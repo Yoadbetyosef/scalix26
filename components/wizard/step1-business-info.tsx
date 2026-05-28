@@ -49,8 +49,8 @@ export function Step1BusinessInfo({ tenant, data, updateData }: Props) {
       if (scraped.error) throw new Error(scraped.error)
       setInfo(prev => ({ ...prev, ...scraped }))
       toast.success('Website scanned successfully!')
-    } catch {
-      toast.error('Could not scan website. Fill in manually.')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? `Scan failed: ${err.message}` : 'Could not scan website. Fill in manually.')
     } finally {
       setScanning(false)
     }

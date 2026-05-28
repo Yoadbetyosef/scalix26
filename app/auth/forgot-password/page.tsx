@@ -1,0 +1,95 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+import { Zap, ArrowLeft } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
+  const supabase = createClient()
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/update-password`,
+      })
+      if (error) throw error
+      setSent(true)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send reset email')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
+            <Zap className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-2xl font-bold text-[#1a1f36]">Scalix26</span>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+          {sent ? (
+            <div className="text-center">
+              <div className="w-14 h-14 bg-[#4ecdc4]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-[#4ecdc4]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h1>
+              <p className="text-gray-500 mb-6">
+                We sent a password reset link to <span className="font-medium text-gray-700">{email}</span>
+              </p>
+              <Link href="/auth/login">
+                <Button variant="outline" className="w-full">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to login
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Reset password</h1>
+              <p className="text-gray-500 mb-6">Enter your email and we&apos;ll send you a reset link</p>
+
+              <form onSubmit={handleReset} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full" loading={loading}>
+                  Send Reset Link
+                </Button>
+              </form>
+
+              <Link href="/auth/login" className="flex items-center justify-center gap-1.5 text-sm text-gray-500 mt-6 hover:text-gray-700">
+                <ArrowLeft className="w-4 h-4" />
+                Back to login
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

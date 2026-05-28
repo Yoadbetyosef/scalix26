@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AnalyticsCharts } from '@/components/charts/analytics-charts'
@@ -8,7 +8,8 @@ export default async function AnalyticsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user.id).single()
+  const serviceSupabase = await createServiceClient()
+  const { data: tenant } = await serviceSupabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (!tenant) redirect('/auth/signup')
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()

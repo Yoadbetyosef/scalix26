@@ -11,9 +11,11 @@ export default async function NewAIEmployeePage() {
     .from('tenants')
     .select('*')
     .eq('user_id', user.id)
-    .single()
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  if (!tenant) redirect('/auth/signup')
+  if (!tenant) redirect('/setup')
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">

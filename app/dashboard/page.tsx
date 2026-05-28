@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { Phone, MessageSquare, MessageCircle, Users, Bot, Plus, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
@@ -57,13 +57,17 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase
+  // Use service client to bypass RLS for tenant lookup
+  const serviceSupabase = await createServiceClient()
+  const { data: tenant } = await serviceSupabase
     .from('tenants')
     .select('*')
     .eq('user_id', user.id)
-    .single()
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  if (!tenant) redirect('/auth/signup')
+  if (!tenant) redirect('/setup')
 
   const { stats, conversations, aiEmployees } = await getDashboardData(tenant.id)
 

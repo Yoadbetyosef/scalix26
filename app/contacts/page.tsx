@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Phone, Mail, MessageCircle } from 'lucide-react'
@@ -10,7 +10,8 @@ export default async function ContactsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user.id).single()
+  const serviceSupabase = await createServiceClient()
+  const { data: tenant } = await serviceSupabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (!tenant) redirect('/auth/signup')
 
   const { data: contacts } = await supabase

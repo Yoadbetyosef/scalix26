@@ -32,27 +32,29 @@ export default function SignupPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // Use server API route to handle signup + tenant creation with service role
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+          businessName: form.businessName,
+          industry: form.industry,
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error)
+
+      // Sign in after signup
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: form.email,
         password: form.password,
       })
-      if (error) throw error
+      if (signInError) throw signInError
 
-      if (data.user) {
-        // Create tenant
-        const { error: tenantError } = await supabase.from('tenants').insert({
-          user_id: data.user.id,
-          business_name: form.businessName,
-          industry: form.industry,
-          email: form.email,
-          plan: 'trial',
-        })
-        if (tenantError) throw tenantError
-
-        // Redirect to onboarding (AI employee wizard)
-        router.push('/ai-employees/new?onboarding=true')
-        router.refresh()
-      }
+      router.push('/ai-employees/new?onboarding=true')
+      router.refresh()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed')
     } finally {

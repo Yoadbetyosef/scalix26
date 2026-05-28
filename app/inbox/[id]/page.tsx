@@ -12,7 +12,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user.id).single()
+  const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (!tenant) redirect('/auth/signup')
 
   const { id } = await params
