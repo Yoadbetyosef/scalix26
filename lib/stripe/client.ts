@@ -1,8 +1,10 @@
 import Stripe from 'stripe'
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2026-05-27.dahlia' as const,
-})
+export const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2026-05-27.dahlia' as const,
+    })
+  : null as unknown as Stripe
 
 export const PLANS = {
   starter: {
