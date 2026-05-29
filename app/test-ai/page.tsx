@@ -106,7 +106,7 @@ export default function TestAIPage() {
     recognition.onstart = () => setListening(true)
     recognition.onend = () => setListening(false)
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: any) => {
       const result = event.results[event.results.length - 1]
       const text = result[0].transcript
       setTranscript(text)
