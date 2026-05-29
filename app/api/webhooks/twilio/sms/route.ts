@@ -49,9 +49,14 @@ export async function POST(req: NextRequest) {
     })
 
     // Send SMS response
-    await sendSMS(From, result.response, To)
-  } catch (err) {
-    console.error('SMS pipeline error:', err)
+    try {
+      const msg = await sendSMS(From, result.response, To)
+      console.log('[SMS] Sent successfully. SID:', msg.sid)
+    } catch (smsErr: any) {
+      console.error('[SMS] sendSMS failed:', smsErr?.message, smsErr?.code, smsErr?.status)
+    }
+  } catch (err: any) {
+    console.error('[SMS] Pipeline error:', err?.message)
   }
 
   return new NextResponse('<?xml version="1.0"?><Response></Response>', {
