@@ -56,6 +56,16 @@ export function SettingsClient({ tenant, channels }: Props) {
     if (url) window.open(url, '_blank')
   }
 
+  async function handleUpgrade(priceId: string) {
+    const res = await fetch('/api/stripe/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priceId }),
+    })
+    const { url } = await res.json()
+    if (url) window.location.href = url
+  }
+
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
 
   return (
@@ -163,18 +173,28 @@ export function SettingsClient({ tenant, channels }: Props) {
           </div>
 
           {/* Plans */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
             {[
-              { name: 'Starter', price: '$97/mo', features: ['1 AI Employee', '500 conversations', 'SMS + Voice'] },
-              { name: 'Pro', price: '$197/mo', features: ['3 AI Employees', '2,000 conversations', 'All channels'] },
-              { name: 'Business', price: '$397/mo', features: ['Unlimited', 'Unlimited conversations', 'Priority support'] },
+              { key: 'starter', name: 'Starter', price: '$97/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID, features: ['1 AI Employee', '500 conversations', 'SMS + Voice'] },
+              { key: 'pro', name: 'Pro', price: '$197/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID, features: ['3 AI Employees', '2,000 conversations', 'All channels'] },
+              { key: 'business', name: 'Business', price: '$397/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_PRICE_ID, features: ['Unlimited', 'Unlimited conversations', 'Priority support'] },
             ].map(plan => (
-              <div key={plan.name} className="p-4 rounded-xl border border-gray-100">
+              <div key={plan.name} className={`p-4 rounded-xl border-2 ${tenant.plan === plan.key ? 'border-[#4ecdc4] bg-[#4ecdc4]/5' : 'border-gray-100'}`}>
                 <p className="font-semibold text-gray-900">{plan.name}</p>
                 <p className="text-lg font-bold text-[#4ecdc4] mt-0.5">{plan.price}</p>
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-2 space-y-1 mb-3">
                   {plan.features.map(f => <li key={f} className="text-xs text-gray-500">• {f}</li>)}
                 </ul>
+                {tenant.plan === plan.key ? (
+                  <span className="text-xs font-medium text-[#4ecdc4]">Current plan</span>
+                ) : (
+                  <button
+                    onClick={() => handleUpgrade(plan.priceId!)}
+                    className="w-full mt-1 px-3 py-1.5 text-xs font-medium bg-[#1a1f36] text-white rounded-lg hover:bg-[#2a2f46] transition-colors"
+                  >
+                    Upgrade
+                  </button>
+                )}
               </div>
             ))}
           </div>
