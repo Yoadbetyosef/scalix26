@@ -8,9 +8,11 @@ export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
 
-  // Validate Twilio signature
+  // Validate Twilio signature using the actual incoming host
   const signature = req.headers.get('x-twilio-signature') || ''
-  const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/twilio/sms`
+  const host = req.headers.get('host') || ''
+  const protocol = host.includes('localhost') ? 'http' : 'https'
+  const url = `${protocol}://${host}/api/webhooks/twilio/sms`
 
   const valid = twilio.validateRequest(
     process.env.TWILIO_AUTH_TOKEN!,
@@ -19,7 +21,10 @@ export async function POST(req: NextRequest) {
     params
   )
 
+  console.log('[SMS] Signature valid:', valid, '| URL used:', url)
+
   if (!valid && process.env.NODE_ENV === 'production') {
+    console.error('[SMS] Signature validation failed. URL:', url)
     return new NextResponse('Forbidden', { status: 403 })
   }
 
