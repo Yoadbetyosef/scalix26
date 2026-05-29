@@ -34,7 +34,7 @@ export default function TestAIPage() {
   const [speaking, setSpeaking] = useState(false)
   const [transcript, setTranscript] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
