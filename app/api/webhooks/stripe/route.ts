@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe/client'
 import { createServiceClient } from '@/lib/supabase/server'
+import { provisionTenantPhoneNumber } from '@/lib/twilio/provision'
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -53,6 +54,11 @@ export async function POST(req: NextRequest) {
           .from('tenants')
           .update({ stripe_customer_id: session.customer })
           .eq('id', session.metadata.tenantId)
+
+        // Auto-provision a dedicated phone number for this tenant
+        provisionTenantPhoneNumber(session.metadata.tenantId).catch(err =>
+          console.error('[provision] Failed to provision phone number:', err)
+        )
       }
       break
     }

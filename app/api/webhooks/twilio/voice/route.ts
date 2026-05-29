@@ -1,31 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { runAIPipeline } from '@/lib/anthropic/pipeline'
 
-// TwiML response for incoming calls — gather speech, then process with AI
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
-  const { CallSid, From, To, SpeechResult } = params
+  const { From, To, SpeechResult } = params
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
+  const supabase = await createServiceClient()
 
-  if (SpeechResult) {
-    // Process the gathered speech through AI
-    const res = await fetch(`${baseUrl}/api/ai/voice-respond`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callSid: CallSid, from: From, to: To, speech: SpeechResult }),
-    })
-    const { twiml } = await res.json()
-    return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
+  // Route to tenant by phone number
+  const { data: channel } = await supabase
+    .from('channels')
+    .select('tenant_id')
+    .eq('twilio_number', To)
+    .eq('type', 'voice')
+    .maybeSingle()
+
+  if (SpeechResult && channel) {
+    try {
+      const result = await runAIPipeline({
+        tenantId: channel.tenant_id,
+        channelType: 'voice',
+        from: From,
+        messageContent: SpeechResult,
+      })
+
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US">
+    <Say voice="Polly.Joanna">${escapeXml(result.response)}</Say>
+  </Gather>
+  <Say voice="Polly.Joanna">Is there anything else I can help you with?</Say>
+</Response>`
+      return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
+    } catch (err) {
+      console.error('Voice pipeline error:', err)
+    }
   }
 
-  // Initial call — greet and gather
+  // Load greeting from the tenant's active AI employee
+  let greeting = 'Hello! Thank you for calling. How can I help you today?'
+  if (channel) {
+    const { data: employee } = await supabase
+      .from('ai_employees')
+      .select('greeting')
+      .eq('tenant_id', channel.tenant_id)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    if (employee?.greeting) greeting = employee.greeting
+  }
+
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US">
-    <Say voice="alice">Hello! Thank you for calling. How can I help you today?</Say>
+    <Say voice="Polly.Joanna">${escapeXml(greeting)}</Say>
   </Gather>
-  <Say>I'm sorry, I didn't hear anything. Please call back and I'll be happy to help.</Say>
+  <Say voice="Polly.Joanna">I'm sorry, I didn't catch that. Please call back and we'll be happy to help.</Say>
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
