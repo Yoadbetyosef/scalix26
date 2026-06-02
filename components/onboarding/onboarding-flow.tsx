@@ -147,7 +147,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
   const [showManual, setShowManual] = useState(false)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const scanDebounce = useRef<ReturnType<typeof setTimeout>>()
+  const scanDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Auto-save to localStorage
   useEffect(() => {
