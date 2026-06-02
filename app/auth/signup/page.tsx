@@ -54,7 +54,6 @@ export default function SignupPage() {
       if (signInError) throw signInError
 
       router.push('/onboarding')
-      router.refresh()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed')
     } finally {
