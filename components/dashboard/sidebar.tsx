@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -33,6 +34,21 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [businessName, setBusinessName] = useState<string>('')
+
+  useEffect(() => {
+    async function loadBusinessName() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: tenant } = await supabase
+        .from('tenants')
+        .select('business_name')
+        .eq('user_id', user.id)
+        .single()
+      if (tenant?.business_name) setBusinessName(tenant.business_name)
+    }
+    loadBusinessName()
+  }, [])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -46,9 +62,13 @@ export function Sidebar() {
         {/* Logo */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
           <div className="flex-shrink-0 w-8 h-8 bg-[#4ecdc4] rounded-lg flex items-center justify-center">
-            <Zap className="w-4 h-4 text-white" />
+            <span className="text-white font-bold text-sm">
+              {businessName ? businessName.charAt(0).toUpperCase() : <Zap className="w-4 h-4" />}
+            </span>
           </div>
-          <span className="hidden xl:block text-white font-bold text-lg tracking-tight">Scalix26</span>
+          <span className="hidden xl:block text-white font-bold text-base tracking-tight leading-tight">
+            {businessName || 'Dashboard'}
+          </span>
         </div>
 
         {/* Nav */}
