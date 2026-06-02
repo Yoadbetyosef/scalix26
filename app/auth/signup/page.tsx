@@ -53,7 +53,7 @@ export default function SignupPage() {
       })
       if (signInError) throw signInError
 
-      router.push('/ai-employees/new?onboarding=true')
+      router.push('/onboarding')
       router.refresh()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed')
