@@ -4,7 +4,6 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { Zap, Check, Lock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -52,15 +51,14 @@ const DEFAULT_BRAND: BrandConfig = {
 }
 
 export default function SignupPage() {
-  const searchParams = useSearchParams()
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
 
   useEffect(() => {
     const hostname = window.location.hostname
-    const fromParam = searchParams.get('from') || ''
+    const fromParam = new URLSearchParams(window.location.search).get('from') || ''
     const fromHost = Object.keys(BRANDS).find(key => hostname.includes(key)) || ''
     setBrand(BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND)
-  }, [searchParams])
+  }, [])
 
   const [form, setForm] = useState({
     businessName: '',
