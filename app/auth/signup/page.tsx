@@ -4,28 +4,68 @@ export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Zap, Check } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Zap, Check, Lock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
+// Brand configs — add a new entry for each niche site
+const BRANDS: Record<string, {
+  name: string
+  trialDays: number
+  logo: React.ReactNode
+  industry?: string
+}> = {
+  mylocksmith: {
+    name: 'My Locksmith AI',
+    trialDays: 20,
+    industry: 'Locksmith',
+    logo: (
+      <div className="flex items-center gap-2">
+        <Lock className="w-7 h-7 text-[#1a1f36]" strokeWidth={2.5} />
+        <span className="text-2xl text-[#1a1f36] tracking-tight">
+          <span className="font-light">my</span>
+          <span className="font-black uppercase">Locksmith</span>
+          <span className="font-light text-lg">Ai</span>
+        </span>
+      </div>
+    ),
+  },
+}
+
+const DEFAULT_BRAND = {
+  name: 'Scalix26',
+  trialDays: 20,
+  logo: (
+    <div className="flex items-center gap-2">
+      <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
+        <Zap className="w-5 h-5 text-white" />
+      </div>
+      <span className="text-2xl font-bold text-[#1a1f36]">Scalix26</span>
+    </div>
+  ),
+}
+
 export default function SignupPage() {
+  const searchParams = useSearchParams()
+  const from = searchParams.get('from') || ''
+  const brand = BRANDS[from] ?? DEFAULT_BRAND
+
   const [form, setForm] = useState({
     businessName: '',
     email: '',
     password: '',
-    industry: '',
+    industry: brand.industry || '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const router = useRouter()
   const supabase = createClient()
 
   const industries = [
-    'HVAC', 'Plumbing', 'Electrical', 'Cleaning', 'Landscaping',
+    'Locksmith', 'HVAC', 'Plumbing', 'Electrical', 'Cleaning', 'Landscaping',
     'Roofing', 'Pest Control', 'Handyman', 'Pool Service', 'Other',
   ]
 
@@ -34,7 +74,6 @@ export default function SignupPage() {
     setLoading(true)
     setError('')
     try {
-      // Use server API route to handle signup + tenant creation with service role
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -48,7 +87,6 @@ export default function SignupPage() {
       const result = await res.json()
       if (!res.ok) throw new Error(result.error)
 
-      // Sign in after signup
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: form.email,
         password: form.password,
@@ -68,16 +106,17 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-2xl font-bold text-[#1a1f36]">Scalix26</span>
+
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          {brand.logo}
         </div>
 
         {/* Trial benefits */}
         <div className="bg-[#4ecdc4]/10 rounded-xl p-4 mb-6 border border-[#4ecdc4]/20">
-          <p className="text-sm font-medium text-[#1a1f36] mb-2">14-day free trial includes:</p>
+          <p className="text-sm font-medium text-[#1a1f36] mb-2">
+            {brand.trialDays}-day free trial includes:
+          </p>
           {['1 AI Employee', '500 conversations', 'SMS + Voice', 'No credit card required'].map(f => (
             <div key={f} className="flex items-center gap-2 text-sm text-gray-700">
               <Check className="w-3.5 h-3.5 text-[#4ecdc4]" />
@@ -94,7 +133,7 @@ export default function SignupPage() {
               <Label htmlFor="businessName">Business Name</Label>
               <Input
                 id="businessName"
-                placeholder="Smith's HVAC Services"
+                placeholder="Smith's Locksmith Services"
                 value={form.businessName}
                 onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))}
                 required
