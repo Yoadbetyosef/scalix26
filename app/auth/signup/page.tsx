@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Zap, Check, Lock } from 'lucide-react'
@@ -12,13 +12,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 
-// Brand configs — add a new entry for each niche site
-const BRANDS: Record<string, {
+interface BrandConfig {
   name: string
   trialDays: number
   logo: React.ReactNode
   industry?: string
-}> = {
+}
+
+// Brand configs — add a new entry for each niche site
+const BRANDS: Record<string, BrandConfig> = {
   mylocksmith: {
     name: 'My Locksmith AI',
     trialDays: 20,
@@ -36,7 +38,7 @@ const BRANDS: Record<string, {
   },
 }
 
-const DEFAULT_BRAND = {
+const DEFAULT_BRAND: BrandConfig = {
   name: 'Scalix26',
   trialDays: 20,
   logo: (
@@ -51,12 +53,14 @@ const DEFAULT_BRAND = {
 
 export default function SignupPage() {
   const searchParams = useSearchParams()
+  const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
 
-  // Auto-detect brand from hostname OR ?from= param
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
-  const fromParam = searchParams.get('from') || ''
-  const fromHost = Object.keys(BRANDS).find(key => hostname.includes(key)) || ''
-  const brand = BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND
+  useEffect(() => {
+    const hostname = window.location.hostname
+    const fromParam = searchParams.get('from') || ''
+    const fromHost = Object.keys(BRANDS).find(key => hostname.includes(key)) || ''
+    setBrand(BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND)
+  }, [searchParams])
 
   const [form, setForm] = useState({
     businessName: '',
