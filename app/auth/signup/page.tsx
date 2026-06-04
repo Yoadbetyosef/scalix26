@@ -57,7 +57,11 @@ export default function SignupPage() {
     const hostname = window.location.hostname
     const fromParam = new URLSearchParams(window.location.search).get('from') || ''
     const fromHost = Object.keys(BRANDS).find(key => hostname.includes(key)) || ''
-    setBrand(BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND)
+    const detected = BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND
+    setBrand(detected)
+    if (detected.industry) {
+      setForm(f => ({ ...f, industry: detected.industry! }))
+    }
   }, [])
 
   const [form, setForm] = useState({
@@ -145,6 +149,7 @@ export default function SignupPage() {
                 required
               />
             </div>
+            {!brand.industry && (
             <div className="space-y-1.5">
               <Label htmlFor="industry">Industry</Label>
               <select
@@ -158,6 +163,7 @@ export default function SignupPage() {
                 {industries.map(i => <option key={i} value={i}>{i}</option>)}
               </select>
             </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="email">Work Email</Label>
               <Input
