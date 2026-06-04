@@ -51,8 +51,12 @@ const DEFAULT_BRAND = {
 
 export default function SignupPage() {
   const searchParams = useSearchParams()
-  const from = searchParams.get('from') || ''
-  const brand = BRANDS[from] ?? DEFAULT_BRAND
+
+  // Auto-detect brand from hostname OR ?from= param
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
+  const fromParam = searchParams.get('from') || ''
+  const fromHost = Object.keys(BRANDS).find(key => hostname.includes(key)) || ''
+  const brand = BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND
 
   const [form, setForm] = useState({
     businessName: '',
