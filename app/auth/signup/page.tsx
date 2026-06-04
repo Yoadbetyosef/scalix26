@@ -20,6 +20,7 @@ export default function SignupPage() {
     industry: '',
   })
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const router = useRouter()
   const supabase = createClient()
 
@@ -31,6 +32,7 @@ export default function SignupPage() {
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setError('')
     try {
       // Use server API route to handle signup + tenant creation with service role
       const res = await fetch('/api/auth/signup', {
@@ -55,7 +57,9 @@ export default function SignupPage() {
 
       window.location.href = '/onboarding'
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Signup failed')
+      const msg = err instanceof Error ? err.message : 'Signup failed'
+      setError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -132,6 +136,11 @@ export default function SignupPage() {
                 required
               />
             </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
             <Button type="submit" className="w-full" loading={loading}>
               Start Free Trial
             </Button>
