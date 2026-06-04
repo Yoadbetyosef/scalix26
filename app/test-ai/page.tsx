@@ -157,35 +157,39 @@ export default function TestAIPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-6 border-b border-gray-100 bg-white flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-[#4ecdc4]" />
-            Test AI Employee
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {mode === 'chat' ? 'Send messages to test your AI' : 'Simulate a real phone call'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Mode toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => { setMode('chat'); endCall() }}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors', mode === 'chat' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}
-            >
-              <MessageSquare className="w-3.5 h-3.5" /> Chat
-            </button>
-            <button
-              onClick={() => { setMode('voice'); reset() }}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors', mode === 'voice' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}
-            >
-              <Phone className="w-3.5 h-3.5" /> Voice Call
-            </button>
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-white">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ecdc4] flex-shrink-0" />
+              <span className="truncate">Test AI Employee</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+              {mode === 'chat' ? 'Send messages to test your AI' : 'Simulate a phone call'}
+            </p>
           </div>
-          {mode === 'chat' && messages.length > 0 && (
-            <Button variant="outline" size="sm" onClick={reset}>New Conversation</Button>
-          )}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Mode toggle */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => { setMode('chat'); endCall() }}
+                className={cn('flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition-colors', mode === 'chat' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Chat</span>
+              </button>
+              <button
+                onClick={() => { setMode('voice'); reset() }}
+                className={cn('flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-medium transition-colors', mode === 'voice' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700')}
+              >
+                <Phone className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Voice</span>
+              </button>
+            </div>
+            {mode === 'chat' && messages.length > 0 && (
+              <Button variant="outline" size="sm" onClick={reset} className="hidden sm:flex">New</Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -315,10 +319,10 @@ export default function TestAIPage() {
             <div ref={bottomRef} />
           </div>
 
-          <div className="p-4 border-t border-gray-100 bg-white">
+          <div className="px-3 sm:px-4 py-3 border-t border-gray-100 bg-white">
             <form onSubmit={handleChatSubmit} className="flex gap-2">
-              <Input value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message as a customer..." disabled={loading} className="flex-1" />
-              <Button type="submit" disabled={loading || !input.trim()}>
+              <Input value={input} onChange={e => setInput(e.target.value)} placeholder="Type a message as a customer..." disabled={loading} className="flex-1 h-11" />
+              <Button type="submit" disabled={loading || !input.trim()} className="h-11 w-11 p-0 flex-shrink-0">
                 <Send className="w-4 h-4" />
               </Button>
             </form>

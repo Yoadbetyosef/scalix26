@@ -69,9 +69,9 @@ export function SettingsClient({ tenant, channels }: Props) {
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl">
+    <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">Manage your business profile and integrations</p>
       </div>
 
@@ -151,11 +151,11 @@ export function SettingsClient({ tenant, channels }: Props) {
           <CardTitle>Billing & Subscription</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <p className="text-sm font-medium text-gray-700">Current Plan</p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full capitalize ${planColors[tenant.plan]}`}>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full capitalize ${planColors[tenant.plan as keyof typeof planColors] || 'bg-gray-100 text-gray-700'}`}>
                   {tenant.plan}
                 </span>
                 {tenant.trial_ends_at && tenant.plan === 'trial' && (
@@ -165,7 +165,7 @@ export function SettingsClient({ tenant, channels }: Props) {
                 )}
               </div>
             </div>
-            <Button variant="outline" onClick={openBillingPortal}>
+            <Button variant="outline" onClick={openBillingPortal} className="w-full sm:w-auto">
               <CreditCard className="w-4 h-4 mr-2" />
               Manage Billing
               <ExternalLink className="w-3.5 h-3.5 ml-1.5" />

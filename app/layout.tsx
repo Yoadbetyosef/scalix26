@@ -6,8 +6,9 @@ import { Toaster } from '@/components/ui/toaster'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Scalix26 — AI Employee for Home Services',
+  title: 'AI Employee Platform — Home Services',
   description: 'AI-powered customer communications for home services businesses',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

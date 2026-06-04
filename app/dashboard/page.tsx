@@ -79,17 +79,18 @@ export default async function DashboardPage() {
   ]
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{tenant.business_name} · Last 7 days</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-0.5 truncate">{tenant.business_name} · Last 7 days</p>
         </div>
-        <Link href="/ai-employees/new">
-          <Button className="gap-2">
+        <Link href="/ai-employees/new" className="flex-shrink-0">
+          <Button className="gap-2 text-sm">
             <Plus className="w-4 h-4" />
-            New AI Employee
+            <span className="hidden sm:inline">New AI Employee</span>
+            <span className="sm:hidden">New</span>
           </Button>
         </Link>
       </div>
@@ -105,7 +106,7 @@ export default async function DashboardPage() {
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
-              <p className="text-3xl font-bold text-gray-900">{value.toLocaleString()}</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900">{value.toLocaleString()}</p>
             </CardContent>
           </Card>
         ))}

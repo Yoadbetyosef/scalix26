@@ -4,60 +4,19 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Zap, Check, Lock } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-
-interface BrandConfig {
-  name: string
-  trialDays: number
-  logo: React.ReactNode
-  industry?: string
-}
-
-// Brand configs — add a new entry for each niche site
-const BRANDS: Record<string, BrandConfig> = {
-  mylocksmith: {
-    name: 'My Locksmith AI',
-    trialDays: 20,
-    industry: 'Locksmith',
-    logo: (
-      <div className="flex items-center gap-2">
-        <Lock className="w-7 h-7 text-[#1a1f36]" strokeWidth={2.5} />
-        <span className="text-2xl text-[#1a1f36] tracking-tight">
-          <span className="font-light">my</span>
-          <span className="font-black uppercase">Locksmith</span>
-          <span className="font-light text-lg">Ai</span>
-        </span>
-      </div>
-    ),
-  },
-}
-
-const DEFAULT_BRAND: BrandConfig = {
-  name: 'Scalix26',
-  trialDays: 20,
-  logo: (
-    <div className="flex items-center gap-2">
-      <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
-        <Zap className="w-5 h-5 text-white" />
-      </div>
-      <span className="text-2xl font-bold text-[#1a1f36]">Scalix26</span>
-    </div>
-  ),
-}
+import { type BrandConfig, DEFAULT_BRAND, BRANDS, detectBrand } from '@/lib/brands'
 
 export default function SignupPage() {
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
 
   useEffect(() => {
-    const hostname = window.location.hostname
-    const fromParam = new URLSearchParams(window.location.search).get('from') || ''
-    const fromHost = Object.keys(BRANDS).find(key => hostname.includes(key)) || ''
-    const detected = BRANDS[fromParam] ?? BRANDS[fromHost] ?? DEFAULT_BRAND
+    const detected = detectBrand()
     setBrand(detected)
     if (detected.industry) {
       setForm(f => ({ ...f, industry: detected.industry! }))
@@ -154,7 +113,7 @@ export default function SignupPage() {
               <Label htmlFor="industry">Industry</Label>
               <select
                 id="industry"
-                className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#4ecdc4] focus:border-transparent"
+                className="flex h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#4ecdc4] focus:border-transparent"
                 value={form.industry}
                 onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
                 required

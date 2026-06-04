@@ -48,7 +48,7 @@ export function ReportBuilder({ tenantId }: Props) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `scalix26-report-${dateRange}d.csv`
+      a.download = `ai-report-${dateRange}d.csv`
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Report exported!')

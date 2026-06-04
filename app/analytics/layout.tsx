@@ -10,7 +10,7 @@ export default async function AnalyticsLayout({ children }: { children: React.Re
   return (
     <div className="flex h-full min-h-screen bg-[#f8f9fa]">
       <Sidebar />
-      <main className="flex-1 md:ml-16 xl:ml-56 pb-16 md:pb-0">
+      <main className="flex-1 md:ml-16 xl:ml-56 pb-[72px] md:pb-0">
         {children}
       </main>
     </div>

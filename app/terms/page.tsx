@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Terms of Service — Scalix26',
+  title: 'Terms of Service — AI Employee Platform',
 }
 
 export default function TermsPage() {
@@ -10,9 +10,10 @@ export default function TermsPage() {
         <div className="mb-12">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 rounded-lg bg-[#4ecdc4] flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </div>
-            <span className="font-bold text-gray-900 text-lg">Scalix26</span>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Terms of Service</h1>
           <p className="text-gray-500">Last updated: May 30, 2026</p>
@@ -23,7 +24,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Acceptance of Terms</h2>
             <p>
-              By using Scalix26 or communicating with a business powered by Scalix26, you agree to
+              By using this platform or communicating with a business powered by our AI, you agree to
               these Terms of Service. If you do not agree, please discontinue use.
             </p>
           </section>
@@ -31,7 +32,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">2. Service Description</h2>
             <p>
-              Scalix26 provides AI-powered customer communication tools for home services businesses.
+              We provide AI-powered customer communication tools for home services businesses.
               Our platform enables businesses to respond automatically to customer inquiries via SMS,
               voice, and other messaging channels using artificial intelligence.
             </p>
@@ -40,7 +41,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">3. SMS Communications</h2>
             <p className="mb-3">
-              By texting a phone number powered by Scalix26, you agree to the following:
+              By texting a phone number powered by our platform, you agree to the following:
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>You are initiating contact and consenting to receive automated SMS replies.</li>
@@ -51,8 +52,7 @@ export default function TermsPage() {
               <li>Message and data rates may apply based on your carrier plan.</li>
               <li>Message frequency varies based on your interactions.</li>
               <li>
-                Scalix26 is not responsible for delayed or undelivered messages due to carrier
-                issues.
+                We are not responsible for delayed or undelivered messages due to carrier issues.
               </li>
             </ul>
           </section>
@@ -60,7 +60,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Business Accounts</h2>
             <p>
-              Businesses using Scalix26 agree to use the platform only for lawful customer
+              Businesses using this platform agree to use it only for lawful customer
               communications. You are responsible for ensuring your use of SMS messaging complies
               with all applicable laws, including the TCPA and CAN-SPAM Act.
             </p>
@@ -79,7 +79,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Limitation of Liability</h2>
             <p>
-              Scalix26 is provided "as is." We are not liable for indirect, incidental, or
+              This platform is provided "as is." We are not liable for indirect, incidental, or
               consequential damages arising from your use of our services. Our total liability
               shall not exceed the amount paid by you in the past 12 months.
             </p>
@@ -97,8 +97,8 @@ export default function TermsPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Contact</h2>
             <p>
               Questions about these terms?{' '}
-              <a href="mailto:legal@scalix26.com" className="text-[#4ecdc4] hover:underline">
-                legal@scalix26.com
+              <a href="mailto:legal@mylocksmithai.com" className="text-[#4ecdc4] hover:underline">
+                legal@mylocksmithai.com
               </a>
             </p>
           </section>

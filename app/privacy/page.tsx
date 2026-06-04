@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Privacy Policy — Scalix26',
+  title: 'Privacy Policy — AI Employee Platform',
 }
 
 export default function PrivacyPage() {
@@ -10,9 +10,10 @@ export default function PrivacyPage() {
         <div className="mb-12">
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 rounded-lg bg-[#4ecdc4] flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </div>
-            <span className="font-bold text-gray-900 text-lg">Scalix26</span>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Privacy Policy</h1>
           <p className="text-gray-500">Last updated: May 30, 2026</p>
@@ -23,7 +24,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Overview</h2>
             <p>
-              Scalix26 ("we," "us," or "our") provides an AI-powered customer communication platform
+              This platform ("we," "us," or "our") provides an AI-powered customer communication platform
               for home services businesses. This Privacy Policy explains how we collect, use, and
               protect information when you use our services, including SMS communications.
             </p>
@@ -32,12 +33,12 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold text-gray-900 mb-3">2. SMS Messaging</h2>
             <p className="mb-3">
-              When you text a business that uses Scalix26, you may receive automated SMS responses
+              When you text a business that uses our platform, you may receive automated SMS responses
               from our AI assistant on behalf of that business.
             </p>
             <ul className="list-disc pl-6 space-y-2">
               <li>
-                <strong>Opt-in:</strong> By texting a Scalix26-powered business number, you consent
+                <strong>Opt-in:</strong> By texting a business number powered by our platform, you consent
                 to receive automated SMS responses.
               </li>
               <li>
@@ -89,8 +90,8 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Contact</h2>
             <p>
               For privacy-related questions, contact us at:{' '}
-              <a href="mailto:privacy@scalix26.com" className="text-[#4ecdc4] hover:underline">
-                privacy@scalix26.com
+              <a href="mailto:privacy@mylocksmithai.com" className="text-[#4ecdc4] hover:underline">
+                privacy@mylocksmithai.com
               </a>
             </p>
           </section>

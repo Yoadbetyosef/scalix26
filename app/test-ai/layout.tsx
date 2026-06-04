@@ -10,7 +10,7 @@ export default async function TestAILayout({ children }: { children: React.React
   return (
     <div className="flex h-full min-h-screen bg-[#f8f9fa]">
       <Sidebar />
-      <main className="flex-1 md:ml-16 xl:ml-56 flex flex-col pb-16 md:pb-0" style={{ height: '100vh' }}>
+      <main className="flex-1 md:ml-16 xl:ml-56 flex flex-col pb-[72px] md:pb-0" style={{ height: '100vh' }}>
         {children}
       </main>
     </div>

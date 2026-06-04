@@ -79,9 +79,9 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="flex items-center gap-3">
           <Link href="/ai-employees">
             <Button variant="ghost" size="sm">
@@ -89,15 +89,15 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{employee.name}</h1>
             <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={toggleStatus}>
+        <div className="flex gap-2 sm:flex-shrink-0">
+          <Button variant="outline" onClick={toggleStatus} className="flex-1 sm:flex-none">
             {form.status === 'active' ? 'Pause' : 'Go Live'}
           </Button>
-          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
+          <Button onClick={handleSave} loading={saving} className="flex-1 sm:flex-none">Save Changes</Button>
         </div>
       </div>
 

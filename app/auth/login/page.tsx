@@ -2,22 +2,25 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
+import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 
 export default function LoginPage() {
+  const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    setBrand(detectBrand())
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -37,11 +40,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-2xl font-bold text-[#1a1f36]">Scalix26</span>
+        <div className="flex items-center justify-center mb-8">
+          {brand.logo}
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
@@ -82,7 +82,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-6">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <Link href="/auth/signup" className="text-[#4ecdc4] font-medium hover:underline">
               Start free trial
             </Link>

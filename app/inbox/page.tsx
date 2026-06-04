@@ -51,54 +51,54 @@ export default async function InboxPage({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-6 border-b border-gray-100 bg-white">
-        <h1 className="text-xl font-bold text-gray-900 mb-4">Shared Inbox</h1>
+      <div className="p-4 sm:p-6 border-b border-gray-100 bg-white space-y-3">
+        <h1 className="text-xl font-bold text-gray-900">Shared Inbox</h1>
 
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <form>
-              <input
-                name="q"
-                defaultValue={q}
-                placeholder="Search conversations..."
-                className="pl-9 h-9 w-60 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
-              />
-            </form>
-          </div>
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <form>
+            <input
+              name="q"
+              defaultValue={q}
+              placeholder="Search conversations..."
+              className="pl-9 h-11 w-full rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
+            />
+          </form>
+        </div>
 
-          <div className="flex gap-1">
-            {['all', 'open', 'resolved', 'closed'].map(s => (
-              <Link
-                key={s}
-                href={`/inbox?status=${s}&channel=${channel}&q=${q}`}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize ${
-                  status === s
-                    ? 'bg-[#1a1f36] text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {s}
-              </Link>
-            ))}
-          </div>
+        {/* Status filters — scrollable row */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          {['all', 'open', 'resolved', 'closed'].map(s => (
+            <Link
+              key={s}
+              href={`/inbox?status=${s}&channel=${channel}&q=${q}`}
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors capitalize min-h-[36px] flex items-center ${
+                status === s
+                  ? 'bg-[#1a1f36] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {s}
+            </Link>
+          ))}
+        </div>
 
-          <div className="flex gap-1">
-            {['all', 'sms', 'voice', 'whatsapp', 'instagram', 'facebook'].map(c => (
-              <Link
-                key={c}
-                href={`/inbox?status=${status}&channel=${c}&q=${q}`}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  channel === c
-                    ? 'bg-[#4ecdc4] text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {c === 'all' ? 'All Channels' : CHANNEL_LABELS[c]}
-              </Link>
-            ))}
-          </div>
+        {/* Channel filters — scrollable row */}
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+          {['all', 'sms', 'voice', 'whatsapp', 'instagram', 'facebook'].map(c => (
+            <Link
+              key={c}
+              href={`/inbox?status=${status}&channel=${c}&q=${q}`}
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors min-h-[36px] flex items-center ${
+                channel === c
+                  ? 'bg-[#4ecdc4] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {c === 'all' ? 'All Channels' : CHANNEL_LABELS[c]}
+            </Link>
+          ))}
         </div>
       </div>
 
@@ -115,12 +115,12 @@ export default async function InboxPage({
               const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
               return (
                 <Link key={conv.id} href={`/inbox/${conv.id}`}>
-                  <div className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
+                  <div className="flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-sm font-medium flex-shrink-0">
                       {contact?.name?.[0] || contact?.phone?.[0] || '?'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">
                           {contact?.name || contact?.phone || 'Unknown'}
                         </p>
@@ -129,12 +129,12 @@ export default async function InboxPage({
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-500 truncate">
-                        {conv.summary ? truncate(conv.summary, 80) : 'No summary yet'}
+                        {conv.summary ? truncate(conv.summary, 60) : 'No summary yet'}
                       </p>
                     </div>
-                    <div className="text-right flex-shrink-0 space-y-1">
+                    <div className="text-right flex-shrink-0 space-y-1 ml-2">
                       <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
-                      <p className="text-xs text-gray-400">{formatDateTime(conv.updated_at)}</p>
+                      <p className="text-xs text-gray-400 whitespace-nowrap">{formatDateTime(conv.updated_at)}</p>
                     </div>
                   </div>
                 </Link>

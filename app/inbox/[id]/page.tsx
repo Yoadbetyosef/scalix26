@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Phone, MessageSquare, User } from 'lucide-react'
+import { ArrowLeft, Phone, MessageSquare, User, Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatDateTime, formatDate } from '@/lib/utils'
 import { ConversationActions } from '@/components/inbox/conversation-actions'
+import { ConversationContactPanel } from '@/components/inbox/conversation-contact-panel'
 
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
@@ -34,30 +35,42 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
 
   const contact = conv.contact as { id: string; name?: string; phone?: string; email?: string; address?: string } | null
 
+  const contactInfo = {
+    id: contact?.id,
+    name: contact?.name,
+    phone: contact?.phone,
+    email: contact?.email,
+    channel: conv.channel,
+    sentiment: conv.sentiment,
+    messageCount: messages?.length || 0,
+  }
+
   return (
     <div className="flex flex-col h-screen max-h-screen">
       {/* Header */}
-      <div className="flex items-center gap-4 px-6 py-4 bg-white border-b border-gray-100 flex-shrink-0">
-        <Link href="/inbox" className="text-gray-400 hover:text-gray-600">
+      <div className="flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-gray-100 flex-shrink-0">
+        <Link href="/inbox" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-medium">
+        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-medium flex-shrink-0">
           {contact?.name?.[0] || contact?.phone?.[0] || '?'}
         </div>
-        <div className="flex-1">
-          <h2 className="text-sm font-semibold text-gray-900">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-sm font-semibold text-gray-900 truncate">
             {contact?.name || contact?.phone || 'Unknown'}
           </h2>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
             <span>{conv.channel}</span>
             <span>·</span>
             <span>{formatDate(conv.created_at)}</span>
-            {conv.ai_employee && <span>· {(conv.ai_employee as { name: string }).name}</span>}
+            {conv.ai_employee && <><span>·</span><span className="truncate">{(conv.ai_employee as { name: string }).name}</span></>}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
           <ConversationActions conversationId={id} currentStatus={conv.status} />
+          {/* Mobile contact info trigger */}
+          <ConversationContactPanel contact={contactInfo} />
         </div>
       </div>
 
@@ -66,21 +79,21 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* AI Summary */}
           {conv.summary && (
-            <div className="mx-6 mt-4 p-4 bg-[#4ecdc4]/5 rounded-xl border border-[#4ecdc4]/20 flex-shrink-0">
+            <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-[#4ecdc4]/5 rounded-xl border border-[#4ecdc4]/20 flex-shrink-0">
               <p className="text-xs font-semibold text-[#3db8af] mb-1">AI Summary</p>
               <p className="text-sm text-gray-700">{conv.summary}</p>
             </div>
           )}
 
           {/* Transcript */}
-          <div className="flex-1 overflow-auto p-6 space-y-4">
+          <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-4">
             {(messages || []).map((msg) => (
               <div
                 key={msg.id}
                 className={`flex ${msg.role === 'assistant' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+                  className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
                     msg.role === 'assistant'
                       ? 'bg-[#4ecdc4] text-white rounded-br-sm'
                       : 'bg-white border border-gray-100 text-gray-900 rounded-bl-sm'
@@ -96,7 +109,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        {/* Contact Sidebar */}
+        {/* Contact Sidebar — desktop only */}
         <div className="w-64 border-l border-gray-100 bg-white p-4 overflow-auto flex-shrink-0 hidden lg:block">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Contact</h3>
 

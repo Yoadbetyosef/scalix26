@@ -22,16 +22,17 @@ export default async function AIEmployeesPage() {
     .order('created_at', { ascending: false })
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Employees</h1>
+    <div className="p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-5 gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">AI Employees</h1>
           <p className="text-sm text-gray-500 mt-0.5">{employees?.length || 0} employees</p>
         </div>
-        <Link href="/ai-employees/new">
+        <Link href="/ai-employees/new" className="flex-shrink-0">
           <Button>
             <Plus className="w-4 h-4 mr-1.5" />
-            New AI Employee
+            <span className="hidden sm:inline">New AI Employee</span>
+            <span className="sm:hidden">New</span>
           </Button>
         </Link>
       </div>

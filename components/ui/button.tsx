@@ -16,10 +16,10 @@ const buttonVariants = cva(
         'sidebar-active': 'bg-[#252b4a] text-white w-full justify-start',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-8 px-3 text-xs',
-        lg: 'h-11 px-6 text-base',
-        icon: 'h-9 w-9',
+        default: 'h-11 px-4 py-2',
+        sm: 'h-9 px-3 text-xs min-w-[36px]',
+        lg: 'h-12 px-6 text-base',
+        icon: 'h-11 w-11',
       },
     },
     defaultVariants: {

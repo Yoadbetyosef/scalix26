@@ -240,7 +240,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
     const e: Record<string, string> = {}
     if (!data.businessName.trim()) e.businessName = 'Oops! Business name is required 😊'
     if (!data.ownerName.trim()) e.ownerName = 'Oops! We need your first name 😊'
-    if (!data.businessType) e.businessType = 'Please select your business type 😊'
+    if (!tenant.industry && !data.businessType) e.businessType = 'Please select your business type 😊'
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -315,9 +315,9 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
         {/* ═══════════════════════════════════════════════════════ STEP 1 */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">Let&apos;s set up your AI assistant</h1>
-            <p className="text-gray-500 mb-8">Takes less than 4 minutes. We promise. 🙌</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Let&apos;s set up your AI assistant</h1>
+            <p className="text-gray-500 mb-6 sm:mb-8">Takes less than 4 minutes. We promise. 🙌</p>
 
             <div className="space-y-5">
               <div>
@@ -359,6 +359,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 </div>
               </div>
 
+              {!tenant.industry && (
               <div>
                 <Label className="text-base font-semibold text-gray-800">What type of business?</Label>
                 <p className="text-sm text-gray-400 mb-2">Your AI will use this to give better answers</p>
@@ -384,6 +385,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 </div>
                 {errors.businessType && <p className="text-red-500 text-sm mt-1">{errors.businessType}</p>}
               </div>
+              )}
             </div>
 
             <Button className="w-full h-14 text-lg mt-8" onClick={goStep2}>
@@ -394,10 +396,10 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
         {/* ═══════════════════════════════════════════════════════ STEP 2 */}
         {step === 2 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">Paste your website</h1>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Paste your website</h1>
             <p className="text-gray-500 mb-2">Our AI will scan it and automatically learn your services and pricing. No manual typing needed.</p>
-            <p className="text-[#4ecdc4] text-sm font-medium mb-8">✨ No website? No problem — scroll down</p>
+            <p className="text-[#4ecdc4] text-sm font-medium mb-6 sm:mb-8">✨ No website? No problem — scroll down</p>
 
             <div className="space-y-5">
               <div>
@@ -530,9 +532,9 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
         {/* ═══════════════════════════════════════════════════════ STEP 3 */}
         {step === 3 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">Customize how your AI talks</h1>
-            <p className="text-gray-500 mb-8">Your AI will use this to answer customers. You can always change it later.</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Customize how your AI talks</h1>
+            <p className="text-gray-500 mb-6 sm:mb-8">Your AI will use this to answer customers. You can always change it later.</p>
 
             <div className="space-y-6">
               {/* Greeting */}
@@ -654,7 +656,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
             <Confetti />
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">🎉</div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Your AI is ready.</h1>
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Your AI is ready.</h1>
               <p className="text-lg text-gray-600">
                 Welcome, {data.ownerName || 'friend'}! <strong>{data.businessName}</strong> now has a 24/7 AI assistant.
               </p>
