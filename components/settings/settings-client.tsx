@@ -182,7 +182,7 @@ export function SettingsClient({ tenant, channels }: Props) {
             <Label className="text-sm font-medium text-gray-700">
               Your personal or work phone number
             </Label>
-            <p className="text-xs text-gray-400 mb-2 mt-0.5">Enter the number you want to ring first (your cell, office line, etc.). Leave blank to have AI answer all calls directly.</p>
+            <p className="text-xs text-gray-400 mb-2 mt-0.5">Enter the number you want to ring first (your cell, office line, etc.). If you don't answer within 5 rings, your AI takes over automatically — so you never lose a lead. Leave blank to have AI answer all calls directly.</p>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
