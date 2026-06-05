@@ -25,10 +25,10 @@ function buildSystemPrompt(
   const activeSkills = skills.filter(s => s.active).map(s => `- ${s.name}: ${s.type}`).join('\n')
   const kbContent = kb.map(k => `## ${k.title}\n${k.content}`).join('\n\n')
 
-  const hours = tenant.business_hours
+  const hours = tenant.business_hours || {}
   const hoursStr = Object.entries(hours)
     .map(([day, h]) => `${day}: ${h}`)
-    .join(', ')
+    .join(', ') || 'Not specified'
 
   return `You are ${employee.name}, an AI assistant for ${tenant.business_name}, a ${tenant.industry || 'home services'} company located in ${tenant.city || ''}, ${tenant.state || ''}.
 
@@ -144,14 +144,14 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // 6. Build system prompt
   const systemPrompt = buildSystemPrompt(tenant, employee, skills || [], kb || [])
 
-  // 7. Save user message
-  await supabase.from('messages').insert({
+  // 7. Save user message (non-blocking — don't let DB write fail the response)
+  supabase.from('messages').insert({
     conversation_id: conversationId,
     tenant_id: input.tenantId,
     role: 'user',
     content: input.messageContent,
     channel: input.channelType,
-  })
+  }).catch(console.error)
 
   // 8. Detect skill trigger
   const skillTriggered = detectSkillTrigger(input.messageContent, skills || [])
