@@ -147,6 +147,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
   const [showManual, setShowManual] = useState(false)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [provisionedNumber, setProvisionedNumber] = useState<string | null>(null)
   const scanDebounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // Auto-save to localStorage
@@ -268,6 +269,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
         const err = await res.json()
         throw new Error(err.error || 'Save failed')
       }
+      const result = await res.json()
+      if (result.phoneNumber) setProvisionedNumber(result.phoneNumber)
       if (typeof window !== 'undefined') localStorage.removeItem(storageKey)
       setStep(4)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -294,7 +297,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
     set('faqs', data.faqs.filter((_, idx) => idx !== i))
   }
 
-  const phoneNumber = channels.find(c => c.type === 'voice' || c.type === 'sms')?.twilio_number
+  const phoneNumber = provisionedNumber || channels.find(c => c.type === 'voice' || c.type === 'sms')?.twilio_number
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -644,7 +647,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
             <div className="flex gap-3 mt-8">
               <Button variant="outline" className="h-12 px-6" onClick={() => setStep(2)}>← Back</Button>
               <Button className="flex-1 h-14 text-base font-semibold" loading={saving} onClick={goStep4}>
-                {saving ? 'Setting up your AI...' : 'Almost Done →'}
+                {saving ? 'Setting up your AI number...' : 'Almost Done →'}
               </Button>
             </div>
           </div>
