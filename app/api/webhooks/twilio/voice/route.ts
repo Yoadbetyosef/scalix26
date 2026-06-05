@@ -22,15 +22,15 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
   const supabase = await createServiceClient()
 
-  // Normalize phone number — try both with and without leading +
   const toNormalized = To?.startsWith('+') ? To : `+${To}`
-  const toAlt = To?.startsWith('+') ? To.slice(1) : To
 
-  const { data: channel } = await supabase
+  const { data: channels } = await supabase
     .from('channels')
     .select('tenant_id')
-    .or(`twilio_number.eq.${toNormalized},twilio_number.eq.${toAlt}`)
-    .maybeSingle()
+    .eq('twilio_number', toNormalized)
+    .limit(1)
+
+  const channel = channels?.[0] ?? null
 
   // Handle Gather callback (user spoke or silence after greeting)
   if (isGatherCallback) {
