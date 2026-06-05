@@ -175,14 +175,14 @@ export function SettingsClient({ tenant, channels }: Props) {
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
             <p className="text-sm font-semibold text-blue-900 mb-1">How it works</p>
             <p className="text-sm text-blue-700">
-              When someone calls your AI number, <strong>your phone rings first</strong>. If you don't answer within 5 rings, your AI picks up automatically — so you never miss a lead.
+              When a customer calls your AI number, <strong>your phone rings first</strong>. If you don't pick up within 5 rings, your AI answers automatically — so no lead is ever missed.
             </p>
           </div>
           <div>
             <Label className="text-sm font-medium text-gray-700">
-              Your mobile or business phone
+              Your personal or work phone number
             </Label>
-            <p className="text-xs text-gray-400 mb-2 mt-0.5">Calls will ring this number first. Leave blank to have AI answer all calls directly.</p>
+            <p className="text-xs text-gray-400 mb-2 mt-0.5">Enter the number you want to ring first (your cell, office line, etc.). Leave blank to have AI answer all calls directly.</p>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -201,16 +201,16 @@ export function SettingsClient({ tenant, channels }: Props) {
           </div>
           {forwardPhone && (
             <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
               <p className="text-sm text-green-700">
-                Calls ring <strong>{forwardPhone}</strong> first, then AI answers after 5 rings
+                Your phone <strong>{forwardPhone}</strong> rings first — AI picks up if you don't answer
               </p>
             </div>
           )}
           {!forwardPhone && (
             <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-              <div className="w-2 h-2 bg-gray-400 rounded-full" />
-              <p className="text-sm text-gray-500">AI answers all calls directly</p>
+              <div className="w-2 h-2 bg-gray-400 rounded-full flex-shrink-0" />
+              <p className="text-sm text-gray-500">AI answers all calls directly (no forwarding set)</p>
             </div>
           )}
         </CardContent>
