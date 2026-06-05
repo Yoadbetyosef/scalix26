@@ -93,18 +93,15 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   if (!tenant) throw new Error('Tenant not found')
 
-  // 2. Find or create contact
-  let contact
-  const { data: existingContact } = await supabase
-    .from('contacts')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
-    .eq('phone', input.from)
-    .single()
+  // 2. Load contact + employee + kb in parallel
+  const [contactResult, employeeResult, kbResult] = await Promise.all([
+    supabase.from('contacts').select('*').eq('tenant_id', input.tenantId).eq('phone', input.from).maybeSingle(),
+    supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
+    supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
+  ])
 
-  if (existingContact) {
-    contact = existingContact
-  } else {
+  let contact = contactResult.data
+  if (!contact) {
     const { data: newContact } = await supabase
       .from('contacts')
       .insert({ tenant_id: input.tenantId, phone: input.from, channel: input.channelType })
@@ -113,43 +110,30 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     contact = newContact
   }
 
-  // 3. Find or create conversation
-  let conversationId = input.conversationId
-  if (!conversationId) {
-    const { data: conv } = await supabase
-      .from('conversations')
-      .insert({
-        tenant_id: input.tenantId,
-        contact_id: contact?.id,
-        channel: input.channelType,
-        status: 'open',
-      })
-      .select()
-      .single()
-    conversationId = conv?.id
-  }
-
-  // 4. Load AI employee + skills + knowledge base
-  const { data: employee } = await supabase
-    .from('ai_employees')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
-    .eq('status', 'active')
-    .single()
-
+  const employee = employeeResult.data
   if (!employee) throw new Error('No active AI employee found')
 
-  const { data: skills } = await supabase
-    .from('skills')
-    .select('*')
-    .eq('ai_employee_id', employee.id)
+  const kb = kbResult.data
 
-  const { data: kb } = await supabase
-    .from('knowledge_base')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
+  // 3. Find or create conversation + load skills in parallel
+  let conversationId = input.conversationId
+  const [convResult, skillsResult] = await Promise.all([
+    conversationId
+      ? Promise.resolve(null)
+      : supabase.from('conversations').insert({
+          tenant_id: input.tenantId,
+          contact_id: contact?.id,
+          channel: input.channelType,
+          status: 'open',
+        }).select().single(),
+    supabase.from('skills').select('*').eq('ai_employee_id', employee.id),
+  ])
 
-  // 5. Load conversation history (last 20 messages)
+  if (!conversationId && convResult?.data) conversationId = convResult.data.id
+
+  const skills = skillsResult.data
+
+  // 4. Load conversation history (last 20 messages)
   const { data: history } = await supabase
     .from('messages')
     .select('*')
@@ -190,35 +174,24 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   const aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // 10. Save AI response
-  await supabase.from('messages').insert({
-    conversation_id: conversationId,
-    tenant_id: input.tenantId,
-    role: 'assistant',
-    content: aiResponse,
-    channel: input.channelType,
-  })
-
-  // 11. Update conversation updated_at
-  await supabase
-    .from('conversations')
-    .update({ updated_at: new Date().toISOString() })
-    .eq('id', conversationId)
-
-  // 12. Update contact last_interaction
-  if (contact) {
-    await supabase
-      .from('contacts')
-      .update({ last_interaction: new Date().toISOString() })
-      .eq('id', contact.id)
-  }
-
-  // 13. Log analytics event
-  await supabase.from('analytics_events').insert({
-    tenant_id: input.tenantId,
-    event_type: 'message_handled',
-    data: { channel: input.channelType, skill_triggered: skillTriggered, conversation_id: conversationId },
-  })
+  // 10-13. Save AI response + update records in parallel (fire and forget)
+  const now = new Date().toISOString()
+  Promise.all([
+    supabase.from('messages').insert({
+      conversation_id: conversationId,
+      tenant_id: input.tenantId,
+      role: 'assistant',
+      content: aiResponse,
+      channel: input.channelType,
+    }),
+    supabase.from('conversations').update({ updated_at: now }).eq('id', conversationId),
+    contact ? supabase.from('contacts').update({ last_interaction: now }).eq('id', contact.id) : Promise.resolve(),
+    supabase.from('analytics_events').insert({
+      tenant_id: input.tenantId,
+      event_type: 'message_handled',
+      data: { channel: input.channelType, skill_triggered: skillTriggered, conversation_id: conversationId },
+    }),
+  ]).catch(console.error)
 
   // 14. Async: generate summary
   generateConversationSummary(conversationId!, input.tenantId).catch(console.error)

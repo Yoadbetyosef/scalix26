@@ -19,12 +19,11 @@ export async function POST(req: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
   const supabase = await createServiceClient()
 
-  // Route to tenant by phone number
+  // Look up tenant by phone number — match any channel type (sms or voice)
   const { data: channel } = await supabase
     .from('channels')
     .select('tenant_id')
     .eq('twilio_number', To)
-    .eq('type', 'voice')
     .maybeSingle()
 
   if (SpeechResult && channel) {
@@ -46,6 +45,13 @@ export async function POST(req: NextRequest) {
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
     } catch (err) {
       console.error('Voice pipeline error:', err)
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US">
+    <Say voice="Polly.Joanna">I'm sorry, I had trouble understanding that. Could you please repeat your question?</Say>
+  </Gather>
+</Response>`
+      return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
     }
   }
 
@@ -64,10 +70,10 @@ export async function POST(req: NextRequest) {
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US">
+  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="5">
     <Say voice="Polly.Joanna">${escapeXml(greeting)}</Say>
   </Gather>
-  <Say voice="Polly.Joanna">I'm sorry, I didn't catch that. Please call back and we'll be happy to help.</Say>
+  <Redirect method="POST">${baseUrl}/api/webhooks/twilio/voice</Redirect>
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
