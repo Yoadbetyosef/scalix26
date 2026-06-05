@@ -221,54 +221,82 @@ export function SettingsClient({ tenant, channels }: Props) {
         <CardHeader>
           <CardTitle>Billing & Subscription</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Current Plan</p>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full capitalize ${planColors[tenant.plan as keyof typeof planColors] || 'bg-gray-100 text-gray-700'}`}>
-                  {tenant.plan}
+        <CardContent className="space-y-4">
+
+          {/* Current plan banner */}
+          {tenant.plan === 'trial' ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-bold text-yellow-800">Free Trial</span>
+                <span className="text-xs font-semibold bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">
+                  {tenant.trial_ends_at
+                    ? `${Math.max(0, Math.ceil((new Date(tenant.trial_ends_at).getTime() - Date.now()) / 86400000))} days left`
+                    : 'Active'}
                 </span>
-                {tenant.trial_ends_at && tenant.plan === 'trial' && (
-                  <span className="text-xs text-gray-500">
-                    Trial ends {new Date(tenant.trial_ends_at).toLocaleDateString()}
-                  </span>
-                )}
               </div>
+              <p className="text-sm text-yellow-700">Upgrade before your trial ends to keep your AI running 24/7.</p>
             </div>
-            <Button variant="outline" onClick={openBillingPortal} className="w-full sm:w-auto">
-              <CreditCard className="w-4 h-4 mr-2" />
-              Manage Billing
-              <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
-            </Button>
-          </div>
+          ) : (
+            <div className="bg-[#4ecdc4]/10 border border-[#4ecdc4]/30 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">Current plan</p>
+                <p className="text-lg font-bold text-gray-900 capitalize">{tenant.plan}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={openBillingPortal}>
+                <CreditCard className="w-4 h-4 mr-1.5" />
+                Manage
+              </Button>
+            </div>
+          )}
 
           {/* Plans */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+          <div className="space-y-3">
             {[
-              { key: 'starter', name: 'Starter', price: '$97/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID, features: ['1 AI Employee', '500 conversations', 'SMS + Voice'] },
-              { key: 'pro', name: 'Pro', price: '$197/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID, features: ['3 AI Employees', '2,000 conversations', 'All channels'] },
-              { key: 'business', name: 'Business', price: '$397/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_PRICE_ID, features: ['Unlimited', 'Unlimited conversations', 'Priority support'] },
-            ].map(plan => (
-              <div key={plan.name} className={`p-4 rounded-xl border-2 ${tenant.plan === plan.key ? 'border-[#4ecdc4] bg-[#4ecdc4]/5' : 'border-gray-100'}`}>
-                <p className="font-semibold text-gray-900">{plan.name}</p>
-                <p className="text-lg font-bold text-[#4ecdc4] mt-0.5">{plan.price}</p>
-                <ul className="mt-2 space-y-1 mb-3">
-                  {plan.features.map(f => <li key={f} className="text-xs text-gray-500">• {f}</li>)}
-                </ul>
-                {tenant.plan === plan.key ? (
-                  <span className="text-xs font-medium text-[#4ecdc4]">Current plan</span>
-                ) : (
-                  <button
-                    onClick={() => handleUpgrade(plan.priceId!)}
-                    className="w-full mt-1 px-3 py-1.5 text-xs font-medium bg-[#1a1f36] text-white rounded-lg hover:bg-[#2a2f46] transition-colors"
-                  >
-                    Upgrade
-                  </button>
-                )}
-              </div>
-            ))}
+              { key: 'starter', name: 'Starter', price: '$97', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID, features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
+              { key: 'pro', name: 'Pro', price: '$197', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID, features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
+              { key: 'business', name: 'Business', price: '$397', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_PRICE_ID, features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
+            ].map(plan => {
+              const isCurrent = tenant.plan === plan.key
+              return (
+                <div key={plan.key} className={`relative rounded-xl border-2 p-4 ${isCurrent ? 'border-[#4ecdc4] bg-[#4ecdc4]/5' : 'border-gray-100 bg-white'}`}>
+                  {plan.popular && !isCurrent && (
+                    <span className="absolute -top-2.5 left-4 text-xs font-semibold bg-[#1a1f36] text-white px-2.5 py-0.5 rounded-full">Most popular</span>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-gray-900">{plan.name}</p>
+                        {isCurrent && <span className="text-xs font-medium text-[#4ecdc4] bg-[#4ecdc4]/10 px-2 py-0.5 rounded-full">Your plan</span>}
+                      </div>
+                      <p className="mt-0.5">
+                        <span className="text-xl font-bold text-gray-900">{plan.price}</span>
+                        <span className="text-sm text-gray-400">{plan.period}</span>
+                      </p>
+                    </div>
+                    {!isCurrent && (
+                      <button
+                        onClick={() => handleUpgrade(plan.priceId!)}
+                        className="h-10 px-5 text-sm font-semibold bg-[#1a1f36] text-white rounded-xl hover:bg-[#2a2f46] transition-colors flex-shrink-0"
+                      >
+                        Upgrade
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+                    {plan.features.map(f => (
+                      <span key={f} className="text-xs text-gray-500">✓ {f}</span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
+
+          {tenant.plan !== 'trial' && (
+            <button onClick={openBillingPortal} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1 flex items-center justify-center gap-1">
+              <CreditCard className="w-3.5 h-3.5" /> Manage billing & invoices
+            </button>
+          )}
         </CardContent>
       </Card>
     </div>
