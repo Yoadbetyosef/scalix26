@@ -42,6 +42,7 @@ export interface Tenant {
   website: string | null
   business_hours: BusinessHours
   timezone: string
+  forward_to_phone: string | null
   plan: Plan
   stripe_customer_id: string | null
   stripe_subscription_id: string | null

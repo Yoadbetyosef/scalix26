@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { ExternalLink, CreditCard, Phone, MessageSquare, Globe } from 'lucide-react'
+import { ExternalLink, CreditCard, Phone, MessageSquare, Globe, PhoneForwarded } from 'lucide-react'
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   voice: Phone,
@@ -34,6 +34,8 @@ export function SettingsClient({ tenant, channels }: Props) {
     city: tenant.city || '',
     state: tenant.state || '',
   })
+  const [forwardPhone, setForwardPhone] = useState(tenant.forward_to_phone || '')
+  const [savingForward, setSavingForward] = useState(false)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
@@ -47,6 +49,22 @@ export function SettingsClient({ tenant, channels }: Props) {
       toast.error('Failed to save settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveForwardPhone() {
+    setSavingForward(true)
+    try {
+      const { error } = await supabase
+        .from('tenants')
+        .update({ forward_to_phone: forwardPhone || null })
+        .eq('id', tenant.id)
+      if (error) throw error
+      toast.success(forwardPhone ? 'Call forwarding saved!' : 'Call forwarding disabled')
+    } catch {
+      toast.error('Failed to save')
+    } finally {
+      setSavingForward(false)
     }
   }
 
@@ -140,6 +158,59 @@ export function SettingsClient({ tenant, channels }: Props) {
                   </div>
                 )
               })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Call Forwarding */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PhoneForwarded className="w-5 h-5 text-[#4ecdc4]" />
+            Call Forwarding
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <p className="text-sm font-semibold text-blue-900 mb-1">How it works</p>
+            <p className="text-sm text-blue-700">
+              When someone calls your AI number, <strong>your phone rings first</strong>. If you don't answer within 5 rings, your AI picks up automatically — so you never miss a lead.
+            </p>
+          </div>
+          <div>
+            <Label className="text-sm font-medium text-gray-700">
+              Your mobile or business phone
+            </Label>
+            <p className="text-xs text-gray-400 mb-2 mt-0.5">Calls will ring this number first. Leave blank to have AI answer all calls directly.</p>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  className="pl-9 h-11"
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={forwardPhone}
+                  onChange={e => setForwardPhone(e.target.value)}
+                />
+              </div>
+              <Button onClick={saveForwardPhone} loading={savingForward} className="h-11 px-5">
+                Save
+              </Button>
+            </div>
+          </div>
+          {forwardPhone && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <p className="text-sm text-green-700">
+                Calls ring <strong>{forwardPhone}</strong> first, then AI answers after 5 rings
+              </p>
+            </div>
+          )}
+          {!forwardPhone && (
+            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+              <div className="w-2 h-2 bg-gray-400 rounded-full" />
+              <p className="text-sm text-gray-500">AI answers all calls directly</p>
             </div>
           )}
         </CardContent>

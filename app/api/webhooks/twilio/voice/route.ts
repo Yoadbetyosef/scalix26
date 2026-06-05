@@ -84,23 +84,48 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fresh call — load greeting
-  let greeting = 'Hello! Thank you for calling. How can I help you today?'
+  // Fresh call — check for call forwarding
   if (channel) {
-    const { data: employee } = await supabase
-      .from('ai_employees')
-      .select('greeting')
-      .eq('tenant_id', channel.tenant_id)
-      .eq('status', 'active')
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('forward_to_phone, ai_employees(greeting, status)')
+      .eq('id', channel.tenant_id)
       .maybeSingle()
-    if (employee?.greeting) greeting = employee.greeting
+
+    const forwardTo = tenant?.forward_to_phone
+    const aiEmployees = tenant?.ai_employees as { greeting: string; status: string }[] | undefined
+    const greeting = aiEmployees?.find(e => e.status === 'active')?.greeting
+      || 'Hello! Thank you for calling. How can I help you today?'
+
+    // If forwarding is set — ring owner's phone first, AI answers on no-answer
+    if (forwardTo) {
+      const fallbackAction = `${baseUrl}/api/webhooks/twilio/voice/ai-fallback`
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial timeout="25" action="${fallbackAction}" method="POST">
+    <Number>${escapeXml(forwardTo)}</Number>
+  </Dial>
+</Response>`
+      return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
+    }
+
+    // No forwarding — AI answers directly
+    const action = gatherUrl(baseUrl)
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
+    <Say voice="Polly.Joanna-Neural">${escapeXml(greeting)}</Say>
+  </Gather>
+  <Say voice="Polly.Joanna-Neural">I didn't hear anything. Please call us back. Goodbye!</Say>
+</Response>`
+    return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
 
   const action = gatherUrl(baseUrl)
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna-Neural">${escapeXml(greeting)}</Say>
+    <Say voice="Polly.Joanna-Neural">Hello! Thank you for calling. How can I help you today?</Say>
   </Gather>
   <Say voice="Polly.Joanna-Neural">I didn't hear anything. Please call us back. Goodbye!</Say>
 </Response>`
