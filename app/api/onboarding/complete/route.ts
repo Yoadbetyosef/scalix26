@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { provisionPhoneNumber } from '@/lib/twilio/client'
 
 interface FAQ {
   q: string
@@ -131,5 +132,27 @@ export async function POST(req: NextRequest) {
     .eq('tenant_id', tenant.id)
     .is('ai_employee_id', null)
 
-  return NextResponse.json({ success: true, employeeId: employee.id })
+  // Provision a phone number if tenant doesn't have one yet
+  const { data: existingChannel } = await serviceSupabase
+    .from('channels')
+    .select('id')
+    .eq('tenant_id', tenant.id)
+    .not('twilio_number', 'is', null)
+    .limit(1)
+    .maybeSingle()
+
+  let phoneNumber: string | null = null
+  if (!existingChannel) {
+    try {
+      phoneNumber = await provisionPhoneNumber()
+      await serviceSupabase.from('channels').insert([
+        { tenant_id: tenant.id, ai_employee_id: employee.id, type: 'sms', twilio_number: phoneNumber, status: 'connected' },
+        { tenant_id: tenant.id, ai_employee_id: employee.id, type: 'voice', twilio_number: phoneNumber, status: 'connected' },
+      ])
+    } catch (err) {
+      console.error('[onboarding] Phone provisioning failed:', err)
+    }
+  }
+
+  return NextResponse.json({ success: true, employeeId: employee.id, phoneNumber })
 }
