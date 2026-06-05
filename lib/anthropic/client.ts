@@ -5,3 +5,4 @@ export const anthropic = new Anthropic({
 })
 
 export const MODEL = 'claude-sonnet-4-5'
+export const VOICE_MODEL = 'claude-haiku-4-5-20251001'

@@ -1,4 +1,4 @@
-import { anthropic, MODEL } from './client'
+import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant } from '@/types'
 
@@ -83,28 +83,27 @@ function detectSkillTrigger(content: string, skills: Skill[]): string | null {
 
 export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutput> {
   const supabase = await createServiceClient()
+  const isVoice = input.channelType === 'voice'
 
-  // 1. Load tenant
-  const { data: tenant } = await supabase
-    .from('tenants')
-    .select('*')
-    .eq('id', input.tenantId)
-    .single()
+  // Load everything in parallel
+  const [tenantRes, contactRes, employeeRes, kbRes] = await Promise.all([
+    supabase.from('tenants').select('*').eq('id', input.tenantId).single(),
+    supabase.from('contacts').select('*').eq('tenant_id', input.tenantId).eq('phone', input.from).maybeSingle(),
+    supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
+    supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
+  ])
 
+  const tenant = tenantRes.data
   if (!tenant) throw new Error('Tenant not found')
 
-  // 2. Find or create contact
-  let contact
-  const { data: existingContact } = await supabase
-    .from('contacts')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
-    .eq('phone', input.from)
-    .maybeSingle()
+  const employee = employeeRes.data
+  if (!employee) throw new Error('No active AI employee found')
 
-  if (existingContact) {
-    contact = existingContact
-  } else {
+  const kb = kbRes.data
+
+  // Create contact if missing (fire-and-forget for voice)
+  let contact = contactRes.data
+  if (!contact) {
     const { data: newContact } = await supabase
       .from('contacts')
       .insert({ tenant_id: input.tenantId, phone: input.from, channel: input.channelType })
@@ -113,74 +112,32 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     contact = newContact
   }
 
-  // 3. Find or create conversation
+  // Load skills + conversation history + create conversation — all in parallel
   let conversationId = input.conversationId
-  if (!conversationId) {
-    const { data: conv } = await supabase
-      .from('conversations')
-      .insert({
-        tenant_id: input.tenantId,
-        contact_id: contact?.id,
-        channel: input.channelType,
-        status: 'open',
-      })
-      .select()
-      .single()
-    conversationId = conv?.id
-  }
+  const [skillsRes, historyRes, convRes] = await Promise.all([
+    supabase.from('skills').select('*').eq('ai_employee_id', employee.id),
+    conversationId
+      ? supabase.from('messages').select('role, content').eq('conversation_id', conversationId)
+          .order('timestamp', { ascending: true }).limit(isVoice ? 6 : 20)
+      : Promise.resolve({ data: [] }),
+    conversationId
+      ? Promise.resolve({ data: { id: conversationId } })
+      : supabase.from('conversations').insert({
+          tenant_id: input.tenantId,
+          contact_id: contact?.id,
+          channel: input.channelType,
+          status: 'open',
+        }).select('id').single(),
+  ])
 
-  // 4. Load AI employee + skills + knowledge base
-  const { data: employee } = await supabase
-    .from('ai_employees')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
-    .eq('status', 'active')
-    .maybeSingle()
+  if (!conversationId) conversationId = (convRes as { data: { id: string } | null }).data?.id
 
-  if (!employee) throw new Error('No active AI employee found')
+  const skills = skillsRes.data || []
+  const history = historyRes.data || []
+  const skillTriggered = detectSkillTrigger(input.messageContent, skills)
 
-  const { data: skills } = await supabase
-    .from('skills')
-    .select('*')
-    .eq('ai_employee_id', employee.id)
-
-  const { data: kb } = await supabase
-    .from('knowledge_base')
-    .select('*')
-    .eq('tenant_id', input.tenantId)
-
-  // 5. Load conversation history (last 20 messages)
-  const { data: history } = await supabase
-    .from('messages')
-    .select('*')
-    .eq('conversation_id', conversationId)
-    .order('timestamp', { ascending: true })
-    .limit(20)
-
-  // 6. Build system prompt
-  const systemPrompt = buildSystemPrompt(tenant, employee, skills || [], kb || [])
-
-  // 7. Save user message
-  await supabase.from('messages').insert({
-    conversation_id: conversationId,
-    tenant_id: input.tenantId,
-    role: 'user',
-    content: input.messageContent,
-    channel: input.channelType,
-  })
-
-  // 8. Detect skill trigger
-  const skillTriggered = detectSkillTrigger(input.messageContent, skills || [])
-
-  // 9. Call Claude
-  const messages = (history || []).map((m: Message) => ({
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-  }))
-
-  messages.push({ role: 'user', content: input.messageContent })
-
-  const isVoice = input.channelType === 'voice'
+  // Build prompt and messages
+  const systemPrompt = buildSystemPrompt(tenant, employee, skills, kb || [])
   const voiceRules = `
 
 VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
@@ -196,27 +153,32 @@ VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
 - If you don't know something, say "Let me get someone to help you with that" — never guess.
 - Feel urgent and helpful. The caller has a problem and needs it solved now.`
 
+  const chatMessages = (history as Message[]).map(m => ({
+    role: m.role as 'user' | 'assistant',
+    content: m.content,
+  }))
+  chatMessages.push({ role: 'user', content: input.messageContent })
+
+  // Call Claude — use fast Haiku model for voice
   const response = await anthropic.messages.create({
-    model: MODEL,
+    model: isVoice ? VOICE_MODEL : MODEL,
     max_tokens: isVoice ? 120 : 500,
     system: isVoice ? systemPrompt + voiceRules : systemPrompt,
-    messages,
+    messages: chatMessages,
   })
 
   const aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // 10. Save AI response + update records
+  // All DB writes fire-and-forget — don't block the response
   const now = new Date().toISOString()
-  await supabase.from('messages').insert({
-    conversation_id: conversationId,
-    tenant_id: input.tenantId,
-    role: 'assistant',
-    content: aiResponse,
-    channel: input.channelType,
-  })
-
-  await Promise.all([
-    supabase.from('conversations').update({ updated_at: now }).eq('id', conversationId),
+  Promise.all([
+    supabase.from('messages').insert([
+      { conversation_id: conversationId, tenant_id: input.tenantId, role: 'user', content: input.messageContent, channel: input.channelType },
+      { conversation_id: conversationId, tenant_id: input.tenantId, role: 'assistant', content: aiResponse, channel: input.channelType },
+    ]),
+    conversationId
+      ? supabase.from('conversations').update({ updated_at: now }).eq('id', conversationId)
+      : Promise.resolve(null),
     contact
       ? supabase.from('contacts').update({ last_interaction: now }).eq('id', contact.id)
       : Promise.resolve(null),
@@ -225,9 +187,11 @@ VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
       event_type: 'message_handled',
       data: { channel: input.channelType, skill_triggered: skillTriggered, conversation_id: conversationId },
     }),
-  ])
+  ]).catch(console.error)
 
-  generateConversationSummary(conversationId!, input.tenantId).catch(console.error)
+  if (!isVoice) {
+    generateConversationSummary(conversationId!, input.tenantId).catch(console.error)
+  }
 
   return {
     response: aiResponse,
