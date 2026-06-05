@@ -1,6 +1,6 @@
 import { anthropic, MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
-import type { AIEmployee, Channel, Message, Skill, KnowledgeBase, Tenant } from '@/types'
+import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant } from '@/types'
 
 interface PipelineInput {
   tenantId: string
@@ -93,15 +93,18 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   if (!tenant) throw new Error('Tenant not found')
 
-  // 2. Load contact + employee + kb in parallel
-  const [contactResult, employeeResult, kbResult] = await Promise.all([
-    supabase.from('contacts').select('*').eq('tenant_id', input.tenantId).eq('phone', input.from).maybeSingle(),
-    supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
-    supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
-  ])
+  // 2. Find or create contact
+  let contact
+  const { data: existingContact } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('tenant_id', input.tenantId)
+    .eq('phone', input.from)
+    .maybeSingle()
 
-  let contact = contactResult.data
-  if (!contact) {
+  if (existingContact) {
+    contact = existingContact
+  } else {
     const { data: newContact } = await supabase
       .from('contacts')
       .insert({ tenant_id: input.tenantId, phone: input.from, channel: input.channelType })
@@ -110,26 +113,43 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     contact = newContact
   }
 
-  const employee = employeeResult.data
+  // 3. Find or create conversation
+  let conversationId = input.conversationId
+  if (!conversationId) {
+    const { data: conv } = await supabase
+      .from('conversations')
+      .insert({
+        tenant_id: input.tenantId,
+        contact_id: contact?.id,
+        channel: input.channelType,
+        status: 'open',
+      })
+      .select()
+      .single()
+    conversationId = conv?.id
+  }
+
+  // 4. Load AI employee + skills + knowledge base
+  const { data: employee } = await supabase
+    .from('ai_employees')
+    .select('*')
+    .eq('tenant_id', input.tenantId)
+    .eq('status', 'active')
+    .maybeSingle()
+
   if (!employee) throw new Error('No active AI employee found')
 
-  const kb = kbResult.data
+  const { data: skills } = await supabase
+    .from('skills')
+    .select('*')
+    .eq('ai_employee_id', employee.id)
 
-  // 3. Find or create conversation + load skills in parallel
-  let conversationId = input.conversationId
-  const [skills] = await Promise.all([
-    supabase.from('skills').select('*').eq('ai_employee_id', employee.id).then(r => r.data),
-    conversationId
-      ? Promise.resolve()
-      : supabase.from('conversations').insert({
-          tenant_id: input.tenantId,
-          contact_id: contact?.id,
-          channel: input.channelType,
-          status: 'open',
-        }).select('id').single().then(r => { if (r.data?.id) conversationId = r.data.id }),
-  ])
+  const { data: kb } = await supabase
+    .from('knowledge_base')
+    .select('*')
+    .eq('tenant_id', input.tenantId)
 
-  // 4. Load conversation history (last 20 messages)
+  // 5. Load conversation history (last 20 messages)
   const { data: history } = await supabase
     .from('messages')
     .select('*')
@@ -138,19 +158,19 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     .limit(20)
 
   // 6. Build system prompt
-  const systemPrompt = buildSystemPrompt(tenant, employee, skills ?? [], kb ?? [])
+  const systemPrompt = buildSystemPrompt(tenant, employee, skills || [], kb || [])
 
-  // 7. Save user message (non-blocking — don't let DB write fail the response)
-  supabase.from('messages').insert({
+  // 7. Save user message
+  await supabase.from('messages').insert({
     conversation_id: conversationId,
     tenant_id: input.tenantId,
     role: 'user',
     content: input.messageContent,
     channel: input.channelType,
-  }).catch(console.error)
+  })
 
   // 8. Detect skill trigger
-  const skillTriggered = detectSkillTrigger(input.messageContent, skills ?? [])
+  const skillTriggered = detectSkillTrigger(input.messageContent, skills || [])
 
   // 9. Call Claude
   const messages = (history || []).map((m: Message) => ({
@@ -158,7 +178,6 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     content: m.content,
   }))
 
-  // Add current message
   messages.push({ role: 'user', content: input.messageContent })
 
   const response = await anthropic.messages.create({
@@ -170,26 +189,28 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   const aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // 10-13. Save AI response + update records in parallel (fire and forget)
+  // 10. Save AI response + update records
   const now = new Date().toISOString()
-  Promise.all([
-    supabase.from('messages').insert({
-      conversation_id: conversationId,
-      tenant_id: input.tenantId,
-      role: 'assistant',
-      content: aiResponse,
-      channel: input.channelType,
-    }),
+  await supabase.from('messages').insert({
+    conversation_id: conversationId,
+    tenant_id: input.tenantId,
+    role: 'assistant',
+    content: aiResponse,
+    channel: input.channelType,
+  })
+
+  await Promise.all([
     supabase.from('conversations').update({ updated_at: now }).eq('id', conversationId),
-    contact ? supabase.from('contacts').update({ last_interaction: now }).eq('id', contact.id) : Promise.resolve(),
+    contact
+      ? supabase.from('contacts').update({ last_interaction: now }).eq('id', contact.id)
+      : Promise.resolve(null),
     supabase.from('analytics_events').insert({
       tenant_id: input.tenantId,
       event_type: 'message_handled',
       data: { channel: input.channelType, skill_triggered: skillTriggered, conversation_id: conversationId },
     }),
-  ]).catch(console.error)
+  ])
 
-  // 14. Async: generate summary
   generateConversationSummary(conversationId!, input.tenantId).catch(console.error)
 
   return {
