@@ -117,21 +117,17 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   // 3. Find or create conversation + load skills in parallel
   let conversationId = input.conversationId
-  const [convResult, skillsResult] = await Promise.all([
+  const [skills] = await Promise.all([
+    supabase.from('skills').select('*').eq('ai_employee_id', employee.id).then(r => r.data),
     conversationId
-      ? Promise.resolve(null)
+      ? Promise.resolve()
       : supabase.from('conversations').insert({
           tenant_id: input.tenantId,
           contact_id: contact?.id,
           channel: input.channelType,
           status: 'open',
-        }).select().single(),
-    supabase.from('skills').select('*').eq('ai_employee_id', employee.id),
+        }).select('id').single().then(r => { if (r.data?.id) conversationId = r.data.id }),
   ])
-
-  if (!conversationId && convResult?.data) conversationId = convResult.data.id
-
-  const skills = skillsResult.data
 
   // 4. Load conversation history (last 20 messages)
   const { data: history } = await supabase
@@ -142,7 +138,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     .limit(20)
 
   // 6. Build system prompt
-  const systemPrompt = buildSystemPrompt(tenant, employee, skills || [], kb || [])
+  const systemPrompt = buildSystemPrompt(tenant, employee, skills ?? [], kb ?? [])
 
   // 7. Save user message (non-blocking — don't let DB write fail the response)
   supabase.from('messages').insert({
@@ -154,7 +150,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   }).catch(console.error)
 
   // 8. Detect skill trigger
-  const skillTriggered = detectSkillTrigger(input.messageContent, skills || [])
+  const skillTriggered = detectSkillTrigger(input.messageContent, skills ?? [])
 
   // 9. Call Claude
   const messages = (history || []).map((m: Message) => ({
