@@ -70,10 +70,10 @@ export async function POST(req: NextRequest) {
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="5">
+  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="10">
     <Say voice="Polly.Joanna">${escapeXml(greeting)}</Say>
   </Gather>
-  <Redirect method="POST">${baseUrl}/api/webhooks/twilio/voice</Redirect>
+  <Say voice="Polly.Joanna">I didn't catch that. Please call us back and we'll be happy to help. Goodbye!</Say>
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
