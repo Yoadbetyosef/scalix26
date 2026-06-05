@@ -180,10 +180,13 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   messages.push({ role: 'user', content: input.messageContent })
 
+  const isVoice = input.channelType === 'voice'
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 500,
-    system: systemPrompt,
+    max_tokens: isVoice ? 120 : 500,
+    system: isVoice
+      ? systemPrompt + '\n\nIMPORTANT FOR VOICE: Keep responses under 30 words. Natural, conversational, no lists. One sentence at a time.'
+      : systemPrompt,
     messages,
   })
 

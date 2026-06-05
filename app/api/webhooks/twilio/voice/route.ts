@@ -11,37 +11,42 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;')
 }
 
+function gatherUrl(baseUrl: string, conversationId?: string) {
+  const url = `${baseUrl}/api/webhooks/twilio/voice`
+  return conversationId ? `${url}?cid=${encodeURIComponent(conversationId)}` : url
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
   const { From, To } = params
-  // SpeechResult key present = Gather callback (even if empty string = couldn't transcribe)
   const isGatherCallback = 'SpeechResult' in params
   const SpeechResult = params.SpeechResult || ''
+
+  // Carry conversationId across turns via query param
+  const conversationId = req.nextUrl.searchParams.get('cid') || undefined
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
   const supabase = await createServiceClient()
 
   const toNormalized = To?.startsWith('+') ? To : `+${To}`
-
   const { data: channels } = await supabase
     .from('channels')
     .select('tenant_id')
     .eq('twilio_number', toNormalized)
     .limit(1)
-
   const channel = channels?.[0] ?? null
 
-  // Handle Gather callback (user spoke or silence after greeting)
+  // Gather callback — user spoke
   if (isGatherCallback) {
     if (!SpeechResult) {
-      // Couldn't transcribe — ask to repeat
+      const action = gatherUrl(baseUrl, conversationId)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna">I'm sorry, I didn't catch that. Could you please repeat your question?</Say>
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
+    <Say voice="Polly.Joanna">Sorry, I didn't catch that. Go ahead.</Say>
   </Gather>
-  <Say voice="Polly.Joanna">I still couldn't hear you. Please call us back and we'll be happy to help. Goodbye!</Say>
+  <Say voice="Polly.Joanna">I couldn't hear you. Please call us back. Goodbye!</Say>
 </Response>`
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
     }
@@ -53,39 +58,33 @@ export async function POST(req: NextRequest) {
           channelType: 'voice',
           from: From,
           messageContent: SpeechResult,
+          conversationId,
         })
 
+        const action = gatherUrl(baseUrl, result.conversationId)
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna">${escapeXml(result.response)}</Say>
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
+    <Say voice="Polly.Joanna-Neural">${escapeXml(result.response)}</Say>
   </Gather>
-  <Say voice="Polly.Joanna">Is there anything else I can help you with? Please call back if you need assistance. Goodbye!</Say>
+  <Say voice="Polly.Joanna-Neural">Feel free to call back anytime. Goodbye!</Say>
 </Response>`
         return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err)
-        console.error('Voice pipeline error:', errMsg)
+        console.error('Voice pipeline error:', err instanceof Error ? err.message : err)
+        const action = gatherUrl(baseUrl, conversationId)
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna">I'm sorry, I had a technical issue. Could you please repeat your question?</Say>
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
+    <Say voice="Polly.Joanna-Neural">Sorry about that, I had a hiccup. What can I help you with?</Say>
   </Gather>
-  <Say voice="Polly.Joanna">Please call us back. Goodbye!</Say>
 </Response>`
         return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
       }
     }
-
-    // No channel found
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">I'm sorry, this number is not configured. Goodbye!</Say>
-</Response>`
-    return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
 
-  // Fresh call — load and play greeting
+  // Fresh call — load greeting
   let greeting = 'Hello! Thank you for calling. How can I help you today?'
   if (channel) {
     const { data: employee } = await supabase
@@ -94,16 +93,16 @@ export async function POST(req: NextRequest) {
       .eq('tenant_id', channel.tenant_id)
       .eq('status', 'active')
       .maybeSingle()
-
     if (employee?.greeting) greeting = employee.greeting
   }
 
+  const action = gatherUrl(baseUrl)
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna">${escapeXml(greeting)}</Say>
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
+    <Say voice="Polly.Joanna-Neural">${escapeXml(greeting)}</Say>
   </Gather>
-  <Say voice="Polly.Joanna">I didn't catch that. Please call us back and we'll be happy to help. Goodbye!</Say>
+  <Say voice="Polly.Joanna-Neural">I didn't hear anything. Please call us back. Goodbye!</Say>
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
