@@ -61,14 +61,23 @@ export async function POST(req: NextRequest) {
 </Response>`
         return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
       } catch (err) {
-        console.error('Voice pipeline error:', err)
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.error('Voice pipeline error:', errMsg)
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="speech" action="${baseUrl}/api/webhooks/twilio/voice" method="POST" speechTimeout="auto" language="en-US" timeout="10">
+    <Say voice="Polly.Joanna">I'm sorry, I had a technical issue. Could you please repeat your question?</Say>
+  </Gather>
+  <Say voice="Polly.Joanna">Please call us back. Goodbye!</Say>
+</Response>`
+        return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
       }
     }
 
-    // Fallback if no channel or pipeline error
+    // No channel found
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">I'm sorry, I'm having trouble right now. Please call back and we'll be happy to help. Goodbye!</Say>
+  <Say voice="Polly.Joanna">I'm sorry, this number is not configured. Goodbye!</Say>
 </Response>`
     return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
