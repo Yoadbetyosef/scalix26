@@ -112,8 +112,23 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     contact = newContact
   }
 
-  // Load skills + conversation history + create conversation — all in parallel
+  // Find existing open conversation for this contact on this channel
   let conversationId = input.conversationId
+  if (!conversationId && contact?.id) {
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('tenant_id', input.tenantId)
+      .eq('contact_id', contact.id)
+      .eq('channel', input.channelType)
+      .eq('status', 'open')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (existing) conversationId = existing.id
+  }
+
+  // Load skills + conversation history + create conversation if none exists
   const [skillsRes, historyRes, convRes] = await Promise.all([
     supabase.from('skills').select('*').eq('ai_employee_id', employee.id),
     conversationId
