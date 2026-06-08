@@ -15,12 +15,14 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-async function sendMetaReply(recipientId: string, text: string, accessToken: string) {
-  const res = await fetch(`https://graph.facebook.com/v21.0/me/messages`, {
+async function sendInstagramReply(recipientId: string, text: string) {
+  const token = process.env.META_INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
+  const igUserId = process.env.META_INSTAGRAM_ID || 'me'
+  const res = await fetch(`https://graph.facebook.com/v21.0/${igUserId}/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       recipient: { id: recipientId },
@@ -30,6 +32,25 @@ async function sendMetaReply(recipientId: string, text: string, accessToken: str
   if (!res.ok) {
     const err = await res.text()
     console.error('Meta Graph API error:', res.status, err)
+  }
+}
+
+async function sendFacebookReply(recipientId: string, text: string) {
+  const token = process.env.META_PAGE_ACCESS_TOKEN || ''
+  const res = await fetch(`https://graph.facebook.com/v21.0/me/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: { text },
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    console.error('Meta Graph API error (Facebook):', res.status, err)
   }
 }
 
@@ -66,8 +87,7 @@ export async function POST(req: NextRequest) {
           messageContent: text,
         })
 
-        const token = process.env.META_INSTAGRAM_ACCESS_TOKEN || process.env.META_PAGE_ACCESS_TOKEN || ''
-        await sendMetaReply(senderId, result.response, token)
+        await sendInstagramReply(senderId, result.response)
       }
     }
     return NextResponse.json({ status: 'ok' })
@@ -104,8 +124,7 @@ export async function POST(req: NextRequest) {
           messageContent: text,
         })
 
-        const token = process.env.META_PAGE_ACCESS_TOKEN || ''
-        await sendMetaReply(senderId, result.response, token)
+        await sendFacebookReply(senderId, result.response)
       }
     }
     return NextResponse.json({ status: 'ok' })
