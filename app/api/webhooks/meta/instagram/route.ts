@@ -17,8 +17,7 @@ export async function GET(req: NextRequest) {
 
 async function sendInstagramReply(recipientId: string, text: string) {
   const token = process.env.META_INSTAGRAM_ACCESS_TOKEN || ''
-  const igUserId = process.env.META_INSTAGRAM_ID || ''
-  const res = await fetch(`https://graph.facebook.com/v21.0/${igUserId}/messages`, {
+  const res = await fetch(`https://graph.instagram.com/v21.0/me/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
