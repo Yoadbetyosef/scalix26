@@ -22,16 +22,16 @@ export async function GET() {
 
   const platformNumber = process.env.TWILIO_PHONE_NUMBER!
 
-  // Create SMS + Voice channels if they don't exist
+  // Create SMS + Voice + Meta channels if they don't exist
   const { data: existing } = await service
     .from('channels')
     .select('id, type')
     .eq('tenant_id', tenant.id)
-    .in('type', ['sms', 'voice'])
+    .in('type', ['sms', 'voice', 'instagram', 'facebook'])
 
   const existingTypes = (existing || []).map((c: { type: string }) => c.type)
 
-  const toInsert = (['sms', 'voice'] as const)
+  const twilioChannels = (['sms', 'voice'] as const)
     .filter(t => !existingTypes.includes(t))
     .map(type => ({
       tenant_id: tenant.id,
@@ -40,6 +40,21 @@ export async function GET() {
       status: 'connected',
       credentials: {},
     }))
+
+  const metaChannels = [
+    { type: 'instagram', meta_page_id: process.env.META_INSTAGRAM_ID },
+    { type: 'facebook', meta_page_id: process.env.META_PAGE_ID },
+  ]
+    .filter(c => c.meta_page_id && !existingTypes.includes(c.type))
+    .map(c => ({
+      tenant_id: tenant.id,
+      type: c.type,
+      meta_page_id: c.meta_page_id,
+      status: 'connected',
+      credentials: {},
+    }))
+
+  const toInsert = [...twilioChannels, ...metaChannels]
 
   if (toInsert.length > 0) {
     await service.from('channels').insert(toInsert)
@@ -76,6 +91,6 @@ export async function GET() {
     tenantId: tenant.id,
     number: platformNumber,
     channelsCreated: toInsert.map(c => c.type),
-    message: `Ready! Text ${platformNumber} to test SMS.`,
+    message: `Ready! Text ${platformNumber} to test SMS. Meta channels seeded with Instagram ID: ${process.env.META_INSTAGRAM_ID}, Page ID: ${process.env.META_PAGE_ID}`,
   })
 }
