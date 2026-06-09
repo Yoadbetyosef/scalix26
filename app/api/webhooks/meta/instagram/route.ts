@@ -60,7 +60,12 @@ export async function POST(req: NextRequest) {
   // Instagram DMs
   if (body.object === 'instagram') {
     for (const entry of body.entry || []) {
-      for (const messaging of entry.messaging || []) {
+      // Support both old format (entry.messaging) and new Instagram API format (entry.changes)
+      const messagingEvents = entry.messaging || (entry.changes || [])
+        .filter((c: { field: string }) => c.field === 'messages')
+        .map((c: { value: unknown }) => c.value)
+
+      for (const messaging of messagingEvents) {
         if (!messaging.message?.text) continue
 
         const senderId = messaging.sender.id
