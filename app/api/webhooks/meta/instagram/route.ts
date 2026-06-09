@@ -67,13 +67,15 @@ export async function POST(req: NextRequest) {
         const recipientId = messaging.recipient.id
         const text = messaging.message.text
 
-        const { data: channel } = await supabase
+        const { data: channels } = await supabase
           .from('channels')
           .select('tenant_id, ai_employee_id, credentials')
           .eq('meta_page_id', recipientId)
           .eq('type', 'instagram')
-          .single()
+          .eq('status', 'connected')
+          .not('ai_employee_id', 'is', null)
 
+        const channel = channels?.[0]
         if (!channel) {
           console.error('Instagram: no channel found for meta_page_id', recipientId)
           continue
@@ -105,13 +107,15 @@ export async function POST(req: NextRequest) {
         const senderId = messaging.sender.id
         const text = messaging.message.text
 
-        const { data: channel } = await supabase
+        const { data: channels } = await supabase
           .from('channels')
           .select('tenant_id, ai_employee_id, credentials')
           .eq('meta_page_id', pageId)
           .eq('type', 'facebook')
-          .single()
+          .eq('status', 'connected')
+          .not('ai_employee_id', 'is', null)
 
+        const channel = channels?.[0]
         if (!channel) {
           console.error('Facebook: no channel found for meta_page_id', pageId)
           continue
