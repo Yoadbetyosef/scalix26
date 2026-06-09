@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
+import { notifyAdminNewUser } from '@/lib/admin/notify'
 
 interface FAQ {
   q: string
@@ -138,6 +139,14 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[onboarding] Phone provisioning failed:', err)
   }
+
+  // Notify admin of new signup
+  notifyAdminNewUser({
+    name: businessName,
+    email: user.email || '',
+    phone: ownerPhone || '',
+    plan: 'trial',
+  }).catch(console.error)
 
   return NextResponse.json({ success: true, employeeId: employee.id, phoneNumber })
 }
