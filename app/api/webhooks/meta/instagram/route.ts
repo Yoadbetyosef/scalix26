@@ -16,21 +16,19 @@ export async function GET(req: NextRequest) {
 }
 
 async function sendInstagramReply(recipientId: string, text: string, accessToken: string) {
-  const token = accessToken || process.env.META_INSTAGRAM_ACCESS_TOKEN || ''
-  const res = await fetch(`https://graph.instagram.com/v21.0/me/messages`, {
+  const token = accessToken || process.env.META_PAGE_ACCESS_TOKEN || ''
+  const res = await fetch(`https://graph.facebook.com/v21.0/me/messages`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       recipient: { id: recipientId },
       message: { text },
+      access_token: token,
     }),
   })
   if (!res.ok) {
     const err = await res.text()
-    console.error('Meta Graph API error:', res.status, err)
+    console.error('Instagram reply error:', res.status, err)
   }
 }
 
