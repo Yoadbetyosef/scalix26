@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { provisionPhoneNumber } from '@/lib/twilio/client'
+import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 
 interface FAQ {
   q: string
@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
 
   if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
 
+  // Update tenant name for billing/account purposes
   await serviceSupabase
     .from('tenants')
     .update({ business_name: businessName, industry: businessType })
@@ -116,6 +117,11 @@ export async function POST(req: NextRequest) {
       voice: 'professional_female',
       system_prompt: systemPrompt,
       status: 'active',
+      // Business identity stored per-agent
+      business_name: businessName,
+      industry: businessType,
+      website: websiteUrl || null,
+      forward_to_phone: ownerPhone || null,
     })
     .select('id')
     .single()
@@ -125,33 +131,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  // Link any unlinked channels to this employee
-  await serviceSupabase
-    .from('channels')
-    .update({ ai_employee_id: employee.id })
-    .eq('tenant_id', tenant.id)
-    .is('ai_employee_id', null)
-
-  // Provision a phone number if tenant doesn't have one yet
-  const { data: existingChannel } = await serviceSupabase
-    .from('channels')
-    .select('id')
-    .eq('tenant_id', tenant.id)
-    .not('twilio_number', 'is', null)
-    .limit(1)
-    .maybeSingle()
-
+  // Provision a dedicated phone number for this agent
   let phoneNumber: string | null = null
-  if (!existingChannel) {
-    try {
-      phoneNumber = await provisionPhoneNumber()
-      await serviceSupabase.from('channels').insert([
-        { tenant_id: tenant.id, ai_employee_id: employee.id, type: 'sms', twilio_number: phoneNumber, status: 'connected' },
-        { tenant_id: tenant.id, ai_employee_id: employee.id, type: 'voice', twilio_number: phoneNumber, status: 'connected' },
-      ])
-    } catch (err) {
-      console.error('[onboarding] Phone provisioning failed:', err)
-    }
+  try {
+    phoneNumber = await provisionAgentPhoneNumber(tenant.id, employee.id)
+  } catch (err) {
+    console.error('[onboarding] Phone provisioning failed:', err)
   }
 
   return NextResponse.json({ success: true, employeeId: employee.id, phoneNumber })

@@ -1,9 +1,10 @@
 import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
-import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant } from '@/types'
+import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
   tenantId: string
+  agentId?: string
   channelType: string
   from: string
   messageContent: string
@@ -17,26 +18,36 @@ interface PipelineOutput {
 }
 
 function buildSystemPrompt(
-  tenant: Tenant,
   employee: AIEmployee,
   skills: Skill[],
-  kb: KnowledgeBase[]
+  kb: KnowledgeBase[],
+  tenant: Tenant
 ): string {
+  // Employee fields take priority; fall back to tenant for accounts that haven't migrated
+  const businessName = employee.business_name || tenant.business_name
+  const industry = employee.industry || tenant.industry
+  const city = employee.city || tenant.city
+  const state = employee.state || tenant.state
+  const phone = employee.phone || tenant.phone
+  const email = employee.email || tenant.email
+  const website = employee.website || tenant.website
+  const hours: BusinessHours | Record<string, string> = employee.business_hours || tenant.business_hours || {}
+  const timezone = employee.timezone || tenant.timezone
+
   const activeSkills = skills.filter(s => s.active).map(s => `- ${s.name}: ${s.type}`).join('\n')
   const kbContent = kb.map(k => `## ${k.title}\n${k.content}`).join('\n\n')
 
-  const hours = tenant.business_hours || {}
   const hoursStr = Object.entries(hours)
     .map(([day, h]) => `${day}: ${h}`)
     .join(', ') || 'Not specified'
 
-  return `You are ${employee.name}, an AI assistant for ${tenant.business_name}, a ${tenant.industry || 'home services'} company located in ${tenant.city || ''}, ${tenant.state || ''}.
+  return `You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
 
 Business hours: ${hoursStr}
-Timezone: ${tenant.timezone}
-Phone: ${tenant.phone || 'N/A'}
-Email: ${tenant.email || 'N/A'}
-Website: ${tenant.website || 'N/A'}
+Timezone: ${timezone}
+Phone: ${phone || 'N/A'}
+Email: ${email || 'N/A'}
+Website: ${website || 'N/A'}
 
 Your personality: ${employee.personality} (score: ${employee.personality_score}/100 — 0=very formal, 100=very friendly)
 
@@ -49,18 +60,18 @@ ${kbContent}
 RULES:
 - Always respond in the same language the customer uses (Spanish if they write in Spanish, English if English, etc.)
 - Never make up pricing — if unsure, offer to have someone call back with a quote
-- If customer mentions emergency (flood, no heat in winter, gas smell, no electricity, burst pipe) — treat as URGENT, say: "This sounds like an emergency! Please call us immediately at ${tenant.phone || 'our emergency line'}. I'm also alerting our on-call technician right now."
+- If customer mentions emergency (flood, no heat in winter, gas smell, no electricity, burst pipe) — treat as URGENT, say: "This sounds like an emergency! Please call us immediately at ${phone || 'our emergency line'}. I'm also alerting our on-call technician right now."
 - Always collect: name, phone number, address before booking an appointment
 - Be concise for SMS (under 160 chars when possible), more detailed for voice
 - Never say you are an AI unless directly asked
-- If asked if you are an AI, say: "I'm ${employee.name}, a virtual assistant for ${tenant.business_name}. How can I help you today?"
+- If asked if you are an AI, say: "I'm ${employee.name}, a virtual assistant for ${businessName}. How can I help you today?"
 - For appointment booking, ask: what service do you need? preferred date/time? address? contact info?
 - For lead qualification, ask: describe the problem, urgency 1-10, property type, approximate size
 - After completing a job (if customer says "thank you" or job is done), offer to send a review link
 
 GREETING (use only at start of new conversation): ${employee.greeting}
 
-Remember: You represent ${tenant.business_name}. Be professional, helpful, and always try to book the appointment or capture the lead.`
+Remember: You represent ${businessName}. Be professional, helpful, and always try to book the appointment or capture the lead.`
 }
 
 function detectSkillTrigger(content: string, skills: Skill[]): string | null {
@@ -85,11 +96,13 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const supabase = await createServiceClient()
   const isVoice = input.channelType === 'voice'
 
-  // Load everything in parallel
+  // Load tenant + contact in parallel; employee loaded separately based on agentId
   const [tenantRes, contactRes, employeeRes, kbRes] = await Promise.all([
     supabase.from('tenants').select('*').eq('id', input.tenantId).single(),
     supabase.from('contacts').select('*').eq('tenant_id', input.tenantId).eq('phone', input.from).maybeSingle(),
-    supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
+    input.agentId
+      ? supabase.from('ai_employees').select('*').eq('id', input.agentId).single()
+      : supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
     supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
   ])
 
@@ -101,7 +114,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   const kb = kbRes.data
 
-  // Create contact if missing (fire-and-forget for voice)
+  // Create contact if missing
   let contact = contactRes.data
   if (!contact) {
     const { data: newContact } = await supabase
@@ -128,7 +141,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     if (existing) conversationId = existing.id
   }
 
-  // Load skills + conversation history + create conversation if none exists
+  // Load skills + conversation history + create conversation if needed
   const [skillsRes, historyRes, convRes] = await Promise.all([
     supabase.from('skills').select('*').eq('ai_employee_id', employee.id),
     conversationId
@@ -139,6 +152,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       ? Promise.resolve({ data: { id: conversationId } })
       : supabase.from('conversations').insert({
           tenant_id: input.tenantId,
+          ai_employee_id: employee.id,
           contact_id: contact?.id,
           channel: input.channelType,
           status: 'open',
@@ -151,8 +165,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const history = historyRes.data || []
   const skillTriggered = detectSkillTrigger(input.messageContent, skills)
 
-  // Build prompt and messages
-  const systemPrompt = buildSystemPrompt(tenant, employee, skills, kb || [])
+  const systemPrompt = buildSystemPrompt(employee, skills, kb || [], tenant)
   const voiceRules = `
 
 VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
@@ -174,7 +187,6 @@ VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
   }))
   chatMessages.push({ role: 'user', content: input.messageContent })
 
-  // Call Claude — use fast Haiku model for voice
   const response = await anthropic.messages.create({
     model: isVoice ? VOICE_MODEL : MODEL,
     max_tokens: isVoice ? 120 : 500,
@@ -184,7 +196,6 @@ VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
 
   const aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
 
-  // All DB writes fire-and-forget — don't block the response
   const now = new Date().toISOString()
   Promise.all([
     supabase.from('messages').insert([

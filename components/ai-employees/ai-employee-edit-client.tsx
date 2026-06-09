@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 
 const VOICES = [
@@ -27,12 +27,61 @@ const PERSONALITIES = [
   { id: 'direct', label: 'Direct' },
 ]
 
-interface Props {
-  employee: any
-  tenantId: string
+const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+const DAY_LABELS: Record<typeof DAYS[number], string> = {
+  mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday',
+  fri: 'Friday', sat: 'Saturday', sun: 'Sunday',
 }
 
-export function AIEmployeeEditClient({ employee, tenantId }: Props) {
+interface Channel {
+  id: string
+  type: string
+  status: string
+  twilio_number: string | null
+  meta_page_id: string | null
+  credentials: Record<string, string>
+}
+
+interface Props {
+  employee: {
+    id: string
+    name: string
+    greeting: string
+    personality: string
+    personality_score: number
+    voice: string
+    system_prompt: string | null
+    status: string
+    // Business identity
+    business_name: string | null
+    industry: string | null
+    website: string | null
+    phone: string | null
+    email: string | null
+    address: string | null
+    city: string | null
+    state: string | null
+    zip: string | null
+    business_hours: Record<string, string> | null
+    timezone: string | null
+    forward_to_phone: string | null
+    channels?: Channel[]
+  }
+  tenantId: string
+  metaConnected?: boolean
+  metaError?: string
+}
+
+const META_ERRORS: Record<string, string> = {
+  cancelled: 'Facebook connection was cancelled.',
+  invalid_state: 'Security check failed. Please try again.',
+  token_failed: 'Could not get Facebook access. Please try again.',
+  pages_failed: 'Could not load your Facebook pages. Please try again.',
+  no_pages: 'No Facebook pages found on your account. Create a page first.',
+  session_expired: 'Session expired. Please try connecting again.',
+}
+
+export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaError }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -44,17 +93,46 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
     voice: employee.voice || 'professional_female',
     system_prompt: employee.system_prompt || '',
     status: employee.status || 'draft',
+    // Business identity
+    business_name: employee.business_name || '',
+    industry: employee.industry || '',
+    website: employee.website || '',
+    phone: employee.phone || '',
+    email: employee.email || '',
+    city: employee.city || '',
+    state: employee.state || '',
+    forward_to_phone: employee.forward_to_phone || '',
+    business_hours: employee.business_hours || {
+      mon: '9:00-17:00', tue: '9:00-17:00', wed: '9:00-17:00',
+      thu: '9:00-17:00', fri: '9:00-17:00', sat: 'closed', sun: 'closed',
+    },
   })
+
+  // Show toast on OAuth return
+  useEffect(() => {
+    if (metaConnected) toast.success('Facebook connected!')
+    if (metaError) toast.error(META_ERRORS[metaError] || 'Connection failed.')
+  }, [metaConnected, metaError])
+
+  // Channel state
+  const [channels, setChannels] = useState<Channel[]>(employee.channels || [])
+  const [provisioningPhone, setProvisioningPhone] = useState(false)
+  const [releasingPhone, setReleasingPhone] = useState(false)
+
+  const phoneChannel = channels.find(c => (c.type === 'sms' || c.type === 'voice') && c.twilio_number && c.status === 'connected')
+  const fbChannel = channels.find(c => c.type === 'facebook' && c.status === 'connected')
+  const igChannel = channels.find(c => c.type === 'instagram' && c.status === 'connected')
 
   async function handleSave() {
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('ai_employees')
-        .update(form)
-        .eq('id', employee.id)
-      if (error) throw error
-      toast.success('AI Employee saved!')
+      const res = await fetch(`/api/agents/${employee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      toast.success('Agent saved!')
       router.refresh()
     } catch {
       toast.error('Failed to save')
@@ -75,7 +153,62 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
     const newStatus = form.status === 'active' ? 'draft' : 'active'
     setForm(f => ({ ...f, status: newStatus }))
     await supabase.from('ai_employees').update({ status: newStatus }).eq('id', employee.id)
-    toast.success(newStatus === 'active' ? 'Employee is now live!' : 'Employee paused')
+    toast.success(newStatus === 'active' ? 'Agent is now live!' : 'Agent paused')
+  }
+
+  async function provisionPhone() {
+    setProvisioningPhone(true)
+    try {
+      const res = await fetch(`/api/agents/${employee.id}/channels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'provision_phone' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed')
+      toast.success(`Phone number provisioned: ${data.phoneNumber}`)
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to provision phone')
+    } finally {
+      setProvisioningPhone(false)
+    }
+  }
+
+  async function releasePhone() {
+    if (!confirm('Release this phone number? Customers will no longer be able to call or text it.')) return
+    setReleasingPhone(true)
+    try {
+      const res = await fetch(`/api/agents/${employee.id}/channels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'release_phone' }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      toast.success('Phone number released')
+      setChannels(prev => prev.filter(c => c.type !== 'sms' && c.type !== 'voice'))
+      router.refresh()
+    } catch {
+      toast.error('Failed to release phone number')
+    } finally {
+      setReleasingPhone(false)
+    }
+  }
+
+  async function disconnectChannel(type: string) {
+    if (!confirm(`Disconnect ${type}?`)) return
+    const res = await fetch(`/api/agents/${employee.id}/channels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'disconnect', type }),
+    })
+    if (res.ok) {
+      toast.success(`${type} disconnected`)
+      setChannels(prev => prev.map(c => c.type === type ? { ...c, status: 'disconnected' } : c))
+      router.refresh()
+    } else {
+      toast.error('Failed to disconnect')
+    }
   }
 
   return (
@@ -101,12 +234,231 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
         </div>
       </div>
 
+      {/* Business Identity */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Business Identity</CardTitle>
+          <p className="text-sm text-gray-500">This agent represents a separate business identity with its own contact info.</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Business Name</Label>
+              <Input className="mt-1.5" placeholder="Smith's Locksmith" value={form.business_name} onChange={e => setForm(f => ({ ...f, business_name: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Industry / Business Type</Label>
+              <Input className="mt-1.5" placeholder="Locksmith" value={form.industry} onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Business Phone</Label>
+              <Input className="mt-1.5" type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Business Email</Label>
+              <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div>
+              <Label>City</Label>
+              <Input className="mt-1.5" placeholder="New York" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+            </div>
+            <div>
+              <Label>State</Label>
+              <Input className="mt-1.5" placeholder="NY" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Website</Label>
+              <Input className="mt-1.5" type="url" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
+            </div>
+          </div>
+
+          {/* Business Hours */}
+          <div>
+            <Label className="text-base font-semibold">Business Hours</Label>
+            <div className="mt-2 space-y-2">
+              {DAYS.map(day => (
+                <div key={day} className="flex items-center gap-3">
+                  <span className="w-24 text-sm text-gray-600 font-medium">{DAY_LABELS[day]}</span>
+                  <Input
+                    className="h-9 text-sm flex-1"
+                    placeholder="9:00-17:00 or closed"
+                    value={(form.business_hours as Record<string, string>)[day] || ''}
+                    onChange={e => setForm(f => ({
+                      ...f,
+                      business_hours: { ...(f.business_hours as Record<string, string>), [day]: e.target.value },
+                    }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-2">Format: 9:00-17:00 or "closed"</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Channels */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Channels</CardTitle>
+          <p className="text-sm text-gray-500">Connect any combination of channels. Each channel is optional — the agent handles whatever is connected.</p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+
+          {/* Phone (calls + SMS) */}
+          <div className="p-4 rounded-xl border border-gray-200 space-y-3">
+            <div className="flex items-center gap-2">
+              <Phone className="w-4 h-4 text-gray-600" />
+              <span className="font-semibold text-gray-800">Phone (calls + SMS)</span>
+              {phoneChannel && <Badge variant="connected">Connected</Badge>}
+            </div>
+
+            {phoneChannel ? (
+              <div className="space-y-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
+                  <p className="text-lg font-bold text-gray-900 tracking-wider">{phoneChannel.twilio_number}</p>
+                </div>
+                <div>
+                  <Label className="text-sm">Forward calls to (optional)</Label>
+                  <p className="text-xs text-gray-400 mb-1.5">Your number rings first for 25s, then the AI takes over</p>
+                  <Input
+                    className="h-9 text-sm"
+                    type="tel"
+                    placeholder="(555) 987-6543"
+                    value={form.forward_to_phone}
+                    onChange={e => setForm(f => ({ ...f, forward_to_phone: e.target.value }))}
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={releasePhone}
+                  loading={releasingPhone}
+                  className="text-red-600 border-red-200 hover:bg-red-50"
+                >
+                  <Link2Off className="w-3.5 h-3.5 mr-1.5" />
+                  Release Number
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500">No phone number assigned. Provision a dedicated number for this agent — handles both inbound calls and SMS.</p>
+                <Button onClick={provisionPhone} loading={provisioningPhone} size="sm">
+                  <Phone className="w-3.5 h-3.5 mr-1.5" />
+                  {provisioningPhone ? 'Provisioning...' : 'Get Phone Number'}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Facebook + Instagram — one OAuth flow connects both */}
+          <div className="p-4 rounded-xl border border-gray-200 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Share2 className="w-4 h-4 text-blue-600" />
+              <span className="font-semibold text-gray-800">Facebook & Instagram</span>
+              {fbChannel && <Badge variant="connected">FB Connected</Badge>}
+              {igChannel && <Badge variant="connected">IG Connected</Badge>}
+              {!fbChannel && !igChannel && <Badge variant="disconnected">Not connected</Badge>}
+            </div>
+
+            {(fbChannel || igChannel) ? (
+              <div className="space-y-3">
+                {/* Facebook row */}
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                      <Share2 className="w-3 h-3" /> Facebook Page
+                    </p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {fbChannel
+                        ? ((fbChannel.credentials as Record<string, string>)?.page_name || fbChannel.meta_page_id)
+                        : <span className="text-gray-400 italic">Not connected</span>}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
+                      <Button size="sm" variant="outline">
+                        {fbChannel ? 'Switch Page' : 'Connect'}
+                      </Button>
+                    </a>
+                    {fbChannel && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => disconnectChannel('facebook')}
+                        className="text-red-600 border-red-200 hover:bg-red-50 px-2"
+                      >
+                        <Link2Off className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Instagram row */}
+                <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                      <MessageCircle className="w-3 h-3" /> Instagram Account
+                    </p>
+                    {igChannel ? (
+                      <p className="text-sm font-medium text-gray-800">
+                        {(igChannel.credentials as Record<string, string>)?.username
+                          ? `@${(igChannel.credentials as Record<string, string>).username}`
+                          : igChannel.meta_page_id}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-400">
+                        Not connected — link Instagram to your Facebook page first, then reconnect.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {!igChannel && (
+                      <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
+                        <Button size="sm" variant="outline">Connect</Button>
+                      </a>
+                    )}
+                    {igChannel && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => disconnectChannel('instagram')}
+                        className="text-red-600 border-red-200 hover:bg-red-50 px-2"
+                      >
+                        <Link2Off className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-500">
+                  Connect your Facebook Page and Instagram Business Account with one click.
+                  If your page has Instagram linked, both channels connect automatically.
+                </p>
+                <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
+                  <Button size="sm">
+                    <Share2 className="w-3.5 h-3.5 mr-1.5" />
+                    Connect with Facebook
+                  </Button>
+                </a>
+                <p className="text-xs text-gray-400">
+                  You&apos;ll be redirected to Facebook to choose which page to connect.
+                </p>
+              </div>
+            )}
+          </div>
+
+        </CardContent>
+      </Card>
+
       {/* Basic Info */}
       <Card>
-        <CardHeader><CardTitle>Basic Info</CardTitle></CardHeader>
+        <CardHeader><CardTitle>AI Persona</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Name</Label>
+            <Label>Agent Name</Label>
             <Input className="mt-1.5" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
           </div>
           <div>
@@ -186,30 +538,8 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
             rows={5}
             value={form.system_prompt}
             onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
-            placeholder="Add specific instructions for this AI employee. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
+            placeholder="Add specific instructions for this AI agent. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
           />
-        </CardContent>
-      </Card>
-
-      {/* Channels */}
-      <Card>
-        <CardHeader><CardTitle>Connected Channels</CardTitle></CardHeader>
-        <CardContent>
-          {employee.channels?.length === 0 ? (
-            <p className="text-sm text-gray-500">No channels connected yet.</p>
-          ) : (
-            <div className="space-y-2">
-              {employee.channels?.map((ch: any) => (
-                <div key={ch.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium capitalize">{ch.type}</p>
-                    {ch.twilio_number && <p className="text-xs text-gray-500">{ch.twilio_number}</p>}
-                  </div>
-                  <Badge variant={ch.status as 'connected' | 'disconnected' | 'pending'}>{ch.status}</Badge>
-                </div>
-              ))}
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -219,7 +549,7 @@ export function AIEmployeeEditClient({ employee, tenantId }: Props) {
         <CardContent>
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" />
-            Delete AI Employee
+            Delete Agent
           </Button>
         </CardContent>
       </Card>

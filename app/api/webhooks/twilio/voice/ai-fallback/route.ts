@@ -30,19 +30,17 @@ export async function POST(req: NextRequest) {
   const supabase = await createServiceClient()
   const { data: channels } = await supabase
     .from('channels')
-    .select('tenant_id')
+    .select('tenant_id, ai_employee_id')
     .eq('twilio_number', toNormalized)
     .limit(1)
-  const tenantId = channels?.[0]?.tenant_id
+  const channel = channels?.[0] ?? null
 
   let greeting = 'Hello! Thank you for calling. Sorry I missed you — how can I help?'
-  if (tenantId) {
-    const { data: employee } = await supabase
-      .from('ai_employees')
-      .select('greeting')
-      .eq('tenant_id', tenantId)
-      .eq('status', 'active')
-      .maybeSingle()
+  if (channel) {
+    const agentQuery = channel.ai_employee_id
+      ? supabase.from('ai_employees').select('greeting').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('greeting').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+    const { data: employee } = await agentQuery
     if (employee?.greeting) greeting = employee.greeting
   }
 

@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
   return new NextResponse('Forbidden', { status: 403 })
 }
 
-async function sendInstagramReply(recipientId: string, text: string) {
-  const token = process.env.META_INSTAGRAM_ACCESS_TOKEN || ''
+async function sendInstagramReply(recipientId: string, text: string, accessToken: string) {
+  const token = accessToken || process.env.META_INSTAGRAM_ACCESS_TOKEN || ''
   const res = await fetch(`https://graph.instagram.com/v21.0/me/messages`, {
     method: 'POST',
     headers: {
@@ -34,8 +34,8 @@ async function sendInstagramReply(recipientId: string, text: string) {
   }
 }
 
-async function sendFacebookReply(recipientId: string, text: string) {
-  const token = process.env.META_PAGE_ACCESS_TOKEN || ''
+async function sendFacebookReply(recipientId: string, text: string, accessToken: string) {
+  const token = accessToken || process.env.META_PAGE_ACCESS_TOKEN || ''
   const res = await fetch(`https://graph.facebook.com/v21.0/me/messages`, {
     method: 'POST',
     headers: {
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
         const { data: channel } = await supabase
           .from('channels')
-          .select('tenant_id')
+          .select('tenant_id, ai_employee_id, credentials')
           .eq('meta_page_id', recipientId)
           .eq('type', 'instagram')
           .single()
@@ -81,12 +81,14 @@ export async function POST(req: NextRequest) {
 
         const result = await runAIPipeline({
           tenantId: channel.tenant_id,
+          agentId: channel.ai_employee_id ?? undefined,
           channelType: 'instagram',
           from: senderId,
           messageContent: text,
         })
 
-        await sendInstagramReply(senderId, result.response)
+        const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
+        await sendInstagramReply(senderId, result.response, accessToken)
       }
     }
     return NextResponse.json({ status: 'ok' })
@@ -98,7 +100,6 @@ export async function POST(req: NextRequest) {
       const pageId = entry.id
       for (const messaging of entry.messaging || []) {
         if (!messaging.message?.text) continue
-        // Ignore messages sent by the page itself
         if (messaging.sender.id === pageId) continue
 
         const senderId = messaging.sender.id
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest) {
 
         const { data: channel } = await supabase
           .from('channels')
-          .select('tenant_id')
+          .select('tenant_id, ai_employee_id, credentials')
           .eq('meta_page_id', pageId)
           .eq('type', 'facebook')
           .single()
@@ -118,12 +119,14 @@ export async function POST(req: NextRequest) {
 
         const result = await runAIPipeline({
           tenantId: channel.tenant_id,
+          agentId: channel.ai_employee_id ?? undefined,
           channelType: 'facebook',
           from: senderId,
           messageContent: text,
         })
 
-        await sendFacebookReply(senderId, result.response)
+        const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
+        await sendFacebookReply(senderId, result.response, accessToken)
       }
     }
     return NextResponse.json({ status: 'ok' })

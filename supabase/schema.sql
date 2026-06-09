@@ -42,6 +42,19 @@ CREATE TABLE ai_employees (
   personality_score INTEGER DEFAULT 70 CHECK (personality_score BETWEEN 0 AND 100),
   system_prompt TEXT,
   status TEXT DEFAULT 'draft' CHECK (status IN ('active','draft')),
+  -- Per-agent business identity
+  business_name TEXT,
+  industry TEXT,
+  website TEXT,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  zip TEXT,
+  business_hours JSONB DEFAULT '{"mon":"9:00-17:00","tue":"9:00-17:00","wed":"9:00-17:00","thu":"9:00-17:00","fri":"9:00-17:00","sat":"closed","sun":"closed"}',
+  timezone TEXT DEFAULT 'America/New_York',
+  forward_to_phone TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -234,6 +247,7 @@ CREATE POLICY "Tenant analytics_events access" ON analytics_events FOR ALL USING
 CREATE INDEX idx_tenants_user_id ON tenants(user_id);
 CREATE INDEX idx_ai_employees_tenant_id ON ai_employees(tenant_id);
 CREATE INDEX idx_channels_tenant_id ON channels(tenant_id);
+CREATE INDEX idx_channels_ai_employee_id ON channels(ai_employee_id);
 CREATE INDEX idx_channels_twilio_number ON channels(twilio_number);
 CREATE INDEX idx_channels_meta_page_id ON channels(meta_page_id);
 CREATE INDEX idx_contacts_tenant_id ON contacts(tenant_id);

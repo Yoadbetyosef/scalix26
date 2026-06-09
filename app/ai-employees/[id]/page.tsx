@@ -2,8 +2,16 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { AIEmployeeEditClient } from '@/components/ai-employees/ai-employee-edit-client'
 
-export default async function AIEmployeeEditPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function AIEmployeeEditPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string>>
+}) {
   const { id } = await params
+  const sp = await searchParams
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -24,7 +32,12 @@ export default async function AIEmployeeEditPage({ params }: { params: Promise<{
 
   return (
     <div className="p-6 max-w-3xl">
-      <AIEmployeeEditClient employee={employee} tenantId={tenant.id} />
+      <AIEmployeeEditClient
+        employee={employee}
+        tenantId={tenant.id}
+        metaConnected={sp.meta_connected === 'true'}
+        metaError={sp.meta_error}
+      />
     </div>
   )
 }

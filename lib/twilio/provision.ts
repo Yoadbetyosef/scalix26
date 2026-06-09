@@ -1,14 +1,14 @@
 import twilio from 'twilio'
 import { createServiceClient } from '@/lib/supabase/server'
 
-export async function provisionTenantPhoneNumber(tenantId: string): Promise<string | null> {
+export async function provisionAgentPhoneNumber(tenantId: string, agentId: string): Promise<string | null> {
   const supabase = await createServiceClient()
 
-  // Idempotent: return existing number if already provisioned
+  // Idempotent: return existing number if this agent already has one
   const { data: existing } = await supabase
     .from('channels')
     .select('twilio_number')
-    .eq('tenant_id', tenantId)
+    .eq('ai_employee_id', agentId)
     .eq('type', 'sms')
     .not('twilio_number', 'is', null)
     .maybeSingle()
@@ -37,6 +37,7 @@ export async function provisionTenantPhoneNumber(tenantId: string): Promise<stri
   await supabase.from('channels').insert([
     {
       tenant_id: tenantId,
+      ai_employee_id: agentId,
       type: 'sms',
       twilio_number: number.phoneNumber,
       status: 'connected',
@@ -44,6 +45,7 @@ export async function provisionTenantPhoneNumber(tenantId: string): Promise<stri
     },
     {
       tenant_id: tenantId,
+      ai_employee_id: agentId,
       type: 'voice',
       twilio_number: number.phoneNumber,
       status: 'connected',
@@ -52,4 +54,19 @@ export async function provisionTenantPhoneNumber(tenantId: string): Promise<stri
   ])
 
   return number.phoneNumber
+}
+
+// Legacy alias kept for any remaining callers
+export async function provisionTenantPhoneNumber(tenantId: string): Promise<string | null> {
+  const supabase = await createServiceClient()
+
+  const { data: agent } = await supabase
+    .from('ai_employees')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  if (!agent) return null
+  return provisionAgentPhoneNumber(tenantId, agent.id)
 }

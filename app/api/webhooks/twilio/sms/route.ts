@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
 
   const { From, To, Body } = params
 
-  // Find tenant by Twilio number
+  // Find agent by Twilio number
   const supabase = await createServiceClient()
   const { data: channel } = await supabase
     .from('channels')
-    .select('tenant_id')
+    .select('tenant_id, ai_employee_id')
     .eq('twilio_number', To)
     .eq('type', 'sms')
     .single()
@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await runAIPipeline({
       tenantId: channel.tenant_id,
+      agentId: channel.ai_employee_id ?? undefined,
       channelType: 'sms',
       from: From,
       messageContent: Body,

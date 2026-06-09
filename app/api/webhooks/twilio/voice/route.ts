@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
   const isGatherCallback = 'SpeechResult' in params
   const SpeechResult = params.SpeechResult || ''
 
-  // Carry conversationId across turns via query param
   const conversationId = req.nextUrl.searchParams.get('cid') || undefined
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
@@ -32,7 +31,7 @@ export async function POST(req: NextRequest) {
   const toNormalized = To?.startsWith('+') ? To : `+${To}`
   const { data: channels } = await supabase
     .from('channels')
-    .select('tenant_id')
+    .select('tenant_id, ai_employee_id')
     .eq('twilio_number', toNormalized)
     .limit(1)
   const channel = channels?.[0] ?? null
@@ -55,6 +54,7 @@ export async function POST(req: NextRequest) {
       try {
         const result = await runAIPipeline({
           tenantId: channel.tenant_id,
+          agentId: channel.ai_employee_id ?? undefined,
           channelType: 'voice',
           from: From,
           messageContent: SpeechResult,
@@ -84,20 +84,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fresh call — check for call forwarding
+  // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
-    const { data: tenant } = await supabase
-      .from('tenants')
-      .select('forward_to_phone, ai_employees(greeting, status)')
-      .eq('id', channel.tenant_id)
-      .maybeSingle()
+    const agentQuery = channel.ai_employee_id
+      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('forward_to_phone, greeting, status').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
-    const forwardTo = tenant?.forward_to_phone
-    const aiEmployees = tenant?.ai_employees as { greeting: string; status: string }[] | undefined
-    const greeting = aiEmployees?.find(e => e.status === 'active')?.greeting
-      || 'Hello! Thank you for calling. How can I help you today?'
+    const { data: agent } = await agentQuery
 
-    // If forwarding is set — ring owner's phone first, AI answers on no-answer
+    const forwardTo = agent?.forward_to_phone
+    const greeting = agent?.greeting || 'Hello! Thank you for calling. How can I help you today?'
+
     if (forwardTo) {
       const fallbackAction = `${baseUrl}/api/webhooks/twilio/voice/ai-fallback`
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -109,7 +106,6 @@ export async function POST(req: NextRequest) {
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
     }
 
-    // No forwarding — AI answers directly
     const action = gatherUrl(baseUrl)
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>

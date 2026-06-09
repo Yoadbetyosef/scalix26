@@ -61,6 +61,19 @@ export interface AIEmployee {
   personality_score: number
   system_prompt: string | null
   status: AIEmployeeStatus
+  // Per-agent business identity
+  business_name: string | null
+  industry: string | null
+  website: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+  business_hours: BusinessHours | null
+  timezone: string
+  forward_to_phone: string | null
   created_at: string
   channels?: Channel[]
   skills?: Skill[]
