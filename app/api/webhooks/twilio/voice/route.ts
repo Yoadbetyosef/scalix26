@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
+import { intakeLead } from '@/lib/leads/speed-to-lead'
 
 function escapeXml(str: string): string {
   return str
@@ -35,6 +36,21 @@ export async function POST(req: NextRequest) {
     .eq('twilio_number', toNormalized)
     .limit(1)
   const channel = channels?.[0] ?? null
+
+  // Safety net: the AI normally answers every call, but if Twilio reports the
+  // call went unanswered (e.g. forwarded to the owner who didn't pick up),
+  // fire Speed to Lead so the caller still gets an instant text back.
+  const callStatus = params.CallStatus
+  if (channel && From && (callStatus === 'no-answer' || callStatus === 'busy' || callStatus === 'failed')) {
+    try {
+      await intakeLead({ tenantId: channel.tenant_id, phone: From, source: 'missed_call' })
+    } catch (err) {
+      console.error('[voice] missed-call speed-to-lead failed:', err instanceof Error ? err.message : err)
+    }
+    return new NextResponse('<?xml version="1.0"?><Response></Response>', {
+      headers: { 'Content-Type': 'text/xml' },
+    })
+  }
 
   // Gather callback — user spoke
   if (isGatherCallback) {
