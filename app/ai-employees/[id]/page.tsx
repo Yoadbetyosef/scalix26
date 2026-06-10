@@ -31,7 +31,7 @@ export default async function AIEmployeeEditPage({
   if (!employee) notFound()
 
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-4 sm:p-6 max-w-3xl">
       <AIEmployeeEditClient
         employee={employee}
         tenantId={tenant.id}

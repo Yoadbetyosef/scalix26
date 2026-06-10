@@ -55,7 +55,7 @@ export default function AdminDashboard() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Total Users', value: stats.total },
             { label: 'Trial Users', value: stats.trials },
@@ -71,15 +71,15 @@ export default function AdminDashboard() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex gap-3">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex flex-col sm:flex-row gap-3">
         <input
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 outline-none focus:border-teal-400"
+          className="border border-gray-200 rounded-lg px-3 h-11 text-sm flex-1 outline-none focus:border-teal-400"
           placeholder="Search by name or email..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
         <select
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400"
+          className="border border-gray-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-teal-400"
           value={planFilter}
           onChange={e => setPlanFilter(e.target.value)}
         >
@@ -92,8 +92,8 @@ export default function AdminDashboard() {
       </div>
 
       {/* Users table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {['Business', 'Email', 'Phone', 'Plan', 'Signed up', 'Last seen', ''].map(h => (

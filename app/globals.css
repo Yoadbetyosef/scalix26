@@ -34,3 +34,26 @@ body {
 
 /* Safe area for mobile bottom navigation */
 .safe-area-inset-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+
+/* Tap highlight off — we provide our own press feedback */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Global press feedback for buttons, links acting as buttons, and clickable rows */
+button:not(:disabled),
+a[role="button"]:not([aria-disabled="true"]),
+[role="button"]:not([aria-disabled="true"]),
+.tap-target {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+  touch-action: manipulation;
+}
+
+button:not(:disabled):active,
+a[role="button"]:not([aria-disabled="true"]):active,
+[role="button"]:not([aria-disabled="true"]):active,
+.tap-target:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+

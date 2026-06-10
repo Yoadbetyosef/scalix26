@@ -190,7 +190,7 @@ export default async function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 {conversations.slice(0, 6).map((conv) => (
-                  <Link key={conv.id} href={`/inbox/${conv.id}`}>
+                  <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
                     <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer">
                       <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-xs font-medium">
                         {(conv.contact as { name?: string; phone?: string } | null)?.name?.[0] || (conv.contact as { name?: string; phone?: string } | null)?.phone?.[0] || '?'}

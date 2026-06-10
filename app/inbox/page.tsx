@@ -73,7 +73,7 @@ export default async function InboxPage({
             <Link
               key={s}
               href={`/inbox?status=${s}&channel=${channel}&q=${q}`}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors capitalize min-h-[36px] flex items-center ${
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors capitalize min-h-[44px] flex items-center ${
                 status === s
                   ? 'bg-[#1a1f36] text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -90,7 +90,7 @@ export default async function InboxPage({
             <Link
               key={c}
               href={`/inbox?status=${status}&channel=${c}&q=${q}`}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors min-h-[36px] flex items-center ${
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors min-h-[44px] flex items-center ${
                 channel === c
                   ? 'bg-[#4ecdc4] text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -114,7 +114,7 @@ export default async function InboxPage({
             {filtered.map((conv) => {
               const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
               return (
-                <Link key={conv.id} href={`/inbox/${conv.id}`}>
+                <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
                   <div className="flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-sm font-medium flex-shrink-0">
                       {contact?.name?.[0] || contact?.phone?.[0] || '?'}

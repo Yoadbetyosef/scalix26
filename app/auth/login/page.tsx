@@ -72,7 +72,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="text-right">
-              <Link href="/auth/forgot-password" className="text-xs text-gray-400 hover:text-[#4ecdc4]">
+              <Link href="/auth/forgot-password" className="inline-block py-3 -my-3 text-xs text-gray-400 hover:text-[#4ecdc4]">
                 Forgot password?
               </Link>
             </div>
