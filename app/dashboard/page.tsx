@@ -49,6 +49,32 @@ async function getDashboardData(tenantId: string) {
       .limit(100),
   ])
 
+  const leadsList = (leadRecords as Lead[] | null) || []
+
+  // Map each lead to a destination: its SMS conversation if one exists,
+  // otherwise the contact profile. Lets the dashboard rows be clickable.
+  const leadLinks: Record<string, string> = {}
+  const contactIds = [...new Set(leadsList.map(l => l.contact_id).filter((c): c is string => !!c))]
+  if (contactIds.length) {
+    const { data: convs } = await supabase
+      .from('conversations')
+      .select('id, contact_id, updated_at')
+      .eq('tenant_id', tenantId)
+      .in('contact_id', contactIds)
+      .order('updated_at', { ascending: false })
+    const latestByContact: Record<string, string> = {}
+    for (const c of (convs || []) as { id: string; contact_id: string | null }[]) {
+      if (c.contact_id && !latestByContact[c.contact_id]) latestByContact[c.contact_id] = c.id
+    }
+    for (const lead of leadsList) {
+      if (lead.contact_id && latestByContact[lead.contact_id]) {
+        leadLinks[lead.id] = `/inbox/${latestByContact[lead.contact_id]}`
+      } else if (lead.contact_id) {
+        leadLinks[lead.id] = `/contacts/${lead.contact_id}`
+      }
+    }
+  }
+
   return {
     stats: {
       totalCalls: totalCalls || 0,
@@ -58,7 +84,8 @@ async function getDashboardData(tenantId: string) {
     },
     conversations: conversations || [],
     aiEmployees: aiEmployees || [],
-    leads_list: (leadRecords as Lead[] | null) || [],
+    leads_list: leadsList,
+    leadLinks,
   }
 }
 
@@ -82,7 +109,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   if (!tenant) redirect('/setup')
 
-  const { stats, conversations, aiEmployees, leads_list } = await getDashboardData(tenant.id)
+  const { stats, conversations, aiEmployees, leads_list, leadLinks } = await getDashboardData(tenant.id)
 
   const statCards = [
     { label: 'Total Calls', value: stats.totalCalls, icon: Phone, color: 'bg-purple-50 text-purple-600' },
@@ -125,7 +152,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       </div>
 
       {activeTab === 'leads' ? (
-        <LeadsTable leads={leads_list} />
+        <LeadsTable leads={leads_list} links={leadLinks} />
       ) : (
       <>
       {/* Stats */}
