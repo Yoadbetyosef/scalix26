@@ -6,10 +6,14 @@ const FROM = 'Scalix <noreply@mylocksmithai.com>'
 export async function sendEmail(to: string, subject: string, html: string) {
   if (!process.env.RESEND_API_KEY) {
     console.warn('[email] RESEND_API_KEY not set, skipping email')
-    return
+    return { success: false, error: 'RESEND_API_KEY not set' }
   }
   const { error } = await resend.emails.send({ from: FROM, to, subject, html })
-  if (error) console.error('[email] send error:', error)
+  if (error) {
+    console.error('[email] send error:', error)
+    return { success: false, error: error.message }
+  }
+  return { success: true }
 }
 
 export const emailTemplates = {

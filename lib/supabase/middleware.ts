@@ -33,10 +33,32 @@ export async function updateSession(request: NextRequest) {
   const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'yoadbetyosef@gmail.com').split(',').map(e => e.trim())
 
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
-  if (isAdminRoute && user && !ADMIN_EMAILS.includes(user.email || '')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+
+  if (isAdminRoute) {
+    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+    if (ADMIN_PASSWORD) {
+      const authHeader = request.headers.get('authorization') || ''
+      let validPassword = false
+      if (authHeader.startsWith('Basic ')) {
+        try {
+          const decoded = atob(authHeader.slice(6))
+          const [, pass] = decoded.split(':')
+          validPassword = pass === ADMIN_PASSWORD
+        } catch {}
+      }
+      if (!validPassword) {
+        return new NextResponse('Authentication required', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="Admin Area"' },
+        })
+      }
+    }
+
+    if (user && !ADMIN_EMAILS.includes(user.email || '')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
   const isPublic = publicRoutes.some(r => pathname.startsWith(r))
 

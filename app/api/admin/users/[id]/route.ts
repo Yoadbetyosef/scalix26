@@ -46,14 +46,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (action === 'reset_password') {
-    const { error } = await supabase.auth.admin.generateLink({
+    const { data, error } = await supabase.auth.admin.generateLink({
       type: 'recovery',
       email: tenant.email,
       options: { redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password` },
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    await sendEmail(tenant.email, 'Reset your Scalix password',
-      `<p>Hi ${tenant.business_name},</p><p>An admin has sent you a password reset link. Click the link in your email to reset your password.</p>`)
+    const resetLink = data.properties?.action_link
+    const result = await sendEmail(tenant.email, 'Reset your Scalix password',
+      `<p>Hi ${tenant.business_name},</p><p>An admin has sent you a password reset link. Click the button below to reset your password:</p><p><a href="${resetLink}" style="background:#4ecdc4;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">Reset Password</a></p><p>If you didn't request this, you can ignore this email.</p>`)
+    if (result?.error) return NextResponse.json({ error: `Email failed: ${result.error}` }, { status: 500 })
     return NextResponse.json({ success: true, message: 'Reset email sent' })
   }
 
