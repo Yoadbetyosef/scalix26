@@ -51,3 +51,22 @@ export function truncate(str: string, length: number) {
   if (str.length <= length) return str
   return `${str.slice(0, length)}...`
 }
+
+// Social channels (Facebook/Instagram) store the platform user id in the
+// contact's `phone` field — it is NOT a real phone number.
+export function isSocialChannel(channel?: string | null): boolean {
+  return channel === 'facebook' || channel === 'instagram'
+}
+
+// Describes how to display a contact's primary identifier (phone vs social id).
+export function contactIdentifier(channel?: string | null, phone?: string | null) {
+  if (!phone) return null
+  if (isSocialChannel(channel)) {
+    return {
+      value: phone,
+      label: channel === 'facebook' ? 'Facebook user' : 'Instagram user',
+      isPhone: false,
+    }
+  }
+  return { value: phone, label: 'Phone', isPhone: true }
+}

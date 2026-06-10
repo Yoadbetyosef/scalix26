@@ -1,10 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Phone, MessageSquare, User, Info } from 'lucide-react'
+import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { formatDateTime, formatDate } from '@/lib/utils'
+import { formatDateTime, formatDate, contactIdentifier } from '@/lib/utils'
 import { ConversationActions } from '@/components/inbox/conversation-actions'
 import { ConversationContactPanel } from '@/components/inbox/conversation-contact-panel'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
@@ -46,6 +45,9 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     sentiment: conv.sentiment,
     messageCount: messages?.length || 0,
   }
+
+  const ident = contactIdentifier(conv.channel, contact?.phone)
+  const IdentIcon = ident && !ident.isPhone ? MessageCircle : Phone
 
   return (
     <div className="flex flex-col h-screen max-h-screen">
@@ -143,10 +145,17 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
                 <span className="text-gray-700">{contact.name}</span>
               </div>
             )}
-            {contact?.phone && (
-              <div className="flex items-center gap-2 text-sm">
-                <Phone className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-700">{contact.phone}</span>
+            {ident && (
+              <div className="flex items-start gap-2 text-sm">
+                <IdentIcon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  {ident.isPhone ? (
+                    <a href={`tel:${ident.value}`} className="text-[#4ecdc4] break-all">{ident.value}</a>
+                  ) : (
+                    <span className="text-gray-700 break-all">{ident.value}</span>
+                  )}
+                  <p className="text-xs text-gray-400">{ident.label}</p>
+                </div>
               </div>
             )}
             {contact?.email && (
