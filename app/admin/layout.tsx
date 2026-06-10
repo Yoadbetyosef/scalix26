@@ -10,7 +10,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <nav className="bg-gray-900 text-white px-6 py-3 flex items-center gap-6">
         <span className="font-bold text-lg">Scalix Admin</span>
         <a href="/admin" className="text-gray-300 hover:text-white text-sm">Dashboard</a>
-        <a href="/admin/users" className="text-gray-300 hover:text-white text-sm">Users</a>
         <a href="/dashboard" className="ml-auto text-gray-400 hover:text-white text-sm">← Back to app</a>
       </nav>
       <main className="p-6">{children}</main>
