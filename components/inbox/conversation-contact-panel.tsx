@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Info, X, Phone, MessageSquare, User } from 'lucide-react'
+import { Info, X, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { contactIdentifier } from '@/lib/utils'
 import Link from 'next/link'
 
 interface ContactInfo {
@@ -17,6 +18,9 @@ interface ContactInfo {
 
 export function ConversationContactPanel({ contact }: { contact: ContactInfo }) {
   const [open, setOpen] = useState(false)
+
+  const ident = contactIdentifier(contact.channel, contact.phone)
+  const IdentIcon = ident && !ident.isPhone ? MessageCircle : Phone
 
   return (
     <>
@@ -51,10 +55,17 @@ export function ConversationContactPanel({ contact }: { contact: ContactInfo }) 
                   <span className="text-gray-700">{contact.name}</span>
                 </div>
               )}
-              {contact.phone && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <a href={`tel:${contact.phone}`} className="text-[#4ecdc4]">{contact.phone}</a>
+              {ident && (
+                <div className="flex items-start gap-3 text-sm">
+                  <IdentIcon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    {ident.isPhone ? (
+                      <a href={`tel:${ident.value}`} className="text-[#4ecdc4] break-all">{ident.value}</a>
+                    ) : (
+                      <span className="text-gray-700 break-all">{ident.value}</span>
+                    )}
+                    <p className="text-xs text-gray-400">{ident.label}</p>
+                  </div>
                 </div>
               )}
               {contact.email && (

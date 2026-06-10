@@ -1,9 +1,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { Users, Phone, Mail, MessageCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { formatDate } from '@/lib/utils'
+import { formatDate, isSocialChannel } from '@/lib/utils'
 
 export default async function ContactsPage() {
   const supabase = await createClient()
@@ -61,8 +60,17 @@ export default async function ContactsPage() {
                 <div className="space-y-1.5 text-sm text-gray-600">
                   {contact.phone && (
                     <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                      <a href={`tel:${contact.phone}`} className="text-[#4ecdc4]">{contact.phone}</a>
+                      {isSocialChannel(contact.channel) ? (
+                        <>
+                          <MessageCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="text-gray-600 break-all">{contact.phone}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <a href={`tel:${contact.phone}`} className="text-[#4ecdc4]">{contact.phone}</a>
+                        </>
+                      )}
                     </div>
                   )}
                   {contact.email && (
@@ -109,8 +117,10 @@ export default async function ContactsPage() {
                     <td className="px-6 py-4">
                       {contact.phone ? (
                         <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                          <Phone className="w-3.5 h-3.5 text-gray-400" />
-                          {contact.phone}
+                          {isSocialChannel(contact.channel)
+                            ? <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
+                            : <Phone className="w-3.5 h-3.5 text-gray-400" />}
+                          <span className="break-all">{contact.phone}</span>
                         </div>
                       ) : <span className="text-gray-300">—</span>}
                     </td>
