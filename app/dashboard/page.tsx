@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Phone, MessageSquare, MessageCircle, Users, Bot, Plus, TrendingUp } from 'lucide-react'
+import { Phone, MessageSquare, MessageCircle, Bot, Plus, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { formatDateTime, truncate } from '@/lib/utils'
 import { ConversationDistributionChart } from '@/components/charts/conversation-distribution'
 import { ChannelDistributionChart } from '@/components/charts/channel-distribution'
+import { LeadsTable } from '@/components/dashboard/leads-table'
+import type { Lead } from '@/types'
 
 async function getDashboardData(tenantId: string) {
   const supabase = await createClient()
@@ -21,6 +23,7 @@ async function getDashboardData(tenantId: string) {
     { count: leads },
     { data: conversations },
     { data: aiEmployees },
+    { data: leadRecords },
   ] = await Promise.all([
     supabase.from('analytics_events').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId).eq('event_type', 'call_handled').gte('created_at', sevenDaysAgo),
@@ -38,6 +41,12 @@ async function getDashboardData(tenantId: string) {
     supabase.from('ai_employees')
       .select('*, channels(*), skills(*)')
       .eq('tenant_id', tenantId),
+    // Leads — resilient: if the table doesn't exist yet, data is null -> []
+    supabase.from('leads')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false })
+      .limit(100),
   ])
 
   return {
@@ -49,10 +58,14 @@ async function getDashboardData(tenantId: string) {
     },
     conversations: conversations || [],
     aiEmployees: aiEmployees || [],
+    leads_list: (leadRecords as Lead[] | null) || [],
   }
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams
+  const activeTab = tab === 'leads' ? 'leads' : 'overview'
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -69,7 +82,7 @@ export default async function DashboardPage() {
 
   if (!tenant) redirect('/setup')
 
-  const { stats, conversations, aiEmployees } = await getDashboardData(tenant.id)
+  const { stats, conversations, aiEmployees, leads_list } = await getDashboardData(tenant.id)
 
   const statCards = [
     { label: 'Total Calls', value: stats.totalCalls, icon: Phone, color: 'bg-purple-50 text-purple-600' },
@@ -95,6 +108,26 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200">
+        <Link
+          href="/dashboard"
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'overview' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Overview
+        </Link>
+        <Link
+          href="/dashboard?tab=leads"
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Leads
+        </Link>
+      </div>
+
+      {activeTab === 'leads' ? (
+        <LeadsTable leads={leads_list} />
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map(({ label, value, icon: Icon, color }) => (
@@ -185,7 +218,7 @@ export default async function DashboardPage() {
               <div className="text-center py-8">
                 <MessageCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                 <p className="text-gray-500 text-sm">No conversations yet</p>
-                <p className="text-gray-400 text-xs mt-1">They'll appear here once customers reach out</p>
+                <p className="text-gray-400 text-xs mt-1">They&apos;ll appear here once customers reach out</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -215,6 +248,8 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      </>
+      )}
     </div>
   )
 }

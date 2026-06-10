@@ -176,6 +176,21 @@ CREATE TABLE appointments (
 );
 
 -- ============================================================
+-- LEADS (Speed to Lead)
+-- ============================================================
+CREATE TABLE leads (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  source TEXT NOT NULL CHECK (source IN ('missed_call','web_form','google_lsa','facebook','yelp','angi','other')),
+  phone TEXT NOT NULL,
+  name TEXT,
+  status TEXT DEFAULT 'new' CHECK (status IN ('new','contacted','booked','lost')),
+  responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- ANALYTICS EVENTS
 -- ============================================================
 CREATE TABLE analytics_events (
@@ -200,6 +215,7 @@ ALTER TABLE skills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_base ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
 
 -- Tenants: user can only see their own tenant
 CREATE POLICY "Users can view own tenant" ON tenants FOR SELECT USING (user_id = auth.uid());
@@ -239,6 +255,9 @@ CREATE POLICY "Tenant appointments access" ON appointments FOR ALL USING (tenant
 -- Analytics Events
 CREATE POLICY "Tenant analytics_events access" ON analytics_events FOR ALL USING (tenant_id = get_tenant_id());
 
+-- Leads
+CREATE POLICY "Tenant leads access" ON leads FOR ALL USING (tenant_id = get_tenant_id());
+
 -- Webhook bypass (for service role)
 -- Use service role key in webhook routes to bypass RLS
 
@@ -262,3 +281,6 @@ CREATE INDEX idx_appointments_tenant_id ON appointments(tenant_id);
 CREATE INDEX idx_appointments_scheduled_at ON appointments(scheduled_at);
 CREATE INDEX idx_analytics_events_tenant_id ON analytics_events(tenant_id);
 CREATE INDEX idx_analytics_events_event_type ON analytics_events(event_type);
+CREATE INDEX idx_leads_tenant_id ON leads(tenant_id);
+CREATE INDEX idx_leads_created_at ON leads(created_at);
+CREATE INDEX idx_leads_phone ON leads(phone);
