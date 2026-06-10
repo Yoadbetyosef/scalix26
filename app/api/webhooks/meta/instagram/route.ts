@@ -92,8 +92,10 @@ export async function POST(req: NextRequest) {
           messageContent: text,
         })
 
-        const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
-        await sendInstagramReply(senderId, result.response, accessToken)
+        if (!result.skipped && result.response) {
+          const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
+          await sendInstagramReply(senderId, result.response, accessToken)
+        }
       }
     }
     return NextResponse.json({ status: 'ok' })
@@ -132,8 +134,10 @@ export async function POST(req: NextRequest) {
           messageContent: text,
         })
 
-        const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
-        await sendFacebookReply(senderId, result.response, accessToken)
+        if (!result.skipped && result.response) {
+          const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
+          await sendFacebookReply(senderId, result.response, accessToken)
+        }
       }
     }
     return NextResponse.json({ status: 'ok' })

@@ -62,6 +62,18 @@ export async function POST(req: NextRequest) {
         })
 
         const action = gatherUrl(baseUrl, result.conversationId)
+
+        // Human has taken over this conversation — don't let the AI speak.
+        if (result.skipped) {
+          const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
+    <Say voice="Polly.Joanna-Neural">One moment please, let me connect you with someone from our team.</Say>
+  </Gather>
+</Response>`
+          return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
+        }
+
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">

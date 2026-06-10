@@ -15,6 +15,8 @@ interface PipelineOutput {
   response: string
   conversationId: string
   skillTriggered?: string
+  /** True when a human has taken over the conversation; AI did not respond. */
+  skipped?: boolean
 }
 
 function buildSystemPrompt(
@@ -127,10 +129,11 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   // Find existing open conversation for this contact on this channel
   let conversationId = input.conversationId
+  let humanTakeover = false
   if (!conversationId && contact?.id) {
     const { data: existing } = await supabase
       .from('conversations')
-      .select('id')
+      .select('id, human_takeover')
       .eq('tenant_id', input.tenantId)
       .eq('contact_id', contact.id)
       .eq('channel', input.channelType)
@@ -138,7 +141,33 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-    if (existing) conversationId = existing.id
+    if (existing) {
+      conversationId = existing.id
+      humanTakeover = existing.human_takeover === true
+    }
+  } else if (conversationId) {
+    // Conversation id passed in directly (e.g. voice) — fetch its takeover state
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('human_takeover')
+      .eq('id', conversationId)
+      .maybeSingle()
+    humanTakeover = existing?.human_takeover === true
+  }
+
+  // Human has taken over: record the inbound customer message so it shows in the
+  // inbox, but do NOT generate or send an AI reply.
+  if (humanTakeover && conversationId) {
+    const nowTs = new Date().toISOString()
+    Promise.all([
+      supabase.from('messages').insert([
+        { conversation_id: conversationId, tenant_id: input.tenantId, role: 'user', content: input.messageContent, channel: input.channelType },
+      ]),
+      supabase.from('conversations').update({ updated_at: nowTs }).eq('id', conversationId),
+      contact ? supabase.from('contacts').update({ last_interaction: nowTs }).eq('id', contact.id) : Promise.resolve(null),
+    ]).catch(console.error)
+
+    return { response: '', conversationId, skipped: true }
   }
 
   // Load skills + conversation history + create conversation if needed

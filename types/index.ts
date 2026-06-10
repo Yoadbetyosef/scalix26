@@ -4,7 +4,7 @@ export type ConversationStatus = 'open' | 'resolved' | 'closed'
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
 export type AIEmployeeStatus = 'active' | 'draft'
 export type ChannelStatus = 'connected' | 'disconnected' | 'pending'
-export type MessageRole = 'user' | 'assistant' | 'system'
+export type MessageRole = 'user' | 'assistant' | 'system' | 'agent'
 export type Sentiment = 'positive' | 'neutral' | 'negative'
 export type KnowledgeSource = 'manual' | 'website' | 'document' | 'template'
 
@@ -113,6 +113,7 @@ export interface Conversation {
   contact_id: string | null
   channel: ChannelType
   status: ConversationStatus
+  human_takeover: boolean
   summary: string | null
   sentiment: Sentiment | null
   duration_seconds: number | null

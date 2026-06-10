@@ -101,6 +101,7 @@ CREATE TABLE conversations (
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
   channel TEXT NOT NULL,
   status TEXT DEFAULT 'open' CHECK (status IN ('open','resolved','closed')),
+  human_takeover BOOLEAN DEFAULT false,
   summary TEXT,
   sentiment TEXT CHECK (sentiment IN ('positive','neutral','negative')),
   duration_seconds INTEGER,
@@ -115,7 +116,7 @@ CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
   tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  role TEXT NOT NULL CHECK (role IN ('user','assistant','system','agent')),
   content TEXT NOT NULL,
   channel TEXT,
   timestamp TIMESTAMPTZ DEFAULT NOW()
