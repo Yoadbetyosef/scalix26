@@ -7,6 +7,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { formatDateTime, formatDate } from '@/lib/utils'
 import { ConversationActions } from '@/components/inbox/conversation-actions'
 import { ConversationContactPanel } from '@/components/inbox/conversation-contact-panel'
+import { HumanTakeover } from '@/components/inbox/human-takeover'
+import { MessageComposer } from '@/components/inbox/message-composer'
 
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient()
@@ -68,6 +70,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
           <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
+          <HumanTakeover conversationId={id} active={conv.human_takeover === true} />
           <ConversationActions conversationId={id} currentStatus={conv.status} />
           {/* Mobile contact info trigger */}
           <ConversationContactPanel contact={contactInfo} />
@@ -77,6 +80,14 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       <div className="flex flex-1 overflow-hidden">
         {/* Messages */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Human takeover banner */}
+          {conv.human_takeover && (
+            <div className="mx-4 sm:mx-6 mt-4 px-4 py-2.5 bg-[#1a1f36] text-white rounded-xl flex items-center gap-2 flex-shrink-0">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <p className="text-sm font-medium">You are now handling this conversation</p>
+            </div>
+          )}
+
           {/* AI Summary */}
           {conv.summary && (
             <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-[#4ecdc4]/5 rounded-xl border border-[#4ecdc4]/20 flex-shrink-0">
@@ -87,26 +98,38 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
 
           {/* Transcript */}
           <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-4">
-            {(messages || []).map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === 'assistant' ? 'justify-end' : 'justify-start'}`}
-              >
+            {(messages || []).map((msg) => {
+              const isAgent = msg.role === 'agent'
+              const isOutbound = msg.role === 'assistant' || isAgent
+              return (
                 <div
-                  className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                    msg.role === 'assistant'
-                      ? 'bg-[#4ecdc4] text-white rounded-br-sm'
-                      : 'bg-white border border-gray-100 text-gray-900 rounded-bl-sm'
-                  }`}
+                  key={msg.id}
+                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                 >
-                  <p className="text-sm">{msg.content}</p>
-                  <p className={`text-xs mt-1 ${msg.role === 'assistant' ? 'text-white/70' : 'text-gray-400'}`}>
-                    {formatDateTime(msg.timestamp)}
-                  </p>
+                  <div
+                    className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
+                      isAgent
+                        ? 'bg-[#1a1f36] text-white rounded-br-sm'
+                        : msg.role === 'assistant'
+                        ? 'bg-[#4ecdc4] text-white rounded-br-sm'
+                        : 'bg-white border border-gray-100 text-gray-900 rounded-bl-sm'
+                    }`}
+                  >
+                    {isAgent && (
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 mb-0.5">Agent</p>
+                    )}
+                    <p className="text-sm">{msg.content}</p>
+                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/70' : 'text-gray-400'}`}>
+                      {formatDateTime(msg.timestamp)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
+
+          {/* Manual message composer — only when a human has taken over */}
+          {conv.human_takeover && <MessageComposer conversationId={id} />}
         </div>
 
         {/* Contact Sidebar — desktop only */}

@@ -54,12 +54,14 @@ export async function POST(req: NextRequest) {
       messageContent: Body,
     })
 
-    // Send SMS response
-    try {
-      const msg = await sendSMS(From, result.response, To)
-      console.log('[SMS] Sent successfully. SID:', msg.sid)
-    } catch (smsErr: any) {
-      console.error('[SMS] sendSMS failed:', smsErr?.message, smsErr?.code, smsErr?.status)
+    // Send SMS response (unless a human has taken over this conversation)
+    if (!result.skipped && result.response) {
+      try {
+        const msg = await sendSMS(From, result.response, To)
+        console.log('[SMS] Sent successfully. SID:', msg.sid)
+      } catch (smsErr: any) {
+        console.error('[SMS] sendSMS failed:', smsErr?.message, smsErr?.code, smsErr?.status)
+      }
     }
   } catch (err: any) {
     console.error('[SMS] Pipeline error:', err?.message)

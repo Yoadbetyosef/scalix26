@@ -34,7 +34,10 @@ export async function POST(req: NextRequest) {
       messageContent: Body,
     })
 
-    await sendSMS(`whatsapp:${fromNumber}`, result.response, `whatsapp:${toNumber}`)
+    // Skip the AI reply when a human has taken over this conversation
+    if (!result.skipped && result.response) {
+      await sendSMS(`whatsapp:${fromNumber}`, result.response, `whatsapp:${toNumber}`)
+    }
   } catch (err) {
     console.error('WhatsApp pipeline error:', err)
   }
