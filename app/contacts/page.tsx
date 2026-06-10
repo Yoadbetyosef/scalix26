@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Users, Phone, Mail, MessageCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Users, Phone, Mail, MessageCircle, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, isSocialChannel } from '@/lib/utils'
 
@@ -40,7 +41,7 @@ export default async function ContactsPage() {
           {/* Mobile card list */}
           <div className="md:hidden space-y-2">
             {contacts.map((contact) => (
-              <div key={contact.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <Link key={contact.id} href={`/contacts/${contact.id}`} className="tap-target block bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 rounded-full bg-[#4ecdc4]/10 flex items-center justify-center text-[#4ecdc4] text-sm font-medium flex-shrink-0">
                     {contact.name?.[0] || contact.phone?.[0] || '?'}
@@ -56,21 +57,15 @@ export default async function ContactsPage() {
                   {contact.last_interaction && (
                     <p className="text-xs text-gray-400 flex-shrink-0">{formatDate(contact.last_interaction)}</p>
                   )}
+                  <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
                 </div>
                 <div className="space-y-1.5 text-sm text-gray-600">
                   {contact.phone && (
                     <div className="flex items-center gap-2">
-                      {isSocialChannel(contact.channel) ? (
-                        <>
-                          <MessageCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                          <span className="text-gray-600 break-all">{contact.phone}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                          <a href={`tel:${contact.phone}`} className="text-[#4ecdc4]">{contact.phone}</a>
-                        </>
-                      )}
+                      {isSocialChannel(contact.channel)
+                        ? <MessageCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        : <Phone className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+                      <span className="break-all">{contact.phone}</span>
                     </div>
                   )}
                   {contact.email && (
@@ -84,7 +79,7 @@ export default async function ContactsPage() {
                     <span>{contact.total_conversations} conversation{contact.total_conversations !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
 
@@ -105,14 +100,14 @@ export default async function ContactsPage() {
                 {contacts.map((contact) => (
                   <tr key={contact.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
+                      <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3 group">
                         <div className="w-8 h-8 rounded-full bg-[#4ecdc4]/10 flex items-center justify-center text-[#4ecdc4] text-sm font-medium">
                           {contact.name?.[0] || contact.phone?.[0] || '?'}
                         </div>
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-gray-900 group-hover:text-[#4ecdc4] transition-colors">
                           {contact.name || 'Unknown'}
                         </span>
-                      </div>
+                      </Link>
                     </td>
                     <td className="px-6 py-4">
                       {contact.phone ? (
