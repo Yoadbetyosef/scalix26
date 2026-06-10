@@ -59,13 +59,13 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
 
   return (
     <div className="max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
-        <a href="/admin" className="text-gray-400 hover:text-gray-600 text-sm">← Back</a>
-        <h1 className="text-2xl font-bold text-gray-900">{t.business_name}</h1>
-        <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full text-xs font-medium">{t.plan}</span>
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <a href="/admin" className="tap-target inline-block py-3 -my-3 text-gray-400 hover:text-gray-600 text-sm">← Back</a>
+        <h1 className="text-2xl font-bold text-gray-900 min-w-0">{t.business_name}</h1>
+        <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full text-xs font-medium flex-shrink-0">{t.plan}</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Account Info */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Account Info</h2>
@@ -78,9 +78,9 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
             ['Last login', data.authUser?.last_sign_in_at ? new Date(data.authUser.last_sign_in_at).toLocaleString() : '—'],
             ['Stripe Customer', t.stripe_customer_id || '—'],
           ].map(([k, v]) => (
-            <div key={k} className="flex justify-between py-1.5 text-sm border-b border-gray-50 last:border-0">
-              <span className="text-gray-500">{k}</span>
-              <span className="text-gray-900 font-medium">{v}</span>
+            <div key={k} className="flex justify-between gap-2 py-1.5 text-sm border-b border-gray-50 last:border-0">
+              <span className="text-gray-500 flex-shrink-0">{k}</span>
+              <span className="text-gray-900 font-medium min-w-0 truncate text-right">{v}</span>
             </div>
           ))}
         </div>
@@ -94,7 +94,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
               <label className="text-xs text-gray-500 uppercase font-medium">Change Plan</label>
               <div className="flex gap-2 mt-1">
                 <select
-                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm flex-1 outline-none"
+                  className="border border-gray-200 rounded-lg px-3 h-11 text-sm flex-1 outline-none"
                   value={plan} onChange={e => setPlan(e.target.value)}
                 >
                   {['trial', 'starter', 'pro', 'business'].map(p => (
@@ -103,7 +103,7 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
                 </select>
                 <button
                   onClick={updatePlan} disabled={saving}
-                  className="px-4 py-2 bg-teal-500 text-white rounded-lg text-sm font-medium hover:bg-teal-600 disabled:opacity-50"
+                  className="px-4 py-3 bg-teal-500 text-white rounded-lg text-sm font-medium hover:bg-teal-600 disabled:opacity-50"
                 >
                   {saving ? '...' : 'Save'}
                 </button>
@@ -111,17 +111,17 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
             </div>
 
             <button onClick={() => action('reset_password')}
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 text-left">
+              className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 text-left">
               Send Password Reset Email
             </button>
 
             <button onClick={() => action('impersonate')}
-              className="w-full px-4 py-2 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 text-left">
+              className="w-full px-4 py-3 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 text-left">
               Login as this user (impersonate)
             </button>
 
             <a href={`/api/admin/users/${id}/export`}
-              className="block w-full px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 text-center">
+              className="tap-target block w-full px-4 py-3 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 text-center">
               Export data as CSV
             </a>
           </div>
@@ -147,15 +147,15 @@ export default function AdminUserPage({ params }: { params: Promise<{ id: string
           <h2 className="font-semibold text-gray-900 mb-4">AI Employees</h2>
           {data.employees?.length === 0 ? <p className="text-sm text-gray-400">None</p> :
             data.employees?.map(e => (
-              <div key={e.id} className="flex items-center justify-between py-1.5 text-sm border-b border-gray-50 last:border-0">
-                <span className="text-gray-700">{e.name}</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs ${e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{e.status}</span>
+              <div key={e.id} className="flex items-center justify-between gap-2 py-1.5 text-sm border-b border-gray-50 last:border-0">
+                <span className="text-gray-700 min-w-0 truncate">{e.name}</span>
+                <span className={`px-2 py-0.5 rounded-full text-xs flex-shrink-0 ${e.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{e.status}</span>
               </div>
             ))}
         </div>
 
         {/* Recent conversations */}
-        <div className="col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+        <div className="col-span-1 lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="font-semibold text-gray-900 mb-4">Recent Conversations ({data.conversations?.length || 0})</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

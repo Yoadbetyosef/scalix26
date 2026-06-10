@@ -23,7 +23,7 @@ export function ConversationContactPanel({ contact }: { contact: ContactInfo }) 
       {/* Trigger — mobile only */}
       <button
         onClick={() => setOpen(true)}
-        className="lg:hidden w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
+        className="lg:hidden w-11 h-11 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
         aria-label="Contact info"
       >
         <Info className="w-4 h-4" />
@@ -38,7 +38,7 @@ export function ConversationContactPanel({ contact }: { contact: ContactInfo }) 
               <span className="font-semibold text-gray-900">Contact Info</span>
               <button
                 onClick={() => setOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500"
+                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500"
               >
                 <X className="w-4 h-4" />
               </button>

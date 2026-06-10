@@ -280,7 +280,7 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
                 <div key={day} className="flex items-center gap-3">
                   <span className="w-24 text-sm text-gray-600 font-medium">{DAY_LABELS[day]}</span>
                   <Input
-                    className="h-9 text-sm flex-1"
+                    className="h-11 text-sm flex-1"
                     placeholder="9:00-17:00 or closed"
                     value={(form.business_hours as Record<string, string>)[day] || ''}
                     onChange={e => setForm(f => ({
@@ -322,7 +322,7 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
                   <Label className="text-sm">Forward calls to (optional)</Label>
                   <p className="text-xs text-gray-400 mb-1.5">Your number rings first for 25s, then the AI takes over</p>
                   <Input
-                    className="h-9 text-sm"
+                    className="h-11 text-sm"
                     type="tel"
                     placeholder="(555) 987-6543"
                     value={form.forward_to_phone}
@@ -365,11 +365,11 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
               <div className="space-y-3">
                 {/* Facebook row */}
                 <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
                       <Share2 className="w-3 h-3" /> Facebook Page
                     </p>
-                    <p className="text-sm font-medium text-gray-800">
+                    <p className="text-sm font-medium text-gray-800 truncate">
                       {fbChannel
                         ? ((fbChannel.credentials as Record<string, string>)?.page_name || fbChannel.meta_page_id)
                         : <span className="text-gray-400 italic">Not connected</span>}
@@ -396,12 +396,12 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
 
                 {/* Instagram row */}
                 <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
                       <MessageCircle className="w-3 h-3" /> Instagram Account
                     </p>
                     {igChannel ? (
-                      <p className="text-sm font-medium text-gray-800">
+                      <p className="text-sm font-medium text-gray-800 truncate">
                         {(igChannel.credentials as Record<string, string>)?.username
                           ? `@${(igChannel.credentials as Record<string, string>).username}`
                           : igChannel.meta_page_id}
@@ -512,7 +512,7 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
       <Card>
         <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {VOICES.map(v => (
               <button
                 key={v.id}

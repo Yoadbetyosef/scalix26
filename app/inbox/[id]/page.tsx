@@ -48,8 +48,8 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col h-screen max-h-screen">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-gray-100 flex-shrink-0">
-        <Link href="/inbox" className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-gray-100 flex-shrink-0">
+        <Link href="/inbox" className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-medium flex-shrink-0">
@@ -66,7 +66,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
             {conv.ai_employee && <><span>·</span><span className="truncate">{(conv.ai_employee as { name: string }).name}</span></>}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
           <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
           <ConversationActions conversationId={id} currentStatus={conv.status} />
           {/* Mobile contact info trigger */}

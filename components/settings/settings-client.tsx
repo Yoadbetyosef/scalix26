@@ -276,7 +276,7 @@ export function SettingsClient({ tenant, channels }: Props) {
                     {!isCurrent && (
                       <button
                         onClick={() => handleUpgrade(plan.priceId!)}
-                        className="h-10 px-5 text-sm font-semibold bg-[#1a1f36] text-white rounded-xl hover:bg-[#2a2f46] transition-colors flex-shrink-0"
+                        className="h-11 px-5 text-sm font-semibold bg-[#1a1f36] text-white rounded-xl hover:bg-[#2a2f46] transition-colors flex-shrink-0"
                       >
                         Upgrade
                       </button>
@@ -293,7 +293,7 @@ export function SettingsClient({ tenant, channels }: Props) {
           </div>
 
           {tenant.plan !== 'trial' && (
-            <button onClick={openBillingPortal} className="w-full text-xs text-gray-400 hover:text-gray-600 py-1 flex items-center justify-center gap-1">
+            <button onClick={openBillingPortal} className="w-full text-xs text-gray-400 hover:text-gray-600 py-3.5 -my-2.5 flex items-center justify-center gap-1">
               <CreditCard className="w-3.5 h-3.5" /> Manage billing & invoices
             </button>
           )}

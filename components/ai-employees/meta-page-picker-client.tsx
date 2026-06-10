@@ -77,16 +77,16 @@ export function MetaPagePickerClient({ agentId, pages }: Props) {
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-gray-900">{page.name}</p>
-                  <div className="flex items-center gap-3 mt-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-900 truncate">{page.name}</p>
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="flex items-center gap-1 text-xs text-blue-600">
                       <Share2 className="w-3 h-3" /> Facebook
                     </span>
                     {page.instagram && (
-                      <span className="flex items-center gap-1 text-xs text-pink-500">
-                        <MessageCircle className="w-3 h-3" /> @{page.instagram.username}
+                      <span className="flex items-center gap-1 text-xs text-pink-500 min-w-0">
+                        <MessageCircle className="w-3 h-3 flex-shrink-0" /> <span className="truncate">@{page.instagram.username}</span>
                       </span>
                     )}
                   </div>

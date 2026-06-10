@@ -92,7 +92,7 @@ export function Sidebar() {
                 key={href}
                 href={href}
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  'tap-target flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                   active
                     ? 'bg-[#252b4a] text-white'
                     : 'text-gray-400 hover:bg-[#252b4a] hover:text-white'
@@ -126,7 +126,7 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium transition-colors min-h-[56px] justify-center',
+                'tap-target flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium transition-colors min-h-[56px] justify-center',
                 active ? 'text-[#4ecdc4]' : 'text-gray-400'
               )}
             >
@@ -164,7 +164,7 @@ export function Sidebar() {
               </span>
               <button
                 onClick={() => setMoreOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500"
+                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -177,7 +177,7 @@ export function Sidebar() {
                     key={href}
                     href={href}
                     className={cn(
-                      'flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium transition-colors',
+                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium transition-colors',
                       active
                         ? 'bg-[#4ecdc4]/10 text-[#4ecdc4]'
                         : 'text-gray-700 hover:bg-gray-50'

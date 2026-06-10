@@ -159,7 +159,7 @@ export function Step2CreateEmployee({ data, updateData }: Props) {
 
       <div>
         <Label>Avatar</Label>
-        <div className="grid grid-cols-4 gap-2 mt-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
           {AVATARS.map(avatar => (
             <button
               key={avatar.id}
@@ -182,7 +182,7 @@ export function Step2CreateEmployee({ data, updateData }: Props) {
       <div>
         <Label>Voice</Label>
         <p className="text-xs text-gray-400 mb-2 mt-0.5">Click ▶ to preview each voice</p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {VOICES.map(voice => (
             <button
               key={voice.id}

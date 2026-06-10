@@ -68,7 +68,7 @@ export function ReportBuilder({ tenantId }: Props) {
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-gray-700">Date Range</label>
           <select
-            className="h-9 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
+            className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
             value={dateRange}
             onChange={e => setDateRange(e.target.value)}
           >
