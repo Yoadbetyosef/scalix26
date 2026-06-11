@@ -12,10 +12,6 @@ import { LeadsTable } from '@/components/dashboard/leads-table'
 import { PostOnboardingChecklist } from '@/components/onboarding/post-onboarding-checklist'
 import type { Lead } from '@/types'
 
-function isWithinDays(dateStr: string, days: number) {
-  return Date.now() - new Date(dateStr).getTime() < days * 24 * 60 * 60 * 1000
-}
-
 async function getDashboardData(tenantId: string) {
   const supabase = await createClient()
 
@@ -117,10 +113,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const { stats, conversations, aiEmployees, leads_list, leadLinks } = await getDashboardData(tenant.id)
 
-  // Post-onboarding success checklist — only for new tenants (< 7 days)
-  const isNewTenant = isWithinDays(tenant.created_at, 7)
+  // Post-onboarding success checklist — shown until every item is done,
+  // regardless of signup date.
+  const checklist = (tenant.onboarding_checklist as Record<string, boolean>) || {}
+  const checklistComplete = !!(checklist.called && checklist.shared && checklist.tested)
+  const showChecklist = !!tenant.slug && !checklistComplete
   let aiPhoneNumber: string | null = null
-  if (isNewTenant) {
+  if (showChecklist) {
     const { data: ch } = await serviceSupabase
       .from('channels')
       .select('twilio_number')
@@ -155,12 +154,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Link>
       </div>
 
-      {/* Post-onboarding success checklist (new tenants only) */}
-      {isNewTenant && tenant.slug && (
+      {/* Post-onboarding success checklist — until all items are done */}
+      {showChecklist && tenant.slug && (
         <PostOnboardingChecklist
           slug={tenant.slug}
           aiPhoneNumber={aiPhoneNumber}
-          initial={(tenant.onboarding_checklist as Record<string, boolean>) || {}}
+          initial={checklist}
         />
       )}
 
