@@ -26,6 +26,8 @@ wss.on('connection', (twilioWs) => {
   // Per-call state: isSpeaking mutes STT while the AI talks (echo); greetingSent
   // prevents a duplicate greeting.
   const state = { isSpeaking: false, greetingSent: false };
+  let claudeTimeout = null;
+  let pendingTranscript = '';
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT ||
     'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
 
@@ -53,54 +55,68 @@ wss.on('connection', (twilioWs) => {
     console.log('[transcript]', { transcript, isFinal });
     console.log('[transcript check] transcript:', JSON.stringify(transcript), 'trimmed empty:', (transcript || '').trim() === '', 'isSpeaking:', state.isSpeaking);
 
-    if (state.isSpeaking) return; // ignore the AI's own voice while it's speaking
-    if (!transcript || transcript.trim() === '' || !isFinal) return;
+    if (!transcript || transcript.trim() === '' || !isFinal || state.isSpeaking) return;
 
-    console.log('[claude] sending to claude:', transcript);
-    conversationHistory.push({ role: 'user', content: transcript });
+    // Debounce: Deepgram can emit several final transcripts in quick
+    // succession — only send the most recent one after 300ms of quiet.
+    pendingTranscript = transcript;
+    if (claudeTimeout) clearTimeout(claudeTimeout);
+    claudeTimeout = setTimeout(async () => {
+      const textToSend = pendingTranscript;
+      pendingTranscript = '';
+      claudeTimeout = null;
 
-    // Get Claude response with streaming
-    try {
-      let fullResponse = '';
+      if (!textToSend || textToSend.trim() === '') return;
 
-      console.log('[claude] starting stream...');
-      const stream = await anthropic.messages.stream({
-        model: 'claude-haiku-4-5',
-        max_tokens: 120,
-        system: systemPrompt,
-        messages: conversationHistory.slice(-6),
-      });
+      console.log('[claude] sending to claude:', textToSend);
+      state.isSpeaking = true;
+      conversationHistory.push({ role: 'user', content: textToSend });
 
-      // Buffer text and send to TTS in chunks
-      let buffer = '';
+      // Get Claude response with streaming
+      try {
+        let fullResponse = '';
 
-      stream.on('text', async (text) => {
-        console.log('[claude text]', text);
-        buffer += text;
-        fullResponse += text;
+        console.log('[claude] starting stream...');
+        const stream = await anthropic.messages.stream({
+          model: 'claude-haiku-4-5',
+          max_tokens: 120,
+          system: systemPrompt,
+          messages: conversationHistory.slice(-6),
+        });
 
-        // Send to TTS when we hit sentence boundary
-        if (buffer.match(/[.!?]\s/) && buffer.length > 20) {
-          await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
-          buffer = '';
-        }
-      });
+        // Buffer text and send to TTS in chunks
+        let buffer = '';
 
-      stream.on('finalMessage', async () => {
-        console.log('[claude] final message done');
-        if (buffer.trim()) {
-          await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
-        }
-        conversationHistory.push({ role: 'assistant', content: fullResponse });
-      });
+        stream.on('text', async (text) => {
+          console.log('[claude text]', text);
+          buffer += text;
+          fullResponse += text;
 
-      stream.on('error', (err) => {
-        console.error('[claude stream error]', err);
-      });
+          // Send to TTS when we hit sentence boundary
+          if (buffer.match(/[.!?]\s/) && buffer.length > 20) {
+            await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
+            buffer = '';
+          }
+        });
 
-    } catch (err) {
-      console.error('[claude error]', err.message);
-    }
+        stream.on('finalMessage', async () => {
+          console.log('[claude] final message done');
+          if (buffer.trim()) {
+            await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
+          }
+          conversationHistory.push({ role: 'assistant', content: fullResponse });
+        });
+
+        stream.on('error', (err) => {
+          console.error('[claude stream error]', err);
+          state.isSpeaking = false; // don't deadlock STT if the stream fails
+        });
+
+      } catch (err) {
+        console.error('[claude error]', err.message);
+        state.isSpeaking = false; // reset so the call isn't left muted forever
+      }
+    }, 300);
   });
 
   dgConnection.on(LiveTranscriptionEvents.Error, (err) => {
