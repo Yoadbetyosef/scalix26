@@ -19,11 +19,23 @@ interface PipelineOutput {
   skipped?: boolean
 }
 
+// Voice-only rules — prepended to the system prompt for phone calls (channel
+// = 'voice'). SMS/WhatsApp/social are NOT restricted by this; they can be longer.
+const VOICE_CALL_RULES = `CRITICAL - VOICE CALL RULES:
+- You are on a PHONE CALL. Speak like a real human, not a chatbot.
+- Keep every response under 2 sentences maximum.
+- Never use lists, bullet points, or long explanations.
+- Never say "Certainly!", "Of course!", "Great question!" or any filler phrases.
+- If you need information, ask ONE question at a time only.
+- Sound natural, warm, and fast. Like a real receptionist answering the phone.
+- If the caller wants to book — book it immediately, don't explain the process.`
+
 function buildSystemPrompt(
   employee: AIEmployee,
   skills: Skill[],
   kb: KnowledgeBase[],
-  tenant: Tenant
+  tenant: Tenant,
+  isVoice: boolean
 ): string {
   // Employee fields take priority; fall back to tenant for accounts that haven't migrated
   const businessName = employee.business_name || tenant.business_name
@@ -43,7 +55,7 @@ function buildSystemPrompt(
     .map(([day, h]) => `${day}: ${h}`)
     .join(', ') || 'Not specified'
 
-  return `You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
+  const basePrompt = `You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
 
 Business hours: ${hoursStr}
 Timezone: ${timezone}
@@ -74,6 +86,9 @@ RULES:
 GREETING (use only at start of new conversation): ${employee.greeting}
 
 Remember: You represent ${businessName}. Be professional, helpful, and always try to book the appointment or capture the lead.`
+
+  // Voice calls get the strict brevity rules prepended before everything else
+  return isVoice ? `${VOICE_CALL_RULES}\n\n${basePrompt}` : basePrompt
 }
 
 function detectSkillTrigger(content: string, skills: Skill[]): string | null {
@@ -194,7 +209,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const history = historyRes.data || []
   const skillTriggered = detectSkillTrigger(input.messageContent, skills)
 
-  const systemPrompt = buildSystemPrompt(employee, skills, kb || [], tenant)
+  const systemPrompt = buildSystemPrompt(employee, skills, kb || [], tenant, isVoice)
   const voiceRules = `
 
 VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
