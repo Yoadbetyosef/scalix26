@@ -27,15 +27,16 @@ wss.on('connection', (ws) => {
 
   // Deepgram STT
   const dg = deepgramClient.listen.live({
-    model: 'nova-3',
+    model: 'nova-2',
     language: 'en-US',
     smart_format: true,
     encoding: 'mulaw',
     sample_rate: 8000,
-    interim_results: false,
-    utterance_end_ms: 1200,
-    vad_events: true,
+    channels: 1,
+    interim_results: true,
     endpointing: 500,
+    utterance_end_ms: 1000,
+    vad_events: true,
   });
 
   dg.on(LiveTranscriptionEvents.Open, () => console.log('[dg] connected'));
@@ -43,9 +44,10 @@ wss.on('connection', (ws) => {
 
   dg.on(LiveTranscriptionEvents.Transcript, async (data) => {
     const transcript = data.channel?.alternatives?.[0]?.transcript?.trim();
-    if (!transcript || !data.is_final) return;
+    const isFinal = data.speech_final || data.is_final;
+    if (!transcript || !isFinal) return;
     if (busy) {
-      console.log('[skip] busy, ignoring:', transcript);
+      console.log('[skip] busy');
       return;
     }
 
