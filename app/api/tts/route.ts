@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const ttsStart = Date.now()
+    console.log(`[tts][latency] Deepgram START @ ${new Date(ttsStart).toISOString()} | text.len=${text.length}`)
     const res = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en', {
       method: 'POST',
       headers: {
@@ -20,6 +22,7 @@ export async function GET(req: NextRequest) {
       },
       body: JSON.stringify({ text }),
     })
+    console.log(`[tts][latency] Deepgram responded | took ${Date.now() - ttsStart}ms | status=${res.status}`)
 
     if (!res.ok || !res.body) {
       const err = await res.text().catch(() => '')
