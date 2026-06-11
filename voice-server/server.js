@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const WebSocket = require('ws');
 const Anthropic = require('@anthropic-ai/sdk');
 const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
@@ -7,7 +8,13 @@ const PORT = process.env.PORT || 8080;
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
-const wss = new WebSocket.Server({ port: PORT });
+// Minimal HTTP server so Railway's health check gets a 200. The WebSocket
+// server shares the same port — Twilio connects via the WSS upgrade.
+const httpServer = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('voice-server ok');
+});
+const wss = new WebSocket.Server({ server: httpServer });
 
 wss.on('connection', (twilioWs) => {
   console.log('[call] new connection');
@@ -156,4 +163,6 @@ async function sendToTTS(text, twilioWs, streamSid) {
   }
 }
 
-console.log(`[server] listening on port ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`[server] listening on port ${PORT}`);
+});
