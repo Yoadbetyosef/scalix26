@@ -21,6 +21,7 @@ wss.on('connection', (twilioWs) => {
 
   let streamSid = null;
   let callSid = null;
+  let mediaFrames = 0;
   let conversationHistory = [];
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT ||
     'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
@@ -43,11 +44,12 @@ wss.on('connection', (twilioWs) => {
   });
 
   dgConnection.on(LiveTranscriptionEvents.Transcript, async (data) => {
+    console.log('[transcript raw]', JSON.stringify(data).substring(0, 200));
     const transcript = data.channel?.alternatives?.[0]?.transcript;
     const isFinal = data.is_final;
+    console.log('[transcript]', { transcript, isFinal });
 
     if (!transcript || !isFinal) return;
-    console.log('[transcript]', transcript);
 
     // Add to history
     conversationHistory.push({ role: 'user', content: transcript });
@@ -90,7 +92,11 @@ wss.on('connection', (twilioWs) => {
   });
 
   dgConnection.on(LiveTranscriptionEvents.Error, (err) => {
-    console.error('[deepgram error]', err);
+    console.error('[deepgram stt error]', err);
+  });
+
+  dgConnection.on(LiveTranscriptionEvents.Warning, (warning) => {
+    console.warn('[deepgram warning]', warning);
   });
 
   // Handle Twilio messages
@@ -117,13 +123,19 @@ wss.on('connection', (twilioWs) => {
           break;
         }
 
-        case 'media':
+        case 'media': {
           // Forward audio to Deepgram
           const audioBuffer = Buffer.from(msg.media.payload, 'base64');
+          mediaFrames++;
+          // Throttled so it doesn't bury the [transcript] logs (Twilio sends ~50/s)
+          if (mediaFrames === 1 || mediaFrames % 50 === 0) {
+            console.log('[audio] received bytes:', audioBuffer.length, '| frame', mediaFrames, '| dg readyState', dgConnection.getReadyState());
+          }
           if (dgConnection.getReadyState() === 1) {
             dgConnection.send(audioBuffer);
           }
           break;
+        }
 
         case 'stop':
           console.log('[call] stopped');
