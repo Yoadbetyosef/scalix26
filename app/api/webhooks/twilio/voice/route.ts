@@ -159,6 +159,7 @@ export async function POST(req: NextRequest) {
   <Connect>
     <Stream url="${wsUrl}">
       <Parameter name="systemPrompt" value="${sp}"/>
+      <Parameter name="greeting" value="${escapeXml(greeting)}"/>
     </Stream>
   </Connect>
 </Response>`

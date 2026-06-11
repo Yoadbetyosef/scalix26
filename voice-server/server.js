@@ -99,7 +99,7 @@ wss.on('connection', (twilioWs) => {
       const msg = JSON.parse(data);
 
       switch (msg.event) {
-        case 'start':
+        case 'start': {
           streamSid = msg.start.streamSid;
           callSid = msg.start.callSid;
 
@@ -108,7 +108,14 @@ wss.on('connection', (twilioWs) => {
           if (params.systemPrompt) systemPrompt = params.systemPrompt;
 
           console.log('[call] started', streamSid);
+
+          // Speak the greeting immediately so the caller hears the AI first
+          // (otherwise both sides wait in silence — ring, then nothing).
+          const greeting = params.greeting || 'Hi! Thanks for calling. How can I help you today?';
+          conversationHistory.push({ role: 'assistant', content: greeting });
+          sendToTTS(greeting, twilioWs, streamSid);
           break;
+        }
 
         case 'media':
           // Forward audio to Deepgram
