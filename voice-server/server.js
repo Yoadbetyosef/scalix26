@@ -58,6 +58,7 @@ wss.on('connection', (ws) => {
       history.push({ role: 'user', content: transcript });
 
       let fullText = '';
+      let buffer = '';
       const stream = anthropic.messages.stream({
         model: 'claude-haiku-4-5',
         max_tokens: 120,
@@ -65,13 +66,24 @@ wss.on('connection', (ws) => {
         messages: history.slice(-6),
       });
 
-      // Collect full response first, then TTS
-      stream.on('text', (t) => { fullText += t; });
+      // Stream to TTS sentence-by-sentence so the caller hears the start
+      // of the reply immediately instead of after the whole response.
+      stream.on('text', async (t) => {
+        fullText += t;
+        buffer += t;
+        if (buffer.match(/[.!?]/) && buffer.trim().length > 15) {
+          const toSend = buffer.trim();
+          buffer = '';
+          await sendAudio(toSend, ws, streamSid);
+        }
+      });
 
       stream.on('finalMessage', async () => {
         console.log('[ai]', fullText);
+        if (buffer.trim().length > 0) {
+          await sendAudio(buffer.trim(), ws, streamSid);
+        }
         history.push({ role: 'assistant', content: fullText });
-        await sendAudio(fullText, ws, streamSid);
         busy = false;
       });
 
