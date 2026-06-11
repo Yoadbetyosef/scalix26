@@ -23,6 +23,9 @@ wss.on('connection', (twilioWs) => {
   let callSid = null;
   let mediaFrames = 0;
   let conversationHistory = [];
+  // Per-call state: isSpeaking mutes STT while the AI talks (echo); greetingSent
+  // prevents a duplicate greeting.
+  const state = { isSpeaking: false, greetingSent: false };
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT ||
     'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
 
@@ -49,7 +52,8 @@ wss.on('connection', (twilioWs) => {
     const isFinal = data.is_final;
     console.log('[transcript]', { transcript, isFinal });
 
-    if (!transcript || !isFinal) return;
+    if (state.isSpeaking) return; // ignore the AI's own voice while it's speaking
+    if (!transcript || transcript.trim() === '' || !isFinal) return;
 
     console.log('[claude] sending to claude:', transcript);
     conversationHistory.push({ role: 'user', content: transcript });
@@ -76,7 +80,7 @@ wss.on('connection', (twilioWs) => {
 
         // Send to TTS when we hit sentence boundary
         if (buffer.match(/[.!?]\s/) && buffer.length > 20) {
-          await sendToTTS(buffer.trim(), twilioWs, streamSid);
+          await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
           buffer = '';
         }
       });
@@ -84,7 +88,7 @@ wss.on('connection', (twilioWs) => {
       stream.on('finalMessage', async () => {
         console.log('[claude] final message done');
         if (buffer.trim()) {
-          await sendToTTS(buffer.trim(), twilioWs, streamSid);
+          await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
         }
         conversationHistory.push({ role: 'assistant', content: fullResponse });
       });
@@ -127,7 +131,10 @@ wss.on('connection', (twilioWs) => {
           // Speak the greeting, but do NOT add it to conversationHistory —
           // Anthropic requires the messages array to start with a 'user' turn.
           const greeting = params.greeting || 'Hi! Thanks for calling. How can I help you today?';
-          sendToTTS(greeting, twilioWs, streamSid);
+          if (!state.greetingSent) {
+            state.greetingSent = true;
+            sendToTTS(greeting, twilioWs, streamSid, state);
+          }
           break;
         }
 
@@ -161,9 +168,10 @@ wss.on('connection', (twilioWs) => {
   });
 });
 
-async function sendToTTS(text, twilioWs, streamSid) {
+async function sendToTTS(text, twilioWs, streamSid, state) {
   if (!text || !streamSid || twilioWs.readyState !== WebSocket.OPEN) return;
 
+  if (state) state.isSpeaking = true; // mute STT while the AI speaks
   try {
     const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000', {
       method: 'POST',
@@ -190,6 +198,9 @@ async function sendToTTS(text, twilioWs, streamSid) {
 
   } catch (err) {
     console.error('[tts error]', err.message);
+  } finally {
+    // Keep STT muted a moment after sending so it doesn't catch the AI's own audio
+    if (state) setTimeout(() => { state.isSpeaking = false; }, 500);
   }
 }
 
