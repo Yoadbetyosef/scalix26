@@ -77,6 +77,8 @@ export async function POST(req: NextRequest) {
 
     if (channel) {
       try {
+        const pipelineStart = Date.now()
+        console.log(`[voice][latency] runAIPipeline START @ ${new Date(pipelineStart).toISOString()} | speech="${SpeechResult.slice(0, 60)}"`)
         const result = await runAIPipeline({
           tenantId: channel.tenant_id,
           agentId: channel.ai_employee_id ?? undefined,
@@ -85,6 +87,8 @@ export async function POST(req: NextRequest) {
           messageContent: SpeechResult,
           conversationId,
         })
+        const pipelineMs = Date.now() - pipelineStart
+        console.log(`[voice][latency] runAIPipeline END | took ${pipelineMs}ms (Claude) | response.len=${result.response?.length ?? 0}`)
 
         const action = gatherUrl(baseUrl, result.conversationId)
 
