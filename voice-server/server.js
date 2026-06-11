@@ -17,7 +17,7 @@ const httpServer = http.createServer((req, res) => {
 const wss = new WebSocket.Server({ server: httpServer });
 
 wss.on('connection', (twilioWs) => {
-  console.log('[call] new connection');
+  console.log('[connection] new WebSocket connection');
 
   let streamSid = null;
   let callSid = null;
@@ -51,6 +51,7 @@ wss.on('connection', (twilioWs) => {
     const transcript = data.channel?.alternatives?.[0]?.transcript;
     const isFinal = data.is_final;
     console.log('[transcript]', { transcript, isFinal });
+    console.log('[transcript check] transcript:', JSON.stringify(transcript), 'trimmed empty:', (transcript || '').trim() === '', 'isSpeaking:', state.isSpeaking);
 
     if (state.isSpeaking) return; // ignore the AI's own voice while it's speaking
     if (!transcript || transcript.trim() === '' || !isFinal) return;
@@ -117,6 +118,7 @@ wss.on('connection', (twilioWs) => {
 
       switch (msg.event) {
         case 'start': {
+          console.log('[start] event received, greetingSent:', state.greetingSent, 'streamSid:', msg.start.streamSid);
           streamSid = msg.start.streamSid;
           callSid = msg.start.callSid;
 
@@ -133,6 +135,7 @@ wss.on('connection', (twilioWs) => {
           const greeting = params.greeting || 'Hi! Thanks for calling. How can I help you today?';
           if (!state.greetingSent) {
             state.greetingSent = true;
+            console.log('[greeting] sending greeting:', greeting);
             sendToTTS(greeting, twilioWs, streamSid, state);
           }
           break;
