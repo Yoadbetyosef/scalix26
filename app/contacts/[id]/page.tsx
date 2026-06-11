@@ -5,7 +5,10 @@ import { ArrowLeft, Phone, Mail, MapPin, MessageCircle, Globe, Calendar, Clock }
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
 
-export default async function ContactProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContactProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
+  const { from } = await searchParams
+  const backHref = from === 'leads' ? '/dashboard?tab=leads' : '/contacts'
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -40,7 +43,7 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
     <div className="p-4 sm:p-6 max-w-4xl">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <Link href="/contacts" className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
+        <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="w-12 h-12 rounded-full bg-[#4ecdc4]/10 flex items-center justify-center text-[#4ecdc4] text-lg font-semibold flex-shrink-0">
