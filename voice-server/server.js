@@ -145,19 +145,22 @@ async function sendToTTS(text, twilioWs, streamSid) {
   if (!text || !streamSid || twilioWs.readyState !== WebSocket.OPEN) return;
 
   try {
-    const response = await deepgram.speak.request(
-      { text },
-      { model: 'aura-2-asteria-en', encoding: 'mulaw', sample_rate: 8000 }
-    );
+    const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ text })
+    });
 
-    const audioBuffer = await response.getBody();
-    const chunks = [];
-
-    for await (const chunk of audioBuffer) {
-      chunks.push(chunk);
+    if (!response.ok) {
+      console.error('[tts error] HTTP', response.status, await response.text());
+      return;
     }
 
-    const audio = Buffer.concat(chunks).toString('base64');
+    const arrayBuffer = await response.arrayBuffer();
+    const audio = Buffer.from(arrayBuffer).toString('base64');
 
     twilioWs.send(JSON.stringify({
       event: 'media',
@@ -166,7 +169,7 @@ async function sendToTTS(text, twilioWs, streamSid) {
     }));
 
   } catch (err) {
-    console.error('[tts error]', err);
+    console.error('[tts error]', err.message);
   }
 }
 
