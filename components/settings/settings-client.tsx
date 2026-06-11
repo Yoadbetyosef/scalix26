@@ -37,6 +37,7 @@ export function SettingsClient({ tenant, channels }: Props) {
   const [forwardPhone, setForwardPhone] = useState(tenant.forward_to_phone || '')
   const [savingForward, setSavingForward] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showLeadCode, setShowLeadCode] = useState(false)
   const supabase = createClient()
 
   async function handleSave() {
@@ -193,53 +194,101 @@ document.getElementById('lead-form').addEventListener('submit', async function (
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-            <p className="text-sm font-semibold text-blue-900 mb-1">Instant text-back for every new lead</p>
+            <p className="text-sm font-semibold text-blue-900 mb-1">Never miss a lead</p>
             <p className="text-sm text-blue-700">
-              Send any new lead to your private URL below and we&apos;ll text the customer within seconds. Works with web forms, Zapier/Make, Google LSA, Facebook, Angi, Yelp and more.
+              Every new lead gets a friendly text within seconds — so you&apos;re first to respond and win the job.
             </p>
           </div>
 
           {!intakeUrl ? (
             <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
               <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
-              <p className="text-sm text-yellow-700">Your intake URL is being set up. Refresh in a moment.</p>
+              <p className="text-sm text-yellow-700">Your lead sources are being set up. Refresh in a moment.</p>
             </div>
           ) : (
             <>
-              {/* Unique intake URL */}
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Your private lead intake URL</Label>
-                <p className="text-xs text-gray-400 mb-2 mt-0.5">Keep this secret — anyone with it can submit leads to your account.</p>
-                <div className="flex gap-2">
-                  <code className="flex-1 min-w-0 truncate bg-gray-50 border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs text-gray-700">
-                    {intakeUrl}
-                  </code>
-                  <Button variant="outline" className="h-11 px-3 flex-shrink-0" onClick={() => copy(intakeUrl, 'URL')}>
-                    <Copy className="w-4 h-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Copy</span>
+              {/* Friendly source list */}
+              <div className="space-y-2.5">
+                {/* Missed calls — already automatic */}
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
+                  <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-4 h-4 text-gray-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Missed calls</p>
+                    <p className="text-xs text-gray-500">We text the caller automatically</p>
+                  </div>
+                  <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium flex-shrink-0">Active</span>
+                </div>
+
+                {/* Website form */}
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
+                  <div className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                    <Globe className="w-4 h-4 text-gray-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Website contact form</p>
+                    <p className="text-xs text-gray-500">Texts customers the moment they fill it in</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="flex-shrink-0" onClick={() => copy(formSnippet, 'Form code')}>
+                    <Copy className="w-3.5 h-3.5 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Copy code</span>
                   </Button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1.5">POST <code>{`{ phone, name?, source? }`}</code> (JSON or form data). Source defaults to <code>web_form</code>.</p>
-              </div>
+                <p className="text-xs text-gray-400 -mt-1 pl-1">Paste it on your website — or just send it to whoever manages your site.</p>
 
-              {/* Web form snippet */}
-              <div>
-                <Label className="text-sm font-medium text-gray-700">Add a contact form to your website</Label>
-                <p className="text-xs text-gray-400 mb-2 mt-0.5">Paste this anywhere on your site — no setup needed.</p>
-                <div className="relative">
-                  <pre className="bg-gray-900 text-gray-100 rounded-lg p-3 pr-12 text-xs overflow-x-auto whitespace-pre"><code>{formSnippet}</code></pre>
-                  <Button variant="outline" className="absolute top-2 right-2 h-9 px-2.5" onClick={() => copy(formSnippet, 'Snippet')}>
-                    <Copy className="w-3.5 h-3.5" />
-                  </Button>
+                {/* Zapier / aggregators */}
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
+                  <div className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                    <Webhook className="w-4 h-4 text-gray-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">Google, Facebook, Angi, Yelp &amp; more</p>
+                    <p className="text-xs text-gray-500">Connect with Zapier — no code needed</p>
+                  </div>
+                  <a href="https://zapier.com/apps/webhook/integrations" target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                    <Button variant="outline" size="sm">
+                      <ExternalLink className="w-3.5 h-3.5 sm:mr-1.5" />
+                      <span className="hidden sm:inline">Connect</span>
+                    </Button>
+                  </a>
                 </div>
               </div>
 
-              <div className="text-xs text-gray-500 space-y-1">
-                <p className="font-medium text-gray-600">Other sources:</p>
-                <p>• <strong>Zapier / Make:</strong> add a Webhook action that POSTs to your URL above.</p>
-                <p>• <strong>Google LSA / Angi / Yelp / Facebook:</strong> connect them through Zapier to your URL (one-click connectors coming soon).</p>
-                <p>• <strong>Missed calls</strong> are already handled automatically.</p>
-              </div>
+              {/* Technical details — hidden by default */}
+              <button
+                onClick={() => setShowLeadCode(v => !v)}
+                className="text-xs text-gray-400 hover:text-gray-600 py-2 -my-1 flex items-center gap-1"
+              >
+                {showLeadCode ? 'Hide' : 'Show'} technical details (for developers)
+              </button>
+
+              {showLeadCode && (
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Your private intake URL</Label>
+                    <p className="text-xs text-gray-400 mb-2 mt-0.5">Keep this secret. Used for Zapier/Make and custom integrations.</p>
+                    <div className="flex gap-2">
+                      <code className="flex-1 min-w-0 truncate bg-gray-50 border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs text-gray-700">
+                        {intakeUrl}
+                      </code>
+                      <Button variant="outline" className="h-11 px-3 flex-shrink-0" onClick={() => copy(intakeUrl, 'URL')}>
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1.5">POST <code>{`{ phone, name?, source? }`}</code> (JSON or form data).</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700">Website form code</Label>
+                    <div className="relative mt-1.5">
+                      <pre className="bg-gray-900 text-gray-100 rounded-lg p-3 pr-12 text-xs overflow-x-auto whitespace-pre"><code>{formSnippet}</code></pre>
+                      <Button variant="outline" className="absolute top-2 right-2 h-9 px-2.5" onClick={() => copy(formSnippet, 'Snippet')}>
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </CardContent>
