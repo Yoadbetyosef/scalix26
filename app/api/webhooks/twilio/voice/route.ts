@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
     const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
     const { data: agent } = await agentQuery
 
@@ -153,7 +153,10 @@ export async function POST(req: NextRequest) {
     // system_prompt is passed through as a custom parameter.
     const wsUrl = process.env.VOICE_SERVER_WS_URL
     if (wsUrl && wsUrl.startsWith('wss://') && !wsUrl.includes('REPLACE')) {
-      const sp = escapeXml(agent?.system_prompt || greeting)
+      const voiceSystemPrompt = agent?.system_prompt && agent.system_prompt.trim().length > 0
+        ? agent.system_prompt
+        : `You are ${agent?.name || 'Alex'}, a professional AI receptionist for ${agent?.business_name || 'our company'}. Your job is to answer calls, help customers, and collect their information. Keep every response under 2 sentences. Be warm, friendly, and fast.`
+      const sp = escapeXml(voiceSystemPrompt)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
