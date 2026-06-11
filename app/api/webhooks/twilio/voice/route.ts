@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
       const sp = escapeXml(voiceSystemPrompt)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect>
+  <Connect answerOnBridge="true">
     <Stream url="${wsUrl}">
       <Parameter name="systemPrompt" value="${sp}"/>
       <Parameter name="greeting" value="${escapeXml(greeting)}"/>
