@@ -17,9 +17,13 @@ function gatherUrl(baseUrl: string, conversationId?: string) {
   return conversationId ? `${url}?cid=${encodeURIComponent(conversationId)}` : url
 }
 
-// Speak via Deepgram Aura TTS (served by /api/tts) instead of Twilio Polly
+// Speak via Deepgram Aura TTS (served by /api/tts) when configured; fall back
+// to Twilio Polly when no Deepgram key is set, so voice never breaks.
 function ttsPlay(text: string): string {
-  return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(text)}</Play>`
+  if (process.env.DEEPGRAM_API_KEY) {
+    return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(text)}</Play>`
+  }
+  return `<Say voice="Polly.Joanna-Neural">${escapeXml(text)}</Say>`
 }
 
 export async function POST(req: NextRequest) {
