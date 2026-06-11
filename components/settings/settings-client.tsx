@@ -88,20 +88,8 @@ export function SettingsClient({ tenant, channels }: Props) {
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  const bookingUrl = tenant.lead_intake_token ? `${appUrl}/f/${tenant.lead_intake_token}` : ''
   const intakeUrl = tenant.lead_intake_token ? `${appUrl}/api/leads/inbound/${tenant.lead_intake_token}` : ''
-  const formSnippet = `<form id="lead-form">
-  <input name="name" placeholder="Your name" />
-  <input name="phone" placeholder="Phone number" required />
-  <input type="hidden" name="source" value="web_form" />
-  <button type="submit">Get a callback</button>
-</form>
-<script>
-document.getElementById('lead-form').addEventListener('submit', async function (e) {
-  e.preventDefault();
-  await fetch('${intakeUrl}', { method: 'POST', body: new FormData(e.target) });
-  e.target.innerHTML = "Thanks! We'll text you right away.";
-});
-</script>`
 
   function copy(text: string, label: string) {
     navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied!`)).catch(() => toast.error('Copy failed'))
@@ -194,20 +182,42 @@ document.getElementById('lead-form').addEventListener('submit', async function (
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-            <p className="text-sm font-semibold text-blue-900 mb-1">Never miss a lead</p>
+            <p className="text-sm font-semibold text-blue-900 mb-1">Never Miss a Lead</p>
             <p className="text-sm text-blue-700">
-              Every new lead gets a friendly text within seconds — so you&apos;re first to respond and win the job.
+              Every time someone requests your help — from any source — they get an automatic text within seconds. You&apos;re always first to respond.
             </p>
           </div>
 
-          {!intakeUrl ? (
+          {!bookingUrl ? (
             <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
               <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
               <p className="text-sm text-yellow-700">Your lead sources are being set up. Refresh in a moment.</p>
             </div>
           ) : (
             <>
-              {/* Friendly source list */}
+              {/* Personal booking link — the star */}
+              <div className="rounded-xl border-2 border-[#4ecdc4]/30 bg-[#4ecdc4]/5 p-4">
+                <p className="text-sm font-semibold text-gray-900">Your Personal Booking Link</p>
+                <p className="text-xs text-gray-500 mt-1 mb-3">
+                  Share this link anywhere. When someone clicks it and fills in their info — they get a text from you within seconds. No website, no developer, no code needed.
+                </p>
+                <div className="flex gap-2">
+                  <code className="flex-1 min-w-0 truncate bg-white border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs sm:text-sm text-gray-700">
+                    {bookingUrl}
+                  </code>
+                  <Button className="h-11 px-4 flex-shrink-0" onClick={() => copy(bookingUrl, 'Link')}>
+                    <Copy className="w-4 h-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Copy Link</span>
+                  </Button>
+                </div>
+                <div className="mt-3 space-y-1.5 text-xs text-gray-600">
+                  <p className="flex items-center gap-2"><span aria-hidden>📍</span> Paste it in your Google Business Profile</p>
+                  <p className="flex items-center gap-2"><span aria-hidden>📱</span> Add it to your Instagram or Facebook bio</p>
+                  <p className="flex items-center gap-2"><span aria-hidden>✉️</span> Include it in your email signature</p>
+                </div>
+              </div>
+
+              {/* Other sources */}
               <div className="space-y-2.5">
                 {/* Missed calls — already automatic */}
                 <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
@@ -215,36 +225,20 @@ document.getElementById('lead-form').addEventListener('submit', async function (
                     <Phone className="w-4 h-4 text-gray-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Missed calls</p>
-                    <p className="text-xs text-gray-500">We text the caller automatically</p>
+                    <p className="text-sm font-medium text-gray-900">Missed Calls</p>
+                    <p className="text-xs text-gray-500">If a call ever slips through, we automatically text them back within seconds so you never lose the job.</p>
                   </div>
                   <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium flex-shrink-0">Active</span>
                 </div>
 
-                {/* Website form */}
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
-                  <div className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
-                    <Globe className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Website contact form</p>
-                    <p className="text-xs text-gray-500">Texts customers the moment they fill it in</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="flex-shrink-0" onClick={() => copy(formSnippet, 'Form code')}>
-                    <Copy className="w-3.5 h-3.5 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Copy code</span>
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-400 -mt-1 pl-1">Paste it on your website — or just send it to whoever manages your site.</p>
-
                 {/* Zapier / aggregators */}
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
+                <div className="flex items-start gap-3 p-3 rounded-lg border border-gray-100">
                   <div className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
                     <Webhook className="w-4 h-4 text-gray-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900">Google, Facebook, Angi, Yelp &amp; more</p>
-                    <p className="text-xs text-gray-500">Connect with Zapier — no code needed</p>
+                    <p className="text-xs text-gray-500">Got leads coming from Google LSA, Facebook Ads, Angi, or Yelp? Connect once and every new lead gets an automatic text within seconds — no manual follow-up needed.</p>
                   </div>
                   <a href="https://zapier.com/apps/webhook/integrations" target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
                     <Button variant="outline" size="sm">
@@ -264,29 +258,18 @@ document.getElementById('lead-form').addEventListener('submit', async function (
               </button>
 
               {showLeadCode && (
-                <div className="space-y-3 pt-1">
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Your private intake URL</Label>
-                    <p className="text-xs text-gray-400 mb-2 mt-0.5">Keep this secret. Used for Zapier/Make and custom integrations.</p>
-                    <div className="flex gap-2">
-                      <code className="flex-1 min-w-0 truncate bg-gray-50 border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs text-gray-700">
-                        {intakeUrl}
-                      </code>
-                      <Button variant="outline" className="h-11 px-3 flex-shrink-0" onClick={() => copy(intakeUrl, 'URL')}>
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1.5">POST <code>{`{ phone, name?, source? }`}</code> (JSON or form data).</p>
+                <div className="pt-1">
+                  <Label className="text-sm font-medium text-gray-700">Your private intake URL</Label>
+                  <p className="text-xs text-gray-400 mb-2 mt-0.5">Keep this secret. Used for Zapier/Make and custom integrations.</p>
+                  <div className="flex gap-2">
+                    <code className="flex-1 min-w-0 truncate bg-gray-50 border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs text-gray-700">
+                      {intakeUrl}
+                    </code>
+                    <Button variant="outline" className="h-11 px-3 flex-shrink-0" onClick={() => copy(intakeUrl, 'URL')}>
+                      <Copy className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Website form code</Label>
-                    <div className="relative mt-1.5">
-                      <pre className="bg-gray-900 text-gray-100 rounded-lg p-3 pr-12 text-xs overflow-x-auto whitespace-pre"><code>{formSnippet}</code></pre>
-                      <Button variant="outline" className="absolute top-2 right-2 h-9 px-2.5" onClick={() => copy(formSnippet, 'Snippet')}>
-                        <Copy className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">POST <code>{`{ phone, name?, source? }`}</code> (JSON or form data).</p>
                 </div>
               )}
             </>
