@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ArrowRight, Plus, Trash2, Globe, Phone, Star, CheckCircle2, LayoutDashboard } from 'lucide-react'
+import { ArrowRight, Plus, Trash2, Globe, Phone, Star, CheckCircle2, LayoutDashboard, Copy } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ interface OnboardingData {
 }
 
 interface Props {
-  tenant: { id: string; business_name: string; industry: string }
+  tenant: { id: string; business_name: string; industry: string; slug?: string | null }
   channels: { type: string; twilio_number?: string; status: string }[]
 }
 
@@ -298,6 +298,13 @@ export function OnboardingFlow({ tenant, channels }: Props) {
   }
 
   const phoneNumber = provisionedNumber || channels.find(c => c.type === 'voice' || c.type === 'sms')?.twilio_number
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  const bookingUrl = tenant.slug ? `${appUrl}/f/${tenant.slug}` : ''
+
+  function copyBookingLink() {
+    navigator.clipboard.writeText(bookingUrl).then(() => toast.success('Link copied!')).catch(() => toast.error('Copy failed'))
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -665,6 +672,26 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               </p>
             </div>
 
+            {/* First move: share your booking link */}
+            {bookingUrl && (
+              <div className="rounded-2xl border-2 border-[#4ecdc4] bg-[#4ecdc4]/5 p-5 sm:p-6 mb-4">
+                <h2 className="text-lg font-bold text-gray-900">🎉 Your AI is live. Here&apos;s your first move:</h2>
+                <p className="text-sm text-gray-600 mt-1 mb-4">
+                  Share your booking link — anyone who clicks it gets a text from your AI within seconds.
+                </p>
+                <div className="flex gap-2">
+                  <code className="flex-1 min-w-0 truncate bg-white border border-gray-200 rounded-xl px-3 h-12 flex items-center text-sm text-gray-700">
+                    {bookingUrl}
+                  </code>
+                  <Button className="h-12 px-4 flex-shrink-0" onClick={copyBookingLink}>
+                    <Copy className="w-4 h-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Copy Link</span>
+                  </Button>
+                </div>
+                <p className="text-sm text-gray-500 mt-3">Paste it in your Google Business Profile right now. It takes 30 seconds.</p>
+              </div>
+            )}
+
             <div className="space-y-4">
               {/* Card 1: Test call */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -742,8 +769,9 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                   className="w-full h-12 text-base"
                   onClick={() => router.push('/dashboard')}
                 >
-                  Go to Dashboard →
+                  Take me to my dashboard →
                 </Button>
+                <p className="text-xs text-gray-400 text-center mt-2">Your AI is already answering calls.</p>
               </div>
             </div>
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
+import { sendSMS } from '@/lib/twilio/client'
 import { notifyAdminNewUser } from '@/lib/admin/notify'
 
 interface FAQ {
@@ -90,10 +91,11 @@ export async function POST(req: NextRequest) {
 
   if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
 
-  // Update tenant name for billing/account purposes
+  // Update tenant name for billing/account purposes (+ store the owner's
+  // business phone so the post-onboarding checklist can text them).
   await serviceSupabase
     .from('tenants')
-    .update({ business_name: businessName, industry: businessType })
+    .update({ business_name: businessName, industry: businessType, phone: ownerPhone || null })
     .eq('id', tenant.id)
 
   const systemPrompt = buildSystemPrompt({
@@ -138,6 +140,20 @@ export async function POST(req: NextRequest) {
     phoneNumber = await provisionAgentPhoneNumber(tenant.id, employee.id)
   } catch (err) {
     console.error('[onboarding] Phone provisioning failed:', err)
+  }
+
+  // WOW moment: text the owner from their brand-new AI number so they can
+  // reply and test it immediately. Skip silently if we have no phone/number.
+  if (ownerPhone && phoneNumber) {
+    try {
+      await sendSMS(
+        ownerPhone,
+        `🎉 Your AI is live! This is ${employeeName} from ${businessName}. Reply to this message to test me out — I'm ready to book jobs 24/7.`,
+        phoneNumber,
+      )
+    } catch (err) {
+      console.error('[onboarding] Welcome SMS failed:', err instanceof Error ? err.message : err)
+    }
   }
 
   // Notify admin of new signup

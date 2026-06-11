@@ -27,6 +27,7 @@ CREATE TABLE tenants (
   trial_ends_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '14 days',
   lead_intake_token UUID DEFAULT uuid_generate_v4(),
   slug TEXT UNIQUE,
+  onboarding_checklist JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
