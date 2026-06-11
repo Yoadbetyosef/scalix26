@@ -6,235 +6,143 @@ const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 
 const PORT = process.env.PORT || 8080;
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
 
-// Minimal HTTP server so Railway's health check gets a 200. The WebSocket
-// server shares the same port — Twilio connects via the WSS upgrade.
-const httpServer = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
   res.end('voice-server ok');
 });
-const wss = new WebSocket.Server({ server: httpServer });
 
-wss.on('connection', (twilioWs) => {
-  console.log('[connection] new WebSocket connection');
+const wss = new WebSocket.Server({ server });
 
+wss.on('connection', (ws) => {
+  console.log('[call] new connection');
+
+  // State לשיחה זו בלבד
   let streamSid = null;
-  let callSid = null;
-  let mediaFrames = 0;
-  let conversationHistory = [];
-  // Per-call state: isSpeaking mutes STT while the AI talks (echo); greetingSent
-  // prevents a duplicate greeting.
-  const state = { isSpeaking: false, greetingSent: false };
-  let claudeTimeout = null;
-  let pendingTranscript = '';
-  let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT ||
-    'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
+  let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT || 'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
+  let greeting = 'Hello! How can I help you today?';
+  let history = [];
+  let busy = false; // true כשהAI מעבד או מדבר
 
-  // Deepgram STT connection
-  const dgConnection = deepgram.listen.live({
+  // Deepgram STT
+  const dg = deepgramClient.listen.live({
     model: 'nova-3',
     language: 'en-US',
     smart_format: true,
     encoding: 'mulaw',
     sample_rate: 8000,
-    channels: 1,
-    interim_results: true,
-    utterance_end_ms: 1000,
+    interim_results: false,
+    utterance_end_ms: 1200,
     vad_events: true,
+    endpointing: 500,
   });
 
-  dgConnection.on(LiveTranscriptionEvents.Open, () => {
-    console.log('[deepgram] connected');
-  });
+  dg.on(LiveTranscriptionEvents.Open, () => console.log('[dg] connected'));
+  dg.on(LiveTranscriptionEvents.Error, (e) => console.error('[dg] error', e));
 
-  dgConnection.on(LiveTranscriptionEvents.Transcript, async (data) => {
-    console.log('[transcript raw]', JSON.stringify(data).substring(0, 200));
-    const transcript = data.channel?.alternatives?.[0]?.transcript;
-    const isFinal = data.is_final;
-    console.log('[transcript]', { transcript, isFinal });
-    console.log('[transcript check] transcript:', JSON.stringify(transcript), 'trimmed empty:', (transcript || '').trim() === '', 'isSpeaking:', state.isSpeaking);
-
-    if (!transcript || transcript.trim() === '' || !isFinal || state.isSpeaking) return;
-
-    // Debounce: Deepgram can emit several final transcripts in quick
-    // succession — only send the most recent one after 300ms of quiet.
-    pendingTranscript = transcript;
-    if (claudeTimeout) clearTimeout(claudeTimeout);
-    claudeTimeout = setTimeout(async () => {
-      const textToSend = pendingTranscript;
-      pendingTranscript = '';
-      claudeTimeout = null;
-
-      if (!textToSend || textToSend.trim() === '') return;
-
-      console.log('[claude] sending to claude:', textToSend);
-      state.isSpeaking = true;
-      conversationHistory.push({ role: 'user', content: textToSend });
-
-      // Get Claude response with streaming
-      try {
-        let fullResponse = '';
-
-        console.log('[claude] starting stream...');
-        const stream = await anthropic.messages.stream({
-          model: 'claude-haiku-4-5',
-          max_tokens: 120,
-          system: systemPrompt,
-          messages: conversationHistory.slice(-6),
-        });
-
-        // Buffer text and send to TTS in chunks
-        let buffer = '';
-
-        stream.on('text', async (text) => {
-          console.log('[claude text]', text);
-          buffer += text;
-          fullResponse += text;
-
-          // Send to TTS when we hit sentence boundary
-          if (buffer.match(/[.!?]\s/) && buffer.length > 20) {
-            await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
-            buffer = '';
-          }
-        });
-
-        stream.on('finalMessage', async () => {
-          console.log('[claude] final message done');
-          if (buffer.trim()) {
-            await sendToTTS(buffer.trim(), twilioWs, streamSid, state);
-          }
-          conversationHistory.push({ role: 'assistant', content: fullResponse });
-        });
-
-        stream.on('error', (err) => {
-          console.error('[claude stream error]', err);
-          state.isSpeaking = false; // don't deadlock STT if the stream fails
-        });
-
-      } catch (err) {
-        console.error('[claude error]', err.message);
-        state.isSpeaking = false; // reset so the call isn't left muted forever
-      }
-    }, 300);
-  });
-
-  dgConnection.on(LiveTranscriptionEvents.Error, (err) => {
-    console.error('[deepgram stt error]', err);
-  });
-
-  dgConnection.on(LiveTranscriptionEvents.Warning, (warning) => {
-    console.warn('[deepgram warning]', warning);
-  });
-
-  // Handle Twilio messages
-  twilioWs.on('message', (data) => {
-    try {
-      const msg = JSON.parse(data);
-
-      switch (msg.event) {
-        case 'start': {
-          console.log('[start] event received, greetingSent:', state.greetingSent, 'streamSid:', msg.start.streamSid);
-          streamSid = msg.start.streamSid;
-          callSid = msg.start.callSid;
-
-          // Get custom parameters if passed from Twilio
-          const params = msg.start.customParameters || {};
-          console.log('[start] customParameters:', JSON.stringify(params));
-          if (params.systemPrompt && params.systemPrompt.trim()) {
-            systemPrompt = params.systemPrompt;
-          } else {
-            console.log('[start] no systemPrompt param — using DEFAULT_SYSTEM_PROMPT');
-          }
-
-          console.log('[call] started', streamSid);
-
-          // Speak the greeting immediately so the caller hears the AI first
-          // (otherwise both sides wait in silence — ring, then nothing).
-          // Speak the greeting, but do NOT add it to conversationHistory —
-          // Anthropic requires the messages array to start with a 'user' turn.
-          const greeting = params.greeting || 'Hi! Thanks for calling. How can I help you today?';
-          if (!state.greetingSent) {
-            state.greetingSent = true;
-            console.log('[greeting] sending greeting:', greeting);
-            sendToTTS(greeting, twilioWs, streamSid, state);
-          }
-          break;
-        }
-
-        case 'media': {
-          // Forward audio to Deepgram
-          const audioBuffer = Buffer.from(msg.media.payload, 'base64');
-          mediaFrames++;
-          // Throttled so it doesn't bury the [transcript] logs (Twilio sends ~50/s)
-          if (mediaFrames === 1 || mediaFrames % 50 === 0) {
-            console.log('[audio] received bytes:', audioBuffer.length, '| frame', mediaFrames, '| dg readyState', dgConnection.getReadyState());
-          }
-          if (dgConnection.getReadyState() === 1) {
-            dgConnection.send(audioBuffer);
-          }
-          break;
-        }
-
-        case 'stop':
-          console.log('[call] stopped');
-          dgConnection.finish();
-          break;
-      }
-    } catch (err) {
-      console.error('[twilio msg error]', err);
-    }
-  });
-
-  twilioWs.on('close', () => {
-    console.log('[call] disconnected');
-    dgConnection.finish();
-  });
-});
-
-async function sendToTTS(text, twilioWs, streamSid, state) {
-  if (!text || !streamSid || twilioWs.readyState !== WebSocket.OPEN) return;
-
-  if (state) state.isSpeaking = true; // mute STT while the AI speaks
-  try {
-    const response = await fetch('https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ text })
-    });
-
-    if (!response.ok) {
-      console.error('[tts error] HTTP', response.status, await response.text());
+  dg.on(LiveTranscriptionEvents.Transcript, async (data) => {
+    const transcript = data.channel?.alternatives?.[0]?.transcript?.trim();
+    if (!transcript || !data.is_final) return;
+    if (busy) {
+      console.log('[skip] busy, ignoring:', transcript);
       return;
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const audio = Buffer.from(arrayBuffer).toString('base64');
+    console.log('[user]', transcript);
+    busy = true;
 
-    twilioWs.send(JSON.stringify({
-      event: 'media',
-      streamSid,
-      media: { payload: audio }
-    }));
+    try {
+      history.push({ role: 'user', content: transcript });
 
-  } catch (err) {
-    console.error('[tts error]', err.message);
-  } finally {
-    // Keep STT muted until the audio has likely finished playing (~60ms/char,
-    // min 2s) so STT doesn't catch the AI's own audio.
-    if (state) {
-      const estimatedDurationMs = Math.max(2000, text.length * 60);
-      setTimeout(() => {
-        state.isSpeaking = false;
-        console.log('[speaking] isSpeaking set to false after', estimatedDurationMs, 'ms');
-      }, estimatedDurationMs);
+      let fullText = '';
+      const stream = anthropic.messages.stream({
+        model: 'claude-haiku-4-5',
+        max_tokens: 120,
+        system: systemPrompt,
+        messages: history.slice(-6),
+      });
+
+      // Collect full response first, then TTS
+      stream.on('text', (t) => { fullText += t; });
+
+      stream.on('finalMessage', async () => {
+        console.log('[ai]', fullText);
+        history.push({ role: 'assistant', content: fullText });
+        await sendAudio(fullText, ws, streamSid);
+        busy = false;
+      });
+
+      stream.on('error', (e) => {
+        console.error('[claude error]', e.message);
+        busy = false;
+      });
+
+    } catch (e) {
+      console.error('[error]', e.message);
+      busy = false;
     }
+  });
+
+  // Twilio messages
+  ws.on('message', async (data) => {
+    try {
+      const msg = JSON.parse(data);
+
+      if (msg.event === 'start') {
+        streamSid = msg.start.streamSid;
+        const p = msg.start.customParameters || {};
+        if (p.systemPrompt) systemPrompt = p.systemPrompt;
+        if (p.greeting) greeting = p.greeting;
+        console.log('[start]', streamSid);
+
+        // Send greeting
+        busy = true;
+        await sendAudio(greeting, ws, streamSid);
+        busy = false;
+      }
+
+      if (msg.event === 'media') {
+        const audio = Buffer.from(msg.media.payload, 'base64');
+        if (dg.getReadyState() === 1) dg.send(audio);
+      }
+
+      if (msg.event === 'stop') {
+        console.log('[stop]');
+        dg.finish();
+      }
+    } catch (e) {
+      console.error('[ws error]', e.message);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log('[call] disconnected');
+    try { dg.finish(); } catch {}
+  });
+});
+
+async function sendAudio(text, ws, streamSid) {
+  if (!text || !streamSid || ws.readyState !== WebSocket.OPEN) return;
+  try {
+    const res = await fetch(
+      'https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      }
+    );
+    if (!res.ok) { console.error('[tts]', res.status); return; }
+    const buf = Buffer.from(await res.arrayBuffer()).toString('base64');
+    ws.send(JSON.stringify({ event: 'media', streamSid, media: { payload: buf } }));
+    console.log('[tts] sent', text.length, 'chars');
+  } catch (e) {
+    console.error('[tts error]', e.message);
   }
 }
 
-httpServer.listen(PORT, () => {
-  console.log(`[server] listening on port ${PORT}`);
-});
+server.listen(PORT, () => console.log('[server] listening on port', PORT));
