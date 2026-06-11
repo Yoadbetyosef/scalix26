@@ -67,10 +67,11 @@ async function getDashboardData(tenantId: string) {
       if (c.contact_id && !latestByContact[c.contact_id]) latestByContact[c.contact_id] = c.id
     }
     for (const lead of leadsList) {
+      // ?from=leads lets the destination's back button return to the Leads tab
       if (lead.contact_id && latestByContact[lead.contact_id]) {
-        leadLinks[lead.id] = `/inbox/${latestByContact[lead.contact_id]}`
+        leadLinks[lead.id] = `/inbox/${latestByContact[lead.contact_id]}?from=leads`
       } else if (lead.contact_id) {
-        leadLinks[lead.id] = `/contacts/${lead.contact_id}`
+        leadLinks[lead.id] = `/contacts/${lead.contact_id}?from=leads`
       }
     }
   }

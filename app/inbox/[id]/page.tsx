@@ -9,7 +9,10 @@ import { ConversationContactPanel } from '@/components/inbox/conversation-contac
 import { HumanTakeover } from '@/components/inbox/human-takeover'
 import { MessageComposer } from '@/components/inbox/message-composer'
 
-export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ConversationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
+  const { from } = await searchParams
+  const backHref = from === 'leads' ? '/dashboard?tab=leads' : '/inbox'
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -53,7 +56,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
     <div className="flex flex-col h-screen max-h-screen">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-gray-100 flex-shrink-0">
-        <Link href="/inbox" className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
+        <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-medium flex-shrink-0">
