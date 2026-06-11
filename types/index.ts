@@ -51,6 +51,7 @@ export interface Tenant {
   trial_ends_at: string | null
   lead_intake_token: string | null
   slug: string | null
+  onboarding_checklist: Record<string, boolean> | null
   created_at: string
 }
 

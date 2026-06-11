@@ -9,7 +9,12 @@ import { formatDateTime, truncate } from '@/lib/utils'
 import { ConversationDistributionChart } from '@/components/charts/conversation-distribution'
 import { ChannelDistributionChart } from '@/components/charts/channel-distribution'
 import { LeadsTable } from '@/components/dashboard/leads-table'
+import { PostOnboardingChecklist } from '@/components/onboarding/post-onboarding-checklist'
 import type { Lead } from '@/types'
+
+function isWithinDays(dateStr: string, days: number) {
+  return Date.now() - new Date(dateStr).getTime() < days * 24 * 60 * 60 * 1000
+}
 
 async function getDashboardData(tenantId: string) {
   const supabase = await createClient()
@@ -112,6 +117,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const { stats, conversations, aiEmployees, leads_list, leadLinks } = await getDashboardData(tenant.id)
 
+  // Post-onboarding success checklist — only for new tenants (< 7 days)
+  const isNewTenant = isWithinDays(tenant.created_at, 7)
+  let aiPhoneNumber: string | null = null
+  if (isNewTenant) {
+    const { data: ch } = await serviceSupabase
+      .from('channels')
+      .select('twilio_number')
+      .eq('tenant_id', tenant.id)
+      .not('twilio_number', 'is', null)
+      .limit(1)
+      .maybeSingle()
+    aiPhoneNumber = ch?.twilio_number || null
+  }
+
   const statCards = [
     { label: 'Total Calls', value: stats.totalCalls, icon: Phone, color: 'bg-purple-50 text-purple-600' },
     { label: 'Text Messages', value: stats.textMessages, icon: MessageSquare, color: 'bg-blue-50 text-blue-600' },
@@ -135,6 +154,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Button>
         </Link>
       </div>
+
+      {/* Post-onboarding success checklist (new tenants only) */}
+      {isNewTenant && tenant.slug && (
+        <PostOnboardingChecklist
+          slug={tenant.slug}
+          aiPhoneNumber={aiPhoneNumber}
+          initial={(tenant.onboarding_checklist as Record<string, boolean>) || {}}
+        />
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
