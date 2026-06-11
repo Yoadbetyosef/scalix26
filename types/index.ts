@@ -49,6 +49,7 @@ export interface Tenant {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
   trial_ends_at: string | null
+  lead_intake_token: string | null
   created_at: string
 }
 

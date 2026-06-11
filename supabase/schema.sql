@@ -25,6 +25,7 @@ CREATE TABLE tenants (
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   trial_ends_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '14 days',
+  lead_intake_token UUID DEFAULT uuid_generate_v4(),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
