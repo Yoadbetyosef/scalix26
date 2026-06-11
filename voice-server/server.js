@@ -124,8 +124,9 @@ wss.on('connection', (twilioWs) => {
 
           // Speak the greeting immediately so the caller hears the AI first
           // (otherwise both sides wait in silence — ring, then nothing).
+          // Speak the greeting, but do NOT add it to conversationHistory —
+          // Anthropic requires the messages array to start with a 'user' turn.
           const greeting = params.greeting || 'Hi! Thanks for calling. How can I help you today?';
-          conversationHistory.push({ role: 'assistant', content: greeting });
           sendToTTS(greeting, twilioWs, streamSid);
           break;
         }
