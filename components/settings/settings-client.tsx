@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { ExternalLink, CreditCard, Phone, MessageSquare, Globe, PhoneForwarded } from 'lucide-react'
+import { ExternalLink, CreditCard, Phone, MessageSquare, Globe, PhoneForwarded, Copy, Webhook } from 'lucide-react'
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   voice: Phone,
@@ -86,6 +86,26 @@ export function SettingsClient({ tenant, channels }: Props) {
 
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  const intakeUrl = tenant.lead_intake_token ? `${appUrl}/api/leads/inbound/${tenant.lead_intake_token}` : ''
+  const formSnippet = `<form id="lead-form">
+  <input name="name" placeholder="Your name" />
+  <input name="phone" placeholder="Phone number" required />
+  <input type="hidden" name="source" value="web_form" />
+  <button type="submit">Get a callback</button>
+</form>
+<script>
+document.getElementById('lead-form').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  await fetch('${intakeUrl}', { method: 'POST', body: new FormData(e.target) });
+  e.target.innerHTML = "Thanks! We'll text you right away.";
+});
+</script>`
+
+  function copy(text: string, label: string) {
+    navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied!`)).catch(() => toast.error('Copy failed'))
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-3xl">
       <div>
@@ -159,6 +179,68 @@ export function SettingsClient({ tenant, channels }: Props) {
                 )
               })}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Lead Sources */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Webhook className="w-5 h-5 text-[#4ecdc4]" />
+            Lead Sources
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <p className="text-sm font-semibold text-blue-900 mb-1">Instant text-back for every new lead</p>
+            <p className="text-sm text-blue-700">
+              Send any new lead to your private URL below and we&apos;ll text the customer within seconds. Works with web forms, Zapier/Make, Google LSA, Facebook, Angi, Yelp and more.
+            </p>
+          </div>
+
+          {!intakeUrl ? (
+            <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
+              <p className="text-sm text-yellow-700">Your intake URL is being set up. Refresh in a moment.</p>
+            </div>
+          ) : (
+            <>
+              {/* Unique intake URL */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Your private lead intake URL</Label>
+                <p className="text-xs text-gray-400 mb-2 mt-0.5">Keep this secret — anyone with it can submit leads to your account.</p>
+                <div className="flex gap-2">
+                  <code className="flex-1 min-w-0 truncate bg-gray-50 border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs text-gray-700">
+                    {intakeUrl}
+                  </code>
+                  <Button variant="outline" className="h-11 px-3 flex-shrink-0" onClick={() => copy(intakeUrl, 'URL')}>
+                    <Copy className="w-4 h-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Copy</span>
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">POST <code>{`{ phone, name?, source? }`}</code> (JSON or form data). Source defaults to <code>web_form</code>.</p>
+              </div>
+
+              {/* Web form snippet */}
+              <div>
+                <Label className="text-sm font-medium text-gray-700">Add a contact form to your website</Label>
+                <p className="text-xs text-gray-400 mb-2 mt-0.5">Paste this anywhere on your site — no setup needed.</p>
+                <div className="relative">
+                  <pre className="bg-gray-900 text-gray-100 rounded-lg p-3 pr-12 text-xs overflow-x-auto whitespace-pre"><code>{formSnippet}</code></pre>
+                  <Button variant="outline" className="absolute top-2 right-2 h-9 px-2.5" onClick={() => copy(formSnippet, 'Snippet')}>
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-500 space-y-1">
+                <p className="font-medium text-gray-600">Other sources:</p>
+                <p>• <strong>Zapier / Make:</strong> add a Webhook action that POSTs to your URL above.</p>
+                <p>• <strong>Google LSA / Angi / Yelp / Facebook:</strong> connect them through Zapier to your URL (one-click connectors coming soon).</p>
+                <p>• <strong>Missed calls</strong> are already handled automatically.</p>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
