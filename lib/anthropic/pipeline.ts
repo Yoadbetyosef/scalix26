@@ -120,7 +120,10 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     input.agentId
       ? supabase.from('ai_employees').select('*').eq('id', input.agentId).single()
       : supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
-    supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
+    // Voice only needs light context — fetch one short KB row instead of all
+    isVoice
+      ? supabase.from('knowledge_base').select('content').eq('tenant_id', input.tenantId).limit(1)
+      : supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
   ])
 
   const tenant = tenantRes.data
@@ -142,9 +145,24 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     contact = newContact
   }
 
-  // Find existing open conversation for this contact on this channel
   let conversationId = input.conversationId
-  let humanTakeover = false
+
+  // Records the inbound customer message (no AI reply) when a human has taken over.
+  const recordTakeoverAndSkip = (): PipelineOutput => {
+    const nowTs = new Date().toISOString()
+    Promise.all([
+      supabase.from('messages').insert([
+        { conversation_id: conversationId, tenant_id: input.tenantId, role: 'user', content: input.messageContent, channel: input.channelType },
+      ]),
+      supabase.from('conversations').update({ updated_at: nowTs }).eq('id', conversationId),
+      contact ? supabase.from('contacts').update({ last_interaction: nowTs }).eq('id', contact.id) : Promise.resolve(null),
+    ]).catch(console.error)
+    return { response: '', conversationId: conversationId!, skipped: true }
+  }
+
+  // Find existing open conversation for this contact (SMS + first voice turn).
+  // When a conversationId is passed in (e.g. voice), takeover is fetched in the
+  // Promise.all below instead — saving a serial round-trip.
   if (!conversationId && contact?.id) {
     const { data: existing } = await supabase
       .from('conversations')
@@ -158,40 +176,20 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       .maybeSingle()
     if (existing) {
       conversationId = existing.id
-      humanTakeover = existing.human_takeover === true
+      if (existing.human_takeover === true) return recordTakeoverAndSkip()
     }
-  } else if (conversationId) {
-    // Conversation id passed in directly (e.g. voice) — fetch its takeover state
-    const { data: existing } = await supabase
-      .from('conversations')
-      .select('human_takeover')
-      .eq('id', conversationId)
-      .maybeSingle()
-    humanTakeover = existing?.human_takeover === true
   }
 
-  // Human has taken over: record the inbound customer message so it shows in the
-  // inbox, but do NOT generate or send an AI reply.
-  if (humanTakeover && conversationId) {
-    const nowTs = new Date().toISOString()
-    Promise.all([
-      supabase.from('messages').insert([
-        { conversation_id: conversationId, tenant_id: input.tenantId, role: 'user', content: input.messageContent, channel: input.channelType },
-      ]),
-      supabase.from('conversations').update({ updated_at: nowTs }).eq('id', conversationId),
-      contact ? supabase.from('contacts').update({ last_interaction: nowTs }).eq('id', contact.id) : Promise.resolve(null),
-    ]).catch(console.error)
-
-    return { response: '', conversationId, skipped: true }
-  }
-
-  // Load skills + conversation history + create conversation if needed
-  const [skillsRes, historyRes, convRes] = await Promise.all([
+  // Load skills + history + takeover (passed-in convo only) + create conversation if needed
+  const [skillsRes, historyRes, takeoverRes, convRes] = await Promise.all([
     supabase.from('skills').select('*').eq('ai_employee_id', employee.id),
     conversationId
       ? supabase.from('messages').select('role, content').eq('conversation_id', conversationId)
-          .order('timestamp', { ascending: true }).limit(isVoice ? 6 : 20)
+          .order('timestamp', { ascending: !isVoice }).limit(isVoice ? 6 : 20)
       : Promise.resolve({ data: [] }),
+    input.conversationId
+      ? supabase.from('conversations').select('human_takeover').eq('id', input.conversationId).maybeSingle()
+      : Promise.resolve({ data: null }),
     conversationId
       ? Promise.resolve({ data: { id: conversationId } })
       : supabase.from('conversations').insert({
@@ -205,27 +203,24 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   if (!conversationId) conversationId = (convRes as { data: { id: string } | null }).data?.id
 
+  // Takeover check for the passed-in conversationId path (voice subsequent turns)
+  if (input.conversationId && (takeoverRes.data as { human_takeover?: boolean } | null)?.human_takeover === true) {
+    return recordTakeoverAndSkip()
+  }
+
   const skills = skillsRes.data || []
   const history = historyRes.data || []
   const skillTriggered = detectSkillTrigger(input.messageContent, skills)
 
-  const systemPrompt = buildSystemPrompt(employee, skills, kb || [], tenant, isVoice)
-  const voiceRules = `
+  // Voice: trim KB to the first 500 chars of one row; SMS/social use full KB
+  const kbForPrompt = isVoice
+    ? (kb?.[0]?.content ? [{ title: 'Business info', content: String(kb[0].content).substring(0, 500) }] : [])
+    : (kb || [])
+  const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice)
 
-VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
-- Max 2-3 sentences. Never more.
-- No lists, bullet points, or numbered items. Speak in natural sentences only.
-- Get to the point in the first sentence — no warm-up phrases.
-- Tone: friendly, confident, like a real receptionist. Never robotic or formal.
-- Never say "Great question!", "Absolutely!", "Certainly!" or any filler opener.
-- First priority on every call: get the caller's location and what the problem is.
-- Second priority: confirm you can help and book the job.
-- Every response must end with a clear next step or question.
-- Never say "I am an AI" or anything that reveals you are not human.
-- If you don't know something, say "Let me get someone to help you with that" — never guess.
-- Feel urgent and helpful. The caller has a problem and needs it solved now.`
-
-  const chatMessages = (history as Message[]).map(m => ({
+  // Voice loads the 6 NEWEST messages (descending) — reverse back to chronological
+  const orderedHistory = isVoice ? [...(history as Message[])].reverse() : (history as Message[])
+  const chatMessages = orderedHistory.map(m => ({
     role: m.role as 'user' | 'assistant',
     content: m.content,
   }))
@@ -234,7 +229,7 @@ VOICE CALL RULES — OVERRIDE EVERYTHING ELSE:
   const response = await anthropic.messages.create({
     model: isVoice ? VOICE_MODEL : MODEL,
     max_tokens: isVoice ? 120 : 500,
-    system: isVoice ? systemPrompt + voiceRules : systemPrompt,
+    system: systemPrompt,
     messages: chatMessages,
   })
 
