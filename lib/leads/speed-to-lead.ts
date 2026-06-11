@@ -19,7 +19,7 @@ interface SpeedToLeadResult {
 
 function buildMessage(source: LeadSource, name: string | null | undefined, employeeName: string, businessName: string): string {
   if (source === 'missed_call') {
-    return `Hi! This is ${employeeName} from ${businessName}. Sorry we missed you — still need a locksmith? Reply YES and we'll call right back.`
+    return `Hi! This is ${employeeName} from ${businessName}. Sorry we missed you — still need help? Reply YES and we'll call right back.`
   }
   const greeting = name ? `Hi ${name}! ` : ''
   return `${greeting}This is ${employeeName} from ${businessName}. We got your request — need help right now? Reply YES and we'll call you immediately.`
