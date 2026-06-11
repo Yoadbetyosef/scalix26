@@ -124,7 +124,12 @@ wss.on('connection', (twilioWs) => {
 
           // Get custom parameters if passed from Twilio
           const params = msg.start.customParameters || {};
-          if (params.systemPrompt) systemPrompt = params.systemPrompt;
+          console.log('[start] customParameters:', JSON.stringify(params));
+          if (params.systemPrompt && params.systemPrompt.trim()) {
+            systemPrompt = params.systemPrompt;
+          } else {
+            console.log('[start] no systemPrompt param — using DEFAULT_SYSTEM_PROMPT');
+          }
 
           console.log('[call] started', streamSid);
 
@@ -202,8 +207,15 @@ async function sendToTTS(text, twilioWs, streamSid, state) {
   } catch (err) {
     console.error('[tts error]', err.message);
   } finally {
-    // Keep STT muted a moment after sending so it doesn't catch the AI's own audio
-    if (state) setTimeout(() => { state.isSpeaking = false; }, 500);
+    // Keep STT muted until the audio has likely finished playing (~60ms/char,
+    // min 2s) so STT doesn't catch the AI's own audio.
+    if (state) {
+      const estimatedDurationMs = Math.max(2000, text.length * 60);
+      setTimeout(() => {
+        state.isSpeaking = false;
+        console.log('[speaking] isSpeaking set to false after', estimatedDurationMs, 'ms');
+      }, estimatedDurationMs);
+    }
   }
 }
 
