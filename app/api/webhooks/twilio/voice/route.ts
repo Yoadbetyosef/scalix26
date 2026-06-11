@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
     const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('forward_to_phone, greeting, status').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
     const { data: agent } = await agentQuery
 
@@ -147,6 +147,26 @@ export async function POST(req: NextRequest) {
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
     }
 
+    // ── Realtime Media Streams (Railway voice-server) ──────────────────────
+    // When VOICE_SERVER_WS_URL is configured, bridge the call to the WebSocket
+    // server for streaming STT/LLM/TTS (sub-second latency). The agent's
+    // system_prompt is passed through as a custom parameter.
+    const wsUrl = process.env.VOICE_SERVER_WS_URL
+    if (wsUrl && wsUrl.startsWith('wss://') && !wsUrl.includes('REPLACE')) {
+      const sp = escapeXml(agent?.system_prompt || greeting)
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="${wsUrl}">
+      <Parameter name="systemPrompt" value="${sp}"/>
+    </Stream>
+  </Connect>
+</Response>`
+      return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
+    }
+
+    // ── FALLBACK (original flow): Twilio <Gather> speech + Deepgram/Polly TTS.
+    // Used when no voice-server is configured. Kept intact on purpose.
     const action = gatherUrl(baseUrl)
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
