@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { ExternalLink, CreditCard, Phone, MessageSquare, Globe, PhoneForwarded, Copy, Webhook } from 'lucide-react'
+import { CreditCard, Phone, MessageSquare, Globe, PhoneForwarded, Copy, Webhook } from 'lucide-react'
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   voice: Phone,
@@ -88,7 +88,7 @@ export function SettingsClient({ tenant, channels }: Props) {
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
-  const bookingUrl = tenant.lead_intake_token ? `${appUrl}/f/${tenant.lead_intake_token}` : ''
+  const bookingUrl = tenant.slug ? `${appUrl}/f/${tenant.slug}` : ''
   const intakeUrl = tenant.lead_intake_token ? `${appUrl}/api/leads/inbound/${tenant.lead_intake_token}` : ''
 
   function copy(text: string, label: string) {
@@ -229,23 +229,6 @@ export function SettingsClient({ tenant, channels }: Props) {
                     <p className="text-xs text-gray-500">If a call ever slips through, we automatically text them back within seconds so you never lose the job.</p>
                   </div>
                   <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium flex-shrink-0">Active</span>
-                </div>
-
-                {/* Zapier / aggregators */}
-                <div className="flex items-start gap-3 p-3 rounded-lg border border-gray-100">
-                  <div className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center flex-shrink-0">
-                    <Webhook className="w-4 h-4 text-gray-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Google, Facebook, Angi, Yelp &amp; more</p>
-                    <p className="text-xs text-gray-500">Got leads coming from Google LSA, Facebook Ads, Angi, or Yelp? Connect once and every new lead gets an automatic text within seconds — no manual follow-up needed.</p>
-                  </div>
-                  <a href="https://zapier.com/apps/webhook/integrations" target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                    <Button variant="outline" size="sm">
-                      <ExternalLink className="w-3.5 h-3.5 sm:mr-1.5" />
-                      <span className="hidden sm:inline">Connect</span>
-                    </Button>
-                  </a>
                 </div>
               </div>
 

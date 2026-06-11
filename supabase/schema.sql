@@ -26,8 +26,41 @@ CREATE TABLE tenants (
   stripe_subscription_id TEXT,
   trial_ends_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '14 days',
   lead_intake_token UUID DEFAULT uuid_generate_v4(),
+  slug TEXT UNIQUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Auto-generate a unique, human-readable slug from business_name on insert
+CREATE OR REPLACE FUNCTION set_tenant_slug() RETURNS trigger AS $$
+DECLARE
+  base TEXT;
+  candidate TEXT;
+  n INT := 2;
+BEGIN
+  IF NEW.slug IS NOT NULL AND NEW.slug <> '' THEN
+    RETURN NEW;
+  END IF;
+  base := trim(both '-' from regexp_replace(
+            regexp_replace(
+              regexp_replace(lower(coalesce(NEW.business_name, 'business')), '\s+', '-', 'g'),
+              '[^a-z0-9-]', '', 'g'
+            ),
+            '-+', '-', 'g'
+          ));
+  IF base = '' THEN base := 'business'; END IF;
+  candidate := base;
+  WHILE EXISTS (SELECT 1 FROM tenants WHERE slug = candidate) LOOP
+    candidate := base || '-' || n;
+    n := n + 1;
+  END LOOP;
+  NEW.slug := candidate;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_set_tenant_slug ON tenants;
+CREATE TRIGGER trg_set_tenant_slug BEFORE INSERT ON tenants
+  FOR EACH ROW EXECUTE FUNCTION set_tenant_slug();
 
 -- ============================================================
 -- AI EMPLOYEES
@@ -266,6 +299,7 @@ CREATE POLICY "Tenant leads access" ON leads FOR ALL USING (tenant_id = get_tena
 -- INDEXES
 -- ============================================================
 CREATE INDEX idx_tenants_user_id ON tenants(user_id);
+CREATE UNIQUE INDEX idx_tenants_slug ON tenants(slug);
 CREATE INDEX idx_ai_employees_tenant_id ON ai_employees(tenant_id);
 CREATE INDEX idx_channels_tenant_id ON channels(tenant_id);
 CREATE INDEX idx_channels_ai_employee_id ON channels(ai_employee_id);
