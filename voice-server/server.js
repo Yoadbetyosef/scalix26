@@ -51,13 +51,14 @@ wss.on('connection', (twilioWs) => {
 
     if (!transcript || !isFinal) return;
 
-    // Add to history
+    console.log('[claude] sending to claude:', transcript);
     conversationHistory.push({ role: 'user', content: transcript });
 
     // Get Claude response with streaming
     try {
       let fullResponse = '';
 
+      console.log('[claude] starting stream...');
       const stream = await anthropic.messages.stream({
         model: 'claude-haiku-4-5',
         max_tokens: 120,
@@ -69,6 +70,7 @@ wss.on('connection', (twilioWs) => {
       let buffer = '';
 
       stream.on('text', async (text) => {
+        console.log('[claude text]', text);
         buffer += text;
         fullResponse += text;
 
@@ -80,14 +82,19 @@ wss.on('connection', (twilioWs) => {
       });
 
       stream.on('finalMessage', async () => {
+        console.log('[claude] final message done');
         if (buffer.trim()) {
           await sendToTTS(buffer.trim(), twilioWs, streamSid);
         }
         conversationHistory.push({ role: 'assistant', content: fullResponse });
       });
 
+      stream.on('error', (err) => {
+        console.error('[claude stream error]', err);
+      });
+
     } catch (err) {
-      console.error('[claude]', err);
+      console.error('[claude error]', err.message);
     }
   });
 
