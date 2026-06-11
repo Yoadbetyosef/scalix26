@@ -24,6 +24,25 @@ wss.on('connection', (ws) => {
   let greeting = 'Hello! How can I help you today?';
   let history = [];
   let busy = false; // true כשהAI מעבד או מדבר
+  let greetingSent = false;
+
+  // Audio queue — play TTS clips one at a time so Twilio never overlaps them
+  let audioQueue = [];
+  let playingAudio = false;
+
+  async function playNext(ws, streamSid) {
+    if (playingAudio || audioQueue.length === 0) return;
+    playingAudio = true;
+    const text = audioQueue.shift();
+    await sendAudio(text, ws, streamSid);
+    playingAudio = false;
+    playNext(ws, streamSid);
+  }
+
+  function queueAudio(text, ws, streamSid) {
+    audioQueue.push(text);
+    playNext(ws, streamSid);
+  }
 
   // Deepgram STT
   const dg = deepgramClient.listen.live({
@@ -74,14 +93,14 @@ wss.on('connection', (ws) => {
         if (buffer.match(/[.!?]/) && buffer.trim().length > 15) {
           const toSend = buffer.trim();
           buffer = '';
-          await sendAudio(toSend, ws, streamSid);
+          queueAudio(toSend, ws, streamSid);
         }
       });
 
       stream.on('finalMessage', async () => {
         console.log('[ai]', fullText);
         if (buffer.trim().length > 0) {
-          await sendAudio(buffer.trim(), ws, streamSid);
+          queueAudio(buffer.trim(), ws, streamSid);
         }
         history.push({ role: 'assistant', content: fullText });
         busy = false;
@@ -110,10 +129,12 @@ wss.on('connection', (ws) => {
         if (p.greeting) greeting = p.greeting;
         console.log('[start]', streamSid);
 
-        // Send greeting
-        busy = true;
-        await sendAudio(greeting, ws, streamSid);
-        busy = false;
+        // Send greeting once per call
+        console.log('[greeting] sending, greetingSent was:', greetingSent);
+        if (!greetingSent) {
+          greetingSent = true;
+          queueAudio(greeting, ws, streamSid);
+        }
       }
 
       if (msg.event === 'media') {
