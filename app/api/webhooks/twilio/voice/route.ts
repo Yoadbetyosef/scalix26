@@ -17,6 +17,15 @@ function gatherUrl(baseUrl: string, conversationId?: string) {
   return conversationId ? `${url}?cid=${encodeURIComponent(conversationId)}` : url
 }
 
+// Speak via Deepgram Aura TTS (served by /api/tts) when configured; fall back
+// to Twilio Polly when no Deepgram key is set, so voice never breaks.
+function ttsPlay(text: string): string {
+  if (process.env.DEEPGRAM_API_KEY) {
+    return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(text)}</Play>`
+  }
+  return `<Say voice="Polly.Joanna-Neural">${escapeXml(text)}</Say>`
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
@@ -59,9 +68,9 @@ export async function POST(req: NextRequest) {
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
-    <Say voice="Polly.Joanna">Sorry, I didn't catch that. Go ahead.</Say>
+    ${ttsPlay("Sorry, I didn't catch that. Go ahead.")}
   </Gather>
-  <Say voice="Polly.Joanna">I couldn't hear you. Please call us back. Goodbye!</Say>
+  ${ttsPlay("I couldn't hear you. Please call us back. Goodbye!")}
 </Response>`
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
     }
@@ -84,7 +93,7 @@ export async function POST(req: NextRequest) {
           const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
-    <Say voice="Polly.Joanna-Neural">One moment please, let me connect you with someone from our team.</Say>
+    ${ttsPlay("One moment please, let me connect you with someone from our team.")}
   </Gather>
 </Response>`
           return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
@@ -93,9 +102,9 @@ export async function POST(req: NextRequest) {
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
-    <Say voice="Polly.Joanna-Neural">${escapeXml(result.response)}</Say>
+    ${ttsPlay(result.response)}
   </Gather>
-  <Say voice="Polly.Joanna-Neural">Feel free to call back anytime. Goodbye!</Say>
+  ${ttsPlay("Feel free to call back anytime. Goodbye!")}
 </Response>`
         return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
       } catch (err) {
@@ -104,7 +113,7 @@ export async function POST(req: NextRequest) {
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="8">
-    <Say voice="Polly.Joanna-Neural">Sorry about that, I had a hiccup. What can I help you with?</Say>
+    ${ttsPlay("Sorry about that, I had a hiccup. What can I help you with?")}
   </Gather>
 </Response>`
         return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
@@ -138,9 +147,9 @@ export async function POST(req: NextRequest) {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna-Neural">${escapeXml(greeting)}</Say>
+    ${ttsPlay(greeting)}
   </Gather>
-  <Say voice="Polly.Joanna-Neural">I didn't hear anything. Please call us back. Goodbye!</Say>
+  ${ttsPlay("I didn't hear anything. Please call us back. Goodbye!")}
 </Response>`
     return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
@@ -149,9 +158,9 @@ export async function POST(req: NextRequest) {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${action}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna-Neural">Hello! Thank you for calling. How can I help you today?</Say>
+    ${ttsPlay("Hello! Thank you for calling. How can I help you today?")}
   </Gather>
-  <Say voice="Polly.Joanna-Neural">I didn't hear anything. Please call us back. Goodbye!</Say>
+  ${ttsPlay("I didn't hear anything. Please call us back. Goodbye!")}
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })

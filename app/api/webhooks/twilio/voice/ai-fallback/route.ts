@@ -10,6 +10,15 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;')
 }
 
+// Speak via Deepgram Aura TTS (served by /api/tts) when configured; fall back
+// to Twilio Polly when no Deepgram key is set, so voice never breaks.
+function ttsPlay(text: string): string {
+  if (process.env.DEEPGRAM_API_KEY) {
+    return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(text)}</Play>`
+  }
+  return `<Say voice="Polly.Joanna-Neural">${escapeXml(text)}</Say>`
+}
+
 // Called by Twilio when the <Dial> to owner's phone ends (no answer, busy, or hung up)
 export async function POST(req: NextRequest) {
   const body = await req.text()
@@ -48,9 +57,9 @@ export async function POST(req: NextRequest) {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${actionUrl}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    <Say voice="Polly.Joanna-Neural">${escapeXml(greeting)}</Say>
+    ${ttsPlay(greeting)}
   </Gather>
-  <Say voice="Polly.Joanna-Neural">I didn't catch that. Please call us back. Goodbye!</Say>
+  ${ttsPlay("I didn't catch that. Please call us back. Goodbye!")}
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
