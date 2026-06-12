@@ -67,6 +67,20 @@ wss.on('connection', (twilioWs) => {
             },
           },
           prompt: systemPrompt,
+          // Client-side function (no endpoint) — we handle it here on the socket.
+          functions: [
+            {
+              name: 'transfer_to_human',
+              description: 'Transfer the call to a human specialist when the customer requests it, has a complex issue, is angry, or needs immediate emergency help.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  reason: { type: 'string', description: 'Why the call is being transferred' },
+                },
+                required: ['reason'],
+              },
+            },
+          ],
         },
         speak: { provider: { type: 'deepgram', model: voiceId } },
         greeting,
@@ -101,6 +115,32 @@ wss.on('connection', (twilioWs) => {
     }
 
     if (msg.type !== 'ConversationText') console.log('[dg event]', msg.type);
+
+    // Human handoff: the agent decided to call transfer_to_human.
+    if (msg.type === 'FunctionCallRequest') {
+      for (const fn of msg.functions || []) {
+        if (fn.name !== 'transfer_to_human') continue;
+        let reason = '';
+        try { reason = JSON.parse(fn.arguments || '{}').reason || ''; } catch { /* arguments not JSON */ }
+        console.log('[handoff] transfer_to_human:', reason);
+
+        // Let the agent speak the hold line.
+        dgWs.send(JSON.stringify({
+          type: 'FunctionCallResponse',
+          id: fn.id,
+          name: fn.name,
+          content: 'Transferring you now. Please hold.',
+        }));
+
+        // After the line plays: alert the owner, then end the AI session.
+        setTimeout(() => {
+          sendHandoffAlert(ownerPhone, callerNumber, fromNumber, reason);
+          try { dgWs.close(); } catch {}
+          try { twilioWs.close(); } catch {}
+        }, 3000);
+      }
+      return;
+    }
 
     // Barge-in: caller started talking — drop buffered agent audio in Twilio.
     if (msg.type === 'UserStartedSpeaking') {
@@ -216,6 +256,27 @@ async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
     console.log(`[lead-alert] SMS sent to owner: ${ownerPhone} (sid=${res.sid} status=${res.status})`);
   } catch (err) {
     console.error(`[lead-alert] error: ${err.message}${err.code ? ` (code ${err.code})` : ''}`);
+  }
+}
+
+// Text the owner when a live call is being handed off to a human.
+async function sendHandoffAlert(ownerPhone, callerPhone, fromNumber, reason) {
+  if (!ownerPhone || !process.env.TWILIO_ACCOUNT_SID) {
+    console.log('[handoff] SMS skipped — no ownerPhone or TWILIO_ACCOUNT_SID');
+    return;
+  }
+  const from = fromNumber || process.env.TWILIO_PHONE_NUMBER;
+  if (!from) { console.log('[handoff] SMS skipped — no from number'); return; }
+  try {
+    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await twilio.messages.create({
+      body: `🚨 Live call transfer!\nCaller: ${callerPhone || 'Unknown'}\nReason: ${reason || 'Not specified'}\nCall them back NOW — they are waiting.`,
+      from,
+      to: ownerPhone,
+    });
+    console.log('[handoff] SMS sent to owner:', ownerPhone);
+  } catch (err) {
+    console.error('[handoff] error:', err.message);
   }
 }
 
