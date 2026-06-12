@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { LeadToaster } from '@/components/dashboard/lead-toaster'
+import { NotificationCenter } from '@/components/dashboard/notification-center'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -215,8 +215,8 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* New-lead notifications — stacked toasts, bottom-left */}
-      <LeadToaster />
+      {/* Persistent notification center — bell, bottom-right */}
+      <NotificationCenter />
     </>
   )
 }

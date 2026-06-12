@@ -1,9 +1,9 @@
 'use client'
 
-import { TrendingUp, ChevronRight } from 'lucide-react'
-import Link from 'next/link'
+import { useState } from 'react'
+import { TrendingUp, Phone, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { formatDateTime } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 import type { Lead, LeadSource, LeadStatus } from '@/types'
 
 const SOURCE_LABELS: Record<LeadSource, string> = {
@@ -17,33 +17,44 @@ const SOURCE_LABELS: Record<LeadSource, string> = {
   other: 'Other',
 }
 
-const STATUS_STYLES: Record<LeadStatus, string> = {
-  new: 'bg-blue-50 text-blue-700',
-  contacted: 'bg-yellow-50 text-yellow-700',
-  booked: 'bg-green-50 text-green-700',
-  lost: 'bg-gray-100 text-gray-500',
+const STATUS_CONFIG: Record<LeadStatus, { label: string; emoji: string; card: string; border: string; badge: string }> = {
+  new:       { label: 'New',    emoji: '🔥', card: 'bg-orange-50',  border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700' },
+  contacted: { label: 'Open',   emoji: '🔔', card: 'bg-white',      border: 'border-l-blue-400',   badge: 'bg-blue-50 text-blue-700' },
+  booked:    { label: 'Booked', emoji: '✅', card: 'bg-green-50',   border: 'border-l-green-500',  badge: 'bg-green-100 text-green-700' },
 }
 
-function responseTime(createdAt: string, respondedAt: string | null): string {
-  if (!respondedAt) return '—'
-  const sec = Math.max(0, Math.round((new Date(respondedAt).getTime() - new Date(createdAt).getTime()) / 1000))
-  if (sec < 60) return `${sec}s`
-  if (sec < 3600) return `${Math.round(sec / 60)}m`
-  return `${Math.round(sec / 3600)}h`
-}
-
-function StatusBadge({ status }: { status: LeadStatus }) {
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${STATUS_STYLES[status] || 'bg-gray-100 text-gray-500'}`}>
-      {status}
-    </span>
-  )
+function relativeTime(iso: string): string {
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (sec < 60) return 'Just now'
+  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`
+  if (sec < 86400) return `${Math.floor(sec / 3600)} hr ago`
+  return `${Math.floor(sec / 86400)} d ago`
 }
 
 export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<string, string> }) {
   const router = useRouter()
+  const [rows, setRows] = useState<Lead[]>(leads)
+  const [updating, setUpdating] = useState<string | null>(null)
 
-  if (!leads.length) {
+  async function markBooked(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
+    setUpdating(id)
+    const supabase = createClient()
+    const { error } = await supabase.from('leads').update({ status: 'booked' }).eq('id', id)
+    if (!error) {
+      setRows((prev) => prev.map((l) => (l.id === id ? { ...l, status: 'booked' as LeadStatus } : l)))
+      router.refresh()
+    }
+    setUpdating(null)
+  }
+
+  const counts = {
+    new: rows.filter((l) => l.status === 'new').length,
+    contacted: rows.filter((l) => l.status === 'contacted').length,
+    booked: rows.filter((l) => l.status === 'booked').length,
+  }
+
+  if (!rows.length) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-white rounded-xl border border-gray-100 shadow-sm">
         <TrendingUp className="w-12 h-12 mb-3" />
@@ -54,78 +65,65 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
   }
 
   return (
-    <>
-      {/* Mobile card list */}
-      <div className="md:hidden space-y-2">
-        {leads.map((lead) => {
+    <div className="space-y-3">
+      {/* Summary header */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 text-sm font-medium">
+        <span className="text-orange-600">🔥 {counts.new} New</span>
+        <span className="text-blue-600">🔔 {counts.contacted} Open</span>
+        <span className="text-green-600">✅ {counts.booked} Booked</span>
+      </div>
+
+      {/* Lead cards */}
+      <div className="space-y-2">
+        {rows.map((lead) => {
+          const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.contacted
           const href = links[lead.id]
-          const inner = (
-            <>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-sm font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</p>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <StatusBadge status={lead.status} />
-                  {href && <ChevronRight className="w-4 h-4 text-gray-300" />}
+          return (
+            <div
+              key={lead.id}
+              onClick={href ? () => router.push(href) : undefined}
+              className={`rounded-xl border border-gray-100 border-l-4 shadow-sm p-4 transition-colors ${cfg.card} ${cfg.border} ${href ? 'cursor-pointer hover:brightness-[0.98]' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}>
+                      {cfg.emoji} {cfg.label}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1 break-all">{lead.phone}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {SOURCE_LABELS[lead.source] || lead.source} • {relativeTime(lead.created_at)}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col items-stretch gap-2 flex-shrink-0">
+                  {lead.phone && (
+                    <a
+                      href={`tel:${lead.phone}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af]"
+                    >
+                      <Phone className="w-3.5 h-3.5" /> Call Now
+                    </a>
+                  )}
+                  {lead.status !== 'booked' && (
+                    <button
+                      onClick={(e) => markBooked(e, lead.id)}
+                      disabled={updating === lead.id}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" /> {updating === lead.id ? '…' : 'Mark as Booked'}
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-gray-600">
-                <span className="text-gray-400">Source</span>
-                <span className="text-right">{SOURCE_LABELS[lead.source] || lead.source}</span>
-                <span className="text-gray-400">Phone</span>
-                <span className="text-right break-all">{lead.phone}</span>
-                <span className="text-gray-400">Response</span>
-                <span className="text-right">{responseTime(lead.created_at, lead.responded_at)}</span>
-                <span className="text-gray-400">Created</span>
-                <span className="text-right">{formatDateTime(lead.created_at)}</span>
-              </div>
-            </>
-          )
-          return href ? (
-            <Link key={lead.id} href={href} className="tap-target block bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              {inner}
-            </Link>
-          ) : (
-            <div key={lead.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              {inner}
             </div>
           )
         })}
       </div>
-
-      {/* Desktop table */}
-      <div className="hidden md:block bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
-        <table className="w-full min-w-[720px]">
-          <thead>
-            <tr className="border-b border-gray-50">
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Source</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Phone</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Response Time</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Created At</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {leads.map((lead) => {
-              const href = links[lead.id]
-              return (
-                <tr
-                  key={lead.id}
-                  onClick={href ? () => router.push(href) : undefined}
-                  className={`transition-colors ${href ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
-                >
-                  <td className="px-6 py-4 text-sm text-gray-700">{SOURCE_LABELS[lead.source] || lead.source}</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{lead.name || 'Unknown'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600 break-all">{lead.phone}</td>
-                  <td className="px-6 py-4"><StatusBadge status={lead.status} /></td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{responseTime(lead.created_at, lead.responded_at)}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{formatDateTime(lead.created_at)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </>
+    </div>
   )
 }
