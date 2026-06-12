@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, Phone, Check, X } from 'lucide-react'
+import { TrendingUp, Phone, Check, X, RotateCcw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Lead, LeadSource, LeadStatus } from '@/types'
@@ -130,6 +130,15 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                       className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50"
                     >
                       <X className="w-3.5 h-3.5" /> Dismiss
+                    </button>
+                  )}
+                  {isDismissed && (
+                    <button
+                      onClick={(e) => updateStatus(e, lead.id, 'contacted')}
+                      disabled={updating === lead.id}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> {updating === lead.id ? '…' : 'Restore'}
                     </button>
                   )}
                 </div>
