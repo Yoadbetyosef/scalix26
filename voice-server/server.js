@@ -57,7 +57,7 @@ wss.on('connection', (ws) => {
     sample_rate: 8000,
     channels: 1,
     interim_results: true,
-    endpointing: 300,
+    endpointing: 250,
     utterance_end_ms: 1000,
     vad_events: true,
   });
@@ -94,7 +94,9 @@ wss.on('connection', (ws) => {
       stream.on('text', (t) => {
         fullText += t;
         buffer += t;
-        if (buffer.match(/[.!?]/) && buffer.trim().length > 20) {
+        // Flush on clause boundaries (comma too), so the reply starts playing
+        // sooner instead of waiting for the whole sentence to finish.
+        if (buffer.match(/[.!?,]/) && buffer.trim().length > 15) {
           const toSend = buffer.trim();
           buffer = '';
           queueAudio(toSend, ws, streamSid);
