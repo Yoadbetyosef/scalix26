@@ -19,6 +19,7 @@ wss.on('connection', (twilioWs) => {
 
   // Per-call config (filled from the Twilio <Stream> custom parameters)
   let streamSid = null;
+  let callSid = null; // Twilio Call SID — needed to redirect the live call
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT || 'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
   let greeting = 'Hello! How can I help you today?';
   let voiceId = process.env.DEFAULT_VOICE || 'aura-2-asteria-en';
@@ -132,11 +133,13 @@ wss.on('connection', (twilioWs) => {
           content: 'Transferring you now. Please hold.',
         }));
 
-        // After the line plays: alert the owner, then end the AI session.
+        // After the line plays: redirect the LIVE call to the owner. Do NOT
+        // close the Twilio socket — the redirect (calls.update) replaces the
+        // <Connect><Stream> with a <Dial>, keeping the call alive. Closing the
+        // Deepgram socket just stops the AI.
         setTimeout(() => {
-          sendHandoffAlert(ownerPhone, callerNumber, fromNumber, reason);
+          transferCall(callSid, ownerPhone, fromNumber, callerNumber, reason);
           try { dgWs.close(); } catch {}
-          try { twilioWs.close(); } catch {}
         }, 3000);
       }
       return;
@@ -200,6 +203,7 @@ wss.on('connection', (twilioWs) => {
 
     if (msg.event === 'start') {
       streamSid = msg.start.streamSid;
+      callSid = msg.start.callSid || null;
       const p = msg.start.customParameters || {};
       if (p.systemPrompt) systemPrompt = p.systemPrompt;
       if (p.greeting) greeting = p.greeting;
@@ -256,6 +260,43 @@ async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
     console.log(`[lead-alert] SMS sent to owner: ${ownerPhone} (sid=${res.sid} status=${res.status})`);
   } catch (err) {
     console.error(`[lead-alert] error: ${err.message}${err.code ? ` (code ${err.code})` : ''}`);
+  }
+}
+
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// True live transfer: redirect the in-progress Twilio call to <Dial> the owner.
+// If callSid/creds are missing, fall back to just SMS-ing the owner. The <Dial>
+// action callback (handoff-fallback) sends the SMS only if the owner misses it.
+async function transferCall(callSid, ownerPhone, fromNumber, callerNumber, reason) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!callSid || !ownerPhone || !process.env.TWILIO_ACCOUNT_SID || !appUrl) {
+    console.log('[handoff] cannot redirect (missing callSid/ownerPhone/creds/appUrl) — SMS fallback');
+    return sendHandoffAlert(ownerPhone, callerNumber, fromNumber, reason);
+  }
+  const q = new URLSearchParams({
+    owner: ownerPhone,
+    from: fromNumber || '',
+    caller: callerNumber || '',
+    reason: reason || '',
+  }).toString();
+  const action = `${appUrl}/api/webhooks/twilio/voice/handoff-fallback?${q}`;
+  // callerId must be a Twilio number on the account — use the tenant's number.
+  const twiml = `<Response><Dial timeout="20" callerId="${escapeXml(fromNumber || '')}" action="${escapeXml(action)}" method="POST"><Number>${escapeXml(ownerPhone)}</Number></Dial></Response>`;
+  try {
+    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await twilio.calls(callSid).update({ twiml });
+    console.log('[handoff] live call redirected to owner:', ownerPhone);
+  } catch (err) {
+    console.error('[handoff] redirect error:', err.message, '— SMS fallback');
+    sendHandoffAlert(ownerPhone, callerNumber, fromNumber, reason);
   }
 }
 
