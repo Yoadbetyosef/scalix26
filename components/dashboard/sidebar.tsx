@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useLeadNotifications } from '@/hooks/useLeadNotifications'
+import { LeadToaster } from '@/components/dashboard/lead-toaster'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -46,8 +46,6 @@ export function Sidebar() {
   const supabase = createClient()
   const [businessName, setBusinessName] = useState<string>('')
   const [moreOpen, setMoreOpen] = useState(false)
-  // Realtime new-lead toasts + live open-lead count for the Leads badge
-  const newLeads = useLeadNotifications()
 
   // Dashboard and Leads both live at /dashboard (Leads is ?tab=leads), so the
   // active highlight has to look at the tab, not just the pathname.
@@ -115,11 +113,6 @@ export function Sidebar() {
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 <span className="hidden xl:block">{label}</span>
-                {label === 'Leads' && newLeads > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-                    {newLeads}
-                  </span>
-                )}
               </Link>
             )
           })}
@@ -150,14 +143,7 @@ export function Sidebar() {
                 active ? 'text-[#4ecdc4]' : 'text-gray-400'
               )}
             >
-              <span className="relative">
-                <Icon className="w-5 h-5 mb-1" />
-                {label === 'Leads' && newLeads > 0 && (
-                  <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-semibold leading-none rounded-full px-1 py-0.5 min-w-[15px] text-center">
-                    {newLeads}
-                  </span>
-                )}
-              </span>
+              <Icon className="w-5 h-5 mb-1" />
               <span>{label}</span>
             </Link>
           )
@@ -228,6 +214,9 @@ export function Sidebar() {
           </div>
         </div>
       )}
+
+      {/* New-lead notifications — stacked toasts, bottom-left */}
+      <LeadToaster />
     </>
   )
 }

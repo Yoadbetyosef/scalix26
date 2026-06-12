@@ -175,9 +175,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Link>
         <Link
           href="/dashboard?tab=leads"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
         >
           Leads
+          {stats.leads > 0 && (
+            <span className="bg-teal-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+              {stats.leads}
+            </span>
+          )}
         </Link>
       </div>
 

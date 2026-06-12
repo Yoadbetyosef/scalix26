@@ -35,6 +35,13 @@ body {
 /* Safe area for mobile bottom navigation */
 .safe-area-inset-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
 
+/* New-lead toast: slide up from the bottom-left corner */
+@keyframes slide-up {
+  from { transform: translateY(100px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-up { animation: slide-up 0.3s ease-out; }
+
 /* Tap highlight off — we provide our own press feedback */
 * { -webkit-tap-highlight-color: transparent; }
 
