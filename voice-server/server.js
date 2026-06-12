@@ -95,6 +95,12 @@ wss.on('connection', (twilioWs) => {
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
 
+    // Surface the full payload of any problem event from Deepgram.
+    if (msg.type === 'Error' || msg.type === 'Warning') {
+      console.error(`[deepgram ${msg.type}]`, JSON.stringify(msg));
+      return;
+    }
+
     if (msg.type !== 'ConversationText') console.log('[dg event]', msg.type);
 
     // Barge-in: caller started talking — drop buffered agent audio in Twilio.
@@ -140,7 +146,13 @@ wss.on('connection', (twilioWs) => {
   });
 
   dgWs.on('error', (err) => console.error('[deepgram error]', err.message));
-  dgWs.on('close', () => console.log('[deepgram] disconnected'));
+  // Non-101 handshake (e.g. 401 bad DEEPGRAM_API_KEY) surfaces here.
+  dgWs.on('unexpected-response', (_req, res) => {
+    let body = '';
+    res.on('data', (c) => { body += c; });
+    res.on('end', () => console.error(`[deepgram handshake] HTTP ${res.statusCode} ${body.slice(0, 300)}`));
+  });
+  dgWs.on('close', (code, reason) => console.log('[deepgram] disconnected', code, reason ? reason.toString() : ''));
 
   // ── Twilio Media Stream ────────────────────────────────────────────────
   twilioWs.on('message', (data) => {
