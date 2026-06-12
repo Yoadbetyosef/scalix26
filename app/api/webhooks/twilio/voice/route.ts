@@ -175,6 +175,7 @@ export async function POST(req: NextRequest) {
       <Parameter name="systemPrompt" value="${sp}"/>
       <Parameter name="greeting" value="${escapeXml(greeting)}"/>
       <Parameter name="ownerPhone" value="${escapeXml(ownerPhone)}"/>
+      <Parameter name="fromNumber" value="${escapeXml(toNormalized)}"/>
     </Stream>
   </Connect>
 </Response>`

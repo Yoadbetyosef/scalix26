@@ -38,6 +38,7 @@ wss.on('connection', (ws) => {
   let collectedIssue = null;
   let leadAlertSent = false;
   let ownerPhone = null;
+  let fromNumber = null; // the tenant's own Twilio number — SMS is sent FROM here
 
   // Audio queue — play TTS clips one at a time so Twilio never overlaps them
   let audioQueue = [];
@@ -161,7 +162,7 @@ wss.on('connection', (ws) => {
                                 fullText.toLowerCase().includes('reach out');
         if (isLeadConfirmed && !leadAlertSent) {
           leadAlertSent = true;
-          sendLeadAlert(collectedName, collectedPhone, collectedIssue, ownerPhone);
+          sendLeadAlert(collectedName, collectedPhone, collectedIssue, ownerPhone, fromNumber);
         }
 
         // Hang up shortly after a closing line so the goodbye finishes playing
@@ -204,6 +205,7 @@ wss.on('connection', (ws) => {
         if (p.systemPrompt) systemPrompt = p.systemPrompt;
         if (p.greeting) greeting = p.greeting;
         if (p.ownerPhone) ownerPhone = p.ownerPhone;
+        if (p.fromNumber) fromNumber = p.fromNumber;
         console.log('[start]', streamSid);
 
         // Send greeting once per call
@@ -263,7 +265,7 @@ async function sendAudio(text, ws, streamSid) {
 // <Connect><Stream> ends and the call hangs up. (Twilio doesn't accept a
 // server-sent 'stop' event, so ws.close() is the correct way to end it.)
 // Text the business owner a summary when the AI captures a hot lead.
-async function sendLeadAlert(name, phone, issue, ownerPhone) {
+async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
   if (!ownerPhone || !process.env.TWILIO_ACCOUNT_SID) return;
 
   const message = `🔔 New lead from AI call!\nName: ${name || 'Unknown'}\nPhone: ${phone || 'Unknown'}\nIssue: ${issue || 'Not specified'}\n\nCall them back now — they're waiting.`;
@@ -272,7 +274,7 @@ async function sendLeadAlert(name, phone, issue, ownerPhone) {
     const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
     await twilio.messages.create({
       body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
+      from: fromNumber || process.env.TWILIO_PHONE_NUMBER,
       to: ownerPhone,
     });
     console.log('[lead-alert] SMS sent to owner:', ownerPhone);
