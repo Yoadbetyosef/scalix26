@@ -64,7 +64,6 @@ wss.on('connection', (twilioWs) => {
             url: 'https://api.anthropic.com/v1/messages',
             headers: {
               'x-api-key': process.env.ANTHROPIC_API_KEY,
-              'anthropic-version': '2023-06-01',
             },
           },
           prompt: systemPrompt,
