@@ -22,6 +22,7 @@ async function getDashboardData(tenantId: string) {
     { count: totalSMS },
     { count: totalConversations },
     { count: leads },
+    { count: activeLeads },
     { data: conversations },
     { data: aiEmployees },
     { data: leadRecords },
@@ -32,10 +33,14 @@ async function getDashboardData(tenantId: string) {
       .eq('tenant_id', tenantId).eq('event_type', 'message_handled').gte('created_at', sevenDaysAgo),
     supabase.from('conversations').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId).gte('created_at', sevenDaysAgo),
-    // Leads Generated — count straight from the leads table (lead_captured
+    // Leads Generated — total count, straight from the leads table (lead_captured
     // analytics events were never emitted, so the old count was stuck at 0).
     supabase.from('leads').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId),
+    // Active leads (need attention) — for the Leads tab badge. Excludes booked
+    // and dismissed.
+    supabase.from('leads').select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId).in('status', ['new', 'contacted']),
     supabase.from('conversations')
       .select('*, contact:contacts(name, phone)')
       .eq('tenant_id', tenantId)
@@ -85,6 +90,7 @@ async function getDashboardData(tenantId: string) {
       textMessages: totalSMS || 0,
       totalConversations: totalConversations || 0,
       leads: leads || 0,
+      activeLeads: activeLeads || 0,
     },
     conversations: conversations || [],
     aiEmployees: aiEmployees || [],
@@ -178,9 +184,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
         >
           Leads
-          {stats.leads > 0 && (
+          {stats.activeLeads > 0 && (
             <span className="bg-teal-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-              {stats.leads}
+              {stats.activeLeads}
             </span>
           )}
         </Link>
