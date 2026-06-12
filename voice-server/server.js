@@ -15,8 +15,11 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
+// Block duplicate Twilio connections for the same call (streamSid -> true)
+const activeCalls = new Map();
+
 wss.on('connection', (ws) => {
-  console.log('[call] new connection');
+  console.log('[connection] new WebSocket, total active:', wss.clients.size);
 
   // State לשיחה זו בלבד
   let streamSid = null;
@@ -25,6 +28,7 @@ wss.on('connection', (ws) => {
   let history = [];
   let busy = false; // true כשהAI מעבד או מדבר
   let greetingSent = false;
+  let registered = false; // did THIS connection register its streamSid?
 
   // Audio queue — play TTS clips one at a time so Twilio never overlaps them
   let audioQueue = [];
@@ -124,6 +128,14 @@ wss.on('connection', (ws) => {
 
       if (msg.event === 'start') {
         streamSid = msg.start.streamSid;
+        if (activeCalls.has(streamSid)) {
+          console.log('[DUPLICATE] duplicate connection for streamSid:', streamSid, '— closing');
+          ws.close();
+          return;
+        }
+        activeCalls.set(streamSid, true);
+        registered = true;
+        console.log('[start] registered streamSid:', streamSid);
         const p = msg.start.customParameters || {};
         if (p.systemPrompt) systemPrompt = p.systemPrompt;
         if (p.greeting) greeting = p.greeting;
@@ -153,6 +165,8 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     console.log('[call] disconnected');
+    if (registered && streamSid) activeCalls.delete(streamSid);
+    console.log('[close] removed streamSid, active calls:', activeCalls.size);
     try { dg.finish(); } catch {}
   });
 });
