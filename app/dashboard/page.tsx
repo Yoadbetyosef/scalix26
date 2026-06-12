@@ -9,7 +9,6 @@ import { formatDateTime, truncate } from '@/lib/utils'
 import { ConversationDistributionChart } from '@/components/charts/conversation-distribution'
 import { ChannelDistributionChart } from '@/components/charts/channel-distribution'
 import { LeadsTable } from '@/components/dashboard/leads-table'
-import { DevTestLeadButton } from '@/components/dashboard/dev-test-lead-button'
 import { PostOnboardingChecklist } from '@/components/onboarding/post-onboarding-checklist'
 import type { Lead } from '@/types'
 
@@ -165,11 +164,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           initial={checklist}
         />
       )}
-
-      {/* TEMPORARY — manual realtime-toast test. Remove after verifying. */}
-      <div className="flex justify-end">
-        <DevTestLeadButton />
-      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">

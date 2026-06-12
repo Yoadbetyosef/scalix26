@@ -46,16 +46,13 @@ export function LeadToaster() {
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'leads', filter: `tenant_id=eq.${tenant.id}` },
           (payload) => {
-            console.log('[leads-realtime] new lead received:', payload)
             const lead = payload.new as { id?: string; name?: string | null; phone?: string | null; source?: string | null }
             const id = lead.id || `${Date.now()}-${Math.random()}`
             setToasts((prev) => [...prev, { id, name: lead.name ?? null, phone: lead.phone ?? null, source: lead.source ?? null }])
             setTimeout(() => dismiss(id), AUTO_DISMISS_MS)
           },
         )
-        .subscribe((status) => {
-          console.log('[leads-realtime] subscription status:', status, '(tenant', tenant.id + ')')
-        })
+        .subscribe()
     })()
 
     return () => {
