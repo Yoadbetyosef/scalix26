@@ -57,7 +57,7 @@ wss.on('connection', (ws) => {
     sample_rate: 8000,
     channels: 1,
     interim_results: true,
-    endpointing: 500,
+    endpointing: 300,
     utterance_end_ms: 1000,
     vad_events: true,
   });
@@ -165,7 +165,7 @@ async function sendAudio(text, ws, streamSid) {
   if (!text || !streamSid || ws.readyState !== WebSocket.OPEN) return;
   try {
     const res = await fetch(
-      'https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000',
+      'https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000&container=none',
       {
         method: 'POST',
         headers: {
