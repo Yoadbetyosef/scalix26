@@ -217,7 +217,7 @@ CREATE TABLE leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
-  source TEXT NOT NULL CHECK (source IN ('missed_call','web_form','google_lsa','facebook','yelp','angi','other')),
+  source TEXT NOT NULL CHECK (source IN ('missed_call','voice_call','web_form','google_lsa','facebook','yelp','angi','other')),
   phone TEXT NOT NULL,
   name TEXT,
   status TEXT DEFAULT 'new' CHECK (status IN ('new','contacted','booked','lost')),
