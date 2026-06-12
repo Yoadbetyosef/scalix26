@@ -1,12 +1,11 @@
 require('dotenv').config();
 const http = require('http');
 const WebSocket = require('ws');
-const Anthropic = require('@anthropic-ai/sdk');
-const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 
 const PORT = process.env.PORT || 8080;
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const deepgramClient = createClient(process.env.DEEPGRAM_API_KEY);
+const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
+// Deepgram Voice Agent API (GA v1) — single WebSocket does STT + LLM + TTS.
+const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 
 const server = http.createServer((req, res) => {
   res.writeHead(200);
@@ -15,269 +14,173 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server });
 
-// Block duplicate Twilio connections for the same call (streamSid -> true)
-const activeCalls = new Map();
+wss.on('connection', (twilioWs) => {
+  console.log('[call] new connection');
 
-wss.on('connection', (ws) => {
-  console.log('[connection] new WebSocket, total active:', wss.clients.size);
-
-  // State לשיחה זו בלבד
+  // Per-call config (filled from the Twilio <Stream> custom parameters)
   let streamSid = null;
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT || 'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
   let greeting = 'Hello! How can I help you today?';
-  let history = [];
-  let busy = false; // true while the AI is talking or thinking
-  let claudeStreaming = false;
-  let turnId = 0;           // bumps each user turn; stale streams check against it
-  let currentStream = null; // the in-flight Claude stream (for barge-in abort)
-  let greetingSent = false;
-  let registered = false; // did THIS connection register its streamSid?
-  // Lead capture for the owner SMS alert
+  let voiceId = process.env.DEFAULT_VOICE || 'aura-2-asteria-en';
+  let ownerPhone = null;
+  let fromNumber = null;
+  let leadToken = null;    // tenant's secret intake token — to save the lead
+  let callerNumber = null; // caller's real phone (From) — reliable fallback
+
+  // Lead capture state
   let collectedName = null;
   let collectedPhone = null;
   let collectedIssue = null;
+  let askedName = false;     // did the AI just ask for the caller's name?
   let leadAlertSent = false;
-  let ownerPhone = null;
-  let fromNumber = null;   // the tenant's own Twilio number — SMS is sent FROM here
-  let leadToken = null;    // tenant's secret intake token — to save the lead to the DB
-  let callerNumber = null; // the caller's real phone (From) — reliable fallback
 
-  // Audio queue — play TTS clips one at a time so Twilio never overlaps them
-  let audioQueue = [];
-  let playingAudio = false;
+  // Settings can only be sent once we have BOTH the Deepgram socket open AND
+  // Twilio's start event (which carries the real prompt/greeting). Otherwise the
+  // agent would start with the default prompt/greeting.
+  let dgOpen = false;
+  let startReceived = false;
+  let settingsSent = false;
 
-  async function playNext(ws, streamSid) {
-    if (playingAudio) return;
-    if (audioQueue.length === 0) {
-      if (!claudeStreaming) busy = false; // AI finished talking — ready to listen
-      return;
-    }
-    playingAudio = true;
-    const text = audioQueue.shift();
-    await sendAudio(text, ws, streamSid);
-    playingAudio = false;
-    playNext(ws, streamSid);
-  }
-
-  function queueAudio(text, ws, streamSid) {
-    busy = true;
-    audioQueue.push(text);
-    playNext(ws, streamSid);
-  }
-
-  // Barge-in: stop the AI immediately so it can listen to the caller.
-  function stopSpeaking() {
-    audioQueue = [];
-    playingAudio = false;
-    claudeStreaming = false;
-    if (currentStream) { try { currentStream.abort(); } catch {} currentStream = null; }
-    if (ws.readyState === WebSocket.OPEN && streamSid) {
-      ws.send(JSON.stringify({ event: 'clear', streamSid })); // drop Twilio's buffered audio
-    }
-  }
-
-  // Deepgram STT
-  const dg = deepgramClient.listen.live({
-    model: 'nova-2',
-    language: 'en-US',
-    smart_format: true,
-    encoding: 'mulaw',
-    sample_rate: 8000,
-    channels: 1,
-    interim_results: true,
-    endpointing: 250,
-    utterance_end_ms: 1000,
-    vad_events: true,
+  const dgWs = new WebSocket(DEEPGRAM_AGENT_URL, {
+    headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
   });
 
-  dg.on(LiveTranscriptionEvents.Open, () => console.log('[dg] connected'));
-  dg.on(LiveTranscriptionEvents.Error, (e) => console.error('[dg] error', e));
+  function sendSettings() {
+    if (settingsSent || !dgOpen || !startReceived) return;
+    settingsSent = true;
+    const settings = {
+      type: 'Settings',
+      audio: {
+        input: { encoding: 'mulaw', sample_rate: 8000 },
+        output: { encoding: 'mulaw', sample_rate: 8000, container: 'none' },
+      },
+      agent: {
+        language: 'en',
+        listen: { provider: { type: 'deepgram', model: 'nova-3' } },
+        think: {
+          provider: { type: 'anthropic', model: 'claude-haiku-4-5', temperature: 0.7 },
+          // Bring-your-own Anthropic key via a custom endpoint.
+          endpoint: {
+            url: 'https://api.anthropic.com/v1/messages',
+            headers: {
+              'x-api-key': process.env.ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
+            },
+          },
+          prompt: systemPrompt,
+        },
+        speak: { provider: { type: 'deepgram', model: voiceId } },
+        greeting,
+      },
+    };
+    dgWs.send(JSON.stringify(settings));
+    console.log('[deepgram] settings sent (prompt + greeting)');
+  }
 
-  dg.on(LiveTranscriptionEvents.Transcript, async (data) => {
-    const transcript = data.channel?.alternatives?.[0]?.transcript?.trim();
-    const isFinal = data.speech_final || data.is_final;
-    if (!transcript || !isFinal) return;
+  dgWs.on('open', () => {
+    console.log('[deepgram] connected');
+    dgOpen = true;
+    sendSettings();
+  });
 
-    // Barge-in: the caller spoke while the AI was talking — stop and listen.
-    if (busy) {
-      console.log('[barge-in]', transcript);
-      stopSpeaking();
+  dgWs.on('message', (data, isBinary) => {
+    // Binary frame = agent audio → forward to Twilio as a media event.
+    if (isBinary) {
+      if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
+        twilioWs.send(JSON.stringify({ event: 'media', streamSid, media: { payload: data.toString('base64') } }));
+      }
+      return;
     }
 
-    console.log('[user]', transcript);
-    busy = true;
-    claudeStreaming = true;
-    const myTurn = ++turnId; // this turn's id; stale stream handlers no-op below
+    let msg;
+    try { msg = JSON.parse(data.toString()); } catch { return; }
 
-    try {
-      history.push({ role: 'user', content: transcript });
+    if (msg.type !== 'ConversationText') console.log('[dg event]', msg.type);
 
-      // Capture lead details from this turn (for the owner SMS alert + DB save).
-      // Decide what this answer is by looking at what the AI just asked.
-      const lastAIMessage = history.filter(h => h.role === 'assistant').slice(-1)[0]?.content.toLowerCase() || '';
-      const isAskingForName = lastAIMessage.includes('your name') || lastAIMessage.includes('name please') || lastAIMessage.includes('get your name') || lastAIMessage.includes('may i have your name');
-      const isAskingForPhone = lastAIMessage.includes('number') || lastAIMessage.includes('phone') || lastAIMessage.includes('reach you') || lastAIMessage.includes('call you back');
-
-      if (isAskingForName && transcript.length < 40 && !transcript.match(/\d/) && !collectedName) {
-        collectedName = transcript.trim();
+    // Barge-in: caller started talking — drop buffered agent audio in Twilio.
+    if (msg.type === 'UserStartedSpeaking') {
+      if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
+        twilioWs.send(JSON.stringify({ event: 'clear', streamSid }));
       }
+      return;
+    }
 
-      if (isAskingForPhone) {
-        const phoneMatch = transcript.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
+    if (msg.type === 'ConversationText') {
+      const role = msg.role;
+      const content = msg.content || '';
+      console.log(`[${role}]`, content);
+
+      if (role === 'user') {
+        const phoneMatch = content.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
         if (phoneMatch) collectedPhone = phoneMatch[1];
+        if (askedName && !collectedName && content.trim().length < 40 && !/\d/.test(content)) {
+          collectedName = content.trim();
+        }
+        if (!collectedIssue && content.trim().length > 5) collectedIssue = content.trim();
       }
 
-      // First thing the caller says = their issue
-      if (!collectedIssue && history.filter(h => h.role === 'user').length === 1) {
-        collectedIssue = transcript.trim();
-      }
+      if (role === 'assistant') {
+        const c = content.toLowerCase();
+        askedName = c.includes('your name') || c.includes('name please') || c.includes('may i have your name') || c.includes('who am i speaking');
 
-      let fullText = '';
-      let buffer = '';
-      const stream = anthropic.messages.stream({
-        model: 'claude-haiku-4-5',
-        max_tokens: 120,
-        system: systemPrompt,
-        messages: history.slice(-6),
-      });
-      currentStream = stream;
-
-      // Stream each clause to TTS as it completes — click-free raw mulaw.
-      stream.on('text', (t) => {
-        if (myTurn !== turnId) return; // superseded by a barge-in
-        fullText += t;
-        buffer += t;
-        if (buffer.match(/[.!?,]/) && buffer.trim().length > 15) {
-          const toSend = buffer.trim();
-          buffer = '';
-          queueAudio(toSend, ws, streamSid);
-        }
-      });
-
-      stream.on('finalMessage', async () => {
-        if (myTurn !== turnId) return;
-        console.log('[ai]', fullText);
-        if (buffer.trim().length > 0) {
-          queueAudio(buffer.trim(), ws, streamSid);
-        }
-        history.push({ role: 'assistant', content: fullText });
-        claudeStreaming = false;
-        currentStream = null;
-        if (!playingAudio && audioQueue.length === 0) busy = false;
-
-        // Hot lead: the AI confirmed a callback — text the owner once
-        const isLeadConfirmed = fullText.toLowerCase().includes('technician will call') ||
-                                fullText.toLowerCase().includes('call you') ||
-                                fullText.toLowerCase().includes('reach out');
-        const leadPhone = collectedPhone || callerNumber; // prefer spoken number, fall back to caller ID
-        console.log(`[lead-alert] check: isLeadConfirmed=${isLeadConfirmed} leadAlertSent=${leadAlertSent} name=${collectedName || '-'} phone=${leadPhone || '-'} ownerPhone=${ownerPhone || '-'} fromNumber=${fromNumber || '-'}`);
-        if (isLeadConfirmed && !leadAlertSent) {
+        const leadPhone = collectedPhone || callerNumber;
+        const isLeadConfirmed = c.includes('technician will call') || c.includes('call you') || c.includes('reach out') || c.includes('get back to you');
+        if (isLeadConfirmed && !leadAlertSent && leadPhone) {
           leadAlertSent = true;
           sendLeadAlert(collectedName, leadPhone, collectedIssue, ownerPhone, fromNumber);
           saveLeadToDatabase(collectedName, leadPhone, leadToken);
         }
 
-        // Hang up shortly after a closing line so the goodbye finishes playing
-        const endPhrases = ['have a great day', 'goodbye', 'take care', 'bye'];
-        if (endPhrases.some(p => fullText.toLowerCase().includes(p))) {
-          setTimeout(() => endCall(ws, streamSid), 2000);
+        // Hang up shortly after a closing line so the goodbye finishes playing.
+        if (['have a great day', 'goodbye', 'take care', 'bye'].some((p) => c.includes(p))) {
+          setTimeout(() => { try { dgWs.close(); } catch {} try { twilioWs.close(); } catch {} }, 3000);
         }
-      });
-
-      stream.on('error', (e) => {
-        if (myTurn !== turnId) return;
-        console.error('[claude error]', e.message);
-        claudeStreaming = false;
-        currentStream = null;
-        busy = false;
-      });
-
-    } catch (e) {
-      if (myTurn === turnId) { claudeStreaming = false; busy = false; }
-      console.error('[error]', e.message);
+      }
     }
   });
 
-  // Twilio messages
-  ws.on('message', async (data) => {
-    try {
-      const msg = JSON.parse(data);
+  dgWs.on('error', (err) => console.error('[deepgram error]', err.message));
+  dgWs.on('close', () => console.log('[deepgram] disconnected'));
 
-      if (msg.event === 'start') {
-        streamSid = msg.start.streamSid;
-        if (activeCalls.has(streamSid)) {
-          console.log('[DUPLICATE] duplicate connection for streamSid:', streamSid, '— closing');
-          ws.close();
-          return;
-        }
-        activeCalls.set(streamSid, true);
-        registered = true;
-        console.log('[start] registered streamSid:', streamSid);
-        const p = msg.start.customParameters || {};
-        if (p.systemPrompt) systemPrompt = p.systemPrompt;
-        if (p.greeting) greeting = p.greeting;
-        if (p.ownerPhone) ownerPhone = p.ownerPhone;
-        if (p.fromNumber) fromNumber = p.fromNumber;
-        if (p.leadToken) leadToken = p.leadToken;
-        if (p.callerNumber) callerNumber = p.callerNumber;
-        console.log('[start]', streamSid);
+  // ── Twilio Media Stream ────────────────────────────────────────────────
+  twilioWs.on('message', (data) => {
+    let msg;
+    try { msg = JSON.parse(data); } catch { return; }
 
-        // Send greeting once per call
-        console.log('[greeting] sending, greetingSent was:', greetingSent);
-        if (!greetingSent) {
-          greetingSent = true;
-          queueAudio(greeting, ws, streamSid);
-        }
+    if (msg.event === 'start') {
+      streamSid = msg.start.streamSid;
+      const p = msg.start.customParameters || {};
+      if (p.systemPrompt) systemPrompt = p.systemPrompt;
+      if (p.greeting) greeting = p.greeting;
+      if (p.voiceId) voiceId = p.voiceId;
+      if (p.ownerPhone) ownerPhone = p.ownerPhone;
+      if (p.fromNumber) fromNumber = p.fromNumber;
+      if (p.leadToken) leadToken = p.leadToken;
+      if (p.callerNumber) callerNumber = p.callerNumber;
+      console.log('[start]', streamSid);
+      startReceived = true;
+      sendSettings();
+    }
+
+    if (msg.event === 'media') {
+      // Caller audio → Deepgram (raw mulaw bytes).
+      if (dgWs.readyState === WebSocket.OPEN) {
+        dgWs.send(Buffer.from(msg.media.payload, 'base64'));
       }
+    }
 
-      if (msg.event === 'media') {
-        const audio = Buffer.from(msg.media.payload, 'base64');
-        if (dg.getReadyState() === 1) dg.send(audio);
-      }
-
-      if (msg.event === 'stop') {
-        console.log('[stop]');
-        dg.finish();
-      }
-    } catch (e) {
-      console.error('[ws error]', e.message);
+    if (msg.event === 'stop') {
+      console.log('[stop]');
+      try { dgWs.close(); } catch {}
     }
   });
 
-  ws.on('close', () => {
+  twilioWs.on('close', () => {
     console.log('[call] disconnected');
-    if (registered && streamSid) activeCalls.delete(streamSid);
-    console.log('[close] removed streamSid, active calls:', activeCalls.size);
-    try { dg.finish(); } catch {}
+    try { dgWs.close(); } catch {}
   });
 });
 
-async function sendAudio(text, ws, streamSid) {
-  if (!text || !streamSid || ws.readyState !== WebSocket.OPEN) return;
-  try {
-    const res = await fetch(
-      'https://api.deepgram.com/v1/speak?model=aura-2-asteria-en&encoding=mulaw&sample_rate=8000&container=none',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${process.env.DEEPGRAM_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      }
-    );
-    if (!res.ok) { console.error('[tts]', res.status); return; }
-    const buf = Buffer.from(await res.arrayBuffer()).toString('base64');
-    ws.send(JSON.stringify({ event: 'media', streamSid, media: { payload: buf } }));
-    console.log('[tts] sent', text.length, 'chars');
-  } catch (e) {
-    console.error('[tts error]', e.message);
-  }
-}
-
-// End the call: stop any buffered audio, then close the WS so Twilio's
-// <Connect><Stream> ends and the call hangs up. (Twilio doesn't accept a
-// server-sent 'stop' event, so ws.close() is the correct way to end it.)
 // Text the business owner a summary when the AI captures a hot lead.
 async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
   if (!ownerPhone) {
@@ -288,15 +191,13 @@ async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
     console.log('[lead-alert] skipped — TWILIO_ACCOUNT_SID not set in env');
     return;
   }
-
   const from = fromNumber || process.env.TWILIO_PHONE_NUMBER;
   if (!from) {
-    console.log('[lead-alert] skipped — no from number (fromNumber + TWILIO_PHONE_NUMBER both empty)');
+    console.log('[lead-alert] skipped — no from number');
     return;
   }
 
   const message = `🔔 New lead from AI call!\nName: ${name || 'Unknown'}\nPhone: ${phone || 'Unknown'}\nIssue: ${issue || 'Not specified'}\n\nCall them back now — they're waiting.`;
-
   console.log(`[lead-alert] sending from=${from} to=${ownerPhone}`);
   try {
     const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -307,8 +208,9 @@ async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
   }
 }
 
-// Persist the lead to the app DB via the tenant's secure intake URL so it shows
-// up in the dashboard Leads list (and fires the realtime new-lead notification).
+// Persist the lead via the tenant's secure intake URL so it shows in the
+// dashboard (and fires the realtime notification). The open /api/leads/inbound
+// endpoint is deprecated (410) — the token URL is the supported path.
 async function saveLeadToDatabase(name, phone, leadToken) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!leadToken) { console.log('[lead-db] skipped — no leadToken'); return; }
@@ -328,14 +230,4 @@ async function saveLeadToDatabase(name, phone, leadToken) {
   }
 }
 
-function endCall(ws, streamSid) {
-  console.log('[end-call] hanging up');
-  try {
-    if (ws.readyState === WebSocket.OPEN && streamSid) {
-      ws.send(JSON.stringify({ event: 'clear', streamSid }));
-    }
-  } catch {}
-  setTimeout(() => { try { ws.close(); } catch {} }, 500);
-}
-
-server.listen(PORT, () => console.log('[server] listening on port', PORT));
+server.listen(PORT, () => console.log(`[server] listening on port ${PORT}`));
