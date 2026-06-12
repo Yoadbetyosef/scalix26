@@ -26,7 +26,10 @@ wss.on('connection', (ws) => {
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT || 'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
   let greeting = 'Hello! How can I help you today?';
   let history = [];
-  let busy = false; // true כשהAI מעבד או מדבר
+  let busy = false; // true while the AI is talking or thinking
+  let claudeStreaming = false;
+  let turnId = 0;           // bumps each user turn; stale streams check against it
+  let currentStream = null; // the in-flight Claude stream (for barge-in abort)
   let greetingSent = false;
   let registered = false; // did THIS connection register its streamSid?
 
@@ -35,7 +38,11 @@ wss.on('connection', (ws) => {
   let playingAudio = false;
 
   async function playNext(ws, streamSid) {
-    if (playingAudio || audioQueue.length === 0) return;
+    if (playingAudio) return;
+    if (audioQueue.length === 0) {
+      if (!claudeStreaming) busy = false; // AI finished talking — ready to listen
+      return;
+    }
     playingAudio = true;
     const text = audioQueue.shift();
     await sendAudio(text, ws, streamSid);
@@ -44,8 +51,20 @@ wss.on('connection', (ws) => {
   }
 
   function queueAudio(text, ws, streamSid) {
+    busy = true;
     audioQueue.push(text);
     playNext(ws, streamSid);
+  }
+
+  // Barge-in: stop the AI immediately so it can listen to the caller.
+  function stopSpeaking() {
+    audioQueue = [];
+    playingAudio = false;
+    claudeStreaming = false;
+    if (currentStream) { try { currentStream.abort(); } catch {} currentStream = null; }
+    if (ws.readyState === WebSocket.OPEN && streamSid) {
+      ws.send(JSON.stringify({ event: 'clear', streamSid })); // drop Twilio's buffered audio
+    }
   }
 
   // Deepgram STT
@@ -69,13 +88,17 @@ wss.on('connection', (ws) => {
     const transcript = data.channel?.alternatives?.[0]?.transcript?.trim();
     const isFinal = data.speech_final || data.is_final;
     if (!transcript || !isFinal) return;
+
+    // Barge-in: the caller spoke while the AI was talking — stop and listen.
     if (busy) {
-      console.log('[skip] busy');
-      return;
+      console.log('[barge-in]', transcript);
+      stopSpeaking();
     }
 
     console.log('[user]', transcript);
     busy = true;
+    claudeStreaming = true;
+    const myTurn = ++turnId; // this turn's id; stale stream handlers no-op below
 
     try {
       history.push({ role: 'user', content: transcript });
@@ -88,14 +111,13 @@ wss.on('connection', (ws) => {
         system: systemPrompt,
         messages: history.slice(-6),
       });
+      currentStream = stream;
 
-      // Stream each sentence to TTS as it completes — click-free now that the
-      // audio is raw mulaw, so the caller hears the reply start almost at once.
+      // Stream each clause to TTS as it completes — click-free raw mulaw.
       stream.on('text', (t) => {
+        if (myTurn !== turnId) return; // superseded by a barge-in
         fullText += t;
         buffer += t;
-        // Flush on clause boundaries (comma too), so the reply starts playing
-        // sooner instead of waiting for the whole sentence to finish.
         if (buffer.match(/[.!?,]/) && buffer.trim().length > 15) {
           const toSend = buffer.trim();
           buffer = '';
@@ -104,22 +126,28 @@ wss.on('connection', (ws) => {
       });
 
       stream.on('finalMessage', async () => {
+        if (myTurn !== turnId) return;
         console.log('[ai]', fullText);
         if (buffer.trim().length > 0) {
           queueAudio(buffer.trim(), ws, streamSid);
         }
         history.push({ role: 'assistant', content: fullText });
-        busy = false;
+        claudeStreaming = false;
+        currentStream = null;
+        if (!playingAudio && audioQueue.length === 0) busy = false;
       });
 
       stream.on('error', (e) => {
+        if (myTurn !== turnId) return;
         console.error('[claude error]', e.message);
+        claudeStreaming = false;
+        currentStream = null;
         busy = false;
       });
 
     } catch (e) {
+      if (myTurn === turnId) { claudeStreaming = false; busy = false; }
       console.error('[error]', e.message);
-      busy = false;
     }
   });
 
