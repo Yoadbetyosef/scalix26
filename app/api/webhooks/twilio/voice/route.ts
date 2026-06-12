@@ -157,12 +157,17 @@ export async function POST(req: NextRequest) {
         ? agent.system_prompt
         : `You are ${agent?.name || 'Alex'}, a professional AI receptionist for ${agent?.business_name || 'our company'}. Your job is to answer calls, help customers, and collect their information. Keep every response under 2 sentences. Be warm, friendly, and fast.`
       const sp = escapeXml(voiceSystemPrompt)
+      // Owner phone for the lead-alert SMS (owner_phone column, else business
+      // phone, else the call-forwarding number).
+      const { data: tenantRow } = await supabase.from('tenants').select('owner_phone, phone').eq('id', channel.tenant_id).maybeSingle()
+      const ownerPhone = tenantRow?.owner_phone || tenantRow?.phone || agent?.forward_to_phone || ''
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${wsUrl}" jitterBufferSize="small">
       <Parameter name="systemPrompt" value="${sp}"/>
       <Parameter name="greeting" value="${escapeXml(greeting)}"/>
+      <Parameter name="ownerPhone" value="${escapeXml(ownerPhone)}"/>
     </Stream>
   </Connect>
 </Response>`
