@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { useLeadNotifications } from '@/hooks/useLeadNotifications'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -42,6 +43,8 @@ export function Sidebar() {
   const supabase = createClient()
   const [businessName, setBusinessName] = useState<string>('')
   const [moreOpen, setMoreOpen] = useState(false)
+  // Realtime new-lead toasts + live open-lead count for the Dashboard badge
+  const newLeads = useLeadNotifications()
 
   useEffect(() => {
     async function loadBusinessName() {
@@ -100,6 +103,11 @@ export function Sidebar() {
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 <span className="hidden xl:block">{label}</span>
+                {label === 'Dashboard' && newLeads > 0 && (
+                  <span className="ml-auto bg-red-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+                    {newLeads}
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -130,7 +138,14 @@ export function Sidebar() {
                 active ? 'text-[#4ecdc4]' : 'text-gray-400'
               )}
             >
-              <Icon className="w-5 h-5 mb-1" />
+              <span className="relative">
+                <Icon className="w-5 h-5 mb-1" />
+                {label === 'Dashboard' && newLeads > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-semibold leading-none rounded-full px-1 py-0.5 min-w-[15px] text-center">
+                    {newLeads}
+                  </span>
+                )}
+              </span>
               <span>{label}</span>
             </Link>
           )

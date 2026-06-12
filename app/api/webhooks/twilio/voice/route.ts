@@ -160,12 +160,15 @@ export async function POST(req: NextRequest) {
       // Owner phone for the lead-alert SMS. Try owner_phone (may not exist yet),
       // fall back to the business phone, then the call-forwarding number.
       let ownerPhone = ''
-      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone').eq('id', channel.tenant_id).maybeSingle()
+      let leadToken = ''
+      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token').eq('id', channel.tenant_id).maybeSingle()
       if (tWith) {
         ownerPhone = tWith.owner_phone || tWith.phone || ''
+        leadToken = tWith.lead_intake_token || ''
       } else {
-        const { data: tBase } = await supabase.from('tenants').select('phone').eq('id', channel.tenant_id).maybeSingle()
+        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token').eq('id', channel.tenant_id).maybeSingle()
         ownerPhone = tBase?.phone || ''
+        leadToken = tBase?.lead_intake_token || ''
       }
       ownerPhone = ownerPhone || agent?.forward_to_phone || ''
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -176,6 +179,8 @@ export async function POST(req: NextRequest) {
       <Parameter name="greeting" value="${escapeXml(greeting)}"/>
       <Parameter name="ownerPhone" value="${escapeXml(ownerPhone)}"/>
       <Parameter name="fromNumber" value="${escapeXml(toNormalized)}"/>
+      <Parameter name="leadToken" value="${escapeXml(leadToken)}"/>
+      <Parameter name="callerNumber" value="${escapeXml(From || '')}"/>
     </Stream>
   </Connect>
 </Response>`

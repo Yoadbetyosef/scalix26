@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
 import type { LeadSource } from '@/types'
 
-const VALID_SOURCES: LeadSource[] = ['missed_call', 'web_form', 'google_lsa', 'facebook', 'yelp', 'angi', 'other']
+const VALID_SOURCES: LeadSource[] = ['missed_call', 'voice_call', 'web_form', 'google_lsa', 'facebook', 'yelp', 'angi', 'other']
 
 // Secure per-tenant lead intake. The tenant is resolved from the secret token
 // in the URL (not from the request body), so external lead sources can't spoof

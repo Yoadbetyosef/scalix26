@@ -21,6 +21,11 @@ function buildMessage(source: LeadSource, name: string | null | undefined, emplo
   if (source === 'missed_call') {
     return `Hi! This is ${employeeName} from ${businessName}. Sorry we missed you — still need help? Reply YES and we'll call right back.`
   }
+  if (source === 'voice_call') {
+    // The caller already spoke with the AI — send a written confirmation, not a "reply YES".
+    const g = name ? `Hi ${name}! ` : ''
+    return `${g}Thanks for calling ${businessName}. We've got your details and someone will be in touch shortly. Reply here if you need anything in the meantime.`
+  }
   const greeting = name ? `Hi ${name}! ` : ''
   return `${greeting}This is ${employeeName} from ${businessName}. We got your request — need help right now? Reply YES and we'll call you immediately.`
 }

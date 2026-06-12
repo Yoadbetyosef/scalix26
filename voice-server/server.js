@@ -38,7 +38,9 @@ wss.on('connection', (ws) => {
   let collectedIssue = null;
   let leadAlertSent = false;
   let ownerPhone = null;
-  let fromNumber = null; // the tenant's own Twilio number — SMS is sent FROM here
+  let fromNumber = null;   // the tenant's own Twilio number — SMS is sent FROM here
+  let leadToken = null;    // tenant's secret intake token — to save the lead to the DB
+  let callerNumber = null; // the caller's real phone (From) — reliable fallback
 
   // Audio queue — play TTS clips one at a time so Twilio never overlaps them
   let audioQueue = [];
@@ -110,15 +112,22 @@ wss.on('connection', (ws) => {
     try {
       history.push({ role: 'user', content: transcript });
 
-      // Capture lead details from this turn (for the owner SMS alert)
-      const phoneMatch = transcript.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
-      if (phoneMatch) collectedPhone = phoneMatch[1];
+      // Capture lead details from this turn (for the owner SMS alert + DB save).
+      // Decide what this answer is by looking at what the AI just asked.
+      const lastAIMessage = history.filter(h => h.role === 'assistant').slice(-1)[0]?.content.toLowerCase() || '';
+      const isAskingForName = lastAIMessage.includes('your name') || lastAIMessage.includes('name please') || lastAIMessage.includes('get your name') || lastAIMessage.includes('may i have your name');
+      const isAskingForPhone = lastAIMessage.includes('number') || lastAIMessage.includes('phone') || lastAIMessage.includes('reach you') || lastAIMessage.includes('call you back');
 
-      const lastAIMessage = history.filter(h => h.role === 'assistant').slice(-1)[0];
-      if (!collectedName && lastAIMessage?.content.toLowerCase().includes('name') && transcript.length < 30) {
+      if (isAskingForName && transcript.length < 40 && !transcript.match(/\d/) && !collectedName) {
         collectedName = transcript.trim();
       }
 
+      if (isAskingForPhone) {
+        const phoneMatch = transcript.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
+        if (phoneMatch) collectedPhone = phoneMatch[1];
+      }
+
+      // First thing the caller says = their issue
       if (!collectedIssue && history.filter(h => h.role === 'user').length === 1) {
         collectedIssue = transcript.trim();
       }
@@ -160,10 +169,12 @@ wss.on('connection', (ws) => {
         const isLeadConfirmed = fullText.toLowerCase().includes('technician will call') ||
                                 fullText.toLowerCase().includes('call you') ||
                                 fullText.toLowerCase().includes('reach out');
-        console.log(`[lead-alert] check: isLeadConfirmed=${isLeadConfirmed} leadAlertSent=${leadAlertSent} name=${collectedName || '-'} phone=${collectedPhone || '-'} ownerPhone=${ownerPhone || '-'} fromNumber=${fromNumber || '-'}`);
+        const leadPhone = collectedPhone || callerNumber; // prefer spoken number, fall back to caller ID
+        console.log(`[lead-alert] check: isLeadConfirmed=${isLeadConfirmed} leadAlertSent=${leadAlertSent} name=${collectedName || '-'} phone=${leadPhone || '-'} ownerPhone=${ownerPhone || '-'} fromNumber=${fromNumber || '-'}`);
         if (isLeadConfirmed && !leadAlertSent) {
           leadAlertSent = true;
-          sendLeadAlert(collectedName, collectedPhone, collectedIssue, ownerPhone, fromNumber);
+          sendLeadAlert(collectedName, leadPhone, collectedIssue, ownerPhone, fromNumber);
+          saveLeadToDatabase(collectedName, leadPhone, leadToken);
         }
 
         // Hang up shortly after a closing line so the goodbye finishes playing
@@ -207,6 +218,8 @@ wss.on('connection', (ws) => {
         if (p.greeting) greeting = p.greeting;
         if (p.ownerPhone) ownerPhone = p.ownerPhone;
         if (p.fromNumber) fromNumber = p.fromNumber;
+        if (p.leadToken) leadToken = p.leadToken;
+        if (p.callerNumber) callerNumber = p.callerNumber;
         console.log('[start]', streamSid);
 
         // Send greeting once per call
@@ -291,6 +304,27 @@ async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
     console.log(`[lead-alert] SMS sent to owner: ${ownerPhone} (sid=${res.sid} status=${res.status})`);
   } catch (err) {
     console.error(`[lead-alert] error: ${err.message}${err.code ? ` (code ${err.code})` : ''}`);
+  }
+}
+
+// Persist the lead to the app DB via the tenant's secure intake URL so it shows
+// up in the dashboard Leads list (and fires the realtime new-lead notification).
+async function saveLeadToDatabase(name, phone, leadToken) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!leadToken) { console.log('[lead-db] skipped — no leadToken'); return; }
+  if (!appUrl) { console.log('[lead-db] skipped — NEXT_PUBLIC_APP_URL not set in env'); return; }
+  if (!phone) { console.log('[lead-db] skipped — no phone'); return; }
+
+  console.log(`[lead-db] saving lead name=${name || '-'} phone=${phone}`);
+  try {
+    const res = await fetch(`${appUrl}/api/leads/inbound/${leadToken}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, name: name || null, source: 'voice_call' }),
+    });
+    console.log('[lead-db] saved, status:', res.status);
+  } catch (err) {
+    console.error('[lead-db] error:', err.message);
   }
 }
 

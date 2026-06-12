@@ -8,6 +8,7 @@ import type { Lead, LeadSource, LeadStatus } from '@/types'
 
 const SOURCE_LABELS: Record<LeadSource, string> = {
   missed_call: 'Missed Call',
+  voice_call: 'Voice Call',
   web_form: 'Web Form',
   google_lsa: 'Google LSA',
   facebook: 'Facebook',
