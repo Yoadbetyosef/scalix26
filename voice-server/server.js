@@ -135,6 +135,12 @@ wss.on('connection', (ws) => {
         claudeStreaming = false;
         currentStream = null;
         if (!playingAudio && audioQueue.length === 0) busy = false;
+
+        // Hang up shortly after a closing line so the goodbye finishes playing
+        const endPhrases = ['have a great day', 'goodbye', 'take care', 'bye'];
+        if (endPhrases.some(p => fullText.toLowerCase().includes(p))) {
+          setTimeout(() => endCall(ws, streamSid), 2000);
+        }
       });
 
       stream.on('error', (e) => {
@@ -222,6 +228,19 @@ async function sendAudio(text, ws, streamSid) {
   } catch (e) {
     console.error('[tts error]', e.message);
   }
+}
+
+// End the call: stop any buffered audio, then close the WS so Twilio's
+// <Connect><Stream> ends and the call hangs up. (Twilio doesn't accept a
+// server-sent 'stop' event, so ws.close() is the correct way to end it.)
+function endCall(ws, streamSid) {
+  console.log('[end-call] hanging up');
+  try {
+    if (ws.readyState === WebSocket.OPEN && streamSid) {
+      ws.send(JSON.stringify({ event: 'clear', streamSid }));
+    }
+  } catch {}
+  setTimeout(() => { try { ws.close(); } catch {} }, 500);
 }
 
 server.listen(PORT, () => console.log('[server] listening on port', PORT));
