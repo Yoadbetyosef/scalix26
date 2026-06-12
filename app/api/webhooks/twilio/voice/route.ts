@@ -159,8 +159,9 @@ export async function POST(req: NextRequest) {
       const sp = escapeXml(voiceSystemPrompt)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Connect answerOnBridge="true">
-    <Stream url="${wsUrl}">
+  <Pause length="1"/>
+  <Connect action="${baseUrl}/api/webhooks/twilio/voice/stream-complete">
+    <Stream url="${wsUrl}" track="inbound_track">
       <Parameter name="systemPrompt" value="${sp}"/>
       <Parameter name="greeting" value="${escapeXml(greeting)}"/>
     </Stream>
