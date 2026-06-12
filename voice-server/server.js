@@ -160,6 +160,7 @@ wss.on('connection', (ws) => {
         const isLeadConfirmed = fullText.toLowerCase().includes('technician will call') ||
                                 fullText.toLowerCase().includes('call you') ||
                                 fullText.toLowerCase().includes('reach out');
+        console.log(`[lead-alert] check: isLeadConfirmed=${isLeadConfirmed} leadAlertSent=${leadAlertSent} name=${collectedName || '-'} phone=${collectedPhone || '-'} ownerPhone=${ownerPhone || '-'} fromNumber=${fromNumber || '-'}`);
         if (isLeadConfirmed && !leadAlertSent) {
           leadAlertSent = true;
           sendLeadAlert(collectedName, collectedPhone, collectedIssue, ownerPhone, fromNumber);
@@ -266,20 +267,30 @@ async function sendAudio(text, ws, streamSid) {
 // server-sent 'stop' event, so ws.close() is the correct way to end it.)
 // Text the business owner a summary when the AI captures a hot lead.
 async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
-  if (!ownerPhone || !process.env.TWILIO_ACCOUNT_SID) return;
+  if (!ownerPhone) {
+    console.log('[lead-alert] skipped — no ownerPhone');
+    return;
+  }
+  if (!process.env.TWILIO_ACCOUNT_SID) {
+    console.log('[lead-alert] skipped — TWILIO_ACCOUNT_SID not set in env');
+    return;
+  }
+
+  const from = fromNumber || process.env.TWILIO_PHONE_NUMBER;
+  if (!from) {
+    console.log('[lead-alert] skipped — no from number (fromNumber + TWILIO_PHONE_NUMBER both empty)');
+    return;
+  }
 
   const message = `🔔 New lead from AI call!\nName: ${name || 'Unknown'}\nPhone: ${phone || 'Unknown'}\nIssue: ${issue || 'Not specified'}\n\nCall them back now — they're waiting.`;
 
+  console.log(`[lead-alert] sending from=${from} to=${ownerPhone}`);
   try {
     const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    await twilio.messages.create({
-      body: message,
-      from: fromNumber || process.env.TWILIO_PHONE_NUMBER,
-      to: ownerPhone,
-    });
-    console.log('[lead-alert] SMS sent to owner:', ownerPhone);
+    const res = await twilio.messages.create({ body: message, from, to: ownerPhone });
+    console.log(`[lead-alert] SMS sent to owner: ${ownerPhone} (sid=${res.sid} status=${res.status})`);
   } catch (err) {
-    console.error('[lead-alert] error:', err.message);
+    console.error(`[lead-alert] error: ${err.message}${err.code ? ` (code ${err.code})` : ''}`);
   }
 }
 
