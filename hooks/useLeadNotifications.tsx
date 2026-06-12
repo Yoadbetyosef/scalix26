@@ -42,6 +42,7 @@ export function useLeadNotifications() {
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'leads', filter: `tenant_id=eq.${tenant.id}` },
           (payload) => {
+            console.log('[leads-realtime] new lead received:', payload)
             const lead = payload.new as { name?: string | null; phone?: string | null; source?: string | null }
             setOpenLeads((n) => n + 1)
             toast.custom(
@@ -61,7 +62,9 @@ export function useLeadNotifications() {
             )
           },
         )
-        .subscribe()
+        .subscribe((status) => {
+          console.log('[leads-realtime] subscription status:', status, '(tenant', tenant.id + ')')
+        })
     })()
 
     return () => {

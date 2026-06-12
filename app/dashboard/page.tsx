@@ -32,8 +32,10 @@ async function getDashboardData(tenantId: string) {
       .eq('tenant_id', tenantId).eq('event_type', 'message_handled').gte('created_at', sevenDaysAgo),
     supabase.from('conversations').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId).gte('created_at', sevenDaysAgo),
-    supabase.from('analytics_events').select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId).eq('event_type', 'lead_captured').gte('created_at', sevenDaysAgo),
+    // Leads Generated — count straight from the leads table (lead_captured
+    // analytics events were never emitted, so the old count was stuck at 0).
+    supabase.from('leads').select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId),
     supabase.from('conversations')
       .select('*, contact:contacts(name, phone)')
       .eq('tenant_id', tenantId)

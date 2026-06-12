@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import {
   LayoutDashboard,
   Inbox,
@@ -13,6 +13,7 @@ import {
   LogOut,
   Zap,
   FlaskConical,
+  TrendingUp,
   MoreHorizontal,
   X,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ import { useLeadNotifications } from '@/hooks/useLeadNotifications'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/dashboard?tab=leads', icon: TrendingUp, label: 'Leads' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/ai-employees', icon: Bot, label: 'AI Employees' },
@@ -39,12 +41,22 @@ const bottomMore = navItems.slice(4)
 
 export function Sidebar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const supabase = createClient()
   const [businessName, setBusinessName] = useState<string>('')
   const [moreOpen, setMoreOpen] = useState(false)
-  // Realtime new-lead toasts + live open-lead count for the Dashboard badge
+  // Realtime new-lead toasts + live open-lead count for the Leads badge
   const newLeads = useLeadNotifications()
+
+  // Dashboard and Leads both live at /dashboard (Leads is ?tab=leads), so the
+  // active highlight has to look at the tab, not just the pathname.
+  const onLeadsTab = pathname === '/dashboard' && searchParams.get('tab') === 'leads'
+  const itemActive = (href: string, label: string) => {
+    if (label === 'Leads') return onLeadsTab
+    if (label === 'Dashboard') return pathname === '/dashboard' && !onLeadsTab
+    return pathname.startsWith(href)
+  }
 
   useEffect(() => {
     async function loadBusinessName() {
@@ -89,7 +101,7 @@ export function Sidebar() {
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-1">
           {navItems.map(({ href, icon: Icon, label }) => {
-            const active = pathname.startsWith(href)
+            const active = itemActive(href, label)
             return (
               <Link
                 key={href}
@@ -103,7 +115,7 @@ export function Sidebar() {
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 <span className="hidden xl:block">{label}</span>
-                {label === 'Dashboard' && newLeads > 0 && (
+                {label === 'Leads' && newLeads > 0 && (
                   <span className="ml-auto bg-red-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
                     {newLeads}
                   </span>
@@ -128,7 +140,7 @@ export function Sidebar() {
       {/* Mobile Bottom Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#1a1f36] border-t border-white/10 z-40 flex safe-area-inset-bottom">
         {bottomPrimary.map(({ href, icon: Icon, label }) => {
-          const active = pathname.startsWith(href)
+          const active = itemActive(href, label)
           return (
             <Link
               key={href}
@@ -140,7 +152,7 @@ export function Sidebar() {
             >
               <span className="relative">
                 <Icon className="w-5 h-5 mb-1" />
-                {label === 'Dashboard' && newLeads > 0 && (
+                {label === 'Leads' && newLeads > 0 && (
                   <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-semibold leading-none rounded-full px-1 py-0.5 min-w-[15px] text-center">
                     {newLeads}
                   </span>
@@ -186,7 +198,7 @@ export function Sidebar() {
             </div>
             <nav className="px-4 py-3">
               {bottomMore.map(({ href, icon: Icon, label }) => {
-                const active = pathname.startsWith(href)
+                const active = itemActive(href, label)
                 return (
                   <Link
                     key={href}
