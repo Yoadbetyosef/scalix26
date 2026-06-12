@@ -32,6 +32,12 @@ wss.on('connection', (ws) => {
   let currentStream = null; // the in-flight Claude stream (for barge-in abort)
   let greetingSent = false;
   let registered = false; // did THIS connection register its streamSid?
+  // Lead capture for the owner SMS alert
+  let collectedName = null;
+  let collectedPhone = null;
+  let collectedIssue = null;
+  let leadAlertSent = false;
+  let ownerPhone = null;
 
   // Audio queue — play TTS clips one at a time so Twilio never overlaps them
   let audioQueue = [];
@@ -103,6 +109,19 @@ wss.on('connection', (ws) => {
     try {
       history.push({ role: 'user', content: transcript });
 
+      // Capture lead details from this turn (for the owner SMS alert)
+      const phoneMatch = transcript.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
+      if (phoneMatch) collectedPhone = phoneMatch[1];
+
+      const lastAIMessage = history.filter(h => h.role === 'assistant').slice(-1)[0];
+      if (!collectedName && lastAIMessage?.content.toLowerCase().includes('name') && transcript.length < 30) {
+        collectedName = transcript.trim();
+      }
+
+      if (!collectedIssue && history.filter(h => h.role === 'user').length === 1) {
+        collectedIssue = transcript.trim();
+      }
+
       let fullText = '';
       let buffer = '';
       const stream = anthropic.messages.stream({
@@ -135,6 +154,15 @@ wss.on('connection', (ws) => {
         claudeStreaming = false;
         currentStream = null;
         if (!playingAudio && audioQueue.length === 0) busy = false;
+
+        // Hot lead: the AI confirmed a callback — text the owner once
+        const isLeadConfirmed = fullText.toLowerCase().includes('technician will call') ||
+                                fullText.toLowerCase().includes('call you') ||
+                                fullText.toLowerCase().includes('reach out');
+        if (isLeadConfirmed && !leadAlertSent) {
+          leadAlertSent = true;
+          sendLeadAlert(collectedName, collectedPhone, collectedIssue, ownerPhone);
+        }
 
         // Hang up shortly after a closing line so the goodbye finishes playing
         const endPhrases = ['have a great day', 'goodbye', 'take care', 'bye'];
@@ -175,6 +203,7 @@ wss.on('connection', (ws) => {
         const p = msg.start.customParameters || {};
         if (p.systemPrompt) systemPrompt = p.systemPrompt;
         if (p.greeting) greeting = p.greeting;
+        if (p.ownerPhone) ownerPhone = p.ownerPhone;
         console.log('[start]', streamSid);
 
         // Send greeting once per call
@@ -233,6 +262,25 @@ async function sendAudio(text, ws, streamSid) {
 // End the call: stop any buffered audio, then close the WS so Twilio's
 // <Connect><Stream> ends and the call hangs up. (Twilio doesn't accept a
 // server-sent 'stop' event, so ws.close() is the correct way to end it.)
+// Text the business owner a summary when the AI captures a hot lead.
+async function sendLeadAlert(name, phone, issue, ownerPhone) {
+  if (!ownerPhone || !process.env.TWILIO_ACCOUNT_SID) return;
+
+  const message = `🔔 New lead from AI call!\nName: ${name || 'Unknown'}\nPhone: ${phone || 'Unknown'}\nIssue: ${issue || 'Not specified'}\n\nCall them back now — they're waiting.`;
+
+  try {
+    const twilio = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    await twilio.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: ownerPhone,
+    });
+    console.log('[lead-alert] SMS sent to owner:', ownerPhone);
+  } catch (err) {
+    console.error('[lead-alert] error:', err.message);
+  }
+}
+
 function endCall(ws, streamSid) {
   console.log('[end-call] hanging up');
   try {
