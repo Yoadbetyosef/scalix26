@@ -220,7 +220,7 @@ CREATE TABLE leads (
   source TEXT NOT NULL CHECK (source IN ('missed_call','voice_call','web_form','google_lsa','facebook','yelp','angi','other')),
   phone TEXT NOT NULL,
   name TEXT,
-  status TEXT DEFAULT 'new' CHECK (status IN ('new','contacted','booked','called_back')),
+  status TEXT DEFAULT 'new' CHECK (status IN ('new','contacted','booked','called_back','dismissed')),
   responded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

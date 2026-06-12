@@ -8,7 +8,7 @@ export type MessageRole = 'user' | 'assistant' | 'system' | 'agent'
 export type Sentiment = 'positive' | 'neutral' | 'negative'
 export type KnowledgeSource = 'manual' | 'website' | 'document' | 'template'
 export type LeadSource = 'missed_call' | 'voice_call' | 'web_form' | 'google_lsa' | 'facebook' | 'yelp' | 'angi' | 'other'
-export type LeadStatus = 'new' | 'contacted' | 'booked'
+export type LeadStatus = 'new' | 'contacted' | 'booked' | 'dismissed'
 
 export type SkillType =
   | 'appointment_booking'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, Phone, Check } from 'lucide-react'
+import { TrendingUp, Phone, Check, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Lead, LeadSource, LeadStatus } from '@/types'
@@ -18,9 +18,10 @@ const SOURCE_LABELS: Record<LeadSource, string> = {
 }
 
 const STATUS_CONFIG: Record<LeadStatus, { label: string; emoji: string; card: string; border: string; badge: string }> = {
-  new:       { label: 'New',    emoji: '🔥', card: 'bg-orange-50',  border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700' },
-  contacted: { label: 'Open',   emoji: '🔔', card: 'bg-white',      border: 'border-l-blue-400',   badge: 'bg-blue-50 text-blue-700' },
-  booked:    { label: 'Booked', emoji: '✅', card: 'bg-green-50',   border: 'border-l-green-500',  badge: 'bg-green-100 text-green-700' },
+  new:       { label: 'New',       emoji: '🔥', card: 'bg-orange-50',  border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700' },
+  contacted: { label: 'Open',      emoji: '🔔', card: 'bg-white',      border: 'border-l-blue-400',   badge: 'bg-blue-50 text-blue-700' },
+  booked:    { label: 'Booked',    emoji: '✅', card: 'bg-green-50',   border: 'border-l-green-500',  badge: 'bg-green-100 text-green-700' },
+  dismissed: { label: 'Dismissed', emoji: '🚫', card: 'bg-gray-50',    border: 'border-l-gray-300',   badge: 'bg-gray-100 text-gray-500' },
 }
 
 function relativeTime(iso: string): string {
@@ -35,14 +36,15 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
   const router = useRouter()
   const [rows, setRows] = useState<Lead[]>(leads)
   const [updating, setUpdating] = useState<string | null>(null)
+  const [showDismissed, setShowDismissed] = useState(false)
 
-  async function markBooked(e: React.MouseEvent, id: string) {
+  async function updateStatus(e: React.MouseEvent, id: string, status: LeadStatus) {
     e.stopPropagation()
     setUpdating(id)
     const supabase = createClient()
-    const { error } = await supabase.from('leads').update({ status: 'booked' }).eq('id', id)
+    const { error } = await supabase.from('leads').update({ status }).eq('id', id)
     if (!error) {
-      setRows((prev) => prev.map((l) => (l.id === id ? { ...l, status: 'booked' as LeadStatus } : l)))
+      setRows((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
       router.refresh()
     }
     setUpdating(null)
@@ -53,6 +55,8 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
     contacted: rows.filter((l) => l.status === 'contacted').length,
     booked: rows.filter((l) => l.status === 'booked').length,
   }
+  const dismissedCount = rows.filter((l) => l.status === 'dismissed').length
+  const visibleRows = showDismissed ? rows : rows.filter((l) => l.status !== 'dismissed')
 
   if (!rows.length) {
     return (
@@ -75,14 +79,15 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
 
       {/* Lead cards */}
       <div className="space-y-2">
-        {rows.map((lead) => {
+        {visibleRows.map((lead) => {
           const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.contacted
           const href = links[lead.id]
+          const isDismissed = lead.status === 'dismissed'
           return (
             <div
               key={lead.id}
               onClick={href ? () => router.push(href) : undefined}
-              className={`rounded-xl border border-gray-100 border-l-4 shadow-sm p-4 transition-colors ${cfg.card} ${cfg.border} ${href ? 'cursor-pointer hover:brightness-[0.98]' : ''}`}
+              className={`rounded-xl border border-gray-100 border-l-4 shadow-sm p-4 transition-colors ${cfg.card} ${cfg.border} ${isDismissed ? 'opacity-60' : ''} ${href ? 'cursor-pointer hover:brightness-[0.98]' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -109,13 +114,22 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                       <Phone className="w-3.5 h-3.5" /> Call Now
                     </a>
                   )}
-                  {lead.status !== 'booked' && (
+                  {lead.status !== 'booked' && !isDismissed && (
                     <button
-                      onClick={(e) => markBooked(e, lead.id)}
+                      onClick={(e) => updateStatus(e, lead.id, 'booked')}
                       disabled={updating === lead.id}
                       className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
                     >
                       <Check className="w-3.5 h-3.5" /> {updating === lead.id ? '…' : 'Mark as Booked'}
+                    </button>
+                  )}
+                  {!isDismissed && (
+                    <button
+                      onClick={(e) => updateStatus(e, lead.id, 'dismissed')}
+                      disabled={updating === lead.id}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      <X className="w-3.5 h-3.5" /> Dismiss
                     </button>
                   )}
                 </div>
@@ -124,6 +138,16 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
           )
         })}
       </div>
+
+      {/* Show / hide dismissed */}
+      {dismissedCount > 0 && (
+        <button
+          onClick={() => setShowDismissed((s) => !s)}
+          className="text-xs font-medium text-gray-400 hover:text-gray-600 px-1"
+        >
+          {showDismissed ? 'Hide dismissed' : `Show dismissed (${dismissedCount})`}
+        </button>
+      )}
     </div>
   )
 }
