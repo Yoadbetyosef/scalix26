@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { Tenant, Channel } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -101,6 +102,19 @@ export function SettingsClient({ tenant, channels }: Props) {
         <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-0.5">Manage your business profile and integrations</p>
       </div>
+
+      {/* Availability & Reviews link */}
+      <Link href="/settings/availability" className="tap-target block">
+        <Card className="hover:border-[#4ecdc4] transition-colors">
+          <CardContent className="flex items-center justify-between py-4">
+            <div>
+              <p className="font-semibold text-gray-900">📅 Availability &amp; Reviews</p>
+              <p className="text-sm text-gray-500 mt-0.5">Set appointment times and Google review automation</p>
+            </div>
+            <span className="text-gray-300 text-xl">›</span>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Business Profile */}
       <Card>

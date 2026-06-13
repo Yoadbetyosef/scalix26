@@ -9,6 +9,7 @@ import { formatDateTime, truncate } from '@/lib/utils'
 import { ConversationDistributionChart } from '@/components/charts/conversation-distribution'
 import { ChannelDistributionChart } from '@/components/charts/channel-distribution'
 import { LeadsTable } from '@/components/dashboard/leads-table'
+import { AppointmentsTable, type Appointment } from '@/components/dashboard/appointments-table'
 import { PostOnboardingChecklist } from '@/components/onboarding/post-onboarding-checklist'
 import type { Lead } from '@/types'
 
@@ -88,6 +89,14 @@ async function getDashboardData(tenantId: string) {
     }
   }
 
+  const { data: appointments } = await supabase
+    .from('appointments')
+    .select('id, customer_name, customer_phone, slot_date, slot_time, service_type, status, skip_review')
+    .eq('tenant_id', tenantId)
+    .order('slot_date', { ascending: false })
+    .order('slot_time', { ascending: true })
+    .limit(100)
+
   return {
     stats: {
       totalCalls: totalCalls || 0,
@@ -100,12 +109,13 @@ async function getDashboardData(tenantId: string) {
     aiEmployees: aiEmployees || [],
     leads_list: leadsList,
     leadLinks,
+    appointments_list: (appointments || []) as Appointment[],
   }
 }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams
-  const activeTab = tab === 'leads' ? 'leads' : 'overview'
+  const activeTab = tab === 'leads' ? 'leads' : tab === 'appointments' ? 'appointments' : 'overview'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -123,7 +133,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   if (!tenant) redirect('/setup')
 
-  const { stats, conversations, aiEmployees, leads_list, leadLinks } = await getDashboardData(tenant.id)
+  const { stats, conversations, aiEmployees, leads_list, leadLinks, appointments_list } = await getDashboardData(tenant.id)
 
   // Post-onboarding success checklist — shown until every item is done,
   // regardless of signup date.
@@ -194,10 +204,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </span>
           )}
         </Link>
+        <Link
+          href="/dashboard?tab=appointments"
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'appointments' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Appointments
+        </Link>
       </div>
 
       {activeTab === 'leads' ? (
         <LeadsTable leads={leads_list} links={leadLinks} />
+      ) : activeTab === 'appointments' ? (
+        <AppointmentsTable appointments={appointments_list} />
       ) : (
       <>
       {/* Stats */}

@@ -163,7 +163,18 @@ export async function POST(req: NextRequest) {
       // per-turn summary like the SMS pipeline — the model tracks fields from
       // its own context, so the instruction must be explicit.)
       const bookingRules = `APPOINTMENT BOOKING: The details you need are service, date, time, name, phone, and address. As the customer gives each one, remember it. NEVER ask for a detail the customer already gave or that you already confirmed — re-read the conversation before asking. Ask for only ONE missing detail at a time. Once you have all six, confirm the full booking once (service, date, time, name, phone, address) and stop asking.`
-      const voiceSystemPrompt = `${DEFAULT_TONE}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${baseVoicePrompt}`
+      let voiceSystemPrompt = `${DEFAULT_TONE}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${baseVoicePrompt}`
+
+      // If the business has configured appointment slots, let the AI actually
+      // schedule via the check_availability / book_appointment functions.
+      const { count: slotsCount } = await supabase
+        .from('appointment_slots')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', channel.tenant_id)
+        .eq('is_active', true)
+      if (slotsCount && slotsCount > 0) {
+        voiceSystemPrompt += `\n\nAPPOINTMENT SCHEDULING: You CAN schedule appointments. When a customer wants to book, use check_availability to find open slots for their preferred date, then use book_appointment to confirm. Always collect name, phone number, and service type before booking.`
+      }
       const sp = escapeXml(voiceSystemPrompt)
       // Owner phone for the lead-alert SMS. Try owner_phone (may not exist yet),
       // fall back to the business phone, then the call-forwarding number.

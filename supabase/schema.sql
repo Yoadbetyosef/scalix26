@@ -28,6 +28,8 @@ CREATE TABLE tenants (
   lead_intake_token UUID DEFAULT uuid_generate_v4(),
   slug TEXT UNIQUE,
   onboarding_checklist JSONB DEFAULT '{}'::jsonb,
+  google_review_url TEXT,
+  review_automation_enabled BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -196,17 +198,27 @@ CREATE TABLE knowledge_base (
 -- ============================================================
 -- APPOINTMENTS
 -- ============================================================
+CREATE TABLE appointment_slots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  slot_time TIME NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE appointments (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
-  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  slot_date DATE NOT NULL,
+  slot_time TIME NOT NULL,
+  customer_name TEXT,
+  customer_phone TEXT NOT NULL,
   service_type TEXT,
-  scheduled_at TIMESTAMPTZ,
-  address TEXT,
-  notes TEXT,
-  status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled','confirmed','completed','cancelled','no_show')),
-  reminder_sent BOOLEAN DEFAULT false,
+  status TEXT DEFAULT 'confirmed' CHECK (status IN ('confirmed','cancelled','completed')),
+  skip_review BOOLEAN DEFAULT false,
+  review_sent_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -286,6 +298,8 @@ CREATE POLICY "Tenant knowledge_base access" ON knowledge_base FOR ALL USING (te
 
 -- Appointments
 CREATE POLICY "Tenant appointments access" ON appointments FOR ALL USING (tenant_id = get_tenant_id());
+ALTER TABLE appointment_slots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Tenant slots access" ON appointment_slots FOR ALL USING (tenant_id = get_tenant_id());
 
 -- Analytics Events
 CREATE POLICY "Tenant analytics_events access" ON analytics_events FOR ALL USING (tenant_id = get_tenant_id());
@@ -314,7 +328,8 @@ CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX idx_skills_ai_employee_id ON skills(ai_employee_id);
 CREATE INDEX idx_knowledge_base_tenant_id ON knowledge_base(tenant_id);
 CREATE INDEX idx_appointments_tenant_id ON appointments(tenant_id);
-CREATE INDEX idx_appointments_scheduled_at ON appointments(scheduled_at);
+CREATE INDEX idx_appointments_date ON appointments(tenant_id, slot_date, slot_time);
+CREATE INDEX idx_slots_day ON appointment_slots(tenant_id, day_of_week);
 CREATE INDEX idx_analytics_events_tenant_id ON analytics_events(tenant_id);
 CREATE INDEX idx_analytics_events_event_type ON analytics_events(event_type);
 CREATE INDEX idx_leads_tenant_id ON leads(tenant_id);

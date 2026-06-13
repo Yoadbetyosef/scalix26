@@ -83,6 +83,32 @@ wss.on('connection', (twilioWs) => {
                 required: ['reason'],
               },
             },
+            {
+              name: 'check_availability',
+              description: 'Check available appointment slots for a specific date',
+              parameters: {
+                type: 'object',
+                properties: {
+                  date: { type: 'string', description: 'Date like tomorrow, Monday, June 15' },
+                },
+                required: ['date'],
+              },
+            },
+            {
+              name: 'book_appointment',
+              description: 'Book an appointment for the customer',
+              parameters: {
+                type: 'object',
+                properties: {
+                  date: { type: 'string' },
+                  time: { type: 'string' },
+                  customer_name: { type: 'string' },
+                  customer_phone: { type: 'string' },
+                  service_type: { type: 'string' },
+                },
+                required: ['date', 'time', 'customer_name', 'customer_phone'],
+              },
+            },
           ],
         },
         speak: { provider: { type: 'deepgram', model: voiceId } },
@@ -99,7 +125,7 @@ wss.on('connection', (twilioWs) => {
     sendSettings();
   });
 
-  dgWs.on('message', (data, isBinary) => {
+  dgWs.on('message', async (data, isBinary) => {
     // Binary frame = agent audio → forward to Twilio as a media event.
     if (isBinary) {
       if (streamSid && twilioWs.readyState === WebSocket.OPEN) {
@@ -121,28 +147,51 @@ wss.on('connection', (twilioWs) => {
 
     // Human handoff: the agent decided to call transfer_to_human.
     if (msg.type === 'FunctionCallRequest') {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL;
       for (const fn of msg.functions || []) {
-        if (fn.name !== 'transfer_to_human') continue;
-        let reason = '';
-        try { reason = JSON.parse(fn.arguments || '{}').reason || ''; } catch { /* arguments not JSON */ }
-        console.log('[handoff] transfer_to_human:', reason);
+        let args = {};
+        try { args = JSON.parse(fn.arguments || '{}'); } catch { /* arguments not JSON */ }
 
-        // Let the agent speak the hold line.
-        dgWs.send(JSON.stringify({
-          type: 'FunctionCallResponse',
-          id: fn.id,
-          name: fn.name,
-          content: 'Transferring you now. Please hold.',
-        }));
+        if (fn.name === 'transfer_to_human') {
+          const reason = args.reason || '';
+          console.log('[handoff] transfer_to_human:', reason);
+          dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content: 'Transferring you now. Please hold.' }));
+          // Redirect the LIVE call to the owner (see transferCall). Don't close
+          // the Twilio socket — the redirect keeps the call alive.
+          setTimeout(() => {
+            transferCall(callSid, ownerPhone, fromNumber, callerNumber, reason);
+            try { dgWs.close(); } catch {}
+          }, 3000);
+          continue;
+        }
 
-        // After the line plays: redirect the LIVE call to the owner. Do NOT
-        // close the Twilio socket — the redirect (calls.update) replaces the
-        // <Connect><Stream> with a <Dial>, keeping the call alive. Closing the
-        // Deepgram socket just stops the AI.
-        setTimeout(() => {
-          transferCall(callSid, ownerPhone, fromNumber, callerNumber, reason);
-          try { dgWs.close(); } catch {}
-        }, 3000);
+        if (fn.name === 'check_availability') {
+          let content = 'No availability on that date.';
+          try {
+            const r = await fetch(`${appUrl}/api/appointments/available?lead_token=${encodeURIComponent(leadToken || '')}&date=${encodeURIComponent(args.date || '')}`);
+            const j = await r.json();
+            content = (j.slots && j.slots.length) ? `Available times: ${j.slots.join(', ')}` : 'No availability on that date.';
+          } catch (e) { console.error('[check_availability] error:', e.message); }
+          console.log('[booking] check_availability:', args.date, '->', content);
+          dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content }));
+          continue;
+        }
+
+        if (fn.name === 'book_appointment') {
+          let content = 'Booking failed, please try again.';
+          try {
+            const r = await fetch(`${appUrl}/api/appointments/book`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...args, lead_token: leadToken, customer_phone: args.customer_phone || callerNumber }),
+            });
+            const j = await r.json();
+            content = j.success ? 'Appointment booked successfully.' : `Could not book: ${j.error || 'please try again'}`;
+          } catch (e) { console.error('[book_appointment] error:', e.message); }
+          console.log('[booking] book_appointment ->', content);
+          dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content }));
+          continue;
+        }
       }
       return;
     }
