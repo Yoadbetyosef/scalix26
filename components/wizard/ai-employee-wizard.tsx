@@ -41,7 +41,7 @@ const DEFAULT_STATE: WizardState = {
   employee: {
     name: 'Alex',
     avatar_url: '/avatars/avatar-1.png',
-    voice: 'professional_female',
+    voice: 'aura-2-asteria-en',
     greeting: "Hi! Thank you for contacting us. How can I help you today?",
     personality_score: 70,
   },
