@@ -1,9 +1,9 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { MessageCircle, Search } from 'lucide-react'
+import { MessageCircle, Search, Phone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { formatDateTime, truncate } from '@/lib/utils'
+import { formatDateTime, formatDuration, truncate } from '@/lib/utils'
 
 const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS',
@@ -116,8 +116,10 @@ export default async function InboxPage({
               return (
                 <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
                   <div className="flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 text-sm font-medium flex-shrink-0">
-                      {contact?.name?.[0] || contact?.phone?.[0] || '?'}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-[#4ecdc4]/15 text-[#4ecdc4]' : 'bg-gray-100 text-gray-600'}`}>
+                      {conv.channel === 'voice'
+                        ? <Phone className="w-4 h-4" />
+                        : (contact?.name?.[0] || contact?.phone?.[0] || '?')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
@@ -125,8 +127,11 @@ export default async function InboxPage({
                           {contact?.name || contact?.phone || 'Unknown'}
                         </p>
                         <Badge variant={conv.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                          {CHANNEL_LABELS[conv.channel] || conv.channel}
+                          {conv.channel === 'voice' ? '📞 ' : ''}{CHANNEL_LABELS[conv.channel] || conv.channel}
                         </Badge>
+                        {conv.channel === 'voice' && conv.duration_seconds != null && (
+                          <span className="text-xs text-gray-400 whitespace-nowrap">{formatDuration(conv.duration_seconds)}</span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-500 truncate">
                         {conv.summary ? truncate(conv.summary, 60) : 'No summary yet'}

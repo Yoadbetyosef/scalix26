@@ -3,7 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { formatDateTime, formatDate, contactIdentifier } from '@/lib/utils'
+import { formatDateTime, formatDate, formatDuration, contactIdentifier } from '@/lib/utils'
 import { ConversationActions } from '@/components/inbox/conversation-actions'
 import { ConversationContactPanel } from '@/components/inbox/conversation-contact-panel'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
@@ -59,17 +59,20 @@ export default async function ConversationPage({ params, searchParams }: { param
         <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-medium flex-shrink-0">
-          {contact?.name?.[0] || contact?.phone?.[0] || '?'}
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-[#4ecdc4]/15 text-[#4ecdc4]' : 'bg-gray-100 text-gray-600'}`}>
+          {conv.channel === 'voice' ? <Phone className="w-4 h-4" /> : (contact?.name?.[0] || contact?.phone?.[0] || '?')}
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-gray-900 truncate">
             {contact?.name || contact?.phone || 'Unknown'}
           </h2>
           <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
-            <span>{conv.channel}</span>
+            <span>{conv.channel === 'voice' ? '📞 voice' : conv.channel}</span>
             <span>·</span>
             <span>{formatDate(conv.created_at)}</span>
+            {conv.channel === 'voice' && conv.duration_seconds != null && (
+              <><span>·</span><span>{formatDuration(conv.duration_seconds)}</span></>
+            )}
             {conv.ai_employee && <><span>·</span><span className="truncate">{(conv.ai_employee as { name: string }).name}</span></>}
           </div>
         </div>
