@@ -30,6 +30,18 @@ const VOICE_CALL_RULES = `VOICE CALL - CRITICAL RULES:
 - If caller wants to book — book immediately, no explanations.
 - Fast, warm, natural. Like your best receptionist.`
 
+// Maps an agent's personality to a one-line tone instruction. Shared by the
+// SMS/WhatsApp pipeline and the realtime voice route so both stay consistent.
+export function getToneInstruction(personality?: string | null): string {
+  const toneMap: Record<string, string> = {
+    professional: 'You communicate in a professional, business-like tone.',
+    friendly: 'You communicate in a warm, friendly, and approachable tone.',
+    empathetic: 'You communicate with empathy and understanding, acknowledging feelings.',
+    direct: 'You communicate directly and concisely, getting straight to the point.',
+  }
+  return toneMap[(personality || 'professional').toLowerCase()] || toneMap.professional
+}
+
 function buildSystemPrompt(
   employee: AIEmployee,
   skills: Skill[],
@@ -55,15 +67,7 @@ function buildSystemPrompt(
     .map(([day, h]) => `${day}: ${h}`)
     .join(', ') || 'Not specified'
 
-  const toneMap: Record<string, string> = {
-    professional: 'You communicate in a professional, business-like tone.',
-    friendly: 'You communicate in a warm, friendly, and approachable tone.',
-    empathetic: 'You communicate with empathy and understanding, acknowledging feelings.',
-    direct: 'You communicate directly and concisely, getting straight to the point.',
-  }
-  const toneInstruction = toneMap[(employee.personality || 'professional').toLowerCase()] || toneMap.professional
-
-  const basePrompt = `${toneInstruction}
+  const basePrompt = `${getToneInstruction(employee.personality)}
 
 You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
 
