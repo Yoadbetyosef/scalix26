@@ -20,6 +20,7 @@ wss.on('connection', (twilioWs) => {
   // Per-call config (filled from the Twilio <Stream> custom parameters)
   let streamSid = null;
   let callSid = null; // Twilio Call SID — needed to redirect the live call
+  let callStartTime = null; // for call-duration analytics
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT || 'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
   let greeting = 'Hello! How can I help you today?';
   let voiceId = process.env.DEFAULT_VOICE || 'aura-2-asteria-en';
@@ -204,6 +205,7 @@ wss.on('connection', (twilioWs) => {
     if (msg.event === 'start') {
       streamSid = msg.start.streamSid;
       callSid = msg.start.callSid || null;
+      callStartTime = Date.now();
       const p = msg.start.customParameters || {};
       if (p.systemPrompt) systemPrompt = p.systemPrompt;
       if (p.greeting) greeting = p.greeting;
@@ -232,6 +234,10 @@ wss.on('connection', (twilioWs) => {
 
   twilioWs.on('close', () => {
     console.log('[call] disconnected');
+    if (callStartTime) {
+      const durationSeconds = Math.round((Date.now() - callStartTime) / 1000);
+      logCallAnalytics(leadToken, durationSeconds);
+    }
     try { dgWs.close(); } catch {}
   });
 });
@@ -260,6 +266,23 @@ async function sendLeadAlert(name, phone, issue, ownerPhone, fromNumber) {
     console.log(`[lead-alert] SMS sent to owner: ${ownerPhone} (sid=${res.sid} status=${res.status})`);
   } catch (err) {
     console.error(`[lead-alert] error: ${err.message}${err.code ? ` (code ${err.code})` : ''}`);
+  }
+}
+
+// Record a handled voice call for dashboard metrics. Tenant is resolved from
+// the lead token server-side (no tenant_id sent from here).
+async function logCallAnalytics(leadToken, durationSeconds) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!leadToken || !appUrl) return;
+  try {
+    await fetch(`${appUrl}/api/analytics/call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_token: leadToken, duration_seconds: durationSeconds }),
+    });
+    console.log('[analytics] call logged, duration:', durationSeconds);
+  } catch (err) {
+    console.error('[analytics] error:', err.message);
   }
 }
 

@@ -27,8 +27,10 @@ async function getDashboardData(tenantId: string) {
     { data: aiEmployees },
     { data: leadRecords },
   ] = await Promise.all([
+    // Total Calls — voice activity is logged as message_handled with
+    // data.channel='voice' (no code ever emitted 'call_handled').
     supabase.from('analytics_events').select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId).eq('event_type', 'call_handled').gte('created_at', sevenDaysAgo),
+      .eq('tenant_id', tenantId).eq('event_type', 'message_handled').eq('data->>channel', 'voice').gte('created_at', sevenDaysAgo),
     supabase.from('analytics_events').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId).eq('event_type', 'message_handled').gte('created_at', sevenDaysAgo),
     supabase.from('conversations').select('*', { count: 'exact', head: true })
