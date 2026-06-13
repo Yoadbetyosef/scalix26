@@ -1,5 +1,6 @@
 import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
+import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -39,7 +40,8 @@ function buildSystemPrompt(
   skills: Skill[],
   kb: KnowledgeBase[],
   tenant: Tenant,
-  isVoice: boolean
+  isVoice: boolean,
+  bookingStatus = ''
 ): string {
   // Employee fields take priority; fall back to tenant for accounts that haven't migrated
   const businessName = employee.business_name || tenant.business_name
@@ -83,7 +85,7 @@ RULES:
 - Be concise for SMS (under 160 chars when possible), more detailed for voice
 - Never say you are an AI unless directly asked
 - If asked if you are an AI, say: "I'm ${employee.name}, a virtual assistant for ${businessName}. How can I help you today?"
-- For appointment booking, ask: what service do you need? preferred date/time? address? contact info?
+- For appointment booking, collect these ONE AT A TIME (never ask for several at once): service, preferred date, preferred time, name, phone, address. Never re-ask for a detail the customer already gave or that you already confirmed. Once you have all of them, confirm the full booking once and stop.
 - For lead qualification, ask: describe the problem, urgency 1-10, property type, approximate size
 - After completing a job (if customer says "thank you" or job is done), offer to send a review link
 
@@ -91,13 +93,16 @@ GREETING (use only at start of new conversation): ${employee.greeting}
 
 Remember: You represent ${businessName}. Be professional, helpful, and always try to book the appointment or capture the lead.`
 
+  // Per-turn booking state goes last (highest recency = best adherence).
+  const booking = bookingStatus ? `\n\n${bookingStatus}` : ''
+
   // Voice calls get the strict brevity rules prepended before everything else
-  if (isVoice) return `${VOICE_CALL_RULES}\n\n${basePrompt}`
+  if (isVoice) return `${VOICE_CALL_RULES}\n\n${basePrompt}${booking}`
 
   // SMS/WhatsApp render plain text — markdown shows up as literal **asterisks**.
   return `${basePrompt}
 
-FORMAT: Plain text only. Never use markdown — no asterisks (* or **), underscores, backticks, headers, or bullet/numbered lists. Keep every reply to 1–2 short sentences; these are text messages, not emails. Ask only ONE question per message — never request multiple details at once. Sound like a real person texting, not a form.`
+FORMAT: Plain text only. Never use markdown — no asterisks (* or **), underscores, backticks, headers, or bullet/numbered lists. Keep every reply to 1–2 short sentences; these are text messages, not emails. Ask only ONE question per message — never request multiple details at once. Sound like a real person texting, not a form.${booking}`
 }
 
 function detectSkillTrigger(content: string, skills: Skill[]): string | null {
@@ -225,8 +230,6 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const kbForPrompt = isVoice
     ? (kb?.[0]?.content ? [{ title: 'Business info', content: String(kb[0].content).substring(0, 500) }] : [])
     : (kb || [])
-  const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice)
-
   // Voice loads the 6 NEWEST messages (descending) — reverse back to chronological
   const orderedHistory = isVoice ? [...(history as Message[])].reverse() : (history as Message[])
   const chatMessages = orderedHistory.map(m => ({
@@ -234,6 +237,16 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     content: m.content,
   }))
   chatMessages.push({ role: 'user', content: input.messageContent })
+
+  // Booking flow: derive which fields are already collected from the whole
+  // conversation (customer messages + the AI's own confirmations) and inject a
+  // "collected so far" summary so the AI never re-asks for details it has.
+  let bookingStatus = ''
+  if (bookingInProgress(chatMessages)) {
+    bookingStatus = buildBookingStatus(await extractBookingFields(chatMessages))
+  }
+
+  const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
 
   const response = await anthropic.messages.create({
     model: isVoice ? VOICE_MODEL : MODEL,

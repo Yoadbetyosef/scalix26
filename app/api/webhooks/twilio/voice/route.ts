@@ -158,8 +158,12 @@ export async function POST(req: NextRequest) {
       const baseVoicePrompt = agent?.system_prompt && agent.system_prompt.trim().length > 0
         ? agent.system_prompt
         : `You are ${agent?.name || 'Alex'}, a professional AI receptionist for ${agent?.business_name || 'our company'}. Your job is to answer calls, help customers, and collect their information. Keep every response under 2 sentences. Be warm, friendly, and fast.`
-      // Prepend the default tone + a voice-formatting line (no markdown/lists).
-      const voiceSystemPrompt = `${DEFAULT_TONE}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${baseVoicePrompt}`
+      // Prepend the default tone + a voice-formatting line + booking-tracking
+      // rules. (Deepgram runs the whole conversation, so we can't inject a
+      // per-turn summary like the SMS pipeline — the model tracks fields from
+      // its own context, so the instruction must be explicit.)
+      const bookingRules = `APPOINTMENT BOOKING: The details you need are service, date, time, name, phone, and address. As the customer gives each one, remember it. NEVER ask for a detail the customer already gave or that you already confirmed — re-read the conversation before asking. Ask for only ONE missing detail at a time. Once you have all six, confirm the full booking once (service, date, time, name, phone, address) and stop asking.`
+      const voiceSystemPrompt = `${DEFAULT_TONE}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${baseVoicePrompt}`
       const sp = escapeXml(voiceSystemPrompt)
       // Owner phone for the lead-alert SMS. Try owner_phone (may not exist yet),
       // fall back to the business phone, then the call-forwarding number.
