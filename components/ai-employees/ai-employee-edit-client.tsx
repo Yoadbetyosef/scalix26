@@ -130,10 +130,16 @@ export function AIEmployeeEditClient({ employee, tenantId, businessDetails, know
 
   async function handleDelete() {
     if (!confirm(`Delete ${employee.name}? This cannot be undone.`)) return
-    const { error } = await supabase.from('ai_employees').delete().eq('id', employee.id)
-    if (error) { toast.error('Failed to delete'); return }
-    toast.success('Deleted')
-    router.push('/ai-employees')
+    // Server-side delete: releases the agent's Twilio number(s) BEFORE the DB
+    // cascade wipes the channel rows (and their SIDs).
+    try {
+      const res = await fetch(`/api/agents/${employee.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      toast.success('Deleted')
+      router.push('/ai-employees')
+    } catch {
+      toast.error('Failed to delete')
+    }
   }
 
   async function toggleStatus() {
