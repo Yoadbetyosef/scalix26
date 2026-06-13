@@ -14,13 +14,6 @@ import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucid
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 
-const PERSONALITIES = [
-  { id: 'professional', label: 'Professional' },
-  { id: 'friendly', label: 'Friendly' },
-  { id: 'empathetic', label: 'Empathetic' },
-  { id: 'direct', label: 'Direct' },
-]
-
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const DAY_LABELS: Record<typeof DAYS[number], string> = {
   mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday',
@@ -41,8 +34,6 @@ interface Props {
     id: string
     name: string
     greeting: string
-    personality: string
-    personality_score: number
     voice: string
     system_prompt: string | null
     status: string
@@ -82,8 +73,6 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
   const [form, setForm] = useState({
     name: employee.name || '',
     greeting: employee.greeting || '',
-    personality: employee.personality || 'friendly',
-    personality_score: employee.personality_score ?? 70,
     voice: employee.voice || 'professional_female',
     system_prompt: employee.system_prompt || '',
     status: employee.status || 'draft',
@@ -468,39 +457,6 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
         </CardContent>
       </Card>
 
-      {/* Personality */}
-      <Card>
-        <CardHeader><CardTitle>Personality</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {PERSONALITIES.map(p => (
-              <button
-                key={p.id}
-                onClick={() => setForm(f => ({ ...f, personality: p.id }))}
-                className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
-                  form.personality === p.id
-                    ? 'border-[#4ecdc4] bg-[#4ecdc4]/10 text-[#4ecdc4]'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div>
-            <Label>Friendliness: {form.personality_score}/100</Label>
-            <input
-              type="range" min={0} max={100}
-              value={form.personality_score}
-              onChange={e => setForm(f => ({ ...f, personality_score: Number(e.target.value) }))}
-              className="w-full mt-2 accent-[#4ecdc4]"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>Very Formal</span><span>Very Friendly</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Voice */}
       <Card>

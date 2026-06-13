@@ -12,7 +12,7 @@ export const VOICES = [
   { id: 'aura-2-arcas-en', name: 'Arcas', gender: 'Male', description: 'Natural & smooth' },
 ]
 
-const avatarUrl = (name: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`
+const avatarUrl = (name: string) => `/avatars/${name.toLowerCase()}.png`
 const PREVIEW_TEXT = 'Hi! Thanks for calling. How can I help you today?'
 
 type Mode = 'idle' | 'listening' | 'thinking' | 'speaking'
@@ -304,7 +304,7 @@ export function VoiceDemo({ value, onChange, systemPrompt }: { value: string; on
               }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={avatarUrl(v.name)} alt={v.name} className="w-12 h-12 rounded-full bg-white border border-gray-100" />
+              <img src={avatarUrl(v.name)} alt={v.name} className="w-12 h-12 rounded-full object-cover bg-white border border-gray-100" />
               <span className="text-sm font-semibold text-gray-900">{v.name}</span>
               <span className="text-[11px] text-gray-400 leading-tight text-center">{v.gender}</span>
             </button>
@@ -316,7 +316,7 @@ export function VoiceDemo({ value, onChange, systemPrompt }: { value: string; on
       <div className="rounded-xl border-2 border-[#4ecdc4] bg-[#4ecdc4]/5 p-5">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={avatarUrl(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full bg-white border border-gray-100" />
+          <img src={avatarUrl(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full object-cover bg-white border border-gray-100" />
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-900">{selected.name}</p>
             <p className="text-xs text-gray-500">{selected.description} • {selected.gender}</p>

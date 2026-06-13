@@ -75,27 +75,6 @@ export function Step2CreateEmployee({ data, updateData }: Props) {
         <VoiceSelector value={emp.voice} onChange={(v) => update('voice', v)} />
       </div>
 
-      <div>
-        <Label>Personality</Label>
-        <div className="mt-2">
-          <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-            <span>Formal</span>
-            <span>Friendly</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={emp.personality_score}
-            onChange={e => update('personality_score', parseInt(e.target.value))}
-            className="w-full accent-[#4ecdc4]"
-          />
-          <p className="text-xs text-gray-500 mt-1 text-center">
-            {emp.personality_score < 33 ? 'Very formal & professional' :
-             emp.personality_score < 66 ? 'Balanced tone' : 'Warm & friendly'}
-          </p>
-        </div>
-      </div>
 
       <div>
         <Label>Greeting Message</Label>
