@@ -135,16 +135,6 @@ export function VoiceDemo({ value, onChange, systemPrompt }: { value: string; on
     setLevel(0)
   }
 
-  async function chat(message: string): Promise<string> {
-    const res = await fetch('/api/ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, system_prompt: promptRef.current || undefined }),
-    })
-    const data = await res.json().catch(() => ({}))
-    return typeof data.reply === 'string' ? data.reply : ''
-  }
-
   async function speak(text: string) {
     const res = await fetch(`/api/tts?voice=${encodeURIComponent(voiceRef.current)}&text=${encodeURIComponent(text)}`)
     if (!res.ok) throw new Error('tts')
@@ -213,13 +203,56 @@ export function VoiceDemo({ value, onChange, systemPrompt }: { value: string; on
     setTurns((t) => [...t, { role: 'user', text }])
     setMode('thinking')
     try {
-      const reply = await chat(text)
-      if (!activeRef.current) return
-      if (reply) {
-        setTurns((t) => [...t, { role: 'agent', text: reply }])
-        setMode('speaking')
-        await speak(reply)
+      const res = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, system_prompt: promptRef.current || undefined }),
+      })
+      if (!res.ok || !res.body) throw new Error('chat')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let full = ''
+      let buffer = ''
+      let added = false
+
+      // Live-update the agent's transcript bubble as text streams in.
+      const pushOrUpdate = (value: string) => {
+        if (!added) {
+          added = true
+          setTurns((t) => [...t, { role: 'agent', text: value }])
+        } else {
+          setTurns((t) => {
+            const c = [...t]
+            for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'agent') { c[i] = { ...c[i], text: value }; break } }
+            return c
+          })
+        }
       }
+
+      // Serial audio chain — each sentence is spoken in order, the moment its
+      // TTS is ready, while later sentences are still being generated.
+      let chain: Promise<void> = Promise.resolve()
+      const enqueue = (clip: string) => {
+        chain = chain.then(() => (activeRef.current ? speak(clip) : Promise.resolve()))
+      }
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        full += chunk
+        buffer += chunk
+        pushOrUpdate(full)
+        // Flush a sentence/clause to TTS as soon as it completes.
+        if (/[.!?,]/.test(buffer) && buffer.trim().length > 12) {
+          enqueue(buffer.trim())
+          buffer = ''
+        }
+      }
+      if (!added && full.trim()) pushOrUpdate(full)
+      if (buffer.trim()) enqueue(buffer.trim())
+      await chain
     } catch {
       toast.error('Something went wrong')
     } finally {

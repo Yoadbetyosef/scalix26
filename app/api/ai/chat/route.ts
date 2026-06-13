@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 
-// Short Claude Haiku reply for the in-dashboard "Talk to me" voice demo.
+// Streaming Claude Haiku reply for the in-dashboard "Talk to your agent" demo.
+// Streams raw text deltas so the client can start TTS on the first sentence
+// instead of waiting for the whole reply (much faster, like the real call).
 // Auth-gated (not a public route) so it can't be abused for free generation.
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -17,20 +19,22 @@ export async function POST(req: NextRequest) {
     ? body.system_prompt
     : 'You are a helpful AI receptionist. Keep responses under 2 sentences.'
 
-  try {
-    const res = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 150,
-      system,
-      messages: [{ role: 'user', content: message }],
-    })
-    const reply = res.content
-      .map((b) => (b.type === 'text' ? b.text : ''))
-      .join(' ')
-      .trim()
-    return NextResponse.json({ reply })
-  } catch (err) {
-    console.error('[ai/chat] error:', err instanceof Error ? err.message : err)
-    return NextResponse.json({ error: 'ai_failed' }, { status: 502 })
-  }
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    start(controller) {
+      const s = anthropic.messages.stream({
+        model: MODEL,
+        max_tokens: 150,
+        system,
+        messages: [{ role: 'user', content: message }],
+      })
+      s.on('text', (delta) => { try { controller.enqueue(encoder.encode(delta)) } catch { /* closed */ } })
+      s.on('end', () => { try { controller.close() } catch { /* closed */ } })
+      s.on('error', () => { try { controller.close() } catch { /* closed */ } })
+    },
+  })
+
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  })
 }
