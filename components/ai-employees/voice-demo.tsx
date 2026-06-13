@@ -35,35 +35,42 @@ function getSpeechRec(): (new () => SpeechRec) | null {
 }
 
 // SVG wave — 4 rounded bars whose height follows the live audio level.
+// Reactive "voice bubble" — a colorful orb that pulses with the live audio
+// level and emits expanding rings when there's sound; breathes gently when idle.
 function WaveViz({ level, mode }: { level: number; mode: Mode }) {
   const active = mode === 'listening' || mode === 'speaking'
-  const base = 8
-  const range = mode === 'speaking' ? 30 : mode === 'listening' ? 16 : 0
-  const factors = [0.55, 1, 0.75, 0.45]
+  const l = active ? Math.min(1, level) : 0
+  const gain = mode === 'speaking' ? 1 : 0.7
+  const core = 11 + l * 13 * gain
+  const ring1 = 16 + l * 16 * gain
+  const ring2 = 20 + l * 24 * gain
   return (
-    <svg viewBox="0 0 120 56" className="w-40 h-14" aria-hidden>
+    <svg viewBox="0 0 64 64" className={`w-16 h-16 ${mode === 'idle' ? 'animate-orb-idle' : ''}`} aria-hidden>
       <defs>
-        <linearGradient id="vd-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#4ecdc4" />
-          <stop offset="100%" stopColor="#3db8af" />
-        </linearGradient>
+        <radialGradient id="vd-orb" cx="42%" cy="38%" r="65%">
+          <stop offset="0%" stopColor="#a7f3eb" />
+          <stop offset="40%" stopColor="#4ecdc4" />
+          <stop offset="75%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#818cf8" />
+        </radialGradient>
+        <filter id="vd-soft" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="0.6" />
+        </filter>
       </defs>
-      {factors.map((f, i) => {
-        const h = active ? base + level * range * f * 2 : base
-        const x = 24 + i * 24
-        return (
-          <rect
-            key={i}
-            x={x}
-            y={28 - h / 2}
-            width="10"
-            height={Math.max(6, h)}
-            rx="5"
-            fill="url(#vd-grad)"
-            className="transition-[height,y] duration-75 ease-out"
-          />
-        )
-      })}
+      {/* expanding ripple rings while there's sound */}
+      {active && (
+        <>
+          <circle cx="32" cy="32" r={ring2} fill="none" stroke="#38bdf8" strokeWidth="2"
+            strokeOpacity={0.12 + l * 0.22} className="transition-all duration-75 ease-out" />
+          <circle cx="32" cy="32" r={ring1} fill="none" stroke="#4ecdc4" strokeWidth="2.5"
+            strokeOpacity={0.22 + l * 0.35} className="transition-all duration-75 ease-out" />
+        </>
+      )}
+      {/* core orb */}
+      <circle cx="32" cy="32" r={core} fill="url(#vd-orb)" filter="url(#vd-soft)"
+        className="transition-[r] duration-75 ease-out" />
+      {/* soft highlight */}
+      <circle cx={32 - core * 0.28} cy={32 - core * 0.32} r={core * 0.28} fill="#ffffff" fillOpacity="0.45" />
     </svg>
   )
 }

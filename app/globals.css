@@ -55,6 +55,13 @@ body {
 }
 .voice-bar { animation: voice-wave 0.8s ease-in-out infinite; transform-origin: center; }
 
+/* Voice demo — gentle "breathing" of the idle voice bubble */
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(0.9); }
+  50% { transform: scale(1); }
+}
+.animate-orb-idle { animation: orb-breathe 2.6s ease-in-out infinite; transform-origin: center; }
+
 /* Tap highlight off — we provide our own press feedback */
 * { -webkit-tap-highlight-color: transparent; }
 
