@@ -30,11 +30,19 @@ export default async function AIEmployeeEditPage({
 
   if (!employee) notFound()
 
+  const { data: knowledgeBase } = await serviceSupabase
+    .from('knowledge_base')
+    .select('id, title, content')
+    .eq('tenant_id', tenant.id)
+    .eq('ai_employee_id', id)
+    .order('created_at', { ascending: true })
+
   return (
     <div className="p-4 sm:p-6 max-w-3xl">
       <AIEmployeeEditClient
         employee={employee}
         tenantId={tenant.id}
+        knowledgeBase={knowledgeBase || []}
         metaConnected={sp.meta_connected === 'true'}
         metaError={sp.meta_error}
       />

@@ -175,6 +175,19 @@ export async function POST(req: NextRequest) {
       if (slotsCount && slotsCount > 0) {
         voiceSystemPrompt += `\n\nAPPOINTMENT SCHEDULING: You CAN schedule appointments. When a customer wants to book, use check_availability to find open slots for their preferred date, then use book_appointment to confirm. Always collect name, phone number, and service type before booking.`
       }
+
+      // Knowledge base (pricing, service areas, etc.). Loaded by tenant so both
+      // agent-specific entries and tenant-wide templates apply on live calls.
+      const { data: kbRows } = await supabase
+        .from('knowledge_base')
+        .select('title, content')
+        .eq('tenant_id', channel.tenant_id)
+        .order('created_at', { ascending: true })
+      const kbContent = (kbRows || []).map((r) => `## ${r.title}\n${r.content}`).join('\n\n')
+      if (kbContent) {
+        voiceSystemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`
+      }
+
       const sp = escapeXml(voiceSystemPrompt)
       // Owner phone for the lead-alert SMS. Try owner_phone (may not exist yet),
       // fall back to the business phone, then the call-forwarding number.

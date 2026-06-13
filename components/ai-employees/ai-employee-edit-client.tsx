@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
+import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const DAY_LABELS: Record<typeof DAYS[number], string> = {
@@ -53,6 +54,7 @@ interface Props {
     channels?: Channel[]
   }
   tenantId: string
+  knowledgeBase: KBEntry[]
   metaConnected?: boolean
   metaError?: string
 }
@@ -66,7 +68,7 @@ const META_ERRORS: Record<string, string> = {
   session_expired: 'Session expired. Please try connecting again.',
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaError }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, knowledgeBase, metaConnected, metaError }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -476,6 +478,15 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
             onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
             placeholder="Add specific instructions for this AI agent. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
           />
+        </CardContent>
+      </Card>
+
+      {/* Knowledge Base */}
+      <Card>
+        <CardHeader><CardTitle>📚 Knowledge Base</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-500 mb-3">Facts the AI uses to answer customers (pricing, service area, policies). Saved instantly.</p>
+          <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />
         </CardContent>
       </Card>
 

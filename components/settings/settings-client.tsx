@@ -116,6 +116,19 @@ export function SettingsClient({ tenant, channels }: Props) {
         </Card>
       </Link>
 
+      {/* Business Info link */}
+      <Link href="/settings/business-info" className="tap-target block">
+        <Card className="hover:border-[#4ecdc4] transition-colors">
+          <CardContent className="flex items-center justify-between py-4">
+            <div>
+              <p className="font-semibold text-gray-900">📚 Business Info</p>
+              <p className="text-sm text-gray-500 mt-0.5">Pricing, service areas, and what you don&apos;t do — used by every AI employee</p>
+            </div>
+            <span className="text-gray-300 text-xl">›</span>
+          </CardContent>
+        </Card>
+      </Link>
+
       {/* Business Profile */}
       <Card>
         <CardHeader>
