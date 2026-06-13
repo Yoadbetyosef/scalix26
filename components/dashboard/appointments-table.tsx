@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Check, BellOff, Phone } from 'lucide-react'
+import { Calendar, Check, BellOff, Phone, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { formatTime12 } from '@/lib/appointments'
 
@@ -15,6 +16,7 @@ export type Appointment = {
   service_type: string | null
   status: 'confirmed' | 'cancelled' | 'completed'
   skip_review: boolean | null
+  review_sent_at: string | null
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -52,6 +54,23 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
     const { error } = await supabase.from('appointments').update({ skip_review: true }).eq('id', id)
     if (!error) { setRows((r) => r.map((a) => (a.id === id ? { ...a, skip_review: true } : a))); router.refresh() }
     setBusy(null)
+  }
+  async function sendReview(id: string) {
+    setBusy(id)
+    try {
+      const res = await fetch(`/api/appointments/${id}/review`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        toast.success('Review request sent')
+        setRows((r) => r.map((a) => (a.id === id ? { ...a, review_sent_at: new Date().toISOString() } : a)))
+      } else {
+        toast.error(data.error === 'no google_review_url' ? 'Add your Google review link in Settings → Availability' : 'Could not send review')
+      }
+    } catch {
+      toast.error('Could not send review')
+    } finally {
+      setBusy(null)
+    }
   }
 
   if (!rows.length) {
@@ -97,7 +116,17 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
                       <Check className="w-3.5 h-3.5" /> {busy === a.id ? '…' : 'Mark Completed'}
                     </button>
                   )}
-                  {!a.skip_review && (
+                  {a.review_sent_at ? (
+                    <span className="inline-flex items-center justify-center gap-1 px-3 py-1 text-xs font-medium text-green-600">
+                      <Star className="w-3.5 h-3.5 fill-current" /> Review sent
+                    </span>
+                  ) : (
+                    <button onClick={() => sendReview(a.id)} disabled={busy === a.id}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">
+                      <Star className="w-3.5 h-3.5" /> {busy === a.id ? '…' : 'Send Review Now'}
+                    </button>
+                  )}
+                  {!a.skip_review && !a.review_sent_at && (
                     <button onClick={() => skipReview(a.id)} disabled={busy === a.id}
                       className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50">
                       <BellOff className="w-3.5 h-3.5" /> Skip Review

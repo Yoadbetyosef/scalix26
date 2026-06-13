@@ -3,7 +3,10 @@ import { sendSMS } from '@/lib/twilio/client'
 
 // Shared so both /api/reviews/send and the /api/reviews/process cron use the
 // exact same logic (the cron calls this directly — no internal HTTP hop).
-export async function sendReviewForAppointment(appointmentId: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendReviewForAppointment(
+  appointmentId: string,
+  opts: { force?: boolean } = {},
+): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createServiceClient()
 
   const { data: appt } = await supabase
@@ -12,7 +15,7 @@ export async function sendReviewForAppointment(appointmentId: string): Promise<{
     .eq('id', appointmentId)
     .maybeSingle()
   if (!appt) return { ok: false, error: 'appointment not found' }
-  if (appt.review_sent_at) return { ok: false, error: 'already sent' }
+  if (appt.review_sent_at && !opts.force) return { ok: false, error: 'already sent' }
 
   const { data: tenant } = await supabase
     .from('tenants')
