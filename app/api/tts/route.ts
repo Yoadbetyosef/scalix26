@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { stripMarkdown } from '@/lib/utils'
 
 // Text-to-speech proxy for the voice call flow. Twilio's <Play> fetches this
 // URL; we stream Deepgram Aura audio back as audio/mpeg.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const text = searchParams.get('text') || ''
+  const text = stripMarkdown(searchParams.get('text') || '')
   // Voice = Deepgram Aura model. Whitelisted to an aura model id so the value
   // can't inject anything into the upstream URL.
   const voiceParam = searchParams.get('voice') || ''

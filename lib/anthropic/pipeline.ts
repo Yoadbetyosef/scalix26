@@ -97,7 +97,7 @@ Remember: You represent ${businessName}. Be professional, helpful, and always tr
   // SMS/WhatsApp render plain text — markdown shows up as literal **asterisks**.
   return `${basePrompt}
 
-CRITICAL FOR SMS/WHATSAPP: Never use markdown formatting. No asterisks, no bold (**text**), no bullet points, no numbered lists. Plain text only. One short paragraph maximum.`
+FORMAT: Plain text only. Never use markdown — no asterisks (* or **), underscores, backticks, headers, or bullet/numbered lists. Keep every reply to 1–2 short sentences; these are text messages, not emails. Ask only ONE question per message — never request multiple details at once. Sound like a real person texting, not a form.`
 }
 
 function detectSkillTrigger(content: string, skills: Skill[]): string | null {

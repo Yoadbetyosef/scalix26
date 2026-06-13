@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
+import { stripMarkdown } from '@/lib/utils'
 
 function escapeXml(str: string): string {
   return str
@@ -20,10 +21,11 @@ function gatherUrl(baseUrl: string, conversationId?: string) {
 // Speak via Deepgram Aura TTS (served by /api/tts) when configured; fall back
 // to Twilio Polly when no Deepgram key is set, so voice never breaks.
 function ttsPlay(text: string): string {
+  const clean = stripMarkdown(text)
   if (process.env.DEEPGRAM_API_KEY) {
-    return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(text)}</Play>`
+    return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(clean)}</Play>`
   }
-  return `<Say voice="Polly.Joanna-Neural">${escapeXml(text)}</Say>`
+  return `<Say voice="Polly.Joanna-Neural">${escapeXml(clean)}</Say>`
 }
 
 export async function POST(req: NextRequest) {
@@ -156,8 +158,8 @@ export async function POST(req: NextRequest) {
       const baseVoicePrompt = agent?.system_prompt && agent.system_prompt.trim().length > 0
         ? agent.system_prompt
         : `You are ${agent?.name || 'Alex'}, a professional AI receptionist for ${agent?.business_name || 'our company'}. Your job is to answer calls, help customers, and collect their information. Keep every response under 2 sentences. Be warm, friendly, and fast.`
-      // Prepend the default tone line (same as SMS/WhatsApp).
-      const voiceSystemPrompt = `${DEFAULT_TONE}\n\n${baseVoicePrompt}`
+      // Prepend the default tone + a voice-formatting line (no markdown/lists).
+      const voiceSystemPrompt = `${DEFAULT_TONE}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${baseVoicePrompt}`
       const sp = escapeXml(voiceSystemPrompt)
       // Owner phone for the lead-alert SMS. Try owner_phone (may not exist yet),
       // fall back to the business phone, then the call-forwarding number.

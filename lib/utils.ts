@@ -52,6 +52,22 @@ export function truncate(str: string, length: number) {
   return `${str.slice(0, length)}...`
 }
 
+// Strip markdown so plain-text channels (SMS, WhatsApp, TTS) never show literal
+// formatting like **bold**, _italics_, `code`, # headers, or - bullets.
+export function stripMarkdown(text: string): string {
+  if (!text) return text
+  return text
+    .replace(/`{1,3}([^`]*)`{1,3}/g, '$1')          // `code` / ```blocks```
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')             // **bold** / __bold__
+    .replace(/(\*|_)(?=\S)(.*?\S)\1/g, '$2')        // *italic* / _italic_
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')             // # headers
+    .replace(/^\s*[-*+]\s+/gm, '')                  // - * + bullets
+    .replace(/^\s*\d+\.\s+/gm, '')                  // 1. 2. numbered lists
+    .replace(/[ \t]{2,}/g, ' ')                      // collapse extra spaces
+    .replace(/\n{3,}/g, '\n\n')                      // collapse blank lines
+    .trim()
+}
+
 // Social channels (Facebook/Instagram) store the platform user id in the
 // contact's `phone` field — it is NOT a real phone number.
 export function isSocialChannel(channel?: string | null): boolean {

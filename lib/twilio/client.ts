@@ -1,4 +1,5 @@
 import twilio from 'twilio'
+import { stripMarkdown } from '@/lib/utils'
 
 function getTwilioClient() {
   return twilio(
@@ -60,6 +61,7 @@ export async function sendSMS(to: string, body: string, from?: string) {
   return client.messages.create({
     to,
     from: from || process.env.TWILIO_PHONE_NUMBER!,
-    body,
+    // Plain-text channels (SMS + WhatsApp) — guarantee no markdown ships.
+    body: stripMarkdown(body),
   })
 }
