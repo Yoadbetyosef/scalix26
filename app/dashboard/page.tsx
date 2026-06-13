@@ -31,10 +31,12 @@ async function getDashboardData(tenantId: string) {
     // data.channel='voice' (no code ever emitted 'call_handled').
     supabase.from('analytics_events').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenantId).eq('event_type', 'message_handled').eq('data->>channel', 'voice').gte('created_at', sevenDaysAgo),
+    // Text Messages — SMS only (message_handled also covers voice/social).
     supabase.from('analytics_events').select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId).eq('event_type', 'message_handled').gte('created_at', sevenDaysAgo),
+      .eq('tenant_id', tenantId).eq('event_type', 'message_handled').eq('data->>channel', 'sms').gte('created_at', sevenDaysAgo),
+    // Live Chat — Instagram + Facebook conversations only.
     supabase.from('conversations').select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId).gte('created_at', sevenDaysAgo),
+      .eq('tenant_id', tenantId).in('channel', ['instagram', 'facebook']).gte('created_at', sevenDaysAgo),
     // Leads Generated — total count, straight from the leads table (lead_captured
     // analytics events were never emitted, so the old count was stuck at 0).
     supabase.from('leads').select('*', { count: 'exact', head: true })
