@@ -33,6 +33,7 @@ wss.on('connection', (twilioWs) => {
   let collectedName = null;
   let collectedPhone = null;
   let collectedIssue = null;
+  let conversationHistory = []; // full transcript: { role, content }
   let askedName = false;     // did the AI just ask for the caller's name?
   let leadAlertSent = false;
 
@@ -159,6 +160,9 @@ wss.on('connection', (twilioWs) => {
       const content = msg.content || '';
       console.log(`[${role}]`, content);
 
+      // Collect the full transcript for the Inbox conversation record.
+      if (content.trim()) conversationHistory.push({ role: role === 'assistant' ? 'assistant' : 'user', content: content.trim() });
+
       if (role === 'user') {
         const phoneMatch = content.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
         if (phoneMatch) collectedPhone = phoneMatch[1];
@@ -234,10 +238,10 @@ wss.on('connection', (twilioWs) => {
 
   twilioWs.on('close', () => {
     console.log('[call] disconnected');
-    if (callStartTime) {
-      const durationSeconds = Math.round((Date.now() - callStartTime) / 1000);
-      logCallAnalytics(leadToken, durationSeconds);
-    }
+    const durationSeconds = callStartTime ? Math.round((Date.now() - callStartTime) / 1000) : 0;
+    if (callStartTime) logCallAnalytics(leadToken, durationSeconds);
+    // Save the call as an Inbox conversation with the full transcript.
+    saveConversation(leadToken, callerNumber, collectedName, conversationHistory, durationSeconds);
     try { dgWs.close(); } catch {}
   });
 });
@@ -283,6 +287,30 @@ async function logCallAnalytics(leadToken, durationSeconds) {
     console.log('[analytics] call logged, duration:', durationSeconds);
   } catch (err) {
     console.error('[analytics] error:', err.message);
+  }
+}
+
+// Save the call as an Inbox conversation with its full transcript. Tenant is
+// resolved server-side from the lead token (no tenant_id sent from here).
+async function saveConversation(leadToken, phone, name, transcript, durationSeconds) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!leadToken || !appUrl) { console.log('[conversation] skipped — no leadToken/appUrl'); return; }
+  if (!transcript || transcript.length === 0) { console.log('[conversation] skipped — empty transcript'); return; }
+  try {
+    const res = await fetch(`${appUrl}/api/conversations/voice`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lead_token: leadToken,
+        contact_phone: phone,
+        contact_name: name,
+        transcript,
+        duration_seconds: durationSeconds,
+      }),
+    });
+    console.log('[conversation] saved, status:', res.status, '| turns:', transcript.length);
+  } catch (err) {
+    console.error('[conversation] error:', err.message);
   }
 }
 
