@@ -8,6 +8,7 @@ import { Check } from 'lucide-react'
 export function BookingForm({ token }: { token: string }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
@@ -21,7 +22,7 @@ export function BookingForm({ token }: { token: string }) {
       const res = await fetch(`/api/leads/inbound/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() || undefined, phone: phone.trim(), source: 'web_form' }),
+        body: JSON.stringify({ name: name.trim() || undefined, phone: phone.trim(), issue: message.trim() || undefined, source: 'web_form' }),
       })
       if (!res.ok) throw new Error()
       setDone(true)
@@ -59,6 +60,13 @@ export function BookingForm({ token }: { token: string }) {
         value={phone}
         onChange={e => setPhone(e.target.value)}
         className="h-12"
+      />
+      <textarea
+        placeholder="Tell us what you need help with... (optional)"
+        rows={3}
+        value={message}
+        onChange={e => setMessage(e.target.value)}
+        className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]/40"
       />
       <Button type="submit" loading={submitting} className="w-full h-12 text-base">
         Get a callback
