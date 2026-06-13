@@ -30,19 +30,29 @@ export default async function AIEmployeeEditPage({
 
   if (!employee) notFound()
 
-  const { data: knowledgeBase } = await serviceSupabase
+  const { data: kbRows } = await serviceSupabase
     .from('knowledge_base')
-    .select('id, title, content')
+    .select('id, title, content, source')
     .eq('tenant_id', tenant.id)
     .eq('ai_employee_id', id)
     .order('created_at', { ascending: true })
+
+  // The 3 fixed Business-Details fields vs everything else (free-form KB).
+  const BUSINESS_TITLES = ['Pricing', 'Service Areas', "What We Don't Do"]
+  const businessDetails: Record<string, string> = {}
+  const knowledgeBase: { id: string; title: string; content: string }[] = []
+  for (const r of kbRows || []) {
+    if (r.source === 'template' && BUSINESS_TITLES.includes(r.title)) businessDetails[r.title] = r.content
+    else knowledgeBase.push({ id: r.id, title: r.title, content: r.content })
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl">
       <AIEmployeeEditClient
         employee={employee}
         tenantId={tenant.id}
-        knowledgeBase={knowledgeBase || []}
+        businessDetails={businessDetails}
+        knowledgeBase={knowledgeBase}
         metaConnected={sp.meta_connected === 'true'}
         metaError={sp.meta_error}
       />

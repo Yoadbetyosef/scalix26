@@ -130,8 +130,8 @@ export async function POST(req: NextRequest) {
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
     const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+      ? supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
     const { data: agent } = await agentQuery
 
@@ -176,13 +176,12 @@ export async function POST(req: NextRequest) {
         voiceSystemPrompt += `\n\nAPPOINTMENT SCHEDULING: You CAN schedule appointments. When a customer wants to book, use check_availability to find open slots for their preferred date, then use book_appointment to confirm. Always collect name, phone number, and service type before booking.`
       }
 
-      // Knowledge base (pricing, service areas, etc.). Loaded by tenant so both
-      // agent-specific entries and tenant-wide templates apply on live calls.
-      const { data: kbRows } = await supabase
-        .from('knowledge_base')
-        .select('title, content')
-        .eq('tenant_id', channel.tenant_id)
-        .order('created_at', { ascending: true })
+      // Knowledge base (pricing, service areas, etc.) scoped to this agent (plus
+      // any tenant-wide entries) — not other agents'.
+      let kbQuery = supabase.from('knowledge_base').select('title, content')
+        .eq('tenant_id', channel.tenant_id).order('created_at', { ascending: true })
+      if (agent?.id) kbQuery = kbQuery.or(`ai_employee_id.eq.${agent.id},ai_employee_id.is.null`)
+      const { data: kbRows } = await kbQuery
       const kbContent = (kbRows || []).map((r) => `## ${r.title}\n${r.content}`).join('\n\n')
       if (kbContent) {
         voiceSystemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`

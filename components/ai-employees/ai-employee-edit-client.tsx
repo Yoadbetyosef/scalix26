@@ -14,6 +14,7 @@ import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucid
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
+import { BusinessDetails } from '@/components/ai-employees/business-details'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const DAY_LABELS: Record<typeof DAYS[number], string> = {
@@ -54,6 +55,7 @@ interface Props {
     channels?: Channel[]
   }
   tenantId: string
+  businessDetails: Record<string, string>
   knowledgeBase: KBEntry[]
   metaConnected?: boolean
   metaError?: string
@@ -68,7 +70,7 @@ const META_ERRORS: Record<string, string> = {
   session_expired: 'Session expired. Please try connecting again.',
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, knowledgeBase, metaConnected, metaError }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, businessDetails, knowledgeBase, metaConnected, metaError }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -481,11 +483,19 @@ export function AIEmployeeEditClient({ employee, tenantId, knowledgeBase, metaCo
         </CardContent>
       </Card>
 
+      {/* Business Details */}
+      <Card>
+        <CardHeader><CardTitle>🏢 Business Details</CardTitle></CardHeader>
+        <CardContent>
+          <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
+        </CardContent>
+      </Card>
+
       {/* Knowledge Base */}
       <Card>
         <CardHeader><CardTitle>📚 Knowledge Base</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-3">Facts the AI uses to answer customers (pricing, service area, policies). Saved instantly.</p>
+          <p className="text-sm text-gray-500 mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
           <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />
         </CardContent>
       </Card>

@@ -134,10 +134,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     input.agentId
       ? supabase.from('ai_employees').select('*').eq('id', input.agentId).single()
       : supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
-    // Voice only needs light context — fetch one short KB row instead of all
-    isVoice
-      ? supabase.from('knowledge_base').select('content').eq('tenant_id', input.tenantId).limit(1)
-      : supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
+    supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
   ])
 
   const tenant = tenantRes.data
@@ -146,7 +143,10 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const employee = employeeRes.data
   if (!employee) throw new Error('No active AI employee found')
 
-  const kb = kbRes.data
+  // Scope KB to this agent (plus any tenant-wide entries) — not other agents'.
+  const kb = (kbRes.data || []).filter(
+    (k) => !(k as { ai_employee_id?: string | null }).ai_employee_id || (k as { ai_employee_id?: string | null }).ai_employee_id === employee.id,
+  )
 
   // Create contact if missing
   let contact = contactRes.data
