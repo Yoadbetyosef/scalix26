@@ -24,6 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const phone = typeof data.phone === 'string' ? data.phone : undefined
   const name = typeof data.name === 'string' ? data.name : undefined
+  const issue = typeof data.issue === 'string' ? data.issue : undefined
   // Source is optional; defaults to web_form (the common embed case)
   const source: LeadSource = VALID_SOURCES.includes(data.source as LeadSource) ? (data.source as LeadSource) : 'web_form'
 
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: 'Invalid intake token' }, { status: 404 })
   }
 
-  const result = await intakeLead({ tenantId: tenant.id, phone, name: name ?? null, source })
+  const result = await intakeLead({ tenantId: tenant.id, phone, name: name ?? null, source, issue: issue ?? null })
 
   if (result.error && !result.leadId) {
     return NextResponse.json({ error: result.error }, { status: 500 })

@@ -45,6 +45,20 @@ export async function POST(req: NextRequest) {
     })
   }
 
+  // STOP → opt the sender out of any active drip campaigns (don't run the AI).
+  if ((Body || '').trim().toLowerCase() === 'stop') {
+    await supabase
+      .from('drip_campaigns')
+      .update({ status: 'stopped', updated_at: new Date().toISOString() })
+      .eq('tenant_id', channel.tenant_id)
+      .eq('contact_phone', From)
+      .eq('status', 'active')
+    console.log('[SMS] STOP — drip campaigns stopped for', From)
+    return new NextResponse('<?xml version="1.0"?><Response></Response>', {
+      headers: { 'Content-Type': 'text/xml' },
+    })
+  }
+
   try {
     const result = await runAIPipeline({
       tenantId: channel.tenant_id,

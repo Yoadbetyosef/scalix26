@@ -176,7 +176,7 @@ wss.on('connection', (twilioWs) => {
         if (isLeadConfirmed && !leadAlertSent && leadPhone) {
           leadAlertSent = true;
           sendLeadAlert(collectedName, leadPhone, collectedIssue, ownerPhone, fromNumber);
-          saveLeadToDatabase(collectedName, leadPhone, leadToken);
+          saveLeadToDatabase(collectedName, leadPhone, collectedIssue, leadToken);
         }
 
         // Hang up shortly after a closing line so the goodbye finishes playing.
@@ -324,7 +324,7 @@ async function sendHandoffAlert(ownerPhone, callerPhone, fromNumber, reason) {
 // Persist the lead via the tenant's secure intake URL so it shows in the
 // dashboard (and fires the realtime notification). The open /api/leads/inbound
 // endpoint is deprecated (410) — the token URL is the supported path.
-async function saveLeadToDatabase(name, phone, leadToken) {
+async function saveLeadToDatabase(name, phone, issue, leadToken) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!leadToken) { console.log('[lead-db] skipped — no leadToken'); return; }
   if (!appUrl) { console.log('[lead-db] skipped — NEXT_PUBLIC_APP_URL not set in env'); return; }
@@ -335,7 +335,7 @@ async function saveLeadToDatabase(name, phone, leadToken) {
     const res = await fetch(`${appUrl}/api/leads/inbound/${leadToken}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, name: name || null, source: 'voice_call' }),
+      body: JSON.stringify({ phone, name: name || null, issue: issue || null, source: 'voice_call' }),
     });
     console.log('[lead-db] saved, status:', res.status);
   } catch (err) {

@@ -107,6 +107,7 @@ interface IntakeLeadInput {
   phone: string
   name?: string | null
   source: LeadSource
+  issue?: string | null
 }
 
 interface IntakeLeadResult {
@@ -124,7 +125,7 @@ interface IntakeLeadResult {
  */
 export async function intakeLead(input: IntakeLeadInput): Promise<IntakeLeadResult> {
   const supabase = await createServiceClient()
-  const { tenantId, phone, name, source } = input
+  const { tenantId, phone, name, source, issue } = input
 
   // Find existing contact by phone + tenant, else create one
   let contactId: string | null = null
@@ -158,6 +159,33 @@ export async function intakeLead(input: IntakeLeadInput): Promise<IntakeLeadResu
 
   if (leadErr || !lead) {
     return { contactId, smsSent: false, error: leadErr?.message || 'failed_to_create_lead' }
+  }
+
+  // Kick off a drip campaign for this lead (first follow-up in 2 hours).
+  // Best-effort — never block or fail lead intake.
+  try {
+    const [empRes, chRes, tenantRes] = await Promise.all([
+      supabase.from('ai_employees').select('business_name').eq('tenant_id', tenantId).eq('status', 'active').maybeSingle(),
+      supabase.from('channels').select('twilio_number').eq('tenant_id', tenantId).eq('type', 'sms').not('twilio_number', 'is', null).limit(1).maybeSingle(),
+      supabase.from('tenants').select('business_name').eq('id', tenantId).maybeSingle(),
+    ])
+    const businessName = empRes.data?.business_name || tenantRes.data?.business_name || 'us'
+    const fromNumber = chRes.data?.twilio_number || null
+    const nextSendAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    await supabase.from('drip_campaigns').insert({
+      tenant_id: tenantId,
+      lead_id: lead.id,
+      contact_phone: phone,
+      contact_name: name ?? null,
+      issue: issue ?? null,
+      business_name: businessName,
+      from_number: fromNumber,
+      status: 'active',
+      messages_sent: 0,
+      next_send_at: nextSendAt,
+    })
+  } catch (err) {
+    console.error('[drip] start failed:', err instanceof Error ? err.message : err)
   }
 
   const result = await runSpeedToLead({ tenantId, leadId: lead.id, contactId, phone, name, source })

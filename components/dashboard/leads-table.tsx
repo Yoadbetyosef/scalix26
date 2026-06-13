@@ -44,6 +44,10 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
     const supabase = createClient()
     const { error } = await supabase.from('leads').update({ status }).eq('id', id)
     if (!error) {
+      // A won or dismissed lead shouldn't keep getting drip follow-ups.
+      if (status === 'booked' || status === 'dismissed') {
+        await supabase.from('drip_campaigns').update({ status: 'stopped' }).eq('lead_id', id).eq('status', 'active')
+      }
       setRows((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
       router.refresh()
     }
