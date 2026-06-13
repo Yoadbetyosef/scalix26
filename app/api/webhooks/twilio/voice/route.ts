@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
     const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+      ? supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
     const { data: agent } = await agentQuery
 
@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
       <Parameter name="fromNumber" value="${escapeXml(toNormalized)}"/>
       <Parameter name="leadToken" value="${escapeXml(leadToken)}"/>
       <Parameter name="callerNumber" value="${escapeXml(From || '')}"/>
+      <Parameter name="voiceId" value="${escapeXml(agent?.voice && agent.voice.startsWith('aura') ? agent.voice : '')}"/>
     </Stream>
   </Connect>
 </Response>`

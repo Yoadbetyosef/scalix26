@@ -14,10 +14,11 @@ import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucid
 import Link from 'next/link'
 
 const VOICES = [
-  { id: 'professional_female', label: 'Professional Female', emoji: '👩‍💼' },
-  { id: 'professional_male', label: 'Professional Male', emoji: '👨‍💼' },
-  { id: 'friendly_female', label: 'Friendly Female', emoji: '👩' },
-  { id: 'friendly_male', label: 'Friendly Male', emoji: '👨' },
+  { id: 'aura-2-asteria-en', name: 'Asteria', gender: 'Female', description: 'Warm & friendly', emoji: '👩' },
+  { id: 'aura-2-andromeda-en', name: 'Andromeda', gender: 'Female', description: 'Professional & clear', emoji: '👩‍💼' },
+  { id: 'aura-2-thalia-en', name: 'Thalia', gender: 'Female', description: 'Energetic & bright', emoji: '⚡' },
+  { id: 'aura-2-odysseus-en', name: 'Odysseus', gender: 'Male', description: 'Deep & professional', emoji: '👨‍💼' },
+  { id: 'aura-2-arcas-en', name: 'Arcas', gender: 'Male', description: 'Natural & smooth', emoji: '👨' },
 ]
 
 const PERSONALITIES = [
@@ -138,6 +139,19 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
       toast.error('Failed to save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function playPreview(voiceId: string) {
+    try {
+      const res = await fetch(`/api/tts?voice=${encodeURIComponent(voiceId)}&text=${encodeURIComponent('Hi! Thanks for calling. How can I help you today?')}`)
+      if (!res.ok) throw new Error()
+      const url = URL.createObjectURL(await res.blob())
+      const audio = new Audio(url)
+      audio.onended = () => URL.revokeObjectURL(url)
+      await audio.play()
+    } catch {
+      toast.error('Preview unavailable')
     }
   }
 
@@ -514,17 +528,28 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {VOICES.map(v => (
-              <button
+              <div
                 key={v.id}
                 onClick={() => setForm(f => ({ ...f, voice: v.id }))}
-                className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                className={`p-3 rounded-lg border-2 transition-colors cursor-pointer flex items-center gap-3 ${
                   form.voice === v.id
                     ? 'border-[#4ecdc4] bg-[#4ecdc4]/10'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <span>{v.emoji}</span>{v.label}
-              </button>
+                <span className="text-xl">{v.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{v.name} <span className="text-xs font-normal text-gray-400">· {v.gender}</span></p>
+                  <p className="text-xs text-gray-500">{v.description}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); playPreview(v.id) }}
+                  className="tap-target text-xs font-semibold text-[#4ecdc4] hover:text-[#3db8af] px-2 py-1 rounded-md hover:bg-[#4ecdc4]/10 flex-shrink-0"
+                >
+                  ▶ Preview
+                </button>
+              </div>
             ))}
           </div>
         </CardContent>

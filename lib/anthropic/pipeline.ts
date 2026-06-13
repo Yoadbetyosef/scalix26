@@ -55,7 +55,17 @@ function buildSystemPrompt(
     .map(([day, h]) => `${day}: ${h}`)
     .join(', ') || 'Not specified'
 
-  const basePrompt = `You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
+  const toneMap: Record<string, string> = {
+    professional: 'You communicate in a professional, business-like tone.',
+    friendly: 'You communicate in a warm, friendly, and approachable tone.',
+    empathetic: 'You communicate with empathy and understanding, acknowledging feelings.',
+    direct: 'You communicate directly and concisely, getting straight to the point.',
+  }
+  const toneInstruction = toneMap[(employee.personality || 'professional').toLowerCase()] || toneMap.professional
+
+  const basePrompt = `${toneInstruction}
+
+You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
 
 Business hours: ${hoursStr}
 Timezone: ${timezone}
@@ -88,7 +98,12 @@ GREETING (use only at start of new conversation): ${employee.greeting}
 Remember: You represent ${businessName}. Be professional, helpful, and always try to book the appointment or capture the lead.`
 
   // Voice calls get the strict brevity rules prepended before everything else
-  return isVoice ? `${VOICE_CALL_RULES}\n\n${basePrompt}` : basePrompt
+  if (isVoice) return `${VOICE_CALL_RULES}\n\n${basePrompt}`
+
+  // SMS/WhatsApp render plain text — markdown shows up as literal **asterisks**.
+  return `${basePrompt}
+
+CRITICAL FOR SMS/WHATSAPP: Never use markdown formatting. No asterisks, no bold (**text**), no bullet points, no numbered lists. Plain text only. One short paragraph maximum.`
 }
 
 function detectSkillTrigger(content: string, skills: Skill[]): string | null {

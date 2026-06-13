@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const text = searchParams.get('text') || ''
-  // tenant_id is accepted for future per-tenant voice selection (unused for now)
+  // Voice = Deepgram Aura model. Whitelisted to an aura model id so the value
+  // can't inject anything into the upstream URL.
+  const voiceParam = searchParams.get('voice') || ''
+  const voice = /^aura-2?-[a-z]+-en$/.test(voiceParam) ? voiceParam : 'aura-2-asteria-en'
 
   if (!text) {
     return new NextResponse('Missing text', { status: 400 })
@@ -14,7 +17,7 @@ export async function GET(req: NextRequest) {
   try {
     const ttsStart = Date.now()
     console.log(`[tts][latency] Deepgram START @ ${new Date(ttsStart).toISOString()} | text.len=${text.length}`)
-    const res = await fetch('https://api.deepgram.com/v1/speak?model=aura-asteria-en', {
+    const res = await fetch(`https://api.deepgram.com/v1/speak?model=${voice}`, {
       method: 'POST',
       headers: {
         Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
