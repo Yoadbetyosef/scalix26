@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
-import { VoiceSelector } from '@/components/ai-employees/voice-selector'
+import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 
 const PERSONALITIES = [
   { id: 'professional', label: 'Professional' },
@@ -506,7 +506,7 @@ export function AIEmployeeEditClient({ employee, tenantId, metaConnected, metaEr
       <Card>
         <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
         <CardContent>
-          <VoiceSelector value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} />
+          <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} systemPrompt={form.system_prompt} />
         </CardContent>
       </Card>
 
