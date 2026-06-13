@@ -14,7 +14,7 @@ function dripMessage(n: number, name: string | null, business: string, issue: st
   const who = name || 'there'
   const what = issue || 'service'
   if (n === 0) {
-    return `Hi ${who}! Alex here from ${business}. Still need help with your ${what}? We have availability today. Reply YES and we'll call you right back. Reply STOP to opt out.`
+    return `Hi ${who}! This is the team at ${business}. Still need help with your ${what}? We have availability today. Reply YES and we'll call you right back. Reply STOP to opt out.`
   }
   if (n === 1) {
     return `Hi ${who}, following up from ${business}. We want to make sure you're taken care of. Still need ${what} resolved? Call us anytime. Reply STOP to opt out.`
