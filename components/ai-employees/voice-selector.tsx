@@ -41,6 +41,7 @@ function WaveBars({ active }: { active: boolean }) {
 }
 
 export function VoiceSelector({ value, onChange }: { value: string; onChange: (voiceId: string) => void }) {
+  console.log('VoiceSelector rendered', value)
   const active = VOICES.some((v) => v.id === value) ? value : VOICES[0].id
   const selected = VOICES.find((v) => v.id === active)!
 
