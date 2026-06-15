@@ -100,6 +100,7 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
         tenantId: account.tenantId, agent, tenantBusinessName: tenant?.business_name ?? null,
         emailText: msg.body || '', subject: msg.subject,
       })
+      console.log('[mailbox-poll] reply generated, length', reply.length)
       const subject = msg.subject?.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject || 'your message'}`
       console.log(`[mailbox-poll] sending reply | transport=${provider.name}-api | from=${account.emailAddress} | to=${msg.fromEmail}`)
       await provider.sendReply(account, {

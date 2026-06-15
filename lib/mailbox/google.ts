@@ -201,7 +201,10 @@ export const googleProvider: MailProvider = {
 
   async sendReply(account, reply: ReplyInput) {
     const bodyB64 = Buffer.from(reply.body, 'utf8').toString('base64').replace(/(.{76})/g, '$1\r\n')
-    const mime = [
+    // Build the HEADERS only (dropping the optional threading headers when absent),
+    // then join with the MANDATORY blank line + body. Do NOT .filter() the whole
+    // message — that strips the header/body separator and yields an empty body.
+    const headers = [
       `From: ${account.emailAddress}`,
       `To: ${reply.to}`,
       `Subject: ${encodeHeaderValue(reply.subject)}`,
@@ -210,9 +213,9 @@ export const googleProvider: MailProvider = {
       'MIME-Version: 1.0',
       'Content-Type: text/plain; charset="UTF-8"',
       'Content-Transfer-Encoding: base64',
-      '',
-      bodyB64,
-    ].filter(Boolean).join('\r\n')
+    ].filter(Boolean)
+    const mime = `${headers.join('\r\n')}\r\n\r\n${bodyB64}`
+    console.log(`[google] sendReply | from=${account.emailAddress} | to=${reply.to} | bodyLen=${reply.body.length}`)
 
     const res = await gapi(account, '/messages/send', {
       method: 'POST',
