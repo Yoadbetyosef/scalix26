@@ -21,6 +21,7 @@ export interface InboundMessage {
   subject: string
   body: string // plain text
   rfcMessageId: string // the Message-ID header — used for In-Reply-To/References
+  internalDateMs: number | null // when the message arrived (epoch ms) — baseline guard
   headers: Record<string, string> // lowercased header name -> value
 }
 
@@ -33,6 +34,7 @@ export interface MailAccount {
   emailAddress: string
   accessToken: string
   historyId: string | null
+  baselineMs: number // connection moment — never process mail older than this
 }
 
 export interface ReplyInput {

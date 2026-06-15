@@ -34,6 +34,13 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
   const { data: tenant } = await supabase.from('tenants').select('business_name').eq('id', account.tenantId).maybeSingle()
 
   for (const msg of messages) {
+    // Baseline guard: only reply to mail that arrived AFTER the inbox was connected.
+    // Anything older is ignored entirely — not replied to, not marked, just skipped.
+    if (msg.internalDateMs !== null && msg.internalDateMs < account.baselineMs) {
+      console.log(`[mailbox-poll] skip ${msg.providerMessageId} (pre-existing: arrived ${new Date(msg.internalDateMs).toISOString()} < baseline ${new Date(account.baselineMs).toISOString()})`)
+      skipped++; continue
+    }
+
     const reason = isAutomatedOrSelf(msg, account.emailAddress)
     if (reason) { console.log(`[mailbox-poll] skip ${msg.providerMessageId} (${reason})`); skipped++; continue }
 

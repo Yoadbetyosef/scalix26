@@ -15,9 +15,10 @@ export interface AccountRow {
   scopes: string | null
   history_id: string | null
   status: string
+  created_at: string | null
 }
 
-const COLS = 'id, tenant_id, ai_employee_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, history_id, status'
+const COLS = 'id, tenant_id, ai_employee_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, history_id, status, created_at'
 
 // Insert/replace the connection for an agent (one per agent+provider). Tokens are
 // encrypted before they ever touch the DB.
@@ -120,5 +121,7 @@ export async function getValidAccount(row: AccountRow): Promise<MailAccount | nu
     emailAddress: row.email_address,
     accessToken,
     historyId: row.history_id,
+    // Connection moment: never reply to mail that predates it (busy-inbox guard).
+    baselineMs: row.created_at ? new Date(row.created_at).getTime() : 0,
   }
 }

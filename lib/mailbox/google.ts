@@ -184,6 +184,7 @@ export const googleProvider: MailProvider = {
         subject: header(h, 'Subject'),
         body: extractBody(msg.payload),
         rfcMessageId: header(h, 'Message-ID') || header(h, 'Message-Id'),
+        internalDateMs: msg.internalDate ? Number(msg.internalDate) : null,
         headers,
       })
     }
