@@ -28,7 +28,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes that don't need auth
-  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms']
+  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms']
   const adminRoutes = ['/admin', '/api/admin']
   const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'yoadbetyosef@gmail.com').split(',').map(e => e.trim())
 

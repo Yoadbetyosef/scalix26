@@ -140,10 +140,12 @@ async function run(): Promise<NextResponse> {
 }
 
 export async function GET(req: NextRequest) {
+  console.log('[mailbox-poll] hit (GET)')
   if (!cronAuthorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return run()
 }
 export async function POST(req: NextRequest) {
+  console.log('[mailbox-poll] hit (POST)')
   if (!cronAuthorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return run()
 }
