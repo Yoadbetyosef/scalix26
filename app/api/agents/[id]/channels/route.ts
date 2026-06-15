@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
+import { decrypt } from '@/lib/mailbox/crypto'
 import twilio from 'twilio'
 
 export async function POST(
@@ -129,6 +130,32 @@ export async function POST(
       })
     }
 
+    return NextResponse.json({ success: true })
+  }
+
+  // ── Disconnect a connected email mailbox (OAuth) ────────────────────────────
+  if (action === 'disconnect_email') {
+    const { data: accounts } = await serviceSupabase
+      .from('connected_email_accounts')
+      .select('id, provider, refresh_token')
+      .eq('ai_employee_id', agentId)
+
+    for (const acct of accounts || []) {
+      // Best-effort token revocation at the provider, then remove the row.
+      if (acct.provider === 'google' && acct.refresh_token) {
+        try {
+          const token = decrypt(acct.refresh_token)
+          await fetch('https://oauth2.googleapis.com/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ token }),
+          })
+        } catch (err) {
+          console.error('[agents/channels] google revoke failed:', err)
+        }
+      }
+    }
+    await serviceSupabase.from('connected_email_accounts').delete().eq('ai_employee_id', agentId)
     return NextResponse.json({ success: true })
   }
 

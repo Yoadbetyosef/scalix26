@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
@@ -62,6 +62,15 @@ interface Props {
   knowledgeBase: KBEntry[]
   metaConnected?: boolean
   metaError?: string
+  emailAccount?: { id: string; provider: string; email_address: string; status: string } | null
+  googleConnected?: boolean
+  googleError?: string
+}
+
+const GOOGLE_ERRORS: Record<string, string> = {
+  cancelled: 'Email connection was cancelled.',
+  invalid_state: 'Security check failed. Please try again.',
+  token_failed: 'Could not connect your inbox. Please try again.',
 }
 
 const META_ERRORS: Record<string, string> = {
@@ -73,7 +82,7 @@ const META_ERRORS: Record<string, string> = {
   session_expired: 'Session expired. Please try connecting again.',
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -104,7 +113,29 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   useEffect(() => {
     if (metaConnected) toast.success('Facebook connected!')
     if (metaError) toast.error(META_ERRORS[metaError] || 'Connection failed.')
-  }, [metaConnected, metaError])
+    if (googleConnected) toast.success('Inbox connected!')
+    if (googleError) toast.error(GOOGLE_ERRORS[googleError] || 'Connection failed.')
+  }, [metaConnected, metaError, googleConnected, googleError])
+
+  const [disconnectingEmail, setDisconnectingEmail] = useState(false)
+  async function disconnectEmailInbox() {
+    if (!confirm('Disconnect this inbox? The AI will stop reading and replying from it.')) return
+    setDisconnectingEmail(true)
+    try {
+      const res = await fetch(`/api/agents/${employee.id}/channels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnect_email' }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Inbox disconnected')
+      router.refresh()
+    } catch {
+      toast.error('Failed to disconnect')
+    } finally {
+      setDisconnectingEmail(false)
+    }
+  }
 
   // Channel state
   const [channels, setChannels] = useState<Channel[]>(employee.channels || [])
@@ -497,25 +528,73 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Email */}
       <Card>
         <CardHeader><CardTitle>📧 Email</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Inbound email address</Label>
-            <div className="flex items-center gap-2 mt-1.5">
+        <CardContent className="space-y-5">
+          <p className="text-sm text-gray-500">Choose how the AI handles email. Connect your own inbox (recommended) or forward to our address.</p>
+
+          {/* Option B — Connect your own inbox (Gmail OAuth). Recommended. */}
+          <div className="rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-gray-800 flex items-center gap-2">
+                <Mail className="w-4 h-4" /> Connect your inbox
+                <span className="text-[11px] font-medium text-[#1a9d92] bg-[#e7f8f6] rounded px-1.5 py-0.5">Recommended</span>
+              </span>
+              {emailAccount && emailAccount.status === 'connected' && <Badge variant="connected">Connected</Badge>}
+              {emailAccount && emailAccount.status === 'error' && <Badge variant="disconnected">Reconnect needed</Badge>}
+              {!emailAccount && <Badge variant="disconnected">Not connected</Badge>}
+            </div>
+
+            {emailAccount ? (
+              <div className="mt-3 space-y-3">
+                {emailAccount.status === 'error' && (
+                  <p className="text-sm text-red-600">Access to <span className="font-mono">{emailAccount.email_address}</span> expired or was revoked. Reconnect so the AI can keep reading and replying.</p>
+                )}
+                {emailAccount.status === 'connected' && (
+                  <p className="text-sm text-gray-600">Connected as <span className="font-mono">{emailAccount.email_address}</span>. The AI reads new customer emails and replies natively from this address.</p>
+                )}
+                <div className="flex items-center gap-2">
+                  {emailAccount.status === 'error' && (
+                    <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
+                      <Button type="button" size="sm">Reconnect Gmail</Button>
+                    </a>
+                  )}
+                  <Button type="button" variant="outline" size="sm" disabled={disconnectingEmail} onClick={disconnectEmailInbox}>
+                    <Link2Off className="w-3 h-3 mr-1" /> Disconnect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <p className="text-sm text-gray-500 mb-3">Connect Gmail or Google Workspace. The AI replies directly from your own address, with full email threading.</p>
+                <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
+                  <Button type="button" size="sm">Connect Gmail</Button>
+                </a>
+                <p className="text-xs text-gray-400 mt-2">You&apos;ll be redirected to Google to grant access. Microsoft 365 support is coming soon.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Option A — Forward to our Resend inbound address (unchanged). */}
+          <div className="rounded-lg border border-gray-200 p-4">
+            <span className="font-semibold text-gray-800 flex items-center gap-2"><Share2 className="w-4 h-4" /> Or forward your email</span>
+            <p className="text-sm text-gray-500 mt-1">No inbox connection — just forward your business email to the address below and the AI handles replies.</p>
+            <div className="flex items-center gap-2 mt-3">
               <Input readOnly value={`${tenantSlug}@mail.mylocksmithai.com`} className="bg-gray-50 font-mono text-sm" />
               <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(`${tenantSlug}@mail.mylocksmithai.com`); toast.success('Copied') }}>Copy</Button>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Forward your business email here, and the AI handles replies.</p>
+            <div className="mt-3">
+              <Label>Reply-from email (optional)</Label>
+              <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.reply_from_email} onChange={e => setForm(f => ({ ...f, reply_from_email: e.target.value }))} />
+              <p className="text-xs text-gray-400 mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
+            </div>
           </div>
+
           <div>
-            <Label>Reply-from email (optional)</Label>
-            <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.reply_from_email} onChange={e => setForm(f => ({ ...f, reply_from_email: e.target.value }))} />
-            <p className="text-xs text-gray-400 mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.email_auto_reply} onChange={e => setForm(f => ({ ...f, email_auto_reply: e.target.checked }))} className="accent-[#4ecdc4] w-4 h-4" />
+              Auto-reply to incoming emails
+            </label>
+            <p className="text-xs text-gray-400 mt-1">Applies to both options. When off, emails appear in the Inbox but the AI won&apos;t reply automatically.</p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={form.email_auto_reply} onChange={e => setForm(f => ({ ...f, email_auto_reply: e.target.checked }))} className="accent-[#4ecdc4] w-4 h-4" />
-            Auto-reply to incoming emails
-          </label>
-          <p className="text-xs text-gray-400">When off, emails appear in the Inbox but the AI won&apos;t reply automatically.</p>
         </CardContent>
       </Card>
 

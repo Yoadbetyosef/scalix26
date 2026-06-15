@@ -37,6 +37,13 @@ export default async function AIEmployeeEditPage({
     .eq('ai_employee_id', id)
     .order('created_at', { ascending: true })
 
+  // Connected OAuth mailbox (Gmail/Workspace) for this agent, if any.
+  const { data: emailAccount } = await serviceSupabase
+    .from('connected_email_accounts')
+    .select('id, provider, email_address, status')
+    .eq('ai_employee_id', id)
+    .maybeSingle()
+
   // The 3 fixed Business-Details fields vs everything else (free-form KB).
   const BUSINESS_TITLES = ['Pricing', 'Service Areas', "What We Don't Do"]
   const businessDetails: Record<string, string> = {}
@@ -56,6 +63,9 @@ export default async function AIEmployeeEditPage({
         knowledgeBase={knowledgeBase}
         metaConnected={sp.meta_connected === 'true'}
         metaError={sp.meta_error}
+        emailAccount={emailAccount || null}
+        googleConnected={sp.google_connected === 'true'}
+        googleError={sp.google_error}
       />
     </div>
   )
