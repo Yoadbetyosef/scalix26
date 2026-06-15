@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { decrypt } from '@/lib/mailbox/crypto'
 import twilio from 'twilio'
@@ -135,7 +135,8 @@ export async function POST(
 
   // ── Disconnect a connected email mailbox (OAuth) ────────────────────────────
   if (action === 'disconnect_email') {
-    const { data: accounts } = await serviceSupabase
+    const adminSupabase = createAdminClient() // bypass RLS for token table
+    const { data: accounts } = await adminSupabase
       .from('connected_email_accounts')
       .select('id, provider, refresh_token')
       .eq('ai_employee_id', agentId)
@@ -155,7 +156,7 @@ export async function POST(
         }
       }
     }
-    await serviceSupabase.from('connected_email_accounts').delete().eq('ai_employee_id', agentId)
+    await adminSupabase.from('connected_email_accounts').delete().eq('ai_employee_id', agentId)
     return NextResponse.json({ success: true })
   }
 

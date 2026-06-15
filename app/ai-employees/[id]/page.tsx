@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { AIEmployeeEditClient } from '@/components/ai-employees/ai-employee-edit-client'
 
@@ -37,8 +37,10 @@ export default async function AIEmployeeEditPage({
     .eq('ai_employee_id', id)
     .order('created_at', { ascending: true })
 
-  // Connected OAuth mailbox (Gmail/Workspace) for this agent, if any.
-  const { data: emailAccount } = await serviceSupabase
+  // Connected OAuth mailbox (Gmail/Workspace) for this agent, if any. Uses the
+  // admin client because connected_email_accounts has RLS with no read policy
+  // (it holds encrypted tokens — server-only access).
+  const { data: emailAccount } = await createAdminClient()
     .from('connected_email_accounts')
     .select('id, provider, email_address, status')
     .eq('ai_employee_id', id)

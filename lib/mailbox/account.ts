@@ -1,4 +1,4 @@
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { decrypt, encrypt } from './crypto'
 import { getProvider } from './index'
 import type { MailAccount, MailProviderName, OAuthTokens } from './types'
@@ -27,30 +27,50 @@ export async function saveAccount(opts: {
   provider: MailProviderName
   tokens: OAuthTokens
 }): Promise<void> {
-  const supabase = await createServiceClient()
-  await supabase.from('connected_email_accounts')
+  const supabase = createAdminClient() // true service role — bypasses RLS
+
+  // Isolate the encrypt step so a bad APP_ENCRYPTION_KEY is unmistakable in logs.
+  let encAccess: string
+  let encRefresh: string | null
+  try {
+    encAccess = encrypt(opts.tokens.accessToken)
+    encRefresh = opts.tokens.refreshToken ? encrypt(opts.tokens.refreshToken) : null
+    console.log('[mailbox] saveAccount: encrypt OK for', opts.tokens.email)
+  } catch (e) {
+    console.error('[mailbox] saveAccount: ENCRYPT FAILED (check APP_ENCRYPTION_KEY = 32 bytes base64/hex):', e instanceof Error ? e.message : e)
+    throw e
+  }
+
+  const { error: delErr } = await supabase.from('connected_email_accounts')
     .delete().eq('ai_employee_id', opts.aiEmployeeId).eq('provider', opts.provider)
-  await supabase.from('connected_email_accounts').insert({
+  if (delErr) console.error('[mailbox] saveAccount: delete error (continuing):', delErr.message)
+
+  const { error } = await supabase.from('connected_email_accounts').insert({
     tenant_id: opts.tenantId,
     ai_employee_id: opts.aiEmployeeId,
     provider: opts.provider,
     email_address: opts.tokens.email,
-    access_token: encrypt(opts.tokens.accessToken),
-    refresh_token: opts.tokens.refreshToken ? encrypt(opts.tokens.refreshToken) : null,
+    access_token: encAccess,
+    refresh_token: encRefresh,
     token_expiry: new Date(opts.tokens.expiresAt).toISOString(),
     scopes: opts.tokens.scopes,
     history_id: opts.tokens.historyId,
     status: 'connected',
   })
+  if (error) {
+    console.error('[mailbox] saveAccount: INSERT FAILED:', error.message, '| details:', error.details, '| hint:', error.hint, '| code:', error.code)
+    throw new Error('connected_email_accounts insert failed: ' + error.message)
+  }
+  console.log('[mailbox] saveAccount: inserted row for', opts.tokens.email, 'agent', opts.aiEmployeeId)
 }
 
 export async function markAccountError(accountId: string): Promise<void> {
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient()
   await supabase.from('connected_email_accounts').update({ status: 'error' }).eq('id', accountId)
 }
 
 export async function listConnectedAccounts(): Promise<AccountRow[]> {
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient()
   const { data } = await supabase.from('connected_email_accounts').select(COLS).eq('status', 'connected')
   return (data || []) as AccountRow[]
 }
@@ -79,7 +99,7 @@ export async function getValidAccount(row: AccountRow): Promise<MailAccount | nu
     try {
       const refreshed = await provider.refresh(decrypt(row.refresh_token))
       accessToken = refreshed.accessToken
-      const supabase = await createServiceClient()
+      const supabase = createAdminClient()
       await supabase.from('connected_email_accounts').update({
         access_token: encrypt(accessToken),
         token_expiry: new Date(refreshed.expiresAt).toISOString(),
