@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { MessageCircle, Search, Phone } from 'lucide-react'
+import { MessageCircle, Search, Phone, Mail } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime, formatDuration, truncate } from '@/lib/utils'
 
@@ -11,6 +11,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
   instagram: 'Instagram',
   facebook: 'Facebook',
+  email: 'Email',
 }
 
 export default async function InboxPage({
@@ -86,7 +87,7 @@ export default async function InboxPage({
 
         {/* Channel filters — scrollable row */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-          {['all', 'sms', 'voice', 'instagram', 'facebook'].map(c => (
+          {['all', 'sms', 'voice', 'email', 'instagram', 'facebook'].map(c => (
             <Link
               key={c}
               href={`/inbox?status=${status}&channel=${c}&q=${q}`}
@@ -116,18 +117,20 @@ export default async function InboxPage({
               return (
                 <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
                   <div className="flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-[#4ecdc4]/15 text-[#4ecdc4]' : 'bg-gray-100 text-gray-600'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-[#4ecdc4]/15 text-[#4ecdc4]' : conv.channel === 'email' ? 'bg-indigo-50 text-indigo-500' : 'bg-gray-100 text-gray-600'}`}>
                       {conv.channel === 'voice'
                         ? <Phone className="w-4 h-4" />
-                        : (contact?.name?.[0] || contact?.phone?.[0] || '?')}
+                        : conv.channel === 'email'
+                          ? <Mail className="w-4 h-4" />
+                          : (contact?.name?.[0] || contact?.phone?.[0] || contact?.email?.[0] || '?')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">
-                          {contact?.name || contact?.phone || 'Unknown'}
+                          {contact?.name || contact?.phone || contact?.email || 'Unknown'}
                         </p>
                         <Badge variant={conv.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                          {conv.channel === 'voice' ? '📞 ' : ''}{CHANNEL_LABELS[conv.channel] || conv.channel}
+                          {conv.channel === 'voice' ? '📞 ' : conv.channel === 'email' ? '📧 ' : ''}{CHANNEL_LABELS[conv.channel] || conv.channel}
                         </Badge>
                         {conv.channel === 'voice' && conv.duration_seconds != null && (
                           <span className="text-xs text-gray-400 whitespace-nowrap">{formatDuration(conv.duration_seconds)}</span>

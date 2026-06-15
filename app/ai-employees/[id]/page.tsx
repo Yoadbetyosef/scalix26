@@ -18,7 +18,7 @@ export default async function AIEmployeeEditPage({
 
   const serviceSupabase = await createServiceClient()
   const { data: tenant } = await serviceSupabase
-    .from('tenants').select('id').eq('user_id', user.id).limit(1).maybeSingle()
+    .from('tenants').select('id, slug').eq('user_id', user.id).limit(1).maybeSingle()
   if (!tenant) redirect('/setup')
 
   const { data: employee } = await serviceSupabase
@@ -51,6 +51,7 @@ export default async function AIEmployeeEditPage({
       <AIEmployeeEditClient
         employee={employee}
         tenantId={tenant.id}
+        tenantSlug={tenant.slug || ''}
         businessDetails={businessDetails}
         knowledgeBase={knowledgeBase}
         metaConnected={sp.meta_connected === 'true'}

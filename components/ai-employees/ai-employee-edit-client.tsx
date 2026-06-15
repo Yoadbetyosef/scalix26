@@ -52,9 +52,12 @@ interface Props {
     business_hours: Record<string, string> | null
     timezone: string | null
     forward_to_phone: string | null
+    email_auto_reply: boolean | null
+    reply_from_email: string | null
     channels?: Channel[]
   }
   tenantId: string
+  tenantSlug: string
   businessDetails: Record<string, string>
   knowledgeBase: KBEntry[]
   metaConnected?: boolean
@@ -70,7 +73,7 @@ const META_ERRORS: Record<string, string> = {
   session_expired: 'Session expired. Please try connecting again.',
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, businessDetails, knowledgeBase, metaConnected, metaError }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -80,6 +83,8 @@ export function AIEmployeeEditClient({ employee, tenantId, businessDetails, know
     voice: employee.voice || 'professional_female',
     system_prompt: employee.system_prompt || '',
     status: employee.status || 'draft',
+    email_auto_reply: employee.email_auto_reply ?? true,
+    reply_from_email: employee.reply_from_email || '',
     // Business identity
     business_name: employee.business_name || '',
     industry: employee.industry || '',
@@ -486,6 +491,31 @@ export function AIEmployeeEditClient({ employee, tenantId, businessDetails, know
             onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
             placeholder="Add specific instructions for this AI agent. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
           />
+        </CardContent>
+      </Card>
+
+      {/* Email */}
+      <Card>
+        <CardHeader><CardTitle>📧 Email</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Inbound email address</Label>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Input readOnly value={`${tenantSlug}@mail.mylocksmithai.com`} className="bg-gray-50 font-mono text-sm" />
+              <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(`${tenantSlug}@mail.mylocksmithai.com`); toast.success('Copied') }}>Copy</Button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Forward your business email here, and the AI handles replies.</p>
+          </div>
+          <div>
+            <Label>Reply-from email (optional)</Label>
+            <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.reply_from_email} onChange={e => setForm(f => ({ ...f, reply_from_email: e.target.value }))} />
+            <p className="text-xs text-gray-400 mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={form.email_auto_reply} onChange={e => setForm(f => ({ ...f, email_auto_reply: e.target.checked }))} className="accent-[#4ecdc4] w-4 h-4" />
+            Auto-reply to incoming emails
+          </label>
+          <p className="text-xs text-gray-400">When off, emails appear in the Inbox but the AI won&apos;t reply automatically.</p>
         </CardContent>
       </Card>
 

@@ -20,6 +20,7 @@ const badgeVariants = cva(
         whatsapp: 'bg-green-100 text-green-700',
         instagram: 'bg-pink-100 text-pink-700',
         facebook: 'bg-indigo-100 text-indigo-700',
+        email: 'bg-indigo-50 text-indigo-600',
         positive: 'bg-green-100 text-green-700',
         neutral: 'bg-gray-100 text-gray-600',
         negative: 'bg-red-100 text-red-700',

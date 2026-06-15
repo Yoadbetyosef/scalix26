@@ -16,6 +16,36 @@ export async function sendEmail(to: string, subject: string, html: string) {
   return { success: true }
 }
 
+const INBOUND_FROM = 'noreply@mail.mylocksmithai.com'
+
+// Send an AI reply to an inbound email. `from` is the agent's reply-from address
+// (its domain must be verified in Resend); we also set it as Reply-To and fall
+// back to the verified inbound domain so sends never break on an unverified From.
+export async function sendEmailReply(to: string, from: string | null | undefined, subject: string, body: string) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[email] RESEND_API_KEY not set, skipping reply')
+    return { success: false, error: 'RESEND_API_KEY not set' }
+  }
+  const fromAddr = from || INBOUND_FROM
+  const re = subject?.toLowerCase().startsWith('re:') ? subject : `Re: ${subject || 'your message'}`
+  const { error } = await resend.emails.send({
+    from: fromAddr,
+    to,
+    replyTo: from || undefined,
+    subject: re,
+    text: body,
+  })
+  if (error) {
+    console.error('[email] reply send error:', error)
+    if (from && from !== INBOUND_FROM) {
+      const retry = await resend.emails.send({ from: INBOUND_FROM, to, replyTo: from, subject: re, text: body })
+      if (!retry.error) return { success: true }
+    }
+    return { success: false, error: error.message }
+  }
+  return { success: true }
+}
+
 export const emailTemplates = {
   paymentFailed: (name: string, updateUrl: string) => ({
     subject: "We couldn't process your payment",
