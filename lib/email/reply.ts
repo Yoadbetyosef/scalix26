@@ -19,11 +19,12 @@ export async function generateEmailReply(opts: {
   subject: string
 }): Promise<string> {
   const supabase = await createServiceClient()
-  const { data: kbRows } = await supabase
-    .from('knowledge_base')
-    .select('title, content')
-    .eq('tenant_id', opts.tenantId)
-    .or(`ai_employee_id.eq.${opts.agent.id},ai_employee_id.is.null`)
+  // Same knowledge_base every channel uses: this agent's entries + tenant-wide.
+  let kbQuery = supabase.from('knowledge_base').select('title, content').eq('tenant_id', opts.tenantId)
+  kbQuery = opts.agent.id
+    ? kbQuery.or(`ai_employee_id.eq.${opts.agent.id},ai_employee_id.is.null`)
+    : kbQuery.is('ai_employee_id', null)
+  const { data: kbRows } = await kbQuery
   const kb = (kbRows || []).map((r) => `## ${r.title}\n${r.content}`).join('\n\n')
 
   const name = opts.agent.name || 'the team'
@@ -38,6 +39,7 @@ CRITICAL FOR EMAIL:
 - Keep the reply concise and helpful.
 - Never reveal you are an AI unless directly asked.${kb ? `\n\nKNOWLEDGE BASE:\n${kb}` : ''}`
 
+  console.log('[email-reply] calling Claude', MODEL, 'kb-entries', kbRows?.length || 0)
   const res = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 500,

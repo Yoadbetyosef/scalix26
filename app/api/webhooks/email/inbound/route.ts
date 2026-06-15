@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendEmail } from '@/lib/email/send'
+import { sendEmail, sendEmailReply } from '@/lib/email/send'
+import { generateEmailReply } from '@/lib/email/reply'
 
 const SECRET = process.env.RESEND_WEBHOOK_SECRET || process.env.RESEND_INBOUND_SECRET || ''
 
@@ -29,7 +30,7 @@ function emailAddr(v: unknown): string {
 }
 
 // The webhook carries only metadata; the body comes from the Received Emails API.
-async function fetchBody(emailId: string): Promise<{ from?: string; to?: unknown; subject?: string; text?: string; html?: string } | null> {
+async function fetchBody(emailId: string): Promise<{ from?: string; to?: unknown; subject?: string; text?: string; html?: string; message_id?: string } | null> {
   const r = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
   })
@@ -49,10 +50,11 @@ export async function POST(req: NextRequest) {
   let to: unknown = payload.data?.to || ''
   let subject = payload.data?.subject || ''
   let text = ''
+  let inboundMessageId = ''
   const emailId = payload.data?.email_id
   if (emailId) {
     const full = await fetchBody(emailId)
-    if (full) { from = full.from || from; to = full.to ?? to; subject = full.subject || subject; text = full.text || full.html || '' }
+    if (full) { from = full.from || from; to = full.to ?? to; subject = full.subject || subject; text = full.text || full.html || ''; inboundMessageId = full.message_id || '' }
   }
 
   const fromEmail = emailAddr(from)
@@ -63,10 +65,18 @@ export async function POST(req: NextRequest) {
   const supabase = await createServiceClient()
   const { data: tenant } = await supabase
     .from('tenants').select('id, business_name, email').eq('slug', slug).maybeSingle()
-  if (!tenant) return NextResponse.json({ ok: true }) // unknown address — ignore
+  if (!tenant) { console.warn('[email-inbound] no tenant for slug', slug); return NextResponse.json({ ok: true }) }
+  console.log('[email-inbound] tenant', tenant.id, 'slug', slug, 'from', fromEmail)
 
-  const { data: agent } = await supabase
-    .from('ai_employees').select('id, name, email_auto_reply').eq('tenant_id', tenant.id).eq('status', 'active').maybeSingle()
+  // Real agent only: active preferred, else the tenant's earliest agent.
+  const agentCols = 'id, name, system_prompt, business_name, email_auto_reply, reply_from_email'
+  let agent = (await supabase.from('ai_employees').select(agentCols)
+    .eq('tenant_id', tenant.id).eq('status', 'active').maybeSingle()).data
+  if (!agent) {
+    agent = (await supabase.from('ai_employees').select(agentCols)
+      .eq('tenant_id', tenant.id).order('created_at', { ascending: true }).limit(1).maybeSingle()).data
+  }
+  console.log('[email-inbound] agent', agent?.id || 'NONE', 'auto_reply', agent?.email_auto_reply)
 
   // Find / create the contact by email.
   let contactId: string | null = null
@@ -96,13 +106,35 @@ export async function POST(req: NextRequest) {
 
   await supabase.from('messages').insert({ conversation_id: convId, tenant_id: tenant.id, role: 'user', content: text || '(no body)', channel: 'email' })
 
-  if (agent?.email_auto_reply) {
-    // Schedule the reply 2 minutes out — gives the owner a window to take over.
-    await supabase.from('conversations').update({ email_reply_due_at: new Date(Date.now() + 2 * 60 * 1000).toISOString() }).eq('id', convId)
-  } else if (tenant.email) {
-    // Auto-reply off → just notify the owner.
-    await sendEmail(tenant.email, `New email from ${fromEmail}`,
-      `<p>A customer emailed your AI address.</p><p><strong>From:</strong> ${fromEmail}<br/><strong>Subject:</strong> ${subject}</p><p>${(text || '').slice(0, 2000)}</p>`)
+  const ownerNote = (note: string) => tenant.email
+    ? sendEmail(tenant.email, `New email from ${fromEmail}`,
+        `<p>${note}</p><p><strong>From:</strong> ${fromEmail}<br/><strong>Subject:</strong> ${subject}</p><p>${(text || '').slice(0, 2000)}</p>`)
+    : Promise.resolve()
+
+  if (!agent) {
+    // No configured agent — never auto-reply with a generic persona; notify owner.
+    console.warn('[email-inbound] no agent for tenant ' + tenant.id + ', skipping auto-reply')
+    await ownerNote('A customer emailed your AI address.')
+  } else if (agent.email_auto_reply !== false) {
+    try {
+      console.log('[email-inbound] generating Claude reply for', fromEmail)
+      const reply = await generateEmailReply({
+        tenantId: tenant.id, agent, tenantBusinessName: tenant.business_name, emailText: text || '', subject,
+      })
+      console.log('[email-inbound] reply generated, length', reply.length)
+      const sent = await sendEmailReply(fromEmail, agent.reply_from_email, subject, reply, inboundMessageId)
+      if (sent.success) {
+        console.log('[email-inbound] reply SENT to', fromEmail)
+        await supabase.from('messages').insert({ conversation_id: convId, tenant_id: tenant.id, role: 'assistant', content: reply, channel: 'email' })
+      } else {
+        console.error('[email-inbound] reply send FAILED:', sent.error)
+      }
+    } catch (err) {
+      console.error('[email-inbound] auto-reply error:', err instanceof Error ? err.message : err)
+    }
+  } else {
+    console.log('[email-inbound] auto-reply OFF for tenant', tenant.id, '— notifying owner')
+    await ownerNote('A customer emailed your AI address (auto-reply is off).')
   }
 
   return NextResponse.json({ ok: true })
