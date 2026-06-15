@@ -16,6 +16,7 @@ interface Conversation {
 
 export function ChannelDistributionChart({ conversations }: { conversations: Conversation[] }) {
   const counts = conversations.reduce<Record<string, number>>((acc, conv) => {
+    if (conv.channel === 'whatsapp') return acc // WhatsApp removed from the UI
     acc[conv.channel] = (acc[conv.channel] || 0) + 1
     return acc
   }, {})

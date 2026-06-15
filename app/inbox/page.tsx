@@ -86,7 +86,7 @@ export default async function InboxPage({
 
         {/* Channel filters — scrollable row */}
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-          {['all', 'sms', 'voice', 'whatsapp', 'instagram', 'facebook'].map(c => (
+          {['all', 'sms', 'voice', 'instagram', 'facebook'].map(c => (
             <Link
               key={c}
               href={`/inbox?status=${status}&channel=${c}&q=${q}`}

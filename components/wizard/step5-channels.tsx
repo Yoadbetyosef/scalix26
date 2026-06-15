@@ -3,7 +3,7 @@
 import { Switch } from '@/components/ui/switch'
 import { WizardState } from './ai-employee-wizard'
 import { ChannelType } from '@/types'
-import { Phone, MessageSquare, MessageCircle, Globe } from 'lucide-react'
+import { Phone, MessageSquare, Globe } from 'lucide-react'
 
 interface Props {
   data: WizardState
@@ -33,14 +33,6 @@ const CHANNELS: Array<{
     icon: MessageSquare,
     color: 'bg-blue-50 text-blue-600',
     note: 'Uses the same Twilio number as Voice',
-  },
-  {
-    type: 'whatsapp',
-    name: 'WhatsApp',
-    description: 'Connect your Meta Business WhatsApp account.',
-    icon: MessageCircle,
-    color: 'bg-green-50 text-green-600',
-    note: 'Requires Meta Business account',
   },
   {
     type: 'instagram',
@@ -110,7 +102,7 @@ export function Step5Channels({ data, updateData }: Props) {
         <ul className="space-y-1 text-xs text-gray-500 list-disc list-inside">
           <li>Your AI employee becomes active immediately</li>
           <li>SMS/Voice: a Twilio number will be provisioned for you</li>
-          <li>WhatsApp/Instagram/Facebook: you'll connect in Settings after setup</li>
+          <li>Instagram/Facebook: you'll connect in Settings after setup</li>
           <li>You can always add or remove channels from Settings</li>
         </ul>
       </div>

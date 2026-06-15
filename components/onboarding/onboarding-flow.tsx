@@ -736,7 +736,6 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: 'WhatsApp', emoji: '💬', href: '/settings' },
                     { label: 'Instagram', emoji: '📸', href: '/settings' },
                     { label: 'Facebook', emoji: '👍', href: '/settings' },
                     { label: 'SMS', emoji: '📱', href: '/settings' },
