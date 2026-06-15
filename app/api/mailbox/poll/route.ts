@@ -101,6 +101,7 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
         emailText: msg.body || '', subject: msg.subject,
       })
       const subject = msg.subject?.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject || 'your message'}`
+      console.log(`[mailbox-poll] sending reply | transport=${provider.name}-api | from=${account.emailAddress} | to=${msg.fromEmail}`)
       await provider.sendReply(account, {
         to: msg.fromEmail, subject, body: reply,
         threadId: msg.threadId, inReplyTo: msg.rfcMessageId, references: msg.rfcMessageId,
@@ -109,7 +110,7 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
       await supabase.from('messages').insert({
         conversation_id: convId, tenant_id: account.tenantId, role: 'assistant', content: reply, channel: 'email',
       })
-      console.log('[mailbox-poll] reply SENT to', msg.fromEmail)
+      console.log(`[mailbox-poll] reply SENT to ${msg.fromEmail} | transport=${provider.name}-api | from=${account.emailAddress}`)
       replied++
     } catch (err) {
       console.error('[mailbox-poll] reply failed for', msg.fromEmail, ':', err instanceof Error ? err.message : err)

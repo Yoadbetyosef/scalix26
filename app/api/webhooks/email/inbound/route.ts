@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
 
@@ -67,6 +67,18 @@ export async function POST(req: NextRequest) {
     .from('tenants').select('id, business_name, email').eq('slug', slug).maybeSingle()
   if (!tenant) { console.warn('[email-inbound] no tenant for slug', slug); return NextResponse.json({ ok: true }) }
   console.log('[email-inbound] tenant', tenant.id, 'slug', slug, 'from', fromEmail)
+
+  // If this tenant has a connected OAuth mailbox (Gmail), that inbox + the /api/mailbox
+  // poll own all replies — sent natively from the owner's address via Gmail API. The
+  // Resend path must NOT also reply (it would go out from our domain and land in spam,
+  // duplicating the Gmail reply). Connecting an inbox supersedes the forward path.
+  const { data: connectedMbx } = await createAdminClient()
+    .from('connected_email_accounts').select('email_address, provider')
+    .eq('tenant_id', tenant.id).eq('status', 'connected').limit(1).maybeSingle()
+  if (connectedMbx) {
+    console.log(`[email-inbound] tenant has connected mailbox (${connectedMbx.provider}: ${connectedMbx.email_address}) — skipping Resend path; ${connectedMbx.provider}-api poll owns replies`)
+    return NextResponse.json({ ok: true, skipped: 'connected-mailbox' })
+  }
 
   // Real agent only: active preferred, else the tenant's earliest agent.
   const agentCols = 'id, name, system_prompt, business_name, email_auto_reply, reply_from_email'
