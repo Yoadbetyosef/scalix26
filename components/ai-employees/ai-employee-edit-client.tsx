@@ -54,6 +54,9 @@ interface Props {
     forward_to_phone: string | null
     email_auto_reply: boolean | null
     reply_from_email: string | null
+    website_scanned_at?: string | null
+    website_scanned_url?: string | null
+    website_kb_item_count?: number | null
     channels?: Channel[]
   }
   tenantId: string
@@ -80,6 +83,21 @@ const META_ERRORS: Record<string, string> = {
   pages_failed: 'Could not load your Facebook pages. Please try again.',
   no_pages: 'No Facebook pages found on your account. Create a page first.',
   session_expired: 'Session expired. Please try connecting again.',
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime()
+  if (isNaN(then)) return ''
+  const sec = Math.round((Date.now() - then) / 1000)
+  const min = Math.round(sec / 60)
+  const hr = Math.round(min / 60)
+  const day = Math.round(hr / 24)
+  if (sec < 60) return 'just now'
+  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`
+  if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`
+  if (day < 30) return `${day} day${day === 1 ? '' : 's'} ago`
+  const mon = Math.round(day / 30)
+  return `${mon} month${mon === 1 ? '' : 's'} ago`
 }
 
 export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError }: Props) {
@@ -172,6 +190,14 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   const phoneChannel = channels.find(c => (c.type === 'sms' || c.type === 'voice') && c.twilio_number && c.status === 'connected')
   const fbChannel = channels.find(c => c.type === 'facebook' && c.status === 'connected')
   const igChannel = channels.find(c => c.type === 'instagram' && c.status === 'connected')
+
+  // Website scan state: "Connected" only when a scan exists AND the field still matches
+  // the exact URL that was scanned; if the owner edited the URL since, it's stale.
+  const scannedUrl = (employee.website_scanned_url || '').trim()
+  const websiteVal = form.website.trim()
+  const websiteConnected = !!employee.website_scanned_at && scannedUrl !== '' && scannedUrl === websiteVal
+  const websiteChanged = scannedUrl !== '' && scannedUrl !== websiteVal
+  const kbCount = employee.website_kb_item_count ?? 0
 
   async function handleSave() {
     setSaving(true)
@@ -323,14 +349,23 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               <Input className="mt-1.5" placeholder="NY" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
             </div>
             <div className="sm:col-span-2">
-              <Label>Website</Label>
+              <div className="flex items-center gap-2">
+                <Label>Website</Label>
+                {websiteConnected && <Badge variant="connected">Connected</Badge>}
+              </div>
               <div className="flex items-center gap-2 mt-1.5">
                 <Input type="url" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
-                <Button type="button" variant="outline" size="sm" disabled={scanningWebsite || !form.website.trim()} onClick={scanWebsite}>
-                  {scanningWebsite ? 'Scanning…' : 'Scan website'}
+                <Button type="button" variant="outline" size="sm" disabled={scanningWebsite || !websiteVal} onClick={scanWebsite}>
+                  {scanningWebsite ? 'Scanning…' : websiteConnected ? 'Re-scan' : 'Scan website'}
                 </Button>
               </div>
-              <p className="text-xs text-gray-400 mt-1">Optional. We&apos;ll read your site and add services, pricing, service areas, and hours to the agent&apos;s knowledge below. Nothing is invented — anything not on your site, you can fill in manually.</p>
+              {websiteConnected ? (
+                <p className="text-xs text-gray-500 mt-1">Last scanned {relativeTime(employee.website_scanned_at!)} · {kbCount} item{kbCount === 1 ? '' : 's'} added.</p>
+              ) : websiteChanged ? (
+                <p className="text-xs text-amber-600 mt-1">Website changed — scan to update the agent&apos;s knowledge.</p>
+              ) : (
+                <p className="text-xs text-gray-400 mt-1">Optional. We&apos;ll read your site and add services, pricing, service areas, and hours to the agent&apos;s knowledge below. Nothing is invented — anything not on your site, you can fill in manually.</p>
+              )}
             </div>
           </div>
 

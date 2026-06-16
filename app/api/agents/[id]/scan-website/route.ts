@@ -285,6 +285,16 @@ ${corpus}`,
     return NextResponse.json({ added: 0, error: 'Could not save the website content. Please try again.' })
   }
 
+  // Persist scan state on the agent (drives the "Connected" badge). Store the exact
+  // URL the owner entered so the UI can match/stale against the field value. Resilient:
+  // a failure here (e.g. columns not migrated yet) must not fail the scan response.
+  const { error: stateErr } = await admin.from('ai_employees').update({
+    website_scanned_at: new Date().toISOString(),
+    website_scanned_url: String(url).trim(),
+    website_kb_item_count: items.length,
+  }).eq('id', agentId)
+  if (stateErr) console.error('[scan] could not persist scan state (run add_website_scan_state.sql?):', stateErr.message)
+
   console.log(`[scan] crawled ${pages.length} pages | shopify=${shopify} | products=${products.length} | KB items added=${items.length} | ${elapsed}ms`)
   if (elapsed > 50000) console.warn(`[scan] elapsed ${elapsed}ms is near maxDuration=60s — consider moving to a background job`)
 
