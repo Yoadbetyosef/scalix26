@@ -137,6 +137,34 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     }
   }
 
+  // Scan the website and populate this agent's knowledge base. Explicit-trigger only
+  // (no auto-rescrape on save), graceful, and never blocks the rest of the form.
+  const [scanningWebsite, setScanningWebsite] = useState(false)
+  async function scanWebsite() {
+    const url = form.website.trim()
+    if (!url) { toast.error('Enter a website URL first'); return }
+    setScanningWebsite(true)
+    const tid = toast.loading('Scanning your website…')
+    try {
+      const res = await fetch(`/api/agents/${employee.id}/scan-website`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (json.added > 0) {
+        toast.success(`Added ${json.added} item${json.added === 1 ? '' : 's'} from your website${json.titles?.length ? ': ' + json.titles.join(', ') : ''}`, { id: tid })
+        router.refresh() // reload the KB list with the new website entries
+      } else {
+        toast.message(json.error || json.message || 'No new details found on your website.', { id: tid })
+      }
+    } catch {
+      toast.error('Could not scan the website. You can add details manually below.', { id: tid })
+    } finally {
+      setScanningWebsite(false)
+    }
+  }
+
   // Channel state
   const [channels, setChannels] = useState<Channel[]>(employee.channels || [])
   const [provisioningPhone, setProvisioningPhone] = useState(false)
@@ -297,7 +325,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             </div>
             <div className="sm:col-span-2">
               <Label>Website</Label>
-              <Input className="mt-1.5" type="url" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
+              <div className="flex items-center gap-2 mt-1.5">
+                <Input type="url" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
+                <Button type="button" variant="outline" size="sm" disabled={scanningWebsite || !form.website.trim()} onClick={scanWebsite}>
+                  {scanningWebsite ? 'Scanning…' : 'Scan website'}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Optional. We&apos;ll read your site and add services, pricing, service areas, and hours to the agent&apos;s knowledge below. Nothing is invented — anything not on your site, you can fill in manually.</p>
             </div>
           </div>
 
