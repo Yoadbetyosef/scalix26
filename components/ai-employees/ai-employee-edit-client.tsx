@@ -37,6 +37,7 @@ interface Props {
     name: string
     greeting: string
     voice: string
+    voice_language: string | null
     system_prompt: string | null
     status: string
     // Business identity
@@ -108,6 +109,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     name: employee.name || '',
     greeting: employee.greeting || '',
     voice: employee.voice || 'professional_female',
+    voice_language: employee.voice_language || 'en',
     system_prompt: employee.system_prompt || '',
     status: employee.status || 'draft',
     email_auto_reply: employee.email_auto_reply ?? true,
@@ -575,8 +577,23 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Voice */}
       <Card>
         <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="space-y-5">
           <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} systemPrompt={form.system_prompt} />
+          <div>
+            <Label>Call language</Label>
+            <select
+              value={form.voice_language}
+              onChange={e => setForm(f => ({ ...f, voice_language: e.target.value }))}
+              className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="en">English</option>
+              <option value="es">Spanish (Español)</option>
+              <option value="bilingual">Bilingual (English + Spanish)</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Language the agent understands and speaks on phone calls. Bilingual auto-detects and switches between English and Spanish. (Text channels already reply in the caller&apos;s language.)
+            </p>
+          </div>
         </CardContent>
       </Card>
 

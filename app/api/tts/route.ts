@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   // Voice = Deepgram Aura model. Whitelisted to an aura model id so the value
   // can't inject anything into the upstream URL.
   const voiceParam = searchParams.get('voice') || ''
-  const voice = /^aura-2?-[a-z]+-en$/.test(voiceParam) ? voiceParam : 'aura-2-asteria-en'
+  const voice = /^aura-2?-[a-z]+-(en|es)$/.test(voiceParam) ? voiceParam : 'aura-2-asteria-en'
 
   if (!text) {
     return new NextResponse('Missing text', { status: 400 })

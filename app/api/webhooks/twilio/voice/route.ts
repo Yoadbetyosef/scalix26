@@ -32,6 +32,27 @@ function ttsPlay(text: string): string {
   return `<Say voice="Polly.Joanna-Neural">${escapeXml(clean)}</Say>`
 }
 
+// Per-agent voice language → STT language (consumed by the Railway voice-server:
+// 'multi' selects nova-3 multilingual EN<->ES code-switch), the Aura TTS voice, and
+// a system-prompt language directive. 'en' is the default so existing agents are
+// untouched. Note: a single Aura voice speaks one language's phonetics, so for
+// 'bilingual' (Spanish-leaning tenants) we use a Spanish voice; nova-3 still
+// understands both, and the model replies in the caller's language.
+const SPANISH_AURA_VOICE = 'aura-2-celeste-es'
+function voiceLangConfig(lang: string | null | undefined, agentVoice: string | null | undefined) {
+  const v = (agentVoice || '')
+  const isAura = v.toLowerCase().startsWith('aura')
+  const isAuraEs = /-es$/i.test(v)
+  if (lang === 'es') {
+    return { stt: 'es', voiceId: isAuraEs ? v : SPANISH_AURA_VOICE, promptLine: 'IMPORTANT: The caller speaks Spanish — always respond in Spanish (Español).' }
+  }
+  if (lang === 'bilingual') {
+    return { stt: 'multi', voiceId: isAuraEs ? v : SPANISH_AURA_VOICE, promptLine: "IMPORTANT: Respond in the caller's language — Spanish if they speak Spanish, English if they speak English. Match their language on every turn." }
+  }
+  // 'en' (default) — unchanged English behavior.
+  return { stt: 'en-US', voiceId: isAura ? v : '', promptLine: 'Always respond in English.' }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
@@ -134,8 +155,8 @@ export async function POST(req: NextRequest) {
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
     const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+      ? supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
     const { data: agent } = await agentQuery
 
@@ -172,7 +193,8 @@ export async function POST(req: NextRequest) {
       // per-turn summary like the SMS pipeline — the model tracks fields from
       // its own context, so the instruction must be explicit.)
       const bookingRules = `APPOINTMENT BOOKING: The details you need are service, date, time, name, phone, and address. As the customer gives each one, remember it. NEVER ask for a detail the customer already gave or that you already confirmed — re-read the conversation before asking. Ask for only ONE missing detail at a time. Once you have all six, confirm the full booking once (service, date, time, name, phone, address) and stop asking.`
-      let voiceSystemPrompt = `${DEFAULT_TONE}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${baseVoicePrompt}`
+      const langCfg = voiceLangConfig(agent?.voice_language, agent?.voice)
+      let voiceSystemPrompt = `${DEFAULT_TONE}\n\n${langCfg.promptLine}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${baseVoicePrompt}`
 
       // If the business has configured appointment slots, let the AI actually
       // schedule via the check_availability / book_appointment functions.
@@ -221,7 +243,8 @@ export async function POST(req: NextRequest) {
       <Parameter name="fromNumber" value="${escapeXml(toNormalized)}"/>
       <Parameter name="leadToken" value="${escapeXml(leadToken)}"/>
       <Parameter name="callerNumber" value="${escapeXml(From || '')}"/>
-      <Parameter name="voiceId" value="${escapeXml(agent?.voice && agent.voice.startsWith('aura') ? agent.voice : '')}"/>
+      <Parameter name="voiceId" value="${escapeXml(langCfg.voiceId)}"/>
+      <Parameter name="language" value="${escapeXml(langCfg.stt)}"/>
     </Stream>
   </Connect>
 </Response>`

@@ -37,7 +37,7 @@ export async function PATCH(
     'name', 'greeting', 'personality', 'personality_score', 'voice', 'system_prompt', 'status',
     'business_name', 'industry', 'website', 'phone', 'email', 'address', 'city', 'state', 'zip',
     'business_hours', 'timezone', 'forward_to_phone',
-    'email_auto_reply', 'reply_from_email',
+    'email_auto_reply', 'reply_from_email', 'voice_language',
   ]
 
   const updates: Record<string, unknown> = {}
