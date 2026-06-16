@@ -9,7 +9,7 @@ export const stripe = process.env.STRIPE_SECRET_KEY
 export const PLANS = {
   starter: {
     name: 'Starter',
-    price: 97,
+    price: 297,
     priceId: process.env.STRIPE_STARTER_PRICE_ID!,
     features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'],
     maxEmployees: 1,
@@ -17,7 +17,7 @@ export const PLANS = {
   },
   pro: {
     name: 'Pro',
-    price: 197,
+    price: 397,
     priceId: process.env.STRIPE_PRO_PRICE_ID!,
     features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'],
     maxEmployees: 3,
@@ -25,7 +25,7 @@ export const PLANS = {
   },
   business: {
     name: 'Business',
-    price: 397,
+    price: 597,
     priceId: process.env.STRIPE_BUSINESS_PRICE_ID!,
     features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'],
     maxEmployees: Infinity,

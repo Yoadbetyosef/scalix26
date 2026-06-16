@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   const trials = result.filter(u => u.plan === 'trial').length
   const paid = result.filter(u => u.plan !== 'trial').length
   const mrr = result.filter(u => u.plan !== 'trial').reduce((acc, u) => {
-    const amounts: Record<string, number> = { starter: 97, pro: 197, business: 397 }
+    const amounts: Record<string, number> = { starter: 297, pro: 397, business: 597 }
     return acc + (amounts[u.plan] || 0)
   }, 0)
 

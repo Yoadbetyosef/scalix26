@@ -363,9 +363,9 @@ export function SettingsClient({ tenant, channels }: Props) {
           {/* Plans */}
           <div className="space-y-3">
             {[
-              { key: 'starter', name: 'Starter', price: '$97', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID, features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
-              { key: 'pro', name: 'Pro', price: '$197', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID, features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
-              { key: 'business', name: 'Business', price: '$397', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_PRICE_ID, features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
+              { key: 'starter', name: 'Starter', price: '$297', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID, features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
+              { key: 'pro', name: 'Pro', price: '$397', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID, features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
+              { key: 'business', name: 'Business', price: '$597', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_PRICE_ID, features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
             ].map(plan => {
               const isCurrent = tenant.plan === plan.key
               return (
