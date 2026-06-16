@@ -328,7 +328,7 @@ export function SettingsClient({ tenant, channels }: Props) {
       </Card>
 
       {/* Billing */}
-      <Card>
+      <Card id="billing" className="scroll-mt-6">
         <CardHeader>
           <CardTitle>Billing & Subscription</CardTitle>
         </CardHeader>

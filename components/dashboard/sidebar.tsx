@@ -10,6 +10,7 @@ import {
   BarChart3,
   FileText,
   Settings,
+  CreditCard,
   LogOut,
   Zap,
   FlaskConical,
@@ -22,6 +23,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
+import { TrialWidget } from '@/components/dashboard/trial-widget'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -32,6 +34,7 @@ const navItems = [
   { href: '/test-ai', icon: FlaskConical, label: 'Test AI' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/reports', icon: FileText, label: 'Reports' },
+  { href: '/settings#billing', icon: CreditCard, label: 'Billing & Subscription' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -45,6 +48,8 @@ export function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
   const [businessName, setBusinessName] = useState<string>('')
+  const [plan, setPlan] = useState<string | null>(null)
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
 
   // Dashboard and Leads both live at /dashboard (Leads is ?tab=leads), so the
@@ -62,10 +67,12 @@ export function Sidebar() {
       if (!user) return
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('business_name')
+        .select('business_name, plan, trial_ends_at')
         .eq('user_id', user.id)
         .single()
       if (tenant?.business_name) setBusinessName(tenant.business_name)
+      setPlan(tenant?.plan ?? null)
+      setTrialEndsAt(tenant?.trial_ends_at ?? null)
     }
     loadBusinessName()
   }, [])
@@ -117,6 +124,13 @@ export function Sidebar() {
             )
           })}
         </nav>
+
+        {/* Trial / plan status */}
+        {plan && (
+          <div className="px-2 pt-2">
+            <TrialWidget plan={plan} trialEndsAt={trialEndsAt} />
+          </div>
+        )}
 
         {/* Sign out */}
         <div className="px-2 py-4 border-t border-white/10">

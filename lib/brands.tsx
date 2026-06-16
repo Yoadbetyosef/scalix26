@@ -10,7 +10,7 @@ export interface BrandConfig {
 export const BRANDS: Record<string, BrandConfig> = {
   mylocksmith: {
     name: 'My Locksmith AI',
-    trialDays: 20,
+    trialDays: 14,
     industry: 'Locksmith',
     logo: (
       <div className="flex items-center gap-2">
