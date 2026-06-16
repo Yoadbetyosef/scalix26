@@ -77,10 +77,16 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
     if (!convId) { skipped++; continue }
 
     // Persist the inbound message (with external_id so re-polls dedupe).
-    await supabase.from('messages').insert({
+    const { data: inMsg } = await supabase.from('messages').insert({
       conversation_id: convId, tenant_id: account.tenantId, role: 'user',
       content: msg.body || '(no body)', channel: 'email', external_id: msg.providerMessageId,
-    })
+    }).select('id').single()
+    // Best-effort: store threading metadata for manual replies (non-fatal pre-migration).
+    if (inMsg) {
+      const { error: thErr } = await supabase.from('messages')
+        .update({ email_message_id: msg.rfcMessageId || null, email_thread_id: msg.threadId || null }).eq('id', inMsg.id)
+      if (thErr) console.warn('[mailbox-poll] threading meta not stored (run add_message_email_threading.sql?):', thErr.message)
+    }
 
     if (!agent) {
       console.warn('[mailbox-poll] no agent for tenant ' + account.tenantId + ', skipping auto-reply')

@@ -116,7 +116,14 @@ export async function POST(req: NextRequest) {
   }
   if (!convId) return NextResponse.json({ ok: true })
 
-  await supabase.from('messages').insert({ conversation_id: convId, tenant_id: tenant.id, role: 'user', content: text || '(no body)', channel: 'email' })
+  const { data: inMsg } = await supabase.from('messages')
+    .insert({ conversation_id: convId, tenant_id: tenant.id, role: 'user', content: text || '(no body)', channel: 'email' })
+    .select('id').single()
+  // Best-effort: store the inbound Message-ID so manual replies can thread (non-fatal pre-migration).
+  if (inMsg && inboundMessageId) {
+    const { error: thErr } = await supabase.from('messages').update({ email_message_id: inboundMessageId }).eq('id', inMsg.id)
+    if (thErr) console.warn('[email-inbound] threading meta not stored (run add_message_email_threading.sql?):', thErr.message)
+  }
 
   const ownerNote = (note: string) => tenant.email
     ? sendEmail(tenant.email, `New email from ${fromEmail}`,

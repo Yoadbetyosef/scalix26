@@ -217,10 +217,9 @@ export const googleProvider: MailProvider = {
     const mime = `${headers.join('\r\n')}\r\n\r\n${bodyB64}`
     console.log(`[google] sendReply | from=${account.emailAddress} | to=${reply.to} | bodyLen=${reply.body.length}`)
 
-    const res = await gapi(account, '/messages/send', {
-      method: 'POST',
-      body: JSON.stringify({ raw: b64urlEncode(Buffer.from(mime, 'utf8')), threadId: reply.threadId }),
-    })
+    const body: { raw: string; threadId?: string } = { raw: b64urlEncode(Buffer.from(mime, 'utf8')) }
+    if (reply.threadId) body.threadId = reply.threadId // omit when unknown (still threads via References)
+    const res = await gapi(account, '/messages/send', { method: 'POST', body: JSON.stringify(body) })
     if (!res.ok) throw new Error(`gmail send failed: ${res.status} ${await res.text()}`)
   },
 
