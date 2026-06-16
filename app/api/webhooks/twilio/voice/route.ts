@@ -4,6 +4,10 @@ import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
 import { stripMarkdown } from '@/lib/utils'
 
+// Ring the owner's phone below the carrier-voicemail pickup window (~20-25s) so the
+// AI takes over before voicemail grabs the call. Belt to the AMD suspenders below.
+const FORWARD_DIAL_TIMEOUT = 15
+
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -140,10 +144,15 @@ export async function POST(req: NextRequest) {
 
     if (forwardTo) {
       const fallbackAction = `${baseUrl}/api/webhooks/twilio/voice/ai-fallback`
+      const amdCallback = `${baseUrl}/api/webhooks/twilio/voice/amd`
+      // machineDetection on the dialed <Number> runs AMD on the owner's leg. If a
+      // voicemail/machine answers, the amd callback redirects the caller to the AI.
+      // answerOnBridge keeps the caller on ringback (not "answered") until a real
+      // human bridge. action catches no-answer/busy/failed → AI.
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="25" action="${fallbackAction}" method="POST">
-    <Number>${escapeXml(forwardTo)}</Number>
+  <Dial timeout="${FORWARD_DIAL_TIMEOUT}" action="${fallbackAction}" method="POST" answerOnBridge="true">
+    <Number machineDetection="Enable" amdStatusCallback="${amdCallback}" amdStatusCallbackMethod="POST">${escapeXml(forwardTo)}</Number>
   </Dial>
 </Response>`
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })

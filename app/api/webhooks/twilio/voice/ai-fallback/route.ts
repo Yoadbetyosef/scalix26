@@ -19,17 +19,21 @@ function ttsPlay(text: string): string {
   return `<Say voice="Polly.Joanna-Neural">${escapeXml(text)}</Say>`
 }
 
-// Called by Twilio when the <Dial> to owner's phone ends (no answer, busy, or hung up)
+// Called when the <Dial> to the owner's phone ends (no-answer/busy/failed/completed),
+// OR via a forced redirect from the AMD callback when voicemail/machine answered.
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
   const { To, DialCallStatus } = params
+  // forced=machine → the AMD callback redirected the caller here off a voicemail
+  // bridge. Always run the AI; never short-circuit on DialCallStatus.
+  const forced = req.nextUrl.searchParams.get('forced')
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
 
-  // Only take over if owner didn't answer
-  if (DialCallStatus === 'completed') {
-    // Owner answered and finished — call is done
+  // A real human answered and the call finished — nothing to do. (Skipped when forced,
+  // since a machine-answer reports DialCallStatus=completed but isn't a human bridge.)
+  if (!forced && DialCallStatus === 'completed') {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`
     return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
