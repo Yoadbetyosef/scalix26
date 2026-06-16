@@ -28,6 +28,7 @@ wss.on('connection', (twilioWs) => {
   let fromNumber = null;
   let leadToken = null;    // tenant's secret intake token — to save the lead
   let callerNumber = null; // caller's real phone (From) — reliable fallback
+  let voiceLanguage = 'en-US'; // from the app: 'en-US' | 'es' | 'multi' (default English)
 
   // Lead capture state
   let collectedName = null;
@@ -51,6 +52,15 @@ wss.on('connection', (twilioWs) => {
   function sendSettings() {
     if (settingsSent || !dgOpen || !startReceived) return;
     settingsSent = true;
+
+    // Per-call voice language → Deepgram Voice Agent config. Default = English
+    // (unchanged). nova-3 handles en / es / multi (EN<->ES code-switch).
+    let agentLanguage = 'en';
+    if (voiceLanguage === 'es') agentLanguage = 'es';
+    else if (voiceLanguage === 'multi') agentLanguage = 'multi';
+    const sttModel = 'nova-3';
+    console.log('[stt]', sttModel, '[lang]', voiceLanguage, '[tts]', voiceId);
+
     const settings = {
       type: 'Settings',
       audio: {
@@ -58,8 +68,8 @@ wss.on('connection', (twilioWs) => {
         output: { encoding: 'mulaw', sample_rate: 8000, container: 'none' },
       },
       agent: {
-        language: 'en',
-        listen: { provider: { type: 'deepgram', model: 'nova-3' } },
+        language: agentLanguage,
+        listen: { provider: { type: 'deepgram', model: sttModel } },
         think: {
           provider: { type: 'anthropic', model: 'claude-haiku-4-5', temperature: 0.7 },
           // Bring-your-own Anthropic key via a custom endpoint.
@@ -267,6 +277,7 @@ wss.on('connection', (twilioWs) => {
       if (p.fromNumber) fromNumber = p.fromNumber;
       if (p.leadToken) leadToken = p.leadToken;
       if (p.callerNumber) callerNumber = p.callerNumber;
+      if (p.language) voiceLanguage = p.language;
       console.log('[start]', streamSid);
       startReceived = true;
       sendSettings();
