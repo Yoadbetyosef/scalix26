@@ -34,6 +34,7 @@ export async function generateEmailReply(opts: {
 
 CRITICAL FOR EMAIL:
 - Write a professional email reply only.
+- Start DIRECTLY with the greeting (e.g. "Hi Yoad,"). Do NOT add any label, heading, subject line, or prefix such as "Email Reply", "EMAIL REPLY", or "Subject:".
 - No markdown, no bullet points in the opening.
 - Sign off as ${name} from ${business}.
 - Keep the reply concise and helpful.
@@ -47,5 +48,16 @@ CRITICAL FOR EMAIL:
     messages: [{ role: 'user', content: `Subject: ${opts.subject}\n\n${opts.emailText}` }],
   })
   const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join(' ').trim()
-  return stripMarkdown(text)
+  return stripMarkdown(stripLeadingLabel(text))
+}
+
+// Strip any leaked channel/label prefix the model sometimes puts at the very top
+// (e.g. "EMAIL REPLY", "Email Reply:", "Subject: …") so the body starts at the greeting.
+function stripLeadingLabel(s: string): string {
+  let out = s
+  // Drop a leading "Subject: ..." line if present.
+  out = out.replace(/^\s*subject\s*:.*(?:\r?\n)+/i, '')
+  // Drop a leading "Email Reply" / "EMAIL REPLY" label (optional colon), incl. its line break.
+  out = out.replace(/^\s*email[\s_-]*reply\s*:?\s*(?:\r?\n)*/i, '')
+  return out.trimStart()
 }
