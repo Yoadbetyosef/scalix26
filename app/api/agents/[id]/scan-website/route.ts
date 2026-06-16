@@ -7,23 +7,40 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 // touches the owner's manually-edited KB or the Business-Details template fields.
 const WEBSITE_SOURCE = 'website'
 
+const BODY_LIMIT = 12000
+
 function extractText(html: string): string {
+  // Meta/og tags first — usually the cleanest summary of the business.
   const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() || ''
   const metas: string[] = title ? [`Title: ${title}`] : []
-  const metaMatches = html.matchAll(/<meta[^>]+>/gi)
-  for (const m of metaMatches) {
+  for (const m of html.matchAll(/<meta[^>]+>/gi)) {
     const tag = m[0]
     const name = (tag.match(/(?:name|property)=["']([^"']+)["']/i)?.[1] || '').toLowerCase()
     const content = tag.match(/content=["']([^"']+)["']/i)?.[1]?.trim()
-    if (content && (name.includes('description') || name.includes('og:'))) metas.push(`${name}: ${content}`)
+    if (content && (name.includes('description') || name.includes('og:') || name.includes('keywords'))) metas.push(`${name}: ${content}`)
   }
-  const body = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
+  // Image alt text often names products/services on JS-heavy/e-commerce sites.
+  const alts: string[] = []
+  for (const m of html.matchAll(/<img[^>]+alt=["']([^"']{3,})["']/gi)) alts.push(m[1].trim())
+
+  let body = html
+    // Drop non-content elements entirely (incl. JS/SVG/templates that pollute text).
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<template[\s\S]*?<\/template>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
-    .replace(/\s+/g, ' ').trim().slice(0, 5000)
-  return [...metas, '', body].join('\n')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#x27;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+  // Remove inline-JS leftovers (Alpine/Shopify handlers leak when attr values contain '>').
+  body = body
+    .replace(/\{[^{}]*(?:=>|querySelector|\$store|\$dispatch|function\b|document\.|window\.|addEventListener)[^{}]*\}/g, ' ')
+    .replace(/\b(?:const|let|var|function|return|setTimeout|querySelector|addEventListener)\b/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+
+  const altLine = alts.length ? `Image labels: ${[...new Set(alts)].slice(0, 40).join(', ')}` : ''
+  return [...metas, altLine, '', body.slice(0, BODY_LIMIT)].filter(Boolean).join('\n')
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -61,6 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const html = await res.text()
     const text = extractText(html)
+    console.log(`[agents/scan-website] ${target} | HTML ${html.length} chars | extracted ${text.length} chars`)
     if (text.length < 50) throw new Error('Could not read the website content')
 
     const response = await anthropic.messages.create({
@@ -68,14 +86,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       max_tokens: 800,
       messages: [{
         role: 'user',
-        content: `Analyze this home-services business website and extract information to train an AI customer assistant.
+        content: `Analyze this business's website (ANY industry — services, retail, e-commerce, etc.) and extract information to train an AI customer assistant.
 
-Return ONLY valid JSON (use null for anything not stated on the site — NEVER invent or guess, especially pricing):
+Return ONLY valid JSON. Use null only when the information is genuinely absent. NEVER invent or guess — especially pricing.
 {
-  "services": "comma-separated list of specific services, or null",
-  "pricing": "pricing details ONLY if explicitly stated on the site (e.g. 'Starting from $75', 'Free estimates'), else null",
-  "areas": "cities or regions served, or null",
-  "hours": "business hours, or null",
+  "services": "comma-separated list of the main services OR products/offerings, or null",
+  "pricing": "pricing details ONLY if explicitly stated (e.g. '50% off sitewide', 'Starting from $75', 'Free estimates', 'Free consultations'), else null",
+  "areas": "cities/regions served if it's a local business, or null",
+  "hours": "business hours if stated, or null",
   "description": "1-2 sentence description of what the business does and who it serves, or null"
 }
 

@@ -144,7 +144,6 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     const url = form.website.trim()
     if (!url) { toast.error('Enter a website URL first'); return }
     setScanningWebsite(true)
-    const tid = toast.loading('Scanning your website…')
     try {
       const res = await fetch(`/api/agents/${employee.id}/scan-website`, {
         method: 'POST',
@@ -153,13 +152,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       })
       const json = await res.json().catch(() => ({}))
       if (json.added > 0) {
-        toast.success(`Added ${json.added} item${json.added === 1 ? '' : 's'} from your website${json.titles?.length ? ': ' + json.titles.join(', ') : ''}`, { id: tid })
+        toast.success(`Added ${json.added} item${json.added === 1 ? '' : 's'} from your website${json.titles?.length ? ': ' + json.titles.join(', ') : ''}`)
         router.refresh() // reload the KB list with the new website entries
       } else {
-        toast.message(json.error || json.message || 'No new details found on your website.', { id: tid })
+        toast(json.error || json.message || 'No new details found on your website.')
       }
     } catch {
-      toast.error('Could not scan the website. You can add details manually below.', { id: tid })
+      toast.error('Could not scan the website. You can add details manually below.')
     } finally {
       setScanningWebsite(false)
     }
