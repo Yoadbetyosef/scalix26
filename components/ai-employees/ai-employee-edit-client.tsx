@@ -597,7 +597,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader><CardTitle>📧 Email</CardTitle></CardHeader>
         <CardContent className="space-y-5">
-          <p className="text-sm text-gray-500">Choose how the AI handles email. Connect your own inbox (recommended) or forward to our address.</p>
+          <p className="text-sm text-gray-500">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
 
           {/* Option B — Connect your own inbox (Gmail OAuth). Recommended. */}
           <div className="rounded-lg border border-gray-200 p-4">
@@ -641,7 +641,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             )}
           </div>
 
-          {/* Option A — Forward to our Resend inbound address (unchanged). */}
+          {/* Option A — Forward to our Resend inbound address. HIDDEN from the UI for now
+              (backend inbound webhook + reply path stay fully active; we'll re-expose
+              this per-brand later). Render-gated only — do not delete. */}
+          {false && (
           <div className="rounded-lg border border-gray-200 p-4">
             <span className="font-semibold text-gray-800 flex items-center gap-2"><Share2 className="w-4 h-4" /> Or forward your email</span>
             <p className="text-sm text-gray-500 mt-1">No inbox connection — just forward your business email to the address below and the AI handles replies.</p>
@@ -655,6 +658,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               <p className="text-xs text-gray-400 mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
             </div>
           </div>
+          )}
 
           <div>
             <label className="flex items-center gap-2 text-sm text-gray-700">
