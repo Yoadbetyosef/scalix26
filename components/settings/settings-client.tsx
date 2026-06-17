@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Tenant, Channel } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -70,7 +70,11 @@ export function SettingsClient({ tenant, channels }: Props) {
 
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  // Use the brand domain the user is actually on (app.scalix26.com vs
+  // app.mylocksmithai.com) so shared links never leak the wrong brand. Initialized
+  // to the env value to avoid an SSR/hydration mismatch, then set to the real origin.
+  const [appUrl, setAppUrl] = useState(process.env.NEXT_PUBLIC_APP_URL || '')
+  useEffect(() => { setAppUrl(window.location.origin) }, [])
   const bookingUrl = tenant.slug ? `${appUrl}/f/${tenant.slug}` : ''
   const intakeUrl = tenant.lead_intake_token ? `${appUrl}/api/leads/inbound/${tenant.lead_intake_token}` : ''
 

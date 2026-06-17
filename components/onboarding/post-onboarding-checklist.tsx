@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Check, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
@@ -14,7 +14,10 @@ interface Props {
 export function PostOnboardingChecklist({ slug, aiPhoneNumber, initial }: Props) {
   const [state, setState] = useState<Record<string, boolean>>(initial || {})
   const [sending, setSending] = useState(false)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+  // Use the brand domain the user is actually on so the shared booking link never
+  // leaks the wrong brand. Env value first (SSR-safe), then the real origin on mount.
+  const [appUrl, setAppUrl] = useState(process.env.NEXT_PUBLIC_APP_URL || '')
+  useEffect(() => { setAppUrl(window.location.origin) }, [])
   const bookingUrl = `${appUrl}/f/${slug}`
 
   function mark(item: string) {
