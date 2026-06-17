@@ -4,9 +4,10 @@ import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
 import { stripMarkdown } from '@/lib/utils'
 
-// Ring the owner's phone below the carrier-voicemail pickup window (~20-25s) so the
-// AI takes over before voicemail grabs the call. Belt to the AMD suspenders below.
-const FORWARD_DIAL_TIMEOUT = 15
+// How long the owner's phone rings before the AI receptionist takes over.
+// ~4 rings ≈ 20s — also below the carrier-voicemail pickup window, so the AI
+// answers before voicemail grabs the call (the AMD callback below is the backstop).
+const RING_TIMEOUT_SECONDS = 20 // ~4 rings before AI takes over
 
 function escapeXml(str: string): string {
   return str
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
       // human bridge. action catches no-answer/busy/failed → AI.
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="${FORWARD_DIAL_TIMEOUT}" action="${fallbackAction}" method="POST" answerOnBridge="true">
+  <Dial timeout="${RING_TIMEOUT_SECONDS}" action="${fallbackAction}" method="POST" answerOnBridge="true">
     <Number machineDetection="Enable" amdStatusCallback="${amdCallback}" amdStatusCallbackMethod="POST">${escapeXml(forwardTo)}</Number>
   </Dial>
 </Response>`

@@ -413,13 +413,27 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
             {phoneChannel ? (
               <div className="space-y-3">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-0.5">Phone Number</p>
-                  <p className="text-lg font-bold text-gray-900 tracking-wider">{phoneChannel.twilio_number}</p>
+                {/* How it works — matches the real ring-through behavior */}
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-blue-900 mb-1.5">How it works</p>
+                  <ol className="text-sm text-blue-700 space-y-1">
+                    <li>1. A customer calls your AI line</li>
+                    <li>2. Your phone rings first (4 rings)</li>
+                    <li>3. If you&apos;re busy, your AI answers — no lead lost</li>
+                  </ol>
                 </div>
+
+                {/* Your AI line */}
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-0.5">Your AI line</p>
+                  <p className="text-lg font-bold text-gray-900 tracking-wider">{phoneChannel.twilio_number}</p>
+                  <p className="text-xs text-gray-400 mt-1.5">This is the line your AI receptionist answers on. Use it as your business number, or forward your existing number to it — either way, your own phone always rings first.</p>
+                </div>
+
+                {/* Your phone number (rings first) */}
                 <div>
-                  <Label className="text-sm">Forward calls to (optional)</Label>
-                  <p className="text-xs text-gray-400 mb-1.5">Your number rings first for 25s, then the AI takes over</p>
+                  <Label className="text-sm">Your phone number</Label>
+                  <p className="text-xs text-gray-400 mb-1.5">Enter your cell or office number. When a customer calls, your phone rings first — if you don&apos;t answer within 4 rings, your AI receptionist picks up so you never miss a lead.</p>
                   <Input
                     className="h-11 text-sm"
                     type="tel"
@@ -427,7 +441,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                     value={form.forward_to_phone}
                     onChange={e => setForm(f => ({ ...f, forward_to_phone: e.target.value }))}
                   />
+                  {form.forward_to_phone.trim() ? (
+                    <p className="text-xs text-green-600 mt-1.5">✓ Connected — your phone rings first, your AI catches anything you miss.</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1.5">No number yet — your AI answers every call directly.</p>
+                  )}
                 </div>
+
                 <Button
                   variant="outline"
                   size="sm"
