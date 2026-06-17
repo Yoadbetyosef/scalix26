@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Real agent only: active preferred, else the tenant's earliest agent.
-  const agentCols = 'id, name, system_prompt, business_name, email_auto_reply, reply_from_email'
+  const agentCols = 'id, name, system_prompt, business_name, email_auto_reply, reply_from_email, email_handoff_after_first_reply'
   let agent = (await supabase.from('ai_employees').select(agentCols)
     .eq('tenant_id', tenant.id).eq('status', 'active').maybeSingle()).data
   if (!agent) {
@@ -102,11 +102,13 @@ export async function POST(req: NextRequest) {
   // Find / create the open email conversation.
   const nowIso = new Date().toISOString()
   let convId: string | null = null
+  let convTakeover = false
   const { data: existing } = await supabase.from('conversations')
-    .select('id').eq('tenant_id', tenant.id).eq('contact_id', contactId).eq('channel', 'email').eq('status', 'open')
+    .select('id, human_takeover').eq('tenant_id', tenant.id).eq('contact_id', contactId).eq('channel', 'email').eq('status', 'open')
     .order('updated_at', { ascending: false }).limit(1).maybeSingle()
   if (existing) {
     convId = existing.id
+    convTakeover = existing.human_takeover === true
     await supabase.from('conversations').update({ summary: subject, updated_at: nowIso }).eq('id', convId)
   } else {
     const { data: created } = await supabase.from('conversations')
@@ -130,6 +132,14 @@ export async function POST(req: NextRequest) {
         `<p>${note}</p><p><strong>From:</strong> ${fromEmail}<br/><strong>Subject:</strong> ${subject}</p><p>${(text || '').slice(0, 2000)}</p>`)
     : Promise.resolve()
 
+  // 2a. If a human has taken over this email thread, the AI must never reply again.
+  // The inbound message is already stored above — just notify the owner and stop.
+  if (convTakeover) {
+    console.log('[email-inbound] human_takeover active for conv', convId, '— storing only, notifying owner')
+    await ownerNote('A customer replied in a conversation you have taken over.')
+    return NextResponse.json({ ok: true, takenOver: true })
+  }
+
   if (!agent) {
     // No configured agent — never auto-reply with a generic persona; notify owner.
     console.warn('[email-inbound] no agent for tenant ' + tenant.id + ', skipping auto-reply')
@@ -145,6 +155,12 @@ export async function POST(req: NextRequest) {
       if (sent.success) {
         console.log('[email-inbound] reply SENT to', fromEmail)
         await supabase.from('messages').insert({ conversation_id: convId, tenant_id: tenant.id, role: 'assistant', content: reply, channel: 'email' })
+        // 2b. Acknowledge-then-handoff: after this one reply, hand the thread to the
+        // human so every further inbound email hits the human_takeover branch (2a).
+        if (agent.email_handoff_after_first_reply) {
+          await supabase.from('conversations').update({ human_takeover: true }).eq('id', convId)
+          console.log('[email-inbound] handoff-after-first-reply: conv', convId, '→ human_takeover')
+        }
       } else {
         console.error('[email-inbound] reply send FAILED:', sent.error)
       }

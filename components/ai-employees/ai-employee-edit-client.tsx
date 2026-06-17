@@ -54,6 +54,7 @@ interface Props {
     timezone: string | null
     forward_to_phone: string | null
     email_auto_reply: boolean | null
+    email_handoff_after_first_reply: boolean | null
     reply_from_email: string | null
     website_scanned_at?: string | null
     website_scanned_url?: string | null
@@ -113,6 +114,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     system_prompt: employee.system_prompt || '',
     status: employee.status || 'draft',
     email_auto_reply: employee.email_auto_reply ?? true,
+    email_handoff_after_first_reply: employee.email_handoff_after_first_reply ?? false,
     reply_from_email: employee.reply_from_email || '',
     // Business identity
     business_name: employee.business_name || '',
@@ -703,6 +705,14 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               Auto-reply to incoming emails
             </label>
             <p className="text-xs text-gray-400 mt-1">Applies to both options. When off, emails appear in the Inbox but the AI won&apos;t reply automatically.</p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={form.email_handoff_after_first_reply} onChange={e => setForm(f => ({ ...f, email_handoff_after_first_reply: e.target.checked }))} className="accent-[#4ecdc4] w-4 h-4" disabled={!form.email_auto_reply} />
+              After the first auto-reply, hand the conversation to me (AI stops replying).
+            </label>
+            <p className="text-xs text-gray-400 mt-1">The AI sends one reply to acknowledge, then you take it from there — it won&apos;t send anything else in that email thread.</p>
           </div>
         </CardContent>
       </Card>

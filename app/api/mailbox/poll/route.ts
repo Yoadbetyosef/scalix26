@@ -29,7 +29,7 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
 
   // The agent that owns this connection drives the reply (same prompt/KB everywhere).
   const { data: agent } = await supabase.from('ai_employees')
-    .select('id, name, system_prompt, business_name, email_auto_reply')
+    .select('id, name, system_prompt, business_name, email_auto_reply, email_handoff_after_first_reply')
     .eq('id', account.aiEmployeeId || '').maybeSingle()
   const { data: tenant } = await supabase.from('tenants').select('business_name').eq('id', account.tenantId).maybeSingle()
 
@@ -62,11 +62,13 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
 
     const nowIso = new Date().toISOString()
     let convId: string | null = null
-    const { data: existing } = await supabase.from('conversations').select('id')
+    let convTakeover = false
+    const { data: existing } = await supabase.from('conversations').select('id, human_takeover')
       .eq('tenant_id', account.tenantId).eq('contact_id', contactId).eq('channel', 'email').eq('status', 'open')
       .order('updated_at', { ascending: false }).limit(1).maybeSingle()
     if (existing) {
       convId = existing.id
+      convTakeover = existing.human_takeover === true
       await supabase.from('conversations').update({ summary: msg.subject, updated_at: nowIso }).eq('id', convId)
     } else {
       const { data: created } = await supabase.from('conversations')
@@ -86,6 +88,15 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
       const { error: thErr } = await supabase.from('messages')
         .update({ email_message_id: msg.rfcMessageId || null, email_thread_id: msg.threadId || null }).eq('id', inMsg.id)
       if (thErr) console.warn('[mailbox-poll] threading meta not stored (run add_message_email_threading.sql?):', thErr.message)
+    }
+
+    // 2a. Human has taken over this email thread — never let the AI reply again.
+    // Store the inbound (done above), mark it processed, and move on.
+    if (convTakeover) {
+      console.log('[mailbox-poll] human_takeover active for conv', convId, '— storing only')
+      await provider.markProcessed(account, msg.providerMessageId)
+      skipped++
+      continue
     }
 
     if (!agent) {
@@ -117,6 +128,12 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
       await supabase.from('messages').insert({
         conversation_id: convId, tenant_id: account.tenantId, role: 'assistant', content: reply, channel: 'email',
       })
+      // 2b. Acknowledge-then-handoff: after this one reply, hand the thread to the
+      // human so every further inbound email hits the human_takeover branch (2a).
+      if (agent.email_handoff_after_first_reply) {
+        await supabase.from('conversations').update({ human_takeover: true }).eq('id', convId)
+        console.log('[mailbox-poll] handoff-after-first-reply: conv', convId, '→ human_takeover')
+      }
       console.log(`[mailbox-poll] reply SENT to ${msg.fromEmail} | transport=${provider.name}-api | from=${account.emailAddress}`)
       replied++
     } catch (err) {
