@@ -3,11 +3,15 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createHmac } from 'crypto'
 import { getProvider } from '@/lib/mailbox'
 import { saveAccount } from '@/lib/mailbox/account'
+import { requestBaseUrl } from '@/lib/request-url'
 
 // Mirrors /api/auth/meta/callback: verify HMAC state + CSRF nonce + session user,
 // exchange the code for tokens, store them encrypted, redirect back to the agent.
 export async function GET(req: NextRequest) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
+  // Google redirected the browser to redirect_uri on the SAME host the connect flow
+  // started on, so this matches the redirect_uri used in the auth request — and we
+  // send the user back to that same domain when done.
+  const baseUrl = requestBaseUrl(req)
   const code = req.nextUrl.searchParams.get('code')
   const state = req.nextUrl.searchParams.get('state')
   const oauthError = req.nextUrl.searchParams.get('error')
