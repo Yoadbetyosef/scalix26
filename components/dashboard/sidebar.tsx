@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { TrialWidget } from '@/components/dashboard/trial-widget'
+import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -48,6 +49,7 @@ export function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
   const [businessName, setBusinessName] = useState<string>('')
+  const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
   const [plan, setPlan] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -77,6 +79,9 @@ export function Sidebar() {
     loadBusinessName()
   }, [])
 
+  // Resolve the host-based brand (myLocksmith / Scalix26 / default) once on mount.
+  useEffect(() => { setBrand(detectBrand()) }, [])
+
   // Close drawer on route change
   useEffect(() => { setMoreOpen(false) }, [pathname])
 
@@ -99,7 +104,7 @@ export function Sidebar() {
             </span>
           </div>
           <span className="hidden xl:block text-white font-bold text-base tracking-tight leading-tight">
-            {businessName || 'Dashboard'}
+            {businessName || brand.name}
           </span>
         </div>
 
@@ -187,7 +192,7 @@ export function Sidebar() {
           <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <span className="font-semibold text-gray-900">
-                {businessName || 'Menu'}
+                {businessName || brand.name}
               </span>
               <button
                 onClick={() => setMoreOpen(false)}

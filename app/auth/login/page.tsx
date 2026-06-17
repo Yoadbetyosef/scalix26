@@ -46,7 +46,7 @@ export default function LoginPage() {
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h1>
-          <p className="text-gray-500 mb-6">Sign in to your AI employee platform</p>
+          <p className="text-gray-500 mb-6">{brand.tagline}</p>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
