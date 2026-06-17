@@ -85,6 +85,7 @@ const META_ERRORS: Record<string, string> = {
   pages_failed: 'Could not load your Facebook pages. Please try again.',
   no_pages: 'No Facebook pages found on your account. Create a page first.',
   session_expired: 'Session expired. Please try connecting again.',
+  page_in_use: 'This Facebook or Instagram page is already connected to another account.',
 }
 
 function relativeTime(iso: string): string {

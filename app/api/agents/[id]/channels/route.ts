@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { decrypt } from '@/lib/mailbox/crypto'
+import { claimMetaPages } from '@/lib/meta/connect'
 import twilio from 'twilio'
 
 export async function POST(
@@ -80,24 +81,11 @@ export async function POST(
       return NextResponse.json({ error: 'pageId and accessToken are required' }, { status: 400 })
     }
 
-    // Delete any existing channel of this type for the agent first, then insert fresh
-    await serviceSupabase
-      .from('channels')
-      .delete()
-      .eq('ai_employee_id', agentId)
-      .eq('type', type)
-
-    await serviceSupabase
-      .from('channels')
-      .insert({
-        tenant_id: agent.tenant_id,
-        ai_employee_id: agentId,
-        type,
-        meta_page_id: pageId,
-        credentials: { access_token: accessToken },
-        status: 'connected',
-      })
-
+    const { error } = await claimMetaPages(serviceSupabase, {
+      tenantId: agent.tenant_id, agentId,
+      pages: [{ type, metaPageId: pageId, credentials: { access_token: accessToken } }],
+    })
+    if (error) return NextResponse.json({ error }, { status: 409 })
     return NextResponse.json({ success: true })
   }
 
@@ -108,28 +96,14 @@ export async function POST(
       return NextResponse.json({ error: 'pageId and accessToken are required' }, { status: 400 })
     }
 
-    await serviceSupabase.from('channels').delete().eq('ai_employee_id', agentId).eq('type', 'facebook')
-    await serviceSupabase.from('channels').insert({
-      tenant_id: agent.tenant_id,
-      ai_employee_id: agentId,
-      type: 'facebook',
-      meta_page_id: pageId,
-      credentials: { access_token: accessToken, page_name: pageName },
-      status: 'connected',
-    })
-
+    const pages: { type: 'facebook' | 'instagram'; metaPageId: string; credentials: Record<string, string> }[] = [
+      { type: 'facebook', metaPageId: pageId, credentials: { access_token: accessToken, page_name: pageName } },
+    ]
     if (instagram?.id) {
-      await serviceSupabase.from('channels').delete().eq('ai_employee_id', agentId).eq('type', 'instagram')
-      await serviceSupabase.from('channels').insert({
-        tenant_id: agent.tenant_id,
-        ai_employee_id: agentId,
-        type: 'instagram',
-        meta_page_id: instagram.id,
-        credentials: { access_token: accessToken, page_id: pageId, username: instagram.username },
-        status: 'connected',
-      })
+      pages.push({ type: 'instagram', metaPageId: instagram.id, credentials: { access_token: accessToken, page_id: pageId, username: instagram.username } })
     }
-
+    const { error } = await claimMetaPages(serviceSupabase, { tenantId: agent.tenant_id, agentId, pages })
+    if (error) return NextResponse.json({ error }, { status: 409 })
     return NextResponse.json({ success: true })
   }
 

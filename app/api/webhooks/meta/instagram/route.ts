@@ -77,6 +77,8 @@ export async function POST(req: NextRequest) {
           .eq('type', 'instagram')
           .eq('status', 'connected')
           .not('ai_employee_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
 
         const channel = channels?.[0]
         if (!channel) {
@@ -119,6 +121,8 @@ export async function POST(req: NextRequest) {
           .eq('type', 'facebook')
           .eq('status', 'connected')
           .not('ai_employee_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
 
         const channel = channels?.[0]
         if (!channel) {

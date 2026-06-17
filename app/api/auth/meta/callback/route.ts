@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createHmac } from 'crypto'
+import { claimMetaPages } from '@/lib/meta/connect'
 
 interface MetaPage {
   id: string
@@ -89,9 +90,10 @@ export async function GET(req: NextRequest) {
 
   // Single page — auto-connect without picker
   if (pages.length === 1) {
-    await connectPage(payload.agentId, user.id, pages[0])
+    const { error: connectErr } = await connectPage(payload.agentId, user.id, pages[0])
+    const back = connectErr ? 'meta_error=page_in_use' : 'meta_connected=true'
     return clearNonce(
-      NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?meta_connected=true`)
+      NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?${back}`)
     )
   }
 
@@ -117,44 +119,34 @@ export async function GET(req: NextRequest) {
   return res
 }
 
-export async function connectPage(agentId: string, userId: string, page: MetaPage) {
+export async function connectPage(agentId: string, userId: string, page: MetaPage): Promise<{ error: string | null }> {
   const supabase = await createServiceClient()
 
   const { data: tenant } = await supabase
     .from('tenants').select('id').eq('user_id', userId).single()
-  if (!tenant) return
+  if (!tenant) return { error: 'Account not found.' }
 
-  // Connect Facebook Messenger channel
-  await supabase.from('channels').delete().eq('ai_employee_id', agentId).eq('type', 'facebook')
-  await supabase.from('channels').insert({
-    tenant_id: tenant.id,
-    ai_employee_id: agentId,
-    type: 'facebook',
-    meta_page_id: page.id,
-    credentials: { access_token: page.access_token, page_name: page.name },
-    status: 'connected',
-  })
+  // Build the page(s) to claim: the FB page, plus its linked IG account if present.
+  const pages: { type: 'facebook' | 'instagram'; metaPageId: string; credentials: Record<string, string> }[] = [
+    { type: 'facebook', metaPageId: page.id, credentials: { access_token: page.access_token, page_name: page.name } },
+  ]
+  if (page.instagram_business_account) {
+    pages.push({
+      type: 'instagram',
+      metaPageId: page.instagram_business_account.id,
+      credentials: { access_token: page.access_token, page_id: page.id, username: page.instagram_business_account.username },
+    })
+  }
 
-  // Subscribe page to webhook events so Messenger messages are received
+  // Uniqueness-enforced claim (cross-tenant block, same-tenant move, 23505 guard).
+  const { error } = await claimMetaPages(supabase, { tenantId: tenant.id, agentId, pages })
+  if (error) return { error }
+
+  // Subscribe the page to webhook events so Messenger messages are received.
   await fetch(
     `https://graph.facebook.com/v21.0/${page.id}/subscribed_apps?subscribed_fields=messages,messaging_postbacks&access_token=${page.access_token}`,
     { method: 'POST' }
   ).catch(err => console.error('[connectPage] webhook subscription failed:', err))
 
-  // Connect Instagram DMs if a Business Account is linked to this page
-  if (page.instagram_business_account) {
-    await supabase.from('channels').delete().eq('ai_employee_id', agentId).eq('type', 'instagram')
-    await supabase.from('channels').insert({
-      tenant_id: tenant.id,
-      ai_employee_id: agentId,
-      type: 'instagram',
-      meta_page_id: page.instagram_business_account.id,
-      credentials: {
-        access_token: page.access_token,
-        page_id: page.id,
-        username: page.instagram_business_account.username,
-      },
-      status: 'connected',
-    })
-  }
+  return { error: null }
 }
