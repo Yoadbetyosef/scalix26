@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import twilio from 'twilio'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { sendSMS } from '@/lib/twilio/client'
 
 export async function PATCH(
   req: NextRequest,
@@ -15,10 +16,10 @@ export async function PATCH(
 
   const serviceSupabase = await createServiceClient()
 
-  // Verify ownership
+  // Verify ownership (+ old forward number / names for the one-time welcome SMS)
   const { data: agent } = await serviceSupabase
     .from('ai_employees')
-    .select('id, tenant_id')
+    .select('id, tenant_id, forward_to_phone, name, business_name')
     .eq('id', agentId)
     .single()
 
@@ -51,6 +52,30 @@ export async function PATCH(
     .eq('id', agentId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // One-time welcome "text yourself" SMS: fires only when the owner FIRST sets their
+  // forward number (empty → set transition), texted from the agent's provisioned
+  // number so they can reply and test it. Non-fatal; never blocks the save.
+  const oldForward = (agent.forward_to_phone || '').trim()
+  const newForward = typeof body.forward_to_phone === 'string' ? body.forward_to_phone.trim() : oldForward
+  if ('forward_to_phone' in body && !oldForward && newForward) {
+    try {
+      const { data: ch } = await serviceSupabase
+        .from('channels').select('twilio_number')
+        .eq('ai_employee_id', agentId).not('twilio_number', 'is', null).limit(1).maybeSingle()
+      const fromNumber = ch?.twilio_number
+      if (fromNumber) {
+        const who = agent.name || `${agent.business_name || 'your business'} AI`
+        const biz = agent.business_name || 'your business'
+        await sendSMS(newForward, `🎉 Your AI is live! This is ${who} from ${biz}. Reply to this message to test me out — I'm ready to book jobs 24/7.`, fromNumber)
+        console.log('[agents/PATCH] welcome SMS sent to', newForward, 'from', fromNumber)
+      } else {
+        console.log('[agents/PATCH] welcome SMS skipped — no provisioned number for agent', agentId)
+      }
+    } catch (err) {
+      console.error('[agents/PATCH] welcome SMS failed:', err instanceof Error ? err.message : err)
+    }
+  }
 
   return NextResponse.json({ success: true })
 }
