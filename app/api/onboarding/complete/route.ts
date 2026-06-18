@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { sendSMS } from '@/lib/twilio/client'
 import { notifyAdminNewUser } from '@/lib/admin/notify'
+import { maxEmployeesForPlan } from '@/lib/plans'
 
 interface FAQ {
   q: string
@@ -84,12 +85,30 @@ export async function POST(req: NextRequest) {
 
   const { data: tenant } = await serviceSupabase
     .from('tenants')
-    .select('id')
+    .select('id, plan')
     .eq('user_id', user.id)
     .limit(1)
     .maybeSingle()
 
   if (!tenant) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 })
+
+  // Idempotent first-agent bootstrap: if the tenant already has an agent, return it
+  // and do NOT create/provision again — prevents a double-buy / orphaned number on
+  // retry or double-submit (provisioning is also idempotent per agent).
+  const { data: existingAgents } = await serviceSupabase
+    .from('ai_employees').select('id').eq('tenant_id', tenant.id)
+    .order('created_at', { ascending: true }).limit(1)
+  if (existingAgents && existingAgents.length > 0) {
+    return NextResponse.json({ success: true, employeeId: existingAgents[0].id, existing: true })
+  }
+
+  // Plan gate BEFORE create/provision. The first agent passes (0 < trial limit of 1);
+  // this also blocks creating/provisioning a second on a tenant already at its cap.
+  const { count: agentCount } = await serviceSupabase
+    .from('ai_employees').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id)
+  if ((agentCount ?? 0) >= maxEmployeesForPlan(tenant.plan)) {
+    return NextResponse.json({ error: 'plan_limit' }, { status: 403 })
+  }
 
   // Update tenant name for billing/account purposes (+ store the owner's
   // business phone so the post-onboarding checklist can text them).

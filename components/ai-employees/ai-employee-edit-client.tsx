@@ -70,6 +70,7 @@ interface Props {
   emailAccount?: { id: string; provider: string; email_address: string; status: string } | null
   googleConnected?: boolean
   googleError?: string
+  onboarding?: boolean
 }
 
 const GOOGLE_ERRORS: Record<string, string> = {
@@ -103,7 +104,7 @@ function relativeTime(iso: string): string {
   return `${mon} month${mon === 1 ? '' : 's'} ago`
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError, onboarding }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -222,6 +223,25 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     }
   }
 
+  const [finishing, setFinishing] = useState(false)
+  // Onboarding: persist the details the owner just filled in, then go to the dashboard.
+  async function finishSetup() {
+    setFinishing(true)
+    try {
+      const res = await fetch(`/api/agents/${employee.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      toast.success('You’re all set!')
+      router.push('/dashboard')
+    } catch {
+      toast.error('Could not finish setup — please try again')
+      setFinishing(false)
+    }
+  }
+
   async function handleDelete() {
     if (!confirm(`Delete ${employee.name}? This cannot be undone.`)) return
     // Server-side delete: releases the agent's Twilio number(s) BEFORE the DB
@@ -300,24 +320,44 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
+      {/* Onboarding welcome banner */}
+      {onboarding && (
+        <div className="rounded-2xl border border-[#4ecdc4]/30 bg-[#4ecdc4]/10 p-4 sm:p-5">
+          <h2 className="text-base font-bold text-gray-900">Welcome — meet your AI. Your number is live.</h2>
+          <p className="text-sm text-gray-600 mt-1">Fill in your business details, pick a voice, connect your channels, and scan your website. When you’re happy, hit <strong>Finish setup</strong>.</p>
+          <Button onClick={finishSetup} loading={finishing} className="mt-3">Finish setup →</Button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/ai-employees">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Back
-            </Button>
-          </Link>
-          <div>
+          {onboarding ? (
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{employee.name}</h1>
-            <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>
-          </div>
+          ) : (
+            <>
+              <Link href="/ai-employees">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{employee.name}</h1>
+                <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>
+              </div>
+            </>
+          )}
         </div>
         <div className="flex gap-2 sm:flex-shrink-0">
-          <Button variant="outline" onClick={toggleStatus} className="flex-1 sm:flex-none">
-            {form.status === 'active' ? 'Pause' : 'Go Live'}
-          </Button>
-          <Button onClick={handleSave} loading={saving} className="flex-1 sm:flex-none">Save Changes</Button>
+          {!onboarding && (
+            <Button variant="outline" onClick={toggleStatus} className="flex-1 sm:flex-none">
+              {form.status === 'active' ? 'Pause' : 'Go Live'}
+            </Button>
+          )}
+          <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className="flex-1 sm:flex-none">Save Changes</Button>
+          {onboarding && (
+            <Button onClick={finishSetup} loading={finishing} className="flex-1 sm:flex-none">Finish setup</Button>
+          )}
         </div>
       </div>
 

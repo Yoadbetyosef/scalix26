@@ -62,6 +62,21 @@ export default function SignupPage() {
       })
       if (signInError) throw signInError
 
+      // Create the first agent + provision its number, then land directly on its
+      // edit page — that page IS the onboarding. Fall back to the classic flow if
+      // bootstrap fails, so signup is never a dead end.
+      try {
+        const boot = await fetch('/api/onboarding/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessName: form.businessName, businessType: form.industry }),
+        })
+        const bj = await boot.json().catch(() => ({}))
+        if (boot.ok && bj.employeeId) {
+          window.location.href = `/ai-employees/${bj.employeeId}?onboarding=1`
+          return
+        }
+      } catch { /* fall through to the classic onboarding flow */ }
       window.location.href = '/onboarding'
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Signup failed'

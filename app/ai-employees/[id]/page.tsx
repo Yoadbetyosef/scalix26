@@ -68,6 +68,7 @@ export default async function AIEmployeeEditPage({
         emailAccount={emailAccount || null}
         googleConnected={sp.google_connected === 'true'}
         googleError={sp.google_error}
+        onboarding={sp.onboarding === '1'}
       />
     </div>
   )
