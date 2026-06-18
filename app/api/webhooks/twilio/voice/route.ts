@@ -156,8 +156,8 @@ export async function POST(req: NextRequest) {
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
     const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
+      ? supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language, business_hours').eq('id', channel.ai_employee_id).single()
+      : supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language, business_hours').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
 
     const { data: agent } = await agentQuery
 
@@ -197,6 +197,16 @@ export async function POST(req: NextRequest) {
       const transferRule = `TRANSFERS: After booking an appointment or answering a routine question, DO NOT transfer the call — confirm the details once and let the call end normally. Only transfer to a human (transfer_to_human) when the caller EXPLICITLY asks to speak to a person.`
       const langCfg = voiceLangConfig(agent?.voice_language, agent?.voice)
       let voiceSystemPrompt = `${DEFAULT_TONE}\n\n${langCfg.promptLine}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${transferRule}\n\n${baseVoicePrompt}`
+
+      // Informational opening hours (business_hours JSON) — so phone callers who ask
+      // "what are your hours?" get a real answer. Mirrors the SMS/WhatsApp prompt
+      // (lib/anthropic/pipeline buildSystemPrompt). This is NOT appointment
+      // availability (appointment_slots stays booking-only).
+      const bizHours = (agent?.business_hours || {}) as Record<string, string>
+      const hoursStr = Object.entries(bizHours).map(([day, h]) => `${day}: ${h}`).join(', ')
+      if (hoursStr) {
+        voiceSystemPrompt += `\n\nBUSINESS HOURS: ${hoursStr}. When a caller asks what hours you're open or whether you're open now, answer from these. (These are your open hours, not appointment availability.)`
+      }
 
       // If the business has configured appointment slots, let the AI actually
       // schedule via the check_availability / book_appointment functions.
