@@ -15,6 +15,8 @@ import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
 import { BusinessDetails } from '@/components/ai-employees/business-details'
+import { SkillsEditor } from '@/components/ai-employees/skills-editor'
+import { Sparkles } from 'lucide-react'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const DAY_LABELS: Record<typeof DAYS[number], string> = {
@@ -71,6 +73,7 @@ interface Props {
   googleConnected?: boolean
   googleError?: string
   onboarding?: boolean
+  skills?: { type: string; active: boolean }[]
 }
 
 const GOOGLE_ERRORS: Record<string, string> = {
@@ -104,7 +107,7 @@ function relativeTime(iso: string): string {
   return `${mon} month${mon === 1 ? '' : 's'} ago`
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError, onboarding }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError, onboarding, skills }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -763,6 +766,15 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-[#4ecdc4]" /> Business Details</CardTitle></CardHeader>
         <CardContent>
           <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
+        </CardContent>
+      </Card>
+
+      {/* Skills */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#4ecdc4]" /> Skills</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-500 mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
+          <SkillsEditor agentId={employee.id} initial={skills || []} />
         </CardContent>
       </Card>
 

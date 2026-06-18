@@ -4,6 +4,7 @@ import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { sendSMS } from '@/lib/twilio/client'
 import { notifyAdminNewUser } from '@/lib/admin/notify'
 import { maxEmployeesForPlan } from '@/lib/plans'
+import { seedDefaultSkills } from '@/lib/skills'
 
 interface FAQ {
   q: string
@@ -154,6 +155,9 @@ export async function POST(req: NextRequest) {
     console.error('[onboarding/complete]', error)
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
+
+  // Seed the default skills so the first agent matches additional agents exactly.
+  await seedDefaultSkills(serviceSupabase, tenant.id, employee.id)
 
   // Provision a dedicated phone number for this agent
   let phoneNumber: string | null = null

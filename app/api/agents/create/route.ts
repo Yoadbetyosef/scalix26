@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { maxEmployeesForPlan, planLimitMessage } from '@/lib/plans'
+import { seedDefaultSkills } from '@/lib/skills'
 
 // Create an additional AI employee + provision its dedicated number. The plan
 // limit is checked BEFORE any provisioning — we never buy a Twilio number and then
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest) {
     console.error('[agents/create] insert failed:', error?.message)
     return NextResponse.json({ error: "Couldn't create the employee — please try again." }, { status: 400 })
   }
+
+  // Seed the default skills (same set as the first agent) so every agent is identical.
+  await seedDefaultSkills(service, tenant.id, employee.id)
 
   // Provision a dedicated number AFTER the gate + create. Idempotent; non-fatal.
   let phoneNumber: string | null = null

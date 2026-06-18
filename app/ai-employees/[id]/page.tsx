@@ -69,6 +69,7 @@ export default async function AIEmployeeEditPage({
         googleConnected={sp.google_connected === 'true'}
         googleError={sp.google_error}
         onboarding={sp.onboarding === '1'}
+        skills={(employee.skills as { type: string; active: boolean }[]) || []}
       />
     </div>
   )
