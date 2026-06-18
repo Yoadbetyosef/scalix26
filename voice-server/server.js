@@ -53,13 +53,14 @@ wss.on('connection', (twilioWs) => {
     if (settingsSent || !dgOpen || !startReceived) return;
     settingsSent = true;
 
-    // Per-call voice language → Deepgram Voice Agent config. Default = English
-    // (unchanged). nova-3 handles en / es / multi (EN<->ES code-switch).
-    let agentLanguage = 'en';
-    if (voiceLanguage === 'es') agentLanguage = 'es';
-    else if (voiceLanguage === 'multi') agentLanguage = 'multi';
-    const sttModel = 'nova-3';
-    console.log('[stt]', sttModel, '[lang]', voiceLanguage, '[tts]', voiceId);
+    // STT: Deepgram Flux v2 (flux-general-multi) — faster, interruption-aware
+    // turn-taking. Auto-detects language (keeps English + Spanish), so agent.language
+    // is omitted (deprecated for Flux). eot_threshold is the latency knob: LOWER =
+    // responds sooner; RAISE toward 0.8–0.9 if it clips callers mid-sentence.
+    // ── REVERT to nova-3 (single commit): restore `language: <en|es|multi>` on agent
+    //    and `listen: { provider: { type: 'deepgram', model: 'nova-3' } }`. ──
+    const EOT_THRESHOLD = 0.7;
+    console.log('[stt] flux-general-multi v2 eot_threshold', EOT_THRESHOLD, '[lang]', voiceLanguage, '[tts]', voiceId);
 
     const settings = {
       type: 'Settings',
@@ -68,8 +69,7 @@ wss.on('connection', (twilioWs) => {
         output: { encoding: 'mulaw', sample_rate: 8000, container: 'none' },
       },
       agent: {
-        language: agentLanguage,
-        listen: { provider: { type: 'deepgram', model: sttModel } },
+        listen: { provider: { type: 'deepgram', model: 'flux-general-multi', version: 'v2', eot_threshold: EOT_THRESHOLD } },
         think: {
           provider: { type: 'anthropic', model: 'claude-haiku-4-5', temperature: 0.7 },
           // Bring-your-own Anthropic key via a custom endpoint. Deepgram proxies to
