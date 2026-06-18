@@ -20,6 +20,20 @@ export async function POST(req: NextRequest) {
     .from('tenants').select('id, plan').eq('user_id', user.id).limit(1).maybeSingle()
   if (!tenant) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
 
+  // ── IDEMPOTENT DRAFT REUSE ─────────────────────────────────────────────────
+  // Reuse an existing unfinished draft (setup_complete=false) instead of creating +
+  // provisioning a new agent, so a refresh / re-navigation never spawns a second
+  // agent or buys a second number. (Tolerant if the column isn't migrated yet.)
+  const { data: draft } = await service
+    .from('ai_employees').select('id').eq('tenant_id', tenant.id).eq('setup_complete', false)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (draft?.id) {
+    let phoneNumber: string | null = null
+    try { phoneNumber = await provisionAgentPhoneNumber(tenant.id, draft.id) } catch { /* idempotent; non-fatal */ }
+    console.log('[agents/create] reusing unfinished draft', draft.id)
+    return NextResponse.json({ success: true, employeeId: draft.id, reused: true, phoneNumber })
+  }
+
   // ── PLAN GATE (before create, before provision) ────────────────────────────
   const { count } = await service
     .from('ai_employees').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id)
@@ -49,6 +63,10 @@ export async function POST(req: NextRequest) {
     console.error('[agents/create] insert failed:', error?.message)
     return NextResponse.json({ error: "Couldn't create the employee — please try again." }, { status: 400 })
   }
+
+  // Mark as an unfinished draft so a refresh reuses it (best-effort; tolerant of an
+  // unmigrated column). Cleared by "Finish setup".
+  await service.from('ai_employees').update({ setup_complete: false }).eq('id', employee.id)
 
   // Seed the default skills (same set as the first agent) so every agent is identical.
   await seedDefaultSkills(service, tenant.id, employee.id)

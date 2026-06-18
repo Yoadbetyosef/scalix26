@@ -227,7 +227,8 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   }
 
   const [finishing, setFinishing] = useState(false)
-  // Onboarding: persist the details the owner just filled in, then go to the dashboard.
+  // Onboarding: persist the details, clear the draft flag (so New Employee no longer
+  // reuses this agent), then go to the dashboard.
   async function finishSetup() {
     setFinishing(true)
     try {
@@ -237,6 +238,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         body: JSON.stringify(form),
       })
       if (!res.ok) throw new Error('Save failed')
+      await fetch(`/api/agents/${employee.id}/finish`, { method: 'POST' }).catch(() => {})
       toast.success('You’re all set!')
       router.push('/dashboard')
     } catch {

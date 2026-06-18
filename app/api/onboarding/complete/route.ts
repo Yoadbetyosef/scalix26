@@ -156,6 +156,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
+  // Mark as an unfinished draft until "Finish setup" (best-effort; tolerant of an
+  // unmigrated column) — so New Employee reuses it rather than buying a 2nd number.
+  await serviceSupabase.from('ai_employees').update({ setup_complete: false }).eq('id', employee.id)
+
   // Seed the default skills so the first agent matches additional agents exactly.
   await seedDefaultSkills(serviceSupabase, tenant.id, employee.id)
 
