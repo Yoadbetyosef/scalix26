@@ -84,7 +84,7 @@ export function Step5Channels({ data, updateData }: Props) {
                 <p className="text-sm font-medium text-gray-900">{channel.name}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{channel.description}</p>
                 {channel.note && active && (
-                  <p className="text-xs text-[#4ecdc4] mt-1">ℹ️ {channel.note}</p>
+                  <p className="text-xs text-[#4ecdc4] mt-1">{channel.note}</p>
                 )}
               </div>
               <Switch
@@ -98,7 +98,7 @@ export function Step5Channels({ data, updateData }: Props) {
       </div>
 
       <div className="bg-[#1a1f36]/5 rounded-xl p-4 text-sm text-gray-600">
-        <p className="font-medium mb-1">🚀 What happens when you click "Go Live"?</p>
+        <p className="font-medium mb-1">What happens when you click &quot;Go Live&quot;?</p>
         <ul className="space-y-1 text-xs text-gray-500 list-disc list-inside">
           <li>Your AI employee becomes active immediately</li>
           <li>SMS/Voice: a Twilio number will be provisioned for you</li>

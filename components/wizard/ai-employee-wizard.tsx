@@ -64,30 +64,31 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
   async function handleFinish() {
     setSaving(true)
     try {
-      // 1. Update tenant with business info
-      await supabase.from('tenants').update({
-        ...data.businessInfo,
-      }).eq('id', tenant.id)
-
-      // 2. Create AI employee
-      const { data: employee, error: empError } = await supabase
-        .from('ai_employees')
-        .insert({
-          tenant_id: tenant.id,
+      // 1. Create the employee + provision its number via the gated endpoint. The
+      // plan limit is enforced BEFORE any Twilio number is bought (trial = 1).
+      const createRes = await fetch('/api/agents/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: data.employee.name,
-          // Headshot follows the chosen voice (e.g. aura-2-asteria-en → asteria.png).
-          avatar_url: `/avatars/${(data.employee.voice.split('-')[2] || 'asteria')}.png`,
           voice: data.employee.voice,
           greeting: data.employee.greeting,
           personality_score: data.employee.personality_score,
-          status: 'active',
-        })
-        .select()
-        .single()
+          business_name: data.businessInfo.business_name,
+          industry: data.businessInfo.industry,
+          website: data.businessInfo.website,
+        }),
+      })
+      const created = await createRes.json().catch(() => ({}))
+      if (!createRes.ok) {
+        // plan_limit (403) and other failures surface a friendly message, no number bought.
+        toast.error(created.error || 'Failed to create AI Employee')
+        setSaving(false)
+        return
+      }
+      const employee = { id: created.employeeId as string }
 
-      if (empError) throw empError
-
-      // 3. Create knowledge base items
+      // 2. Create knowledge base items
       if (data.knowledgeItems.length > 0) {
         await supabase.from('knowledge_base').insert(
           data.knowledgeItems.map(item => ({
@@ -130,7 +131,7 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
         })
       }
 
-      toast.success('AI Employee created successfully! 🎉')
+      toast.success(created.phoneNumber ? `AI Employee created — number ${created.phoneNumber} provisioned.` : 'AI Employee created — number is provisioning.')
       router.push('/dashboard')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to create AI Employee')
@@ -204,7 +205,7 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
           </Button>
         ) : (
           <Button onClick={handleFinish} loading={saving}>
-            Go Live 🚀
+            Go Live
           </Button>
         )}
       </div>
