@@ -76,8 +76,10 @@ export default function SignupPage() {
           window.location.href = `/ai-employees/${bj.employeeId}?onboarding=1`
           return
         }
-      } catch { /* fall through to the classic onboarding flow */ }
-      window.location.href = '/onboarding'
+      } catch { /* fall through */ }
+      // Fallback if bootstrap didn't return an agent: the New Employee path (same full
+      // edit-page experience) creates + provisions and lands on the page. No wizard.
+      window.location.href = '/ai-employees/new'
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Signup failed'
       setError(msg)
