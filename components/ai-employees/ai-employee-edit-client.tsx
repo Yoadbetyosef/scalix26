@@ -210,6 +210,14 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   // tools read), reconstructed here as ranges; saving expands them to hourly slots.
   const [appointmentHours, setAppointmentHours] = useState<Record<string, DayHours>>(() => slotsToHours(availabilitySlots || []))
 
+  // Unsaved-changes tracking for the sticky save bar. Baseline = the snapshot at
+  // last successful save (initialized to the loaded values). Only covers what
+  // handleSave persists (form + both hours); KB/Skills/Channels save instantly on
+  // their own and aren't part of this.
+  const editedSnapshot = JSON.stringify({ form, businessHours, appointmentHours })
+  const [savedSnapshot, setSavedSnapshot] = useState(editedSnapshot)
+  const isDirty = editedSnapshot !== savedSnapshot
+
   // Show toast on OAuth return
   useEffect(() => {
     if (metaConnected) toast.success('Facebook connected!')
@@ -295,6 +303,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         body: JSON.stringify({ ...form, business_hours: dayHoursToBusinessHours(businessHours), weekly_hours: appointmentHours }),
       })
       if (!res.ok) throw new Error('Save failed')
+      setSavedSnapshot(editedSnapshot) // baseline = what we just saved → bar hides
       toast.success('Agent saved!')
       router.refresh()
     } catch {
@@ -402,7 +411,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   }
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
+    <div className={`space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'pb-24' : ''}`}>
       {/* Onboarding welcome banner */}
       {onboarding && (
         <div className="rounded-2xl border border-[#4ecdc4]/30 bg-[#4ecdc4]/10 p-4 sm:p-5">
@@ -904,6 +913,17 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           </div>
         </CardContent>
       </Card>
+
+      {/* Sticky save bar — appears only when there are unsaved changes. Same
+          handleSave/payload/loading state as the header + bottom buttons. */}
+      {isDirty && !onboarding && (
+        <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-gray-200 bg-white shadow-lg px-4 py-2.5">
+            <span className="text-sm text-gray-600">You have unsaved changes</span>
+            <Button onClick={handleSave} loading={saving} size="sm">Save Changes</Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
