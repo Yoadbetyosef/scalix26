@@ -4,7 +4,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { WizardState } from './ai-employee-wizard'
-import { cn } from '@/lib/utils'
 import { VoiceSelector } from '@/components/ai-employees/voice-selector'
 
 interface Props {
@@ -12,25 +11,12 @@ interface Props {
   updateData: (partial: Partial<WizardState>) => void
 }
 
-const AVATARS = [
-  { id: 'avatar-1', label: 'Professional Female', emoji: '👩‍💼' },
-  { id: 'avatar-2', label: 'Professional Male', emoji: '👨‍💼' },
-  { id: 'avatar-3', label: 'Friendly Female', emoji: '👩' },
-  { id: 'avatar-4', label: 'Friendly Male', emoji: '👨' },
-  { id: 'avatar-5', label: 'Tech Female', emoji: '👩‍💻' },
-  { id: 'avatar-6', label: 'Tech Male', emoji: '👨‍💻' },
-  { id: 'avatar-7', label: 'Expert Female', emoji: '👩‍🔧' },
-  { id: 'avatar-8', label: 'Expert Male', emoji: '👨‍🔧' },
-]
-
 export function Step2CreateEmployee({ data, updateData }: Props) {
   const emp = data.employee
 
   function update(field: string, value: string | number) {
     updateData({ employee: { ...emp, [field]: value } })
   }
-
-  const selectedAvatar = AVATARS.find(a => `/avatars/${a.id}.png` === emp.avatar_url) || AVATARS[0]
 
   return (
     <div className="space-y-5">
@@ -49,28 +35,7 @@ export function Step2CreateEmployee({ data, updateData }: Props) {
         />
       </div>
 
-      <div>
-        <Label>Avatar</Label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
-          {AVATARS.map(avatar => (
-            <button
-              key={avatar.id}
-              type="button"
-              onClick={() => update('avatar_url', `/avatars/${avatar.id}.png`)}
-              className={cn(
-                'flex flex-col items-center p-3 rounded-xl border-2 transition-all',
-                selectedAvatar.id === avatar.id
-                  ? 'border-[#4ecdc4] bg-[#4ecdc4]/5'
-                  : 'border-gray-100 hover:border-gray-300'
-              )}
-            >
-              <span className="text-3xl">{avatar.emoji}</span>
-              <span className="text-xs text-gray-500 mt-1 text-center leading-tight">{avatar.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
+      {/* Voice picker uses the real photorealistic headshots (the persona IS the voice). */}
       <div>
         <VoiceSelector value={emp.voice} onChange={(v) => update('voice', v)} />
       </div>

@@ -5,12 +5,15 @@ import { toast } from 'sonner'
 import { Play, Mic, Square, Loader2 } from 'lucide-react'
 
 export const VOICES = [
-  { id: 'aura-2-asteria-en', name: 'Asteria', gender: 'Female', description: 'Warm & friendly', emoji: '👩' },
-  { id: 'aura-2-andromeda-en', name: 'Andromeda', gender: 'Female', description: 'Professional & clear', emoji: '👩‍💼' },
-  { id: 'aura-2-thalia-en', name: 'Thalia', gender: 'Female', description: 'Energetic & bright', emoji: '⚡' },
-  { id: 'aura-2-odysseus-en', name: 'Odysseus', gender: 'Male', description: 'Deep & professional', emoji: '👨‍💼' },
-  { id: 'aura-2-arcas-en', name: 'Arcas', gender: 'Male', description: 'Natural & smooth', emoji: '👨' },
+  { id: 'aura-2-asteria-en', name: 'Asteria', gender: 'Female', description: 'Warm & friendly' },
+  { id: 'aura-2-andromeda-en', name: 'Andromeda', gender: 'Female', description: 'Professional & clear' },
+  { id: 'aura-2-thalia-en', name: 'Thalia', gender: 'Female', description: 'Energetic & bright' },
+  { id: 'aura-2-odysseus-en', name: 'Odysseus', gender: 'Male', description: 'Deep & professional' },
+  { id: 'aura-2-arcas-en', name: 'Arcas', gender: 'Male', description: 'Natural & smooth' },
 ]
+
+// Real photorealistic headshot per voice, e.g. /avatars/asteria.png.
+const headshot = (name: string) => `/avatars/${name.toLowerCase()}.png`
 
 const PREVIEW_TEXT = 'Hi! Thanks for calling. How can I help you today?'
 
@@ -136,26 +139,29 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
     <div className="space-y-4">
       <p className="text-sm font-medium text-gray-700">Choose your AI voice</p>
 
-      {/* Voice picker grid */}
-      <div className="flex flex-wrap gap-2">
+      {/* Voice picker grid — real headshots */}
+      <div className="flex flex-wrap gap-3">
         {VOICES.map((v) => (
           <button
             key={v.id}
             type="button"
             onClick={() => onChange(v.id)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border-2 text-sm font-medium transition-colors ${
-              active === v.id ? 'border-[#4ecdc4] bg-[#4ecdc4]/10 text-gray-900' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+            className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors ${
+              active === v.id ? 'border-[#4ecdc4] bg-[#4ecdc4]/10' : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <span className="text-base">{v.emoji}</span>{v.name}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={headshot(v.name)} alt={v.name} className="w-14 h-14 rounded-full object-cover" />
+            <span className="text-xs font-medium text-gray-700">{v.name}</span>
           </button>
         ))}
       </div>
 
       {/* Selected voice — demo card */}
       <div className="rounded-xl border-2 border-[#4ecdc4] bg-[#4ecdc4]/5 p-4">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🎙</span>
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={headshot(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full object-cover" />
           <div>
             <p className="font-semibold text-gray-900">{selected.name}</p>
             <p className="text-xs text-gray-500">{selected.description} • {selected.gender}</p>

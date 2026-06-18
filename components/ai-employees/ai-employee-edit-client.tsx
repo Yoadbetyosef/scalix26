@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail } from 'lucide-react'
+import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
@@ -635,7 +635,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Email */}
       <Card>
-        <CardHeader><CardTitle>📧 Email</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#4ecdc4]" /> Email</CardTitle></CardHeader>
         <CardContent className="space-y-5">
           <p className="text-sm text-gray-500">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
 
@@ -720,7 +720,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Business Details */}
       <Card>
-        <CardHeader><CardTitle>🏢 Business Details</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-[#4ecdc4]" /> Business Details</CardTitle></CardHeader>
         <CardContent>
           <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
         </CardContent>
@@ -728,7 +728,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Knowledge Base */}
       <Card>
-        <CardHeader><CardTitle>📚 Knowledge Base</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-[#4ecdc4]" /> Knowledge Base</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-gray-500 mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
           <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />

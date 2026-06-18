@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   const {
     businessName, ownerName, ownerPhone, businessType,
     websiteUrl, scrapedContent, services, pricing, specialInstructions,
-    googleReviewsLink, greeting, tone, aiInstructions, faqs,
+    googleReviewsLink, greeting, tone, voice, aiInstructions, faqs,
   } = body
 
   const serviceSupabase = await createServiceClient()
@@ -117,7 +117,9 @@ export async function POST(req: NextRequest) {
       greeting: greeting || `Hi! Thanks for contacting ${businessName}. How can I help you today?`,
       personality: tone === 'professional' ? 'professional' : 'friendly',
       personality_score: personalityScore,
-      voice: 'professional_female',
+      // Voice chosen in onboarding (real Aura headshot voice); default to Asteria.
+      voice: typeof voice === 'string' && voice.startsWith('aura') ? voice : 'aura-2-asteria-en',
+      avatar_url: `/avatars/${(typeof voice === 'string' ? voice.split('-')[2] : 'asteria') || 'asteria'}.png`,
       system_prompt: systemPrompt,
       status: 'active',
       // Business identity stored per-agent

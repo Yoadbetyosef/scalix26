@@ -40,7 +40,7 @@ const DEFAULT_STATE: WizardState = {
   businessInfo: {},
   employee: {
     name: 'Alex',
-    avatar_url: '/avatars/avatar-1.png',
+    avatar_url: '/avatars/asteria.png',
     voice: 'aura-2-asteria-en',
     greeting: "Hi! Thank you for contacting us. How can I help you today?",
     personality_score: 70,
@@ -75,7 +75,8 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
         .insert({
           tenant_id: tenant.id,
           name: data.employee.name,
-          avatar_url: data.employee.avatar_url,
+          // Headshot follows the chosen voice (e.g. aura-2-asteria-en → asteria.png).
+          avatar_url: `/avatars/${(data.employee.voice.split('-')[2] || 'asteria')}.png`,
           voice: data.employee.voice,
           greeting: data.employee.greeting,
           personality_score: data.employee.personality_score,

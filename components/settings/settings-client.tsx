@@ -5,12 +5,10 @@ import Link from 'next/link'
 import { Tenant, Channel } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook } from 'lucide-react'
+import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook, Calendar, MapPin, Smartphone, Mail, Check } from 'lucide-react'
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   voice: Phone,
@@ -26,31 +24,7 @@ interface Props {
 }
 
 export function SettingsClient({ tenant, channels }: Props) {
-  const [form, setForm] = useState({
-    business_name: tenant.business_name || '',
-    phone: tenant.phone || '',
-    email: tenant.email || '',
-    website: tenant.website || '',
-    address: tenant.address || '',
-    city: tenant.city || '',
-    state: tenant.state || '',
-  })
-  const [saving, setSaving] = useState(false)
   const [showLeadCode, setShowLeadCode] = useState(false)
-  const supabase = createClient()
-
-  async function handleSave() {
-    setSaving(true)
-    try {
-      const { error } = await supabase.from('tenants').update(form).eq('id', tenant.id)
-      if (error) throw error
-      toast.success('Settings saved!')
-    } catch {
-      toast.error('Failed to save settings')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function openBillingPortal() {
     const res = await fetch('/api/stripe/portal', { method: 'POST' })
@@ -94,7 +68,7 @@ export function SettingsClient({ tenant, channels }: Props) {
         <Card className="hover:border-[#4ecdc4] transition-colors">
           <CardContent className="flex items-center justify-between py-4">
             <div>
-              <p className="font-semibold text-gray-900">📅 Availability &amp; Reviews</p>
+              <p className="font-semibold text-gray-900 flex items-center gap-2"><Calendar className="w-4 h-4 text-[#4ecdc4]" /> Availability &amp; Reviews</p>
               <p className="text-sm text-gray-500 mt-0.5">Set appointment times and Google review automation</p>
             </div>
             <span className="text-gray-300 text-xl">›</span>
@@ -102,45 +76,8 @@ export function SettingsClient({ tenant, channels }: Props) {
         </Card>
       </Link>
 
-      {/* Business Profile */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Business Profile</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label>Business Name</Label>
-              <Input className="mt-1.5" value={form.business_name} onChange={e => setForm(f => ({ ...f, business_name: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Phone</Label>
-              <Input className="mt-1.5" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Email</Label>
-              <Input className="mt-1.5" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-            </div>
-            <div className="col-span-2">
-              <Label>Website</Label>
-              <Input className="mt-1.5" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
-            </div>
-            <div className="col-span-2">
-              <Label>Address</Label>
-              <Input className="mt-1.5" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
-            </div>
-            <div>
-              <Label>City</Label>
-              <Input className="mt-1.5" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
-            </div>
-            <div>
-              <Label>State</Label>
-              <Input className="mt-1.5" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
-            </div>
-          </div>
-          <Button onClick={handleSave} loading={saving}>Save Changes</Button>
-        </CardContent>
-      </Card>
+      {/* Business identity (name, email, address, hours, etc.) is edited on the
+          AI Employee page — the single source of truth — not duplicated here. */}
 
       {/* Connected Channels */}
       <Card>
@@ -211,9 +148,9 @@ export function SettingsClient({ tenant, channels }: Props) {
                   </Button>
                 </div>
                 <div className="mt-3 space-y-1.5 text-xs text-gray-600">
-                  <p className="flex items-center gap-2"><span aria-hidden>📍</span> Paste it in your Google Business Profile</p>
-                  <p className="flex items-center gap-2"><span aria-hidden>📱</span> Add it to your Instagram or Facebook bio</p>
-                  <p className="flex items-center gap-2"><span aria-hidden>✉️</span> Include it in your email signature</p>
+                  <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-gray-400" /> Paste it in your Google Business Profile</p>
+                  <p className="flex items-center gap-2"><Smartphone className="w-3.5 h-3.5 text-gray-400" /> Add it to your Instagram or Facebook bio</p>
+                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-gray-400" /> Include it in your email signature</p>
                 </div>
               </div>
 
@@ -328,7 +265,7 @@ export function SettingsClient({ tenant, channels }: Props) {
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
                     {plan.features.map(f => (
-                      <span key={f} className="text-xs text-gray-500">✓ {f}</span>
+                      <span key={f} className="text-xs text-gray-500 flex items-center gap-1"><Check className="w-3 h-3 text-green-500" /> {f}</span>
                     ))}
                   </div>
                 </div>

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ArrowRight, Plus, Trash2, Globe, Phone, Star, CheckCircle2, LayoutDashboard, Copy } from 'lucide-react'
+import { VoiceSelector } from '@/components/ai-employees/voice-selector'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ interface OnboardingData {
   googleReviewsLink: string
   greeting: string
   tone: 'friendly' | 'professional' | 'casual'
+  voice: string
   aiInstructions: string
   faqs: FAQ[]
 }
@@ -125,6 +127,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
     googleReviewsLink: '',
     greeting: `Hi! Thanks for calling ${tenant.business_name || 'us'}. I'm the AI assistant — the owner is currently on a job. How can I help you today?`,
     tone: 'friendly',
+    voice: 'aura-2-asteria-en',
     aiInstructions: '',
     faqs: [
       { q: 'How fast can you come?', a: 'We typically arrive within 30 minutes.' },
@@ -559,15 +562,20 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 />
               </div>
 
+              {/* Voice — real headshots + live "talk to me" preview */}
+              <div>
+                <VoiceSelector value={data.voice} onChange={(v) => set('voice', v)} />
+              </div>
+
               {/* Tone */}
               <div>
                 <Label className="text-base font-semibold text-gray-800">Tone of voice</Label>
                 <p className="text-sm text-gray-400 mb-3">How should your AI sound?</p>
                 <div className="grid grid-cols-3 gap-3">
                   {([
-                    { id: 'friendly', label: 'Friendly', emoji: '😊', desc: 'Warm and approachable' },
-                    { id: 'professional', label: 'Professional', emoji: '💼', desc: 'Formal and precise' },
-                    { id: 'casual', label: 'Casual', emoji: '👋', desc: 'Relaxed and easy-going' },
+                    { id: 'friendly', label: 'Friendly', desc: 'Warm and approachable' },
+                    { id: 'professional', label: 'Professional', desc: 'Formal and precise' },
+                    { id: 'casual', label: 'Casual', desc: 'Relaxed and easy-going' },
                   ] as const).map(t => (
                     <button
                       key={t.id}
@@ -579,7 +587,6 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <div className="text-2xl mb-1">{t.emoji}</div>
                       <div className="text-sm font-semibold text-gray-800">{t.label}</div>
                       <div className="text-xs text-gray-500 mt-0.5">{t.desc}</div>
                     </button>
