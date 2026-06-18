@@ -17,15 +17,9 @@ export default async function AvailabilityPage() {
     .maybeSingle()
   if (!tenant) redirect('/auth/signup')
 
-  const { data: slots } = await service
-    .from('appointment_slots')
-    .select('day_of_week, slot_time')
-    .eq('tenant_id', tenant.id)
-
   return (
     <AvailabilityClient
       tenantId={tenant.id}
-      initialSlots={slots || []}
       googleReviewUrl={tenant.google_review_url || ''}
       reviewEnabled={tenant.review_automation_enabled ?? true}
     />

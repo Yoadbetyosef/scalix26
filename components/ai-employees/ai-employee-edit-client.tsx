@@ -18,6 +18,7 @@ import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/kno
 import { BusinessDetails } from '@/components/ai-employees/business-details'
 import { SkillsEditor } from '@/components/ai-employees/skills-editor'
 import { AvailabilityClient } from '@/components/settings/availability-client'
+import { slotsToHours, type DayHours } from '@/lib/appointments'
 import { Sparkles } from 'lucide-react'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
@@ -41,19 +42,6 @@ const TIME_SLOTS: { value: string; label: string }[] = (() => {
   }
   return out
 })()
-
-// Normalize a "9:00" / "09:00" token to the canonical "9:00" so it matches a slot.
-function normTime(t: string): string {
-  const [h, m] = (t || '').trim().split(':')
-  if (!h) return t.trim()
-  return `${parseInt(h, 10)}:${(m ?? '00').padStart(2, '0')}`
-}
-
-function parseDay(raw: string | undefined): { isOpen: boolean; open: string; close: string } {
-  if (!raw || raw.trim().toLowerCase() === 'closed') return { isOpen: false, open: '9:00', close: '17:00' }
-  const [o, c] = raw.split('-')
-  return { isOpen: true, open: normTime(o || '9:00'), close: normTime(c || '17:00') }
-}
 
 function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel: string }) {
   return (
@@ -177,11 +165,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     city: employee.city || '',
     state: employee.state || '',
     forward_to_phone: employee.forward_to_phone || '',
-    business_hours: employee.business_hours || {
-      mon: '9:00-17:00', tue: '9:00-17:00', wed: '9:00-17:00',
-      thu: '9:00-17:00', fri: '9:00-17:00', sat: 'closed', sun: 'closed',
-    },
   })
+
+  // Weekly hours live in the appointment_slots table (the booking source of truth),
+  // reconstructed here as per-day open/close ranges. Saving expands them back into
+  // hourly slots server-side, so the UI, the saved data, and what the AI books are
+  // all the SAME source.
+  const [weeklyHours, setWeeklyHours] = useState<Record<string, DayHours>>(() => slotsToHours(availabilitySlots || []))
 
   // Show toast on OAuth return
   useEffect(() => {
@@ -255,14 +245,8 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   const websiteChanged = scannedUrl !== '' && scannedUrl !== websiteVal
   const kbCount = employee.website_kb_item_count ?? 0
 
-  // Merge a single day's open/close/toggle back into the "9:00-17:00" | "closed" string.
-  function updateDay(day: string, next: Partial<{ isOpen: boolean; open: string; close: string }>) {
-    setForm(f => {
-      const hours = f.business_hours as Record<string, string>
-      const merged = { ...parseDay(hours[day]), ...next }
-      const val = merged.isOpen ? `${merged.open}-${merged.close}` : 'closed'
-      return { ...f, business_hours: { ...hours, [day]: val } }
-    })
+  function updateDay(day: string, next: Partial<DayHours>) {
+    setWeeklyHours(w => ({ ...w, [day]: { ...w[day], ...next } }))
   }
 
   async function handleSave() {
@@ -271,7 +255,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       const res = await fetch(`/api/agents/${employee.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, weekly_hours: weeklyHours }),
       })
       if (!res.ok) throw new Error('Save failed')
       toast.success('Agent saved!')
@@ -292,7 +276,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       const res = await fetch(`/api/agents/${employee.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, weekly_hours: weeklyHours }),
       })
       if (!res.ok) throw new Error('Save failed')
       await fetch(`/api/agents/${employee.id}/finish`, { method: 'POST' }).catch(() => {})
@@ -482,10 +466,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               <Clock className="w-4 h-4 text-gray-500" />
               <Label className="text-base font-semibold">Weekly Hours</Label>
             </div>
-            <p className="text-xs text-gray-400 mt-1">Toggle each day open or closed, then pick when you open and close.</p>
+            <p className="text-xs text-gray-400 mt-1">Toggle each day open or closed, then pick when you open and close. These are the hours the AI books appointments within.</p>
             <div className="mt-3 rounded-xl border border-gray-200 divide-y divide-gray-100">
               {DAYS.map(day => {
-                const { isOpen, open, close } = parseDay((form.business_hours as Record<string, string>)[day])
+                const { isOpen, open, close } = weeklyHours[day]
                 return (
                   <div key={day} className="flex items-center gap-3 px-3 sm:px-4 py-3">
                     <div className="flex items-center gap-2.5 w-28 sm:w-36 shrink-0">
@@ -846,11 +830,11 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         </CardContent>
       </Card>
 
-      {/* Availability & Reviews (appointment times + Google review automation) */}
+      {/* Google review automation. Weekly Hours moved up to the Weekly Hours section
+          (backed by appointment_slots — the booking source of truth). */}
       <AvailabilityClient
         tenantId={tenantId}
         embedded
-        initialSlots={availabilitySlots || []}
         googleReviewUrl={googleReviewUrl || ''}
         reviewEnabled={reviewEnabled ?? true}
       />

@@ -104,3 +104,61 @@ export function formatTime12(hhmm: string): string {
   if (h === 0) h = 12
   return `${h}:${m} ${ap}`
 }
+
+// ── Weekly hours ⇄ appointment_slots ─────────────────────────────────────────
+// appointment_slots (tenant-scoped: day_of_week + slot_time) is the SINGLE source
+// of truth the booking logic reads (check_availability / book_appointment). The UI
+// edits a simple per-day open/close range; we expand each open day into hourly
+// bookable slots, and collapse slots back into a range when loading. One source.
+
+export type DayHours = { isOpen: boolean; open: string; close: string } // open/close as "H:MM"
+
+// Our UI day keys (mon..sun) → appointment_slots day_of_week (0=Sun .. 6=Sat).
+export const DOW_FOR_DAY: Record<string, number> = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 }
+
+function minsOf(t: string): number {
+  const [h, m] = (t || '').split(':')
+  return parseInt(h || '0', 10) * 60 + parseInt(m || '0', 10)
+}
+function fromMins(n: number): string {
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`
+}
+
+// Expand per-day open/close ranges into hourly appointment_slots rows.
+export function hoursToSlots(weekly: Record<string, DayHours>): { day_of_week: number; slot_time: string }[] {
+  const rows: { day_of_week: number; slot_time: string }[] = []
+  for (const [day, dow] of Object.entries(DOW_FOR_DAY)) {
+    const h = weekly[day]
+    if (!h || !h.isOpen) continue
+    const start = minsOf(h.open)
+    const end = minsOf(h.close)
+    for (let t = start; t < end; t += 60) {
+      rows.push({ day_of_week: dow, slot_time: `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}:00` })
+    }
+  }
+  return rows
+}
+
+// Collapse appointment_slots back into per-day open/close ranges for the UI.
+export function slotsToHours(slots: { day_of_week: number; slot_time: string }[]): Record<string, DayHours> {
+  const byDow: Record<number, number[]> = {}
+  for (const s of slots) {
+    const hhmm = String(s.slot_time).slice(0, 5)
+    ;(byDow[s.day_of_week] ||= []).push(minsOf(hhmm))
+  }
+  const out: Record<string, DayHours> = {}
+  for (const [day, dow] of Object.entries(DOW_FOR_DAY)) {
+    const mins = (byDow[dow] || []).sort((a, b) => a - b)
+    out[day] = mins.length
+      ? { isOpen: true, open: fromMins(mins[0]), close: fromMins(mins[mins.length - 1] + 60) }
+      : { isOpen: false, open: '9:00', close: '17:00' }
+  }
+  return out
+}
+
+// Human-readable hours line for the AI prompt, derived from slots (same source).
+export function slotsToHoursText(slots: { day_of_week: number; slot_time: string }[]): string {
+  const h = slotsToHours(slots)
+  const order: [string, string][] = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']]
+  return order.map(([d, label]) => (h[d].isOpen ? `${label} ${formatTime12(h[d].open)}–${formatTime12(h[d].close)}` : `${label} closed`)).join(', ')
+}

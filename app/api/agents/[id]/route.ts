@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import twilio from 'twilio'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
+import { hoursToSlots, type DayHours } from '@/lib/appointments'
 
 export async function PATCH(
   req: NextRequest,
@@ -42,7 +43,7 @@ export async function PATCH(
   const allowed = [
     'name', 'greeting', 'personality', 'personality_score', 'voice', 'system_prompt', 'status',
     'business_name', 'industry', 'website', 'phone', 'email', 'address', 'city', 'state', 'zip',
-    'business_hours', 'timezone', 'forward_to_phone',
+    'timezone', 'forward_to_phone',
     'email_auto_reply', 'reply_from_email', 'voice_language', 'email_handoff_after_first_reply',
   ]
 
@@ -51,12 +52,28 @@ export async function PATCH(
     if (key in body) updates[key] = body[key]
   }
 
-  const { error } = await serviceSupabase
-    .from('ai_employees')
-    .update(updates)
-    .eq('id', agentId)
+  if (Object.keys(updates).length > 0) {
+    const { error } = await serviceSupabase
+      .from('ai_employees')
+      .update(updates)
+      .eq('id', agentId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  // Weekly hours are the appointment_slots table (the booking source of truth),
+  // NOT a column on ai_employees. The UI sends per-day open/close ranges; expand
+  // them into hourly bookable slots and replace the tenant's slots. Admin client
+  // bypasses RLS (the old client-side delete/insert silently failed under RLS).
+  if (body.weekly_hours && typeof body.weekly_hours === 'object') {
+    const weekly = body.weekly_hours as Record<string, DayHours>
+    const rows = hoursToSlots(weekly).map(r => ({ ...r, tenant_id: agent.tenant_id, is_active: true }))
+    const { error: delErr } = await serviceSupabase.from('appointment_slots').delete().eq('tenant_id', agent.tenant_id)
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 400 })
+    if (rows.length > 0) {
+      const { error: insErr } = await serviceSupabase.from('appointment_slots').insert(rows)
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 400 })
+    }
+  }
 
   // One-time welcome "text yourself" SMS: fires only when the owner FIRST sets their
   // forward number (empty → set transition), texted from the agent's provisioned
