@@ -890,30 +890,31 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       </Card>
 
       {/* Bottom Save — in its own card so it clearly reads as "save the whole agent"
-          (a bare floating button looked like it saved just the section above). Same
-          handler/payload/state as the header button. Separate from the Danger Zone. */}
+          (a bare floating button looked like it saved just the section above). The
+          green primary action lives HERE, not in the red Danger Zone. In onboarding
+          it's "Finish setup"; when editing it's "Save Changes". */}
       <Card>
         <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
-          <p className="text-sm text-gray-500">Save all changes to this AI employee.</p>
-          <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className="w-full sm:w-auto">Save Changes</Button>
+          <p className="text-sm text-gray-500">
+            {onboarding ? 'Finish setting up this AI employee.' : 'Save all changes to this AI employee.'}
+          </p>
+          {onboarding ? (
+            <Button onClick={finishSetup} loading={finishing} className="w-full sm:w-auto">Finish setup</Button>
+          ) : (
+            <Button onClick={handleSave} loading={saving} className="w-full sm:w-auto">Save Changes</Button>
+          )}
         </CardContent>
       </Card>
 
-      {/* Danger Zone */}
+      {/* Danger Zone — destructive actions only. The green primary action moved up
+          to the Save card above so it never sits beside the red Delete. */}
       <Card className="border-red-200">
         <CardHeader><CardTitle className="text-red-600">Danger Zone</CardTitle></CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="destructive" onClick={handleDelete}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Agent
-            </Button>
-            {onboarding && (
-              <Button onClick={finishSetup} loading={finishing} className="bg-green-600 hover:bg-green-700 text-white">
-                Finish setup
-              </Button>
-            )}
-          </div>
+          <Button variant="destructive" onClick={handleDelete}>
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Agent
+          </Button>
         </CardContent>
       </Card>
 
