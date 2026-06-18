@@ -88,6 +88,7 @@ wss.on('connection', (twilioWs) => {
             time: { type: 'string' },
             customer_name: { type: 'string' },
             customer_phone: { type: 'string' },
+            customer_email: { type: 'string', description: 'Only if the caller volunteers an email' },
             service_type: { type: 'string' },
           },
           required: ['date', 'time', 'customer_name', 'customer_phone'],
@@ -212,7 +213,7 @@ wss.on('connection', (twilioWs) => {
             const r = await fetch(`${appUrl}/api/appointments/book`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...args, lead_token: leadToken, customer_phone: args.customer_phone || callerNumber }),
+              body: JSON.stringify({ ...args, lead_token: leadToken, customer_phone: args.customer_phone || callerNumber, channel: 'voice' }),
             });
             const j = await r.json();
             content = j.success ? 'Appointment booked successfully.' : `Could not book: ${j.error || 'please try again'}`;

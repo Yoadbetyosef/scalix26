@@ -85,6 +85,19 @@ export const emailTemplates = {
 <p>Your data will be retained for 30 days. If you'd like to reactivate, just sign back in.</p>`,
   }),
 
+  appointmentBooked: (a: { business: string; customer: string; when: string; phone: string; service: string; email?: string | null; channel?: string | null }) => ({
+    subject: `New appointment: ${a.customer} — ${a.when}`,
+    html: `<h2>New appointment booked</h2>
+<p>Your AI just booked an appointment${a.channel ? ` via ${a.channel}` : ''} for ${a.business}.</p>
+<table>
+<tr><td><strong>Customer</strong></td><td>${a.customer}</td></tr>
+<tr><td><strong>When</strong></td><td>${a.when}</td></tr>
+<tr><td><strong>Phone</strong></td><td>${a.phone}</td></tr>
+${a.email ? `<tr><td><strong>Email</strong></td><td>${a.email}</td></tr>` : ''}
+<tr><td><strong>Service</strong></td><td>${a.service}</td></tr>
+</table>`,
+  }),
+
   adminNewUser: (user: { name: string; email: string; phone: string; plan: string; signupTime: string }) => ({
     subject: `New signup: ${user.name}`,
     html: `<h2>New user signed up</h2>

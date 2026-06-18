@@ -91,7 +91,7 @@ async function getDashboardData(tenantId: string) {
 
   const { data: appointments } = await supabase
     .from('appointments')
-    .select('id, customer_name, customer_phone, slot_date, slot_time, service_type, status, skip_review, review_sent_at')
+    .select('id, customer_name, customer_phone, customer_email, channel, slot_date, slot_time, service_type, status, skip_review, review_sent_at')
     .eq('tenant_id', tenantId)
     .order('slot_date', { ascending: false })
     .order('slot_time', { ascending: true })

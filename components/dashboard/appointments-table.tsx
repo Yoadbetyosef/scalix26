@@ -11,6 +11,8 @@ export type Appointment = {
   id: string
   customer_name: string | null
   customer_phone: string
+  customer_email: string | null
+  channel: string | null
   slot_date: string
   slot_time: string
   service_type: string | null
@@ -104,7 +106,10 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
                     {a.skip_review && <span className="text-[11px] text-gray-400">review skipped</span>}
                   </div>
                   <p className="text-sm text-gray-700 mt-1">{friendlyDate(a.slot_date)} · {formatTime12(a.slot_time)}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{a.service_type || 'Service'} · {a.customer_phone}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {a.service_type || 'Service'} · {a.customer_phone}
+                    {a.channel && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 capitalize">{a.channel}</span>}
+                  </p>
                 </div>
                 <div className="flex flex-col items-stretch gap-2 flex-shrink-0">
                   <a href={`tel:${a.customer_phone}`} className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af]">
