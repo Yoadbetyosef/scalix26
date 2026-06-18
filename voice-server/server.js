@@ -24,7 +24,8 @@ wss.on('connection', (twilioWs) => {
   let systemPrompt = process.env.DEFAULT_SYSTEM_PROMPT || 'You are a professional AI receptionist. Keep responses under 2 sentences. Be warm and fast.';
   let greeting = 'Hello! How can I help you today?';
   let voiceId = process.env.DEFAULT_VOICE || 'aura-2-asteria-en';
-  let ownerPhone = null;
+  let ownerPhone = null;     // tenant business phone — lead-alert SMS recipient ONLY
+  let transferNumber = null; // agent's configured transfer number — the ONLY live-transfer target
   let fromNumber = null;
   let leadToken = null;    // tenant's secret intake token — to save the lead
   let callerNumber = null; // caller's real phone (From) — reliable fallback
@@ -62,6 +63,52 @@ wss.on('connection', (twilioWs) => {
     const EOT_THRESHOLD = 0.7;
     console.log('[stt] flux-general-multi v2 eot_threshold', EOT_THRESHOLD, '[lang]', voiceLanguage, '[tts]', voiceId);
 
+    // Always available: scheduling. transfer_to_human is included ONLY when this
+    // agent has a configured transfer number — no number means the AI literally
+    // cannot transfer (the function isn't offered to the model).
+    const agentFunctions = [
+      {
+        name: 'check_availability',
+        description: 'Check available appointment slots for a specific date',
+        parameters: {
+          type: 'object',
+          properties: {
+            date: { type: 'string', description: 'Date like tomorrow, Monday, June 15' },
+          },
+          required: ['date'],
+        },
+      },
+      {
+        name: 'book_appointment',
+        description: 'Book an appointment for the customer',
+        parameters: {
+          type: 'object',
+          properties: {
+            date: { type: 'string' },
+            time: { type: 'string' },
+            customer_name: { type: 'string' },
+            customer_phone: { type: 'string' },
+            service_type: { type: 'string' },
+          },
+          required: ['date', 'time', 'customer_name', 'customer_phone'],
+        },
+      },
+    ];
+    if (transferNumber) {
+      agentFunctions.unshift({
+        name: 'transfer_to_human',
+        description: 'Transfer the call to a human ONLY when the caller explicitly asks to speak to a person. Do NOT use this after booking an appointment or for routine questions — finish those and let the call end normally.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string', description: 'Why the call is being transferred' },
+          },
+          required: ['reason'],
+        },
+      });
+    }
+    console.log('[functions] transfer_to_human', transferNumber ? 'ENABLED' : 'disabled (no transfer number)');
+
     const settings = {
       type: 'Settings',
       audio: {
@@ -83,46 +130,8 @@ wss.on('connection', (twilioWs) => {
             },
           },
           prompt: systemPrompt,
-          // Client-side function (no endpoint) — we handle it here on the socket.
-          functions: [
-            {
-              name: 'transfer_to_human',
-              description: 'Transfer the call to a human specialist when the customer requests it, has a complex issue, is angry, or needs immediate emergency help.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  reason: { type: 'string', description: 'Why the call is being transferred' },
-                },
-                required: ['reason'],
-              },
-            },
-            {
-              name: 'check_availability',
-              description: 'Check available appointment slots for a specific date',
-              parameters: {
-                type: 'object',
-                properties: {
-                  date: { type: 'string', description: 'Date like tomorrow, Monday, June 15' },
-                },
-                required: ['date'],
-              },
-            },
-            {
-              name: 'book_appointment',
-              description: 'Book an appointment for the customer',
-              parameters: {
-                type: 'object',
-                properties: {
-                  date: { type: 'string' },
-                  time: { type: 'string' },
-                  customer_name: { type: 'string' },
-                  customer_phone: { type: 'string' },
-                  service_type: { type: 'string' },
-                },
-                required: ['date', 'time', 'customer_name', 'customer_phone'],
-              },
-            },
-          ],
+          // Client-side functions (no endpoint) — we handle them here on the socket.
+          functions: agentFunctions,
         },
         speak: { provider: { type: 'deepgram', model: voiceId } },
         greeting,
@@ -167,12 +176,19 @@ wss.on('connection', (twilioWs) => {
 
         if (fn.name === 'transfer_to_human') {
           const reason = args.reason || '';
-          console.log('[handoff] transfer_to_human:', reason);
+          // Safety net: never transfer without THIS agent's configured number
+          // (the function shouldn't even be offered without one, but guard anyway).
+          if (!transferNumber) {
+            console.log('[handoff] transfer_to_human ignored — no transfer number configured');
+            dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content: "I'm not able to transfer the call, but I can take a message or help you here." }));
+            continue;
+          }
+          console.log('[handoff] transfer_to_human:', reason, '→', transferNumber);
           dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content: 'Transferring you now. Please hold.' }));
-          // Redirect the LIVE call to the owner (see transferCall). Don't close
-          // the Twilio socket — the redirect keeps the call alive.
+          // Redirect the LIVE call to the agent's transfer number (see transferCall).
+          // Don't close the Twilio socket — the redirect keeps the call alive.
           setTimeout(() => {
-            transferCall(callSid, ownerPhone, fromNumber, callerNumber, reason);
+            transferCall(callSid, transferNumber, fromNumber, callerNumber, reason);
             try { dgWs.close(); } catch {}
           }, 3000);
           continue;
@@ -277,6 +293,7 @@ wss.on('connection', (twilioWs) => {
       if (p.greeting) greeting = p.greeting;
       if (p.voiceId) voiceId = p.voiceId;
       if (p.ownerPhone) ownerPhone = p.ownerPhone;
+      if (p.transferNumber) transferNumber = p.transferNumber;
       if (p.fromNumber) fromNumber = p.fromNumber;
       if (p.leadToken) leadToken = p.leadToken;
       if (p.callerNumber) callerNumber = p.callerNumber;

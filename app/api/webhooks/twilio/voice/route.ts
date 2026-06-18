@@ -194,8 +194,9 @@ export async function POST(req: NextRequest) {
       // per-turn summary like the SMS pipeline — the model tracks fields from
       // its own context, so the instruction must be explicit.)
       const bookingRules = `APPOINTMENT BOOKING: The details you need are service, date, time, name, phone, and address. As the customer gives each one, remember it. NEVER ask for a detail the customer already gave or that you already confirmed — re-read the conversation before asking. Ask for only ONE missing detail at a time. Once you have all six, confirm the full booking once (service, date, time, name, phone, address) and stop asking.`
+      const transferRule = `TRANSFERS: After booking an appointment or answering a routine question, DO NOT transfer the call — confirm the details once and let the call end normally. Only transfer to a human (transfer_to_human) when the caller EXPLICITLY asks to speak to a person.`
       const langCfg = voiceLangConfig(agent?.voice_language, agent?.voice)
-      let voiceSystemPrompt = `${DEFAULT_TONE}\n\n${langCfg.promptLine}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${baseVoicePrompt}`
+      let voiceSystemPrompt = `${DEFAULT_TONE}\n\n${langCfg.promptLine}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${transferRule}\n\n${baseVoicePrompt}`
 
       // If the business has configured appointment slots, let the AI actually
       // schedule via the check_availability / book_appointment functions.
@@ -234,6 +235,10 @@ export async function POST(req: NextRequest) {
         leadToken = tBase?.lead_intake_token || ''
       }
       ownerPhone = ownerPhone || agent?.forward_to_phone || ''
+      // Live-transfer target: ONLY this agent's own configured transfer number.
+      // NEVER tenant.phone (the business-profile number / lead-SMS recipient).
+      // Empty → the voice-server won't offer transfer_to_human, so the AI can't transfer.
+      const transferNumber = agent?.forward_to_phone || ''
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
@@ -241,6 +246,7 @@ export async function POST(req: NextRequest) {
       <Parameter name="systemPrompt" value="${sp}"/>
       <Parameter name="greeting" value="${escapeXml(greeting)}"/>
       <Parameter name="ownerPhone" value="${escapeXml(ownerPhone)}"/>
+      <Parameter name="transferNumber" value="${escapeXml(transferNumber)}"/>
       <Parameter name="fromNumber" value="${escapeXml(toNormalized)}"/>
       <Parameter name="leadToken" value="${escapeXml(leadToken)}"/>
       <Parameter name="callerNumber" value="${escapeXml(From || '')}"/>
