@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
@@ -23,6 +24,48 @@ const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const DAY_LABELS: Record<typeof DAYS[number], string> = {
   mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday',
   fri: 'Friday', sat: 'Saturday', sun: 'Sunday',
+}
+
+// Business hours are stored per day as "9:00-17:00" or "closed" (keyed mon..sun).
+// That string format is what the AI prompt reads verbatim (lib/anthropic/pipeline),
+// so the picker must produce exactly that — we just give a friendlier way to set it.
+const TIME_SLOTS: { value: string; label: string }[] = (() => {
+  const out: { value: string; label: string }[] = []
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      const value = `${h}:${String(m).padStart(2, '0')}`        // e.g. "9:00", "17:30"
+      const period = h < 12 ? 'AM' : 'PM'
+      const h12 = h % 12 === 0 ? 12 : h % 12
+      out.push({ value, label: `${h12}:${String(m).padStart(2, '0')} ${period}` })
+    }
+  }
+  return out
+})()
+
+// Normalize a "9:00" / "09:00" token to the canonical "9:00" so it matches a slot.
+function normTime(t: string): string {
+  const [h, m] = (t || '').trim().split(':')
+  if (!h) return t.trim()
+  return `${parseInt(h, 10)}:${(m ?? '00').padStart(2, '0')}`
+}
+
+function parseDay(raw: string | undefined): { isOpen: boolean; open: string; close: string } {
+  if (!raw || raw.trim().toLowerCase() === 'closed') return { isOpen: false, open: '9:00', close: '17:00' }
+  const [o, c] = raw.split('-')
+  return { isOpen: true, open: normTime(o || '9:00'), close: normTime(c || '17:00') }
+}
+
+function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel: string }) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 focus:border-[#4ecdc4] focus:outline-none focus:ring-1 focus:ring-[#4ecdc4]"
+    >
+      {TIME_SLOTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+    </select>
+  )
 }
 
 interface Channel {
@@ -211,6 +254,16 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   const websiteConnected = !!employee.website_scanned_at && scannedUrl !== '' && scannedUrl === websiteVal
   const websiteChanged = scannedUrl !== '' && scannedUrl !== websiteVal
   const kbCount = employee.website_kb_item_count ?? 0
+
+  // Merge a single day's open/close/toggle back into the "9:00-17:00" | "closed" string.
+  function updateDay(day: string, next: Partial<{ isOpen: boolean; open: string; close: string }>) {
+    setForm(f => {
+      const hours = f.business_hours as Record<string, string>
+      const merged = { ...parseDay(hours[day]), ...next }
+      const val = merged.isOpen ? `${merged.open}-${merged.close}` : 'closed'
+      return { ...f, business_hours: { ...hours, [day]: val } }
+    })
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -425,24 +478,33 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
           {/* Business Hours */}
           <div>
-            <Label className="text-base font-semibold">Business Hours</Label>
-            <div className="mt-2 space-y-2">
-              {DAYS.map(day => (
-                <div key={day} className="flex items-center gap-3">
-                  <span className="w-24 text-sm text-gray-600 font-medium">{DAY_LABELS[day]}</span>
-                  <Input
-                    className="h-11 text-sm flex-1"
-                    placeholder="9:00-17:00 or closed"
-                    value={(form.business_hours as Record<string, string>)[day] || ''}
-                    onChange={e => setForm(f => ({
-                      ...f,
-                      business_hours: { ...(f.business_hours as Record<string, string>), [day]: e.target.value },
-                    }))}
-                  />
-                </div>
-              ))}
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gray-500" />
+              <Label className="text-base font-semibold">Weekly Hours</Label>
             </div>
-            <p className="text-xs text-gray-400 mt-2">Format: 9:00-17:00 or "closed"</p>
+            <p className="text-xs text-gray-400 mt-1">Toggle each day open or closed, then pick when you open and close.</p>
+            <div className="mt-3 rounded-xl border border-gray-200 divide-y divide-gray-100">
+              {DAYS.map(day => {
+                const { isOpen, open, close } = parseDay((form.business_hours as Record<string, string>)[day])
+                return (
+                  <div key={day} className="flex items-center gap-3 px-3 sm:px-4 py-3">
+                    <div className="flex items-center gap-2.5 w-28 sm:w-36 shrink-0">
+                      <Switch checked={isOpen} onCheckedChange={v => updateDay(day, { isOpen: v })} aria-label={`${DAY_LABELS[day]} open`} />
+                      <span className="text-sm font-medium text-gray-700">{DAY_LABELS[day]}</span>
+                    </div>
+                    {isOpen ? (
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <TimeSelect value={open} onChange={v => updateDay(day, { open: v })} ariaLabel={`${DAY_LABELS[day]} opening time`} />
+                        <span className="text-xs text-gray-400">to</span>
+                        <TimeSelect value={close} onChange={v => updateDay(day, { close: v })} ariaLabel={`${DAY_LABELS[day]} closing time`} />
+                      </div>
+                    ) : (
+                      <span className="flex-1 text-sm text-gray-400 italic">Closed</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>

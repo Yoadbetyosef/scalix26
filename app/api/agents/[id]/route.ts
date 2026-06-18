@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import twilio from 'twilio'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
 
 export async function PATCH(
@@ -14,7 +14,12 @@ export async function PATCH(
   const { id: agentId } = await params
   const body = await req.json()
 
-  const serviceSupabase = await createServiceClient()
+  // True service role (NOT createServiceClient — that's the cookie-based SSR client,
+  // which gets DOWNGRADED to the logged-in user's JWT and runs under RLS. With no
+  // permissive UPDATE policy on ai_employees, the .update() silently affected 0 rows
+  // and returned no error — so saves (business_hours, etc.) reported success but never
+  // persisted. We verify ownership manually below, then write with admin to bypass RLS.
+  const serviceSupabase = createAdminClient()
 
   // Verify ownership (+ old forward number / names for the one-time welcome SMS)
   const { data: agent } = await serviceSupabase
@@ -89,7 +94,7 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: agentId } = await params
-  const serviceSupabase = await createServiceClient()
+  const serviceSupabase = createAdminClient() // true service role; ownership verified below
 
   // Verify ownership (same as PATCH).
   const { data: agent } = await serviceSupabase
