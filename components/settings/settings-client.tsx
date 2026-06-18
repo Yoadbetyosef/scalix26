@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { Tenant, Channel } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook, Calendar, MapPin, Smartphone, Mail, Check } from 'lucide-react'
+import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook, MapPin, Smartphone, Mail, Check } from 'lucide-react'
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   voice: Phone,
@@ -63,21 +62,8 @@ export function SettingsClient({ tenant, channels }: Props) {
         <p className="text-sm text-gray-500 mt-0.5">Manage your business profile and integrations</p>
       </div>
 
-      {/* Availability & Reviews link */}
-      <Link href="/settings/availability" className="tap-target block">
-        <Card className="hover:border-[#4ecdc4] transition-colors">
-          <CardContent className="flex items-center justify-between py-4">
-            <div>
-              <p className="font-semibold text-gray-900 flex items-center gap-2"><Calendar className="w-4 h-4 text-[#4ecdc4]" /> Availability &amp; Reviews</p>
-              <p className="text-sm text-gray-500 mt-0.5">Set appointment times and Google review automation</p>
-            </div>
-            <span className="text-gray-300 text-xl">›</span>
-          </CardContent>
-        </Card>
-      </Link>
-
-      {/* Business identity (name, email, address, hours, etc.) is edited on the
-          AI Employee page — the single source of truth — not duplicated here. */}
+      {/* Business identity AND availability & reviews are now edited on the AI
+          Employee page — the single source of truth — not duplicated here. */}
 
       {/* Connected Channels */}
       <Card>

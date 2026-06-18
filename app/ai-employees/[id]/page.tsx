@@ -18,8 +18,12 @@ export default async function AIEmployeeEditPage({
 
   const serviceSupabase = await createServiceClient()
   const { data: tenant } = await serviceSupabase
-    .from('tenants').select('id, slug').eq('user_id', user.id).limit(1).maybeSingle()
+    .from('tenants').select('id, slug, google_review_url, review_automation_enabled').eq('user_id', user.id).limit(1).maybeSingle()
   if (!tenant) redirect('/setup')
+
+  // Availability & reviews (tenant-level) — now edited inline on this page.
+  const { data: slots } = await serviceSupabase
+    .from('appointment_slots').select('day_of_week, slot_time').eq('tenant_id', tenant.id)
 
   const { data: employee } = await serviceSupabase
     .from('ai_employees')
@@ -70,6 +74,9 @@ export default async function AIEmployeeEditPage({
         googleError={sp.google_error}
         onboarding={sp.onboarding === '1'}
         skills={(employee.skills as { type: string; active: boolean }[]) || []}
+        availabilitySlots={(slots as { day_of_week: number; slot_time: string }[]) || []}
+        googleReviewUrl={tenant.google_review_url || ''}
+        reviewEnabled={tenant.review_automation_enabled ?? true}
       />
     </div>
   )

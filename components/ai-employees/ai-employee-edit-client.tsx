@@ -16,6 +16,7 @@ import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
 import { BusinessDetails } from '@/components/ai-employees/business-details'
 import { SkillsEditor } from '@/components/ai-employees/skills-editor'
+import { AvailabilityClient } from '@/components/settings/availability-client'
 import { Sparkles } from 'lucide-react'
 
 const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
@@ -74,6 +75,9 @@ interface Props {
   googleError?: string
   onboarding?: boolean
   skills?: { type: string; active: boolean }[]
+  availabilitySlots?: { day_of_week: number; slot_time: string }[]
+  googleReviewUrl?: string
+  reviewEnabled?: boolean
 }
 
 const GOOGLE_ERRORS: Record<string, string> = {
@@ -107,7 +111,7 @@ function relativeTime(iso: string): string {
   return `${mon} month${mon === 1 ? '' : 's'} ago`
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError, onboarding, skills }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError, onboarding, skills, availabilitySlots, googleReviewUrl, reviewEnabled }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -620,65 +624,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         </CardContent>
       </Card>
 
-      {/* Basic Info */}
-      <Card>
-        <CardHeader><CardTitle>AI Persona</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Agent Name</Label>
-            <Input className="mt-1.5" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          </div>
-          <div>
-            <Label>Greeting Message</Label>
-            <Textarea
-              className="mt-1.5"
-              rows={3}
-              value={form.greeting}
-              onChange={e => setForm(f => ({ ...f, greeting: e.target.value }))}
-              placeholder="Hi! Thank you for contacting us. How can I help you today?"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-
-      {/* Voice */}
-      <Card>
-        <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
-        <CardContent className="space-y-5">
-          <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} systemPrompt={form.system_prompt} />
-          <div>
-            <Label>Call language</Label>
-            <select
-              value={form.voice_language}
-              onChange={e => setForm(f => ({ ...f, voice_language: e.target.value }))}
-              className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="en">English</option>
-              <option value="es">Spanish (Español)</option>
-              <option value="bilingual">Bilingual (English + Spanish)</option>
-            </select>
-            <p className="text-xs text-gray-400 mt-1">
-              Language the agent understands and speaks on phone calls. Bilingual auto-detects and switches between English and Spanish. (Text channels already reply in the caller&apos;s language.)
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Custom Instructions */}
-      <Card>
-        <CardHeader><CardTitle>Custom Instructions</CardTitle></CardHeader>
-        <CardContent>
-          <Textarea
-            rows={5}
-            value={form.system_prompt}
-            onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
-            placeholder="Add specific instructions for this AI agent. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
-          />
-        </CardContent>
-      </Card>
-
-      {/* Email */}
+      {/* Email — channel order: Phone → Facebook/Instagram → Email */}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#4ecdc4]" /> Email</CardTitle></CardHeader>
         <CardContent className="space-y-5">
@@ -763,6 +709,64 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         </CardContent>
       </Card>
 
+      {/* Basic Info */}
+      <Card>
+        <CardHeader><CardTitle>AI Persona</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Agent Name</Label>
+            <Input className="mt-1.5" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div>
+            <Label>Greeting Message</Label>
+            <Textarea
+              className="mt-1.5"
+              rows={3}
+              value={form.greeting}
+              onChange={e => setForm(f => ({ ...f, greeting: e.target.value }))}
+              placeholder="Hi! Thank you for contacting us. How can I help you today?"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+
+      {/* Voice */}
+      <Card>
+        <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
+        <CardContent className="space-y-5">
+          <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} systemPrompt={form.system_prompt} />
+          <div>
+            <Label>Call language</Label>
+            <select
+              value={form.voice_language}
+              onChange={e => setForm(f => ({ ...f, voice_language: e.target.value }))}
+              className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+            >
+              <option value="en">English</option>
+              <option value="es">Spanish (Español)</option>
+              <option value="bilingual">Bilingual (English + Spanish)</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              Language the agent understands and speaks on phone calls. Bilingual auto-detects and switches between English and Spanish. (Text channels already reply in the caller&apos;s language.)
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Custom Instructions */}
+      <Card>
+        <CardHeader><CardTitle>Custom Instructions</CardTitle></CardHeader>
+        <CardContent>
+          <Textarea
+            rows={5}
+            value={form.system_prompt}
+            onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
+            placeholder="Add specific instructions for this AI agent. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
+          />
+        </CardContent>
+      </Card>
+
       {/* Business Details */}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-[#4ecdc4]" /> Business Details</CardTitle></CardHeader>
@@ -780,6 +784,15 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         </CardContent>
       </Card>
 
+      {/* Availability & Reviews (appointment times + Google review automation) */}
+      <AvailabilityClient
+        tenantId={tenantId}
+        embedded
+        initialSlots={availabilitySlots || []}
+        googleReviewUrl={googleReviewUrl || ''}
+        reviewEnabled={reviewEnabled ?? true}
+      />
+
       {/* Knowledge Base */}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-[#4ecdc4]" /> Knowledge Base</CardTitle></CardHeader>
@@ -793,10 +806,17 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card className="border-red-200">
         <CardHeader><CardTitle className="text-red-600">Danger Zone</CardTitle></CardHeader>
         <CardContent>
-          <Button variant="destructive" onClick={handleDelete}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Agent
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="destructive" onClick={handleDelete}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Agent
+            </Button>
+            {onboarding && (
+              <Button onClick={finishSetup} loading={finishing} className="bg-green-600 hover:bg-green-700 text-white">
+                Finish setup
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
