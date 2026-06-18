@@ -889,12 +889,15 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         </CardContent>
       </Card>
 
-      {/* Bottom Save — same handler/payload/state as the header button, so users who
-          scrolled down don't forget to save. Kept separate from (above) the red Danger
-          Zone so a green Save never sits beside the destructive Delete. */}
-      <div className="flex justify-end pt-1">
-        <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className="flex-1 sm:flex-none">Save Changes</Button>
-      </div>
+      {/* Bottom Save — in its own card so it clearly reads as "save the whole agent"
+          (a bare floating button looked like it saved just the section above). Same
+          handler/payload/state as the header button. Separate from the Danger Zone. */}
+      <Card>
+        <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
+          <p className="text-sm text-gray-500">Save all changes to this AI employee.</p>
+          <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className="w-full sm:w-auto">Save Changes</Button>
+        </CardContent>
+      </Card>
 
       {/* Danger Zone */}
       <Card className="border-red-200">
