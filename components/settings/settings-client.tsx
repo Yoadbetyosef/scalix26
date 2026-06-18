@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Tenant, Channel } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook, MapPin, Smartphone, Mail, Check } from 'lucide-react'
@@ -23,7 +22,6 @@ interface Props {
 }
 
 export function SettingsClient({ tenant, channels }: Props) {
-  const [showLeadCode, setShowLeadCode] = useState(false)
 
   async function openBillingPortal() {
     const res = await fetch('/api/stripe/portal', { method: 'POST' })
@@ -49,7 +47,6 @@ export function SettingsClient({ tenant, channels }: Props) {
   const [appUrl, setAppUrl] = useState(process.env.NEXT_PUBLIC_APP_URL || '')
   useEffect(() => { setAppUrl(window.location.origin) }, [])
   const bookingUrl = tenant.slug ? `${appUrl}/f/${tenant.slug}` : ''
-  const intakeUrl = tenant.lead_intake_token ? `${appUrl}/api/leads/inbound/${tenant.lead_intake_token}` : ''
 
   function copy(text: string, label: string) {
     navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied!`)).catch(() => toast.error('Copy failed'))
@@ -155,29 +152,8 @@ export function SettingsClient({ tenant, channels }: Props) {
                 </div>
               </div>
 
-              {/* Technical details — hidden by default */}
-              <button
-                onClick={() => setShowLeadCode(v => !v)}
-                className="text-xs text-gray-400 hover:text-gray-600 py-2 -my-1 flex items-center gap-1"
-              >
-                {showLeadCode ? 'Hide' : 'Show'} technical details (for developers)
-              </button>
-
-              {showLeadCode && (
-                <div className="pt-1">
-                  <Label className="text-sm font-medium text-gray-700">Your private intake URL</Label>
-                  <p className="text-xs text-gray-400 mb-2 mt-0.5">Keep this secret. Used for Zapier/Make and custom integrations.</p>
-                  <div className="flex gap-2">
-                    <code className="flex-1 min-w-0 truncate bg-gray-50 border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs text-gray-700">
-                      {intakeUrl}
-                    </code>
-                    <Button variant="outline" className="h-11 px-3 flex-shrink-0" onClick={() => copy(intakeUrl, 'URL')}>
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1.5">POST <code>{`{ phone, name?, source? }`}</code> (JSON or form data).</p>
-                </div>
-              )}
+              {/* The private intake URL (/api/leads/inbound, for Zapier/Make) is hidden
+                  from the UI — the route stays live; we may re-expose it for advanced users. */}
             </>
           )}
         </CardContent>
