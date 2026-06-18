@@ -156,6 +156,37 @@ export function slotsToHours(slots: { day_of_week: number; slot_time: string }[]
   return out
 }
 
+function normHM(t: string): string {
+  const [h, m] = (t || '').trim().split(':')
+  if (!h) return (t || '').trim()
+  return `${parseInt(h, 10)}:${(m ?? '00').padStart(2, '0')}`
+}
+
+// ai_employees.business_hours JSON map ("9:00-17:00" | "closed", keyed mon..sun) is
+// the INFORMATIONAL open-hours fact (what the AI tells callers); it does NOT drive
+// booking. These convert that map ⇄ the per-day DayHours the dropdown UI uses.
+export function businessHoursToDayHours(bh: Record<string, string> | null | undefined): Record<string, DayHours> {
+  const out: Record<string, DayHours> = {}
+  for (const day of Object.keys(DOW_FOR_DAY)) {
+    const raw = bh?.[day]
+    if (!raw || String(raw).trim().toLowerCase() === 'closed') {
+      out[day] = { isOpen: false, open: '9:00', close: '17:00' }
+    } else {
+      const [o, c] = String(raw).split('-')
+      out[day] = { isOpen: true, open: normHM(o || '9:00'), close: normHM(c || '17:00') }
+    }
+  }
+  return out
+}
+export function dayHoursToBusinessHours(weekly: Record<string, DayHours>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const day of Object.keys(DOW_FOR_DAY)) {
+    const h = weekly[day]
+    out[day] = h && h.isOpen ? `${h.open}-${h.close}` : 'closed'
+  }
+  return out
+}
+
 // Human-readable hours line for the AI prompt, derived from slots (same source).
 export function slotsToHoursText(slots: { day_of_week: number; slot_time: string }[]): string {
   const h = slotsToHours(slots)

@@ -43,7 +43,7 @@ export async function PATCH(
   const allowed = [
     'name', 'greeting', 'personality', 'personality_score', 'voice', 'system_prompt', 'status',
     'business_name', 'industry', 'website', 'phone', 'email', 'address', 'city', 'state', 'zip',
-    'timezone', 'forward_to_phone',
+    'business_hours', 'timezone', 'forward_to_phone',
     'email_auto_reply', 'reply_from_email', 'voice_language', 'email_handoff_after_first_reply',
   ]
 

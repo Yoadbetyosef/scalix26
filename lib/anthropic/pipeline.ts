@@ -1,8 +1,7 @@
 import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
-import { slotsToHoursText } from '@/lib/appointments'
-import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant } from '@/types'
+import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
   tenantId: string
@@ -42,7 +41,6 @@ function buildSystemPrompt(
   kb: KnowledgeBase[],
   tenant: Tenant,
   isVoice: boolean,
-  hoursStr: string,
   bookingStatus = ''
 ): string {
   // Employee fields take priority; fall back to tenant for accounts that haven't migrated
@@ -57,6 +55,11 @@ function buildSystemPrompt(
 
   const activeSkills = skills.filter(s => s.active).map(s => `- ${s.name}: ${s.type}`).join('\n')
   const kbContent = kb.map(k => `## ${k.title}\n${k.content}`).join('\n\n')
+
+  // Informational opening hours (business_hours JSON) — what the AI tells callers
+  // who ask "what are your hours?". This is NOT appointment availability (slots).
+  const hours: BusinessHours | Record<string, string> = employee.business_hours || tenant.business_hours || {}
+  const hoursStr = Object.entries(hours).map(([day, h]) => `${day}: ${h}`).join(', ') || 'Not specified'
 
   const basePrompt = `${DEFAULT_TONE}
 
@@ -125,22 +128,17 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const isVoice = input.channelType === 'voice'
 
   // Load tenant + contact in parallel; employee loaded separately based on agentId
-  const [tenantRes, contactRes, employeeRes, kbRes, slotsRes] = await Promise.all([
+  const [tenantRes, contactRes, employeeRes, kbRes] = await Promise.all([
     supabase.from('tenants').select('*').eq('id', input.tenantId).single(),
     supabase.from('contacts').select('*').eq('tenant_id', input.tenantId).eq('phone', input.from).maybeSingle(),
     input.agentId
       ? supabase.from('ai_employees').select('*').eq('id', input.agentId).single()
       : supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
     supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
-    // Weekly hours = the appointment_slots table (single source of truth). Derive the
-    // human-readable hours line for the prompt from the SAME data the AI books against.
-    supabase.from('appointment_slots').select('day_of_week, slot_time').eq('tenant_id', input.tenantId).eq('is_active', true),
   ])
 
   const tenant = tenantRes.data
   if (!tenant) throw new Error('Tenant not found')
-
-  const hoursStr = slotsToHoursText(slotsRes.data || [])
 
   const employee = employeeRes.data
   if (!employee) throw new Error('No active AI employee found')
@@ -248,7 +246,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     bookingStatus = buildBookingStatus(await extractBookingFields(chatMessages))
   }
 
-  const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, hoursStr, bookingStatus)
+  const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
 
   const response = await anthropic.messages.create({
     model: isVoice ? VOICE_MODEL : MODEL,
