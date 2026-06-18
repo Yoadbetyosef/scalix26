@@ -4,44 +4,36 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Check } from 'lucide-react'
+import { Check, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { type BrandConfig, DEFAULT_BRAND, BRANDS, detectBrand } from '@/lib/brands'
+import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 
 export default function SignupPage() {
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
 
-  useEffect(() => {
-    const detected = detectBrand()
-    setBrand(detected)
-    if (detected.industry) {
-      setForm(f => ({ ...f, industry: detected.industry! }))
-    }
-  }, [])
+  useEffect(() => { setBrand(detectBrand()) }, [])
 
   const [form, setForm] = useState({
     businessName: '',
     email: '',
     password: '',
-    industry: brand.industry || '',
   })
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const supabase = createClient()
-
-  const industries = [
-    'Locksmith', 'HVAC', 'Plumbing', 'Electrical', 'Cleaning', 'Landscaping',
-    'Roofing', 'Pest Control', 'Handyman', 'Pool Service', 'Other',
-  ]
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
+    // Industry is no longer collected at signup — default from the brand (e.g. the
+    // locksmith brand), otherwise "Other". It's editable later on the agent page.
+    const industry = brand.industry || 'Other'
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -50,7 +42,7 @@ export default function SignupPage() {
           email: form.email,
           password: form.password,
           businessName: form.businessName,
-          industry: form.industry,
+          industry,
         }),
       })
       const result = await res.json()
@@ -69,7 +61,7 @@ export default function SignupPage() {
         const boot = await fetch('/api/onboarding/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessName: form.businessName, businessType: form.industry }),
+          body: JSON.stringify({ businessName: form.businessName, businessType: industry }),
         })
         const bj = await boot.json().catch(() => ({}))
         if (boot.ok && bj.employeeId) {
@@ -125,21 +117,6 @@ export default function SignupPage() {
                 required
               />
             </div>
-            {!brand.industry && (
-            <div className="space-y-1.5">
-              <Label htmlFor="industry">Industry</Label>
-              <select
-                id="industry"
-                className="flex h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#4ecdc4] focus:border-transparent"
-                value={form.industry}
-                onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
-                required
-              >
-                <option value="">Select industry</option>
-                {industries.map(i => <option key={i} value={i}>{i}</option>)}
-              </select>
-            </div>
-            )}
             <div className="space-y-1.5">
               <Label htmlFor="email">Work Email</Label>
               <Input
@@ -153,15 +130,26 @@ export default function SignupPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Min. 8 characters"
-                minLength={8}
-                value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Min. 8 characters"
+                  minLength={8}
+                  value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                  required
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
