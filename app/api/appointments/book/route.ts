@@ -3,6 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { parseDate, parseTime, dayOfWeek, formatTime12 } from '@/lib/appointments'
+import { getCalendarAccess } from '@/lib/calendar/store'
+import { createCalendarEvent } from '@/lib/calendar/google'
 
 function friendlyDate(dateIso: string): string {
   return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString('en-US', {
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
   // whole query, so tenant came back null and EVERY booking failed with "invalid
   // token" (0 appointments ever persisted). Owner contact = tenant.phone / email.
   const { data: tenant } = await supabase
-    .from('tenants').select('id, business_name, phone, email').eq('lead_intake_token', leadToken).maybeSingle()
+    .from('tenants').select('id, business_name, phone, email, timezone').eq('lead_intake_token', leadToken).maybeSingle()
   if (!tenant) return NextResponse.json({ success: false, error: 'invalid token' }, { status: 404 })
 
   // The slot must exist for that weekday and not already be booked.
@@ -64,6 +66,30 @@ export async function POST(req: NextRequest) {
     // message as the pre-check so the AI offers other times — never a hard error.
     if (apptErr?.code === '23505') return NextResponse.json({ success: false, error: 'that time was just taken' })
     return NextResponse.json({ success: false, error: apptErr?.message || 'failed to book' }, { status: 500 })
+  }
+
+  // Google Calendar (Phase 3a) — ADDITIVE + FAIL-SAFE. If the tenant has a calendar
+  // connected, mirror the booking as an event and store its id. The appointments
+  // row above is the system of record; ANY failure here only logs a warning and
+  // never affects the confirmed booking. If not connected, this is a no-op.
+  try {
+    const access = await getCalendarAccess(tenant.id)
+    if (access) {
+      const tz = tenant.timezone || 'America/New_York'
+      const [h, m] = timeDb.split(':').map(Number)
+      const endH = String((h + 1) % 24).padStart(2, '0')
+      const startDateTime = `${dateIso}T${timeDb}`
+      const endDateTime = `${dateIso}T${endH}:${String(m).padStart(2, '0')}:00`
+      const ev = await createCalendarEvent(access.accessToken, access.calendarId, {
+        summary: `${service || 'Appointment'} — ${name || 'Customer'}`,
+        description: `Booked by your AI via ${channel}.\nContact: ${phone}${email ? `\nEmail: ${email}` : ''}`,
+        start: { dateTime: startDateTime, timeZone: tz },
+        end: { dateTime: endDateTime, timeZone: tz },
+      })
+      if (ev?.id) await supabase.from('appointments').update({ google_event_id: ev.id }).eq('id', appt.id)
+    }
+  } catch (err) {
+    console.warn('[book] calendar sync failed (booking still confirmed):', err instanceof Error ? err.message : err)
   }
 
   // Notify everyone (best-effort; never fail the confirmed booking on a send error).

@@ -18,6 +18,7 @@ import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/kno
 import { BusinessDetails } from '@/components/ai-employees/business-details'
 import { SkillsEditor } from '@/components/ai-employees/skills-editor'
 import { AvailabilityClient } from '@/components/settings/availability-client'
+import { CalendarConnect } from '@/components/ai-employees/calendar-connect'
 import { slotsToHours, businessHoursToDayHours, dayHoursToBusinessHours, type DayHours } from '@/lib/appointments'
 import { Sparkles } from 'lucide-react'
 
@@ -858,6 +859,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             </Button>
           </div>
           <WeeklyHoursGrid hours={appointmentHours} onUpdate={updateAppointmentHours} />
+          <CalendarConnect agentId={employee.id} />
         </CardContent>
       </Card>
 
