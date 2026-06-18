@@ -72,11 +72,14 @@ wss.on('connection', (twilioWs) => {
         listen: { provider: { type: 'deepgram', model: sttModel } },
         think: {
           provider: { type: 'anthropic', model: 'claude-haiku-4-5', temperature: 0.7 },
-          // Bring-your-own Anthropic key via a custom endpoint.
+          // Bring-your-own Anthropic key via a custom endpoint. The Anthropic Messages
+          // API REQUIRES the anthropic-version header — without it every think turn
+          // 400s, so the agent greets (static TTS) then goes silent. Do NOT drop it.
           endpoint: {
             url: 'https://api.anthropic.com/v1/messages',
             headers: {
               'x-api-key': process.env.ANTHROPIC_API_KEY,
+              'anthropic-version': '2023-06-01',
             },
           },
           prompt: systemPrompt,
