@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import twilio from 'twilio'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
+import { releaseAgentNumber } from '@/lib/twilio/release'
 import { hoursToSlots, type DayHours } from '@/lib/appointments'
 
 export async function PATCH(
@@ -122,52 +122,11 @@ export async function DELETE(
     .from('tenants').select('id').eq('id', agent.tenant_id).eq('user_id', user.id).single()
   if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  // 1) BEFORE deleting (the cascade will wipe channel rows): collect Twilio SIDs.
-  const { data: channels } = await serviceSupabase
-    .from('channels')
-    .select('twilio_number, credentials')
-    .eq('ai_employee_id', agentId)
-    .in('type', ['sms', 'voice'])
-    .not('twilio_number', 'is', null)
-
-  // SMS + voice rows share one SID/number — dedupe by SID.
-  const sidToNumber = new Map<string, string | null>()
-  for (const c of channels || []) {
-    const sid = (c.credentials as Record<string, string> | null)?.sid
-    if (sid && !sidToNumber.has(sid)) sidToNumber.set(sid, c.twilio_number ?? null)
-  }
-
-  // 2) Release each number. A failure must never drop the SID silently — log it
-  //    AND persist it for manual retry. It must not block the deletion.
-  if (sidToNumber.size > 0) {
-    const client = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
-    for (const [sid, number] of sidToNumber) {
-      try {
-        await client.incomingPhoneNumbers(sid).remove()
-        console.log('[agent-delete] released Twilio number', number, sid)
-      } catch (err) {
-        // Twilio 20404 = number not found / already released → treat as success.
-        const code = (err as { code?: number }).code
-        if (code === 20404) {
-          console.log('[agent-delete] Twilio number already released (20404):', number, sid)
-          continue
-        }
-        const message = err instanceof Error ? err.message : String(err)
-        console.error('[agent-delete] release FAILED — persisting for retry:', { sid, number, agentId, message })
-        const { error: persistErr } = await serviceSupabase.from('pending_number_releases').insert({
-          tenant_id: agent.tenant_id,
-          ai_employee_id: agentId,
-          twilio_sid: sid,
-          twilio_number: number,
-          error: message,
-        })
-        if (persistErr) {
-          // Last-resort durable trace if even the insert fails.
-          console.error('[agent-delete][CRITICAL] could not persist pending release — SID needs manual release:', { sid, number, agentId, persistError: persistErr.message })
-        }
-      }
-    }
-  }
+  // 1+2) BEFORE deleting (the cascade will wipe channel rows): collect + release
+  //       the Twilio number(s) via the shared helper (dedupe by SID, 20404 = success,
+  //       failures persisted to pending_number_releases). Same proven logic the
+  //       Stripe-cancellation path uses. Never throws.
+  await releaseAgentNumber(serviceSupabase, agentId, agent.tenant_id)
 
   // 3) THEN delete the agent (cascades the channel rows).
   const { error } = await serviceSupabase.from('ai_employees').delete().eq('id', agentId)

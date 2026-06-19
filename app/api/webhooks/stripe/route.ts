@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe/client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { provisionTenantPhoneNumber } from '@/lib/twilio/provision'
+import { releaseTenantNumbers } from '@/lib/twilio/release'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mylocksmithai.com'
+
+// Stripe subscription statuses that still count as "paying" — if any remain after a
+// cancellation (plan switch / multiple subs), we must NOT release the number.
+const PAYING_STATUSES = new Set(['active', 'trialing', 'past_due', 'unpaid'])
 
 async function getTenantByCustomer(supabase: Awaited<ReturnType<typeof createServiceClient>>, customerId: string) {
   const { data } = await supabase.from('tenants').select('*').eq('stripe_customer_id', customerId).single()
@@ -51,6 +56,24 @@ export async function POST(req: NextRequest) {
       if (tenant) {
         const tmpl = emailTemplates.subscriptionCancelled(tenant.business_name)
         await sendEmail(tenant.email, tmpl.subject, tmpl.html)
+
+        // Release this tenant's Twilio number(s) to stop recurring cost. Fully
+        // guarded + fail-safe: a failure here must never break the webhook.
+        try {
+          // Guard: only release if NO other paying subscription remains for this
+          // customer (handles plan switches / multiple subs). Excludes the sub
+          // that was just deleted.
+          const subs = await stripe.subscriptions.list({ customer: sub.customer as string, status: 'all', limit: 100 })
+          const stillPaying = subs.data.some((s) => s.id !== sub.id && PAYING_STATUSES.has(s.status))
+          if (stillPaying) {
+            console.log('[stripe] subscription.deleted but customer still has a paying sub — NOT releasing numbers', sub.customer)
+          } else {
+            const result = await releaseTenantNumbers(tenant.id)
+            console.log('[stripe] released tenant numbers on cancellation', tenant.id, result)
+          }
+        } catch (err) {
+          console.error('[stripe] number release failed (non-fatal):', err instanceof Error ? err.message : err)
+        }
       }
       break
     }
