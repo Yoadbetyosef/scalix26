@@ -565,7 +565,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   if (s === 'failed') {
                     return <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5" /> Texting needs attention — carrier verification didn&apos;t complete. We&apos;ll reach out to finish it.</div>
                   }
-                  return <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" /> Calls are live now. Texting activates after carrier verification (~10–14 days).</div>
+                  return <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" /> 📞 Calls are live now. 💬 Texting is being verified and will activate soon.</div>
                 })()}
 
                 {/* Your phone number (rings first) */}
