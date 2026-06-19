@@ -73,6 +73,25 @@ export async function POST(req: NextRequest) {
       try {
         const msg = await sendSMS(From, result.response, To)
         console.log('[SMS] Sent successfully. SID:', msg.sid)
+        // A2: link the Twilio SID to the assistant message runAIPipeline just wrote,
+        // so the sms-status callback can flip its delivery_status. Best-effort.
+        try {
+          const { data: last } = await supabase
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', result.conversationId)
+            .eq('role', 'assistant')
+            .order('timestamp', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (last) {
+            await supabase.from('messages')
+              .update({ provider_sid: msg.sid, delivery_status: msg.status })
+              .eq('id', last.id)
+          }
+        } catch (linkErr: any) {
+          console.error('[SMS] provider_sid link failed:', linkErr?.message)
+        }
       } catch (smsErr: any) {
         console.error('[SMS] sendSMS failed:', smsErr?.message, smsErr?.code, smsErr?.status)
       }

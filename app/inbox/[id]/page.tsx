@@ -130,6 +130,12 @@ export default async function ConversationPage({ params, searchParams }: { param
                     <p className={`text-xs mt-1 ${isOutbound ? 'text-white/70' : 'text-gray-400'}`}>
                       {formatDateTime(msg.timestamp)}
                     </p>
+                    {/* A2: surface a failed/undelivered SMS so it never looks "sent" silently. */}
+                    {isOutbound && (msg.delivery_status === 'undelivered' || msg.delivery_status === 'failed') && (
+                      <p className="text-xs mt-1 font-medium text-red-200 bg-red-600/30 rounded px-1.5 py-0.5 inline-block">
+                        ⚠ Not delivered{msg.error_code ? ` (error ${msg.error_code})` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
               )

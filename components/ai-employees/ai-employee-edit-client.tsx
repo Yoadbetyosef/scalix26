@@ -94,6 +94,8 @@ interface Channel {
   twilio_number: string | null
   meta_page_id: string | null
   credentials: Record<string, string>
+  sms_status?: string | null
+  messaging_service_sid?: string | null
 }
 
 interface Props {
@@ -279,6 +281,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   const [releasingPhone, setReleasingPhone] = useState(false)
 
   const phoneChannel = channels.find(c => (c.type === 'sms' || c.type === 'voice') && c.twilio_number && c.status === 'connected')
+  const smsChannel = channels.find(c => c.type === 'sms' && c.twilio_number)
   const fbChannel = channels.find(c => c.type === 'facebook' && c.status === 'connected')
   const igChannel = channels.find(c => c.type === 'instagram' && c.status === 'connected')
 
@@ -552,6 +555,18 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   <p className="text-lg font-bold text-gray-900 tracking-wider">{phoneChannel.twilio_number}</p>
                   <p className="text-xs text-gray-400 mt-1.5">This is the line your AI receptionist answers on. Use it as your business number, or forward your existing number to it — either way, your own phone always rings first.</p>
                 </div>
+
+                {/* A4: texting (SMS / A2P) status — calls are instant; texting needs carrier verification. */}
+                {smsChannel && (() => {
+                  const s = smsChannel.sms_status || 'pending_verification'
+                  if (s === 'active') {
+                    return <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" /> Texting: active</div>
+                  }
+                  if (s === 'failed') {
+                    return <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5" /> Texting needs attention — carrier verification didn&apos;t complete. We&apos;ll reach out to finish it.</div>
+                  }
+                  return <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" /> Calls are live now. Texting activates after carrier verification (~10–14 days).</div>
+                })()}
 
                 {/* Your phone number (rings first) */}
                 <div>
