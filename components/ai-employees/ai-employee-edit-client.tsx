@@ -777,37 +777,53 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           </div>
           )}
 
-          {/* Two INDEPENDENT settings — each its own unique id + htmlFor, its own
-              field, and its own handler. checked is strictly coerced to a boolean
-              so a null value can never flip the input to uncontrolled. */}
-          <div>
-            <div className="flex items-center gap-2">
-              <input
-                id="email_auto_reply"
-                type="checkbox"
-                checked={form.email_auto_reply === true}
-                onChange={e => setForm(f => ({ ...f, email_auto_reply: e.target.checked }))}
-                className="accent-[#4ecdc4] w-4 h-4"
-              />
-              <label htmlFor="email_auto_reply" className="text-sm text-gray-700">Auto-reply to incoming emails</label>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">Applies to both options. When off, emails appear in the Inbox but the AI won&apos;t reply automatically.</p>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <input
-                id="email_handoff_after_first_reply"
-                type="checkbox"
-                checked={form.email_handoff_after_first_reply === true}
-                onChange={e => setForm(f => ({ ...f, email_handoff_after_first_reply: e.target.checked }))}
-                className="accent-[#4ecdc4] w-4 h-4"
-                disabled={!form.email_auto_reply}
-              />
-              <label htmlFor="email_handoff_after_first_reply" className="text-sm text-gray-700">After the first auto-reply, hand the conversation to me (AI stops replying).</label>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">The AI sends one reply to acknowledge, then you take it from there — it won&apos;t send anything else in that email thread.</p>
-          </div>
+          {/* One mutually-exclusive choice mapped to the two existing booleans:
+              manual → email_auto_reply=false
+              first  → email_auto_reply=true,  email_handoff_after_first_reply=true
+              whole  → email_auto_reply=true,  email_handoff_after_first_reply=false
+              Derived from the current field values on load (null treated as false). */}
+          {(() => {
+            const autoReply = form.email_auto_reply === true
+            const handoff = form.email_handoff_after_first_reply === true
+            const selected: 'manual' | 'first' | 'whole' = !autoReply ? 'manual' : handoff ? 'first' : 'whole'
+            const setMode = (mode: 'manual' | 'first' | 'whole') => setForm(f => ({
+              ...f,
+              email_auto_reply: mode !== 'manual',
+              email_handoff_after_first_reply: mode === 'first',
+            }))
+            const options: { value: 'manual' | 'first' | 'whole'; title: string; help: string; recommended?: boolean }[] = [
+              { value: 'manual', title: "Don't reply automatically — emails go to my inbox", help: 'The AI reads emails into your Inbox but never replies automatically. You handle every reply yourself.' },
+              { value: 'first', title: 'Reply to the first email, then hand the thread to me', help: "The AI sends one reply to acknowledge, then hands the conversation to you — it won't send anything else in that thread.", recommended: true },
+              { value: 'whole', title: 'Reply to the whole email conversation', help: 'The AI handles the entire email thread automatically, back and forth.' },
+            ]
+            return (
+              <div className="space-y-2">
+                {options.map(opt => (
+                  <label
+                    key={opt.value}
+                    htmlFor={`email_mode_${opt.value}`}
+                    className={`flex gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selected === opt.value ? 'border-[#4ecdc4] bg-[#4ecdc4]/5' : 'border-gray-200 hover:border-gray-300'}`}
+                  >
+                    <input
+                      id={`email_mode_${opt.value}`}
+                      type="radio"
+                      name="email_mode"
+                      checked={selected === opt.value}
+                      onChange={() => setMode(opt.value)}
+                      className="accent-[#4ecdc4] w-4 h-4 mt-0.5 flex-shrink-0"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-gray-800">{opt.title}</span>
+                        {opt.recommended && <span className="text-[10px] font-semibold uppercase tracking-wide text-[#3db8af] bg-[#4ecdc4]/15 px-1.5 py-0.5 rounded">Recommended</span>}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{opt.help}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )
+          })()}
         </CardContent>
       </Card>
 
