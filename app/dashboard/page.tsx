@@ -10,7 +10,6 @@ import { ConversationDistributionChart } from '@/components/charts/conversation-
 import { ChannelDistributionChart } from '@/components/charts/channel-distribution'
 import { LeadsTable } from '@/components/dashboard/leads-table'
 import { AppointmentsTable, type Appointment } from '@/components/dashboard/appointments-table'
-import { PostOnboardingChecklist } from '@/components/onboarding/post-onboarding-checklist'
 import type { Lead } from '@/types'
 
 async function getDashboardData(tenantId: string) {
@@ -135,23 +134,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const { stats, conversations, aiEmployees, leads_list, leadLinks, appointments_list } = await getDashboardData(tenant.id)
 
-  // Post-onboarding success checklist — shown until every item is done,
-  // regardless of signup date.
-  const checklist = (tenant.onboarding_checklist as Record<string, boolean>) || {}
-  const checklistComplete = !!(checklist.called && checklist.shared && checklist.tested)
-  const showChecklist = !!tenant.slug && !checklistComplete
-  let aiPhoneNumber: string | null = null
-  if (showChecklist) {
-    const { data: ch } = await serviceSupabase
-      .from('channels')
-      .select('twilio_number')
-      .eq('tenant_id', tenant.id)
-      .not('twilio_number', 'is', null)
-      .limit(1)
-      .maybeSingle()
-    aiPhoneNumber = ch?.twilio_number || null
-  }
-
   const statCards = [
     { label: 'Total Calls', value: stats.totalCalls, icon: Phone, color: 'bg-purple-50 text-purple-600' },
     { label: 'Text Messages', value: stats.textMessages, icon: MessageSquare, color: 'bg-blue-50 text-blue-600' },
@@ -176,14 +158,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Link>
       </div>
 
-      {/* Post-onboarding success checklist — until all items are done */}
-      {showChecklist && tenant.slug && (
-        <PostOnboardingChecklist
-          slug={tenant.slug}
-          aiPhoneNumber={aiPhoneNumber}
-          initial={checklist}
-        />
-      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
