@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
@@ -50,30 +51,58 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
         ? 'Required your attention just once.'
         : `Required your attention ${data.humanTakeoverCount} times.`
 
+  // Rotating hero lines — built from real props, only those with a value > 0.
+  // Each is a single template-literal string (guaranteed spacing — no JSX adjacency).
+  const coverage = data.coveragePct.value
+  const heroLines: { headline: string; subtext?: string }[] = []
+  if (opp > 0) heroLines.push({
+    headline: `${opp} potential ${opp === 1 ? 'customer' : 'customers'} reached you when you couldn’t answer.`,
+    subtext: 'Every one of them received an immediate response instead of being ignored, delayed, or lost.',
+  })
+  if (coverage !== null && coverage > 0) heroLines.push({
+    headline: `Scalix kept your business responsive ${coverage}% of the time customers reached out.`,
+  })
+  if (data.customersHelped.value > 0) heroLines.push({
+    headline: `Scalix assisted ${data.customersHelped.value} ${data.customersHelped.value === 1 ? 'customer' : 'customers'} this month.`,
+  })
+  if (data.conversationsManaged.value > 0) heroLines.push({
+    headline: `Scalix handled ${data.conversationsManaged.value} ${data.conversationsManaged.value === 1 ? 'conversation' : 'conversations'} for you.`,
+  })
+
+  // Cycle every ~5s with a smooth fade; static when only one (or zero) line qualifies.
+  const [idx, setIdx] = useState(0)
+  const [show, setShow] = useState(true)
+  useEffect(() => {
+    if (heroLines.length < 2) { setShow(true); return }
+    let to: ReturnType<typeof setTimeout>
+    const iv = setInterval(() => {
+      setShow(false)
+      to = setTimeout(() => { setIdx((i) => (i + 1) % heroLines.length); setShow(true) }, 350)
+    }, 5000)
+    return () => { clearInterval(iv); clearTimeout(to) }
+  }, [heroLines.length])
+  const line = heroLines.length ? heroLines[idx % heroLines.length] : null
+
   return (
     <div className="space-y-6">
-      {/* 1) HERO */}
+      {/* 1) HERO — rotating real-data lines (fixed height, smooth fade) */}
       <div className="relative overflow-hidden rounded-2xl bg-[#1a1f36] px-6 py-8 sm:px-10 sm:py-10">
         <ShieldCheck className="absolute -right-4 -top-4 w-28 h-28 text-white/5" />
         <p className="text-[11px] font-semibold uppercase tracking-widest text-[#4ecdc4] mb-3">{data.monthLabel}</p>
-        {opp > 0 ? (
-          <>
-            <h1 className="text-2xl sm:text-4xl font-bold text-white leading-tight max-w-3xl">
-              {opp} potential {opp === 1 ? 'customer' : 'customers'} reached you when you couldn&apos;t answer.
-            </h1>
-            <p className="text-sm sm:text-lg text-white/70 mt-3 max-w-2xl leading-relaxed">
-              Every one of them received an immediate response instead of being ignored, delayed, or lost.
-            </p>
-          </>
+        {line ? (
+          <div className={`min-h-[120px] sm:min-h-[150px] transition-opacity duration-300 ${show ? 'opacity-100' : 'opacity-0'}`}>
+            <h1 className="text-2xl sm:text-4xl font-bold text-white leading-tight max-w-3xl">{line.headline}</h1>
+            {line.subtext && (
+              <p className="text-sm sm:text-lg text-white/70 mt-3 max-w-2xl leading-relaxed">{line.subtext}</p>
+            )}
+          </div>
         ) : (
-          <>
-            <h1 className="text-2xl sm:text-4xl font-bold text-white leading-tight max-w-3xl">
-              Scalix is on duty for {businessName}.
-            </h1>
+          <div className="min-h-[120px] sm:min-h-[150px]">
+            <h1 className="text-2xl sm:text-4xl font-bold text-white leading-tight max-w-3xl">Scalix is on duty for {businessName}.</h1>
             <p className="text-sm sm:text-lg text-white/70 mt-3 max-w-2xl leading-relaxed">
               The moment a customer reaches out — call, text, or message — they&apos;ll get an immediate response. Your impact will appear here.
             </p>
-          </>
+          </div>
         )}
       </div>
 
@@ -112,7 +141,8 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           <p className="text-sm text-gray-500 mb-3">Without Scalix, these customer moments could have been missed.</p>
           <ul className="space-y-2">
             <li className="text-sm sm:text-[15px] text-gray-700">
-              <span className="font-semibold text-gray-900">{opp}</span> potential {opp === 1 ? 'customer' : 'customers'} reached out while you were unavailable.
+              <span className="font-semibold text-gray-900">{opp}</span>
+              {` potential ${opp === 1 ? 'customer' : 'customers'} reached out while you were unavailable.`}
             </li>
             <li className="text-sm sm:text-[15px] text-gray-700">
               Without an instant reply, some may have waited — or moved on to another business.
