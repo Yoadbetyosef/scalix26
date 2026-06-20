@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Users, ShieldCheck, MessagesSquare, Clock, Timer, Activity, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, Sparkles } from 'lucide-react'
+import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { ImpactData } from '@/lib/dashboard/impact'
 
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
@@ -38,116 +37,47 @@ function BigNumber({ children }: { children: React.ReactNode }) {
   return <p className="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900 leading-none">{children}</p>
 }
 
-function ComingSoon({ note }: { note: string }) {
-  return (
-    <div>
-      <p className="text-2xl font-semibold text-gray-300 leading-none">—</p>
-      <p className="text-xs text-gray-400 mt-2">{note}</p>
-    </div>
-  )
-}
-
 export function ImpactDashboard({ data, businessName }: { data: ImpactData; businessName: string }) {
-  // Rotating hero — real sentences only.
-  const heroLines = data.hero.length
-    ? data.hero
-    : ['Scalix is ready — as conversations come in, your impact will appear here.']
-  const [heroIdx, setHeroIdx] = useState(0)
-  useEffect(() => {
-    if (heroLines.length < 2) return
-    const t = setInterval(() => setHeroIdx((i) => (i + 1) % heroLines.length), 5000)
-    return () => clearInterval(t)
-  }, [heroLines.length])
+  const opp = data.opportunities.value
+
+  // Channel recap sentence, e.g. "3 by text, 2 by phone, 13 by email" (count>0 only).
+  const channelLine = data.channelBreakdown.map((c) => `${c.count} ${c.label}`).join(', ')
+
+  const takeoverLine =
+    data.humanTakeoverCount === 0
+      ? 'Handled every conversation without needing you.'
+      : data.humanTakeoverCount === 1
+        ? 'Required your attention just once.'
+        : `Required your attention ${data.humanTakeoverCount} times.`
 
   return (
     <div className="space-y-6">
-      {/* Section title */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Your Business Impact</h2>
-        <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-          While you focused on running your business, Scalix was working in the background making sure no opportunity was missed.
-        </p>
+      {/* 1) HERO */}
+      <div className="relative overflow-hidden rounded-2xl bg-[#1a1f36] px-6 py-8 sm:px-10 sm:py-10">
+        <ShieldCheck className="absolute -right-4 -top-4 w-28 h-28 text-white/5" />
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#4ecdc4] mb-3">{data.monthLabel}</p>
+        {opp > 0 ? (
+          <>
+            <h1 className="text-2xl sm:text-4xl font-bold text-white leading-tight max-w-3xl">
+              {opp} potential {opp === 1 ? 'customer' : 'customers'} reached you when you couldn&apos;t answer.
+            </h1>
+            <p className="text-sm sm:text-lg text-white/70 mt-3 max-w-2xl leading-relaxed">
+              Every one of them received an immediate response instead of being ignored, delayed, or lost.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl sm:text-4xl font-bold text-white leading-tight max-w-3xl">
+              Scalix is on duty for {businessName}.
+            </h1>
+            <p className="text-sm sm:text-lg text-white/70 mt-3 max-w-2xl leading-relaxed">
+              The moment a customer reaches out — call, text, or message — they&apos;ll get an immediate response. Your impact will appear here.
+            </p>
+          </>
+        )}
       </div>
 
-      {/* Rotating hero bar */}
-      <div className="relative overflow-hidden rounded-2xl bg-[#1a1f36] px-6 py-7 sm:px-8 sm:py-8">
-        <Sparkles className="absolute -right-3 -top-3 w-24 h-24 text-white/5" />
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#4ecdc4] mb-2">{data.monthLabel}</p>
-        <p key={heroIdx} className="text-lg sm:text-2xl font-semibold text-white leading-snug max-w-3xl transition-opacity duration-500">
-          {heroLines[heroIdx]}
-        </p>
-      </div>
-
-      {/* 6 impact cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        <ImpactCard icon={Users} label="Customers Helped" desc="People who received a response from Scalix.">
-          <BigNumber>{data.customersHelped.value.toLocaleString()}</BigNumber>
-          <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-gray-400">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
-            <Trend pct={data.customersHelped.trendPct} />
-          </div>
-        </ImpactCard>
-
-        <ImpactCard icon={ShieldCheck} label="Opportunities Captured" desc="Customers who contacted your business when you were unavailable, busy, or after hours.">
-          <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
-          <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-gray-400">{data.opportunities.lifetime.toLocaleString()} since you started</span>
-            <Trend pct={data.opportunities.trendPct} />
-          </div>
-        </ImpactCard>
-
-        <ImpactCard icon={MessagesSquare} label="Conversations Managed" desc="Calls, texts, emails, chats, and social messages handled by Scalix.">
-          <BigNumber>{data.conversationsManaged.value.toLocaleString()}</BigNumber>
-          <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
-        </ImpactCard>
-
-        <ImpactCard icon={Clock} label="Time Returned To You" desc="Estimated hours you didn't spend answering phones and messages.">
-          <div className="flex items-baseline gap-2">
-            <BigNumber>{data.timeReturnedHours.value.toLocaleString()}</BigNumber>
-            <span className="text-sm font-medium text-gray-400">hrs</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">estimated</span>
-          </div>
-          <div className="mt-1.5"><Trend pct={data.timeReturnedHours.trendPct} /></div>
-        </ImpactCard>
-
-        <ImpactCard icon={Timer} label="Average Response Time" desc="How quickly customers received a response.">
-          <ComingSoon note="We'll show this once response timing is captured per message." />
-        </ImpactCard>
-
-        <ImpactCard icon={Activity} label="Availability Coverage" desc="The percentage of time your business remained responsive to customers.">
-          {data.coveragePct.value === null ? (
-            <ComingSoon note="Appears once customers reach out this month." />
-          ) : (
-            <>
-              <BigNumber>{data.coveragePct.value}%</BigNumber>
-              <div className="mt-1.5"><Trend pct={data.coveragePct.trendPct} suffix=" pts" /></div>
-            </>
-          )}
-        </ImpactCard>
-      </div>
-
-      {/* What Scalix Did For You */}
-      <div>
-        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">What Scalix Did For You</h2>
-        <Card>
-          <CardContent className="p-5 sm:p-6">
-            {data.report.length === 0 ? (
-              <p className="text-sm text-gray-500">Scalix is ready — as conversations come in, {businessName}&apos;s report will appear here.</p>
-            ) : (
-              <ul className="space-y-3">
-                {data.report.map((line, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-[#4ecdc4] flex-shrink-0 mt-0.5" />
-                    <span className="text-sm sm:text-[15px] text-gray-700">{line}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Attention Needed */}
+      {/* 2) ATTENTION NEEDED */}
       <div>
         <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Attention Needed</h2>
         {data.attention.length === 0 ? (
@@ -170,6 +100,92 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
             ))}
           </div>
         )}
+      </div>
+
+      {/* 3) WHAT WOULD HAVE HAPPENED WITHOUT SCALIX — only when there's something to say */}
+      {opp > 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldAlert className="w-5 h-5 text-gray-400" />
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900">What Would Have Happened Without Scalix</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-3">Without Scalix, these customer moments could have been missed.</p>
+          <ul className="space-y-2">
+            <li className="text-sm sm:text-[15px] text-gray-700">
+              <span className="font-semibold text-gray-900">{opp}</span> potential {opp === 1 ? 'customer' : 'customers'} reached out while you were unavailable.
+            </li>
+            <li className="text-sm sm:text-[15px] text-gray-700">
+              Without an instant reply, some may have waited — or moved on to another business.
+            </li>
+          </ul>
+        </div>
+      )}
+
+      {/* 4) IMPACT METRIC CARDS — exactly four */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <ImpactCard icon={Users} label="Customers Assisted" desc="People who received a response without waiting on you.">
+          <BigNumber>{data.customersHelped.value.toLocaleString()}</BigNumber>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-xs text-gray-400">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
+            <Trend pct={data.customersHelped.trendPct} />
+          </div>
+        </ImpactCard>
+
+        <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" desc="People who reached out while you were busy, unavailable, or after hours.">
+          <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-xs text-gray-400">{data.opportunities.lifetime.toLocaleString()} since you started</span>
+            <Trend pct={data.opportunities.trendPct} />
+          </div>
+        </ImpactCard>
+
+        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" desc="Calls, texts, emails, chats, and social messages Scalix helped manage.">
+          <BigNumber>{data.conversationsManaged.value.toLocaleString()}</BigNumber>
+          <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
+        </ImpactCard>
+
+        <ImpactCard icon={Activity} label="Business Coverage" desc="Scalix kept your business responsive when customers reached out.">
+          {data.coveragePct.value === null ? (
+            <>
+              <p className="text-2xl font-semibold text-gray-300 leading-none">—</p>
+              <p className="text-xs text-gray-400 mt-2">Appears once customers reach out this month.</p>
+            </>
+          ) : (
+            <>
+              <BigNumber>{data.coveragePct.value}%</BigNumber>
+              <div className="mt-1.5"><Trend pct={data.coveragePct.trendPct} suffix=" pts" /></div>
+            </>
+          )}
+        </ImpactCard>
+        {/* SEAM: add an "Instant Response Speed" card here once per-message
+            receive-vs-reply timestamps exist (not derivable today — never faked). */}
+      </div>
+
+      {/* 5) YOUR AI EMPLOYEE THIS MONTH — per-channel recap (new info, not the cards) */}
+      <div>
+        <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3">Your AI Employee This Month</h2>
+        <Card>
+          <CardContent className="p-5 sm:p-6">
+            {data.channelBreakdown.length === 0 ? (
+              <p className="text-sm text-gray-500">Scalix is ready — as customers reach out, {businessName}&apos;s recap will appear here.</p>
+            ) : (
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-[#4ecdc4] flex-shrink-0 mt-0.5" />
+                  <span className="text-sm sm:text-[15px] text-gray-700">Responded across your channels: <span className="font-medium text-gray-900">{channelLine}</span>.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-[#4ecdc4] flex-shrink-0 mt-0.5" />
+                  <span className="text-sm sm:text-[15px] text-gray-700">{takeoverLine}</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-[#4ecdc4] flex-shrink-0 mt-0.5" />
+                  <span className="text-sm sm:text-[15px] text-gray-700">Kept your business responsive whenever customers reached out.</span>
+                </li>
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

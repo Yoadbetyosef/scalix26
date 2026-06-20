@@ -1,9 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
 
-// The ONE global, documented constant behind "Time Returned To You". Not per-vertical,
-// not per-business — a single estimate of owner minutes saved per handled conversation.
-export const AVG_MINUTES_PER_CONVERSATION = 5
-
 type Conv = {
   id: string
   contact_id: string | null
@@ -15,23 +11,42 @@ type Conv = {
 }
 type AgentHours = { business_hours: Record<string, string> | null; timezone: string | null }
 
+// SMS delivery failures caused by A2P/10DLC carrier REGISTRATION are a platform-side
+// issue the customer cannot fix — they must NOT appear in the customer Attention list
+// (only in an internal/admin view). Exclude these error codes from customer-facing
+// delivery alerts. (30034 = US A2P 10DLC not registered, and the 3003x/3000x family.)
+const PLATFORM_DELIVERY_ERROR_CODES = new Set([
+  '30034', '30033', '30032', '30031', '30030', '30024', '30007', '30005', '30006',
+])
+
 export interface Metric { value: number; lifetime?: number; trendPct: number | null }
 export interface AttentionItem { label: string; href: string }
+export interface ChannelStat { channel: string; label: string; count: number }
 
 export interface ImpactData {
   hasAnyData: boolean
   monthLabel: string
-  trendsAvailable: boolean // previous calendar month had inbound conversations
+  trendsAvailable: boolean
   customersHelped: Metric & { lifetime: number }
   opportunities: Metric & { lifetime: number }
   conversationsManaged: Metric
-  timeReturnedHours: Metric // estimated
-  responseTimeAvailable: false // not derivable from existing timestamps — empty-state
   coveragePct: { value: number | null; trendPct: number | null }
-  report: string[]
-  hero: string[]
+  channelBreakdown: ChannelStat[] // responded conversations by channel this period; count>0 only
+  humanTakeoverCount: number // conversations you stepped into this period
   attention: AttentionItem[]
+  // SEAM: when per-message receive-vs-reply timestamps exist, add an
+  // `instantResponse` metric here (currently NOT derivable — omitted, never faked).
 }
+
+// Channel → human label for the per-channel recap. Order defines display order.
+const CHANNEL_LABELS: { channel: string; label: string }[] = [
+  { channel: 'sms', label: 'by text' },
+  { channel: 'voice', label: 'by phone' },
+  { channel: 'instagram', label: 'via Instagram' },
+  { channel: 'facebook', label: 'via Facebook' },
+  { channel: 'whatsapp', label: 'via WhatsApp' },
+  { channel: 'email', label: 'by email' },
+]
 
 // Is a conversation's start outside the agent's business hours? null = can't tell.
 function isAfterHours(createdAtIso: string, hours: AgentHours | undefined): boolean | null {
@@ -40,7 +55,7 @@ function isAfterHours(createdAtIso: string, hours: AgentHours | undefined): bool
   const tz = hours?.timezone || 'America/New_York'
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(createdAtIso))
   const wd = (parts.find((p) => p.type === 'weekday')?.value || '').toLowerCase().slice(0, 3)
-  let hh = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10) % 24
+  const hh = parseInt(parts.find((p) => p.type === 'hour')?.value || '0', 10) % 24
   const mm = parseInt(parts.find((p) => p.type === 'minute')?.value || '0', 10)
   const spec = bh[wd]
   if (!spec || spec.trim().toLowerCase() === 'closed') return true
@@ -64,13 +79,13 @@ export async function getImpactData(tenantId: string): Promise<ImpactData> {
   const prevStart = Date.UTC(y, m - 1, 1)
   const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(now)
 
-  const [{ data: convRows }, { data: agentRows }, { data: outRows }, { data: leadRows }, { count: undelivered }] = await Promise.all([
+  const [{ data: convRows }, { data: agentRows }, { data: outRows }, { data: leadRows }, { data: failedRows }] = await Promise.all([
     supabase.from('conversations').select('id, contact_id, channel, created_at, human_takeover, status, ai_employee_id').eq('tenant_id', tenantId),
     supabase.from('ai_employees').select('id, business_hours, timezone').eq('tenant_id', tenantId),
-    // Narrow projection: which conversations got a Scalix outbound, and when.
     supabase.from('messages').select('conversation_id, timestamp').eq('tenant_id', tenantId).in('role', ['assistant', 'agent']),
     supabase.from('leads').select('id, responded_at').eq('tenant_id', tenantId),
-    supabase.from('messages').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('delivery_status', ['undelivered', 'failed']),
+    // Delivery failures WITH their error code, so we can drop platform-side (A2P) ones.
+    supabase.from('messages').select('error_code').eq('tenant_id', tenantId).in('delivery_status', ['undelivered', 'failed']),
   ])
 
   const convs = (convRows || []) as Conv[]
@@ -81,34 +96,27 @@ export async function getImpactData(tenantId: string): Promise<ImpactData> {
 
   const convById = new Map(convs.map((c) => [c.id, c]))
   const respondedEver = new Set<string>()
+  for (const o of outRows || []) if (o.conversation_id) respondedEver.add(o.conversation_id)
   const respondedInWindow = (start: number, end: number) => {
     const s = new Set<string>()
-    for (const o of outRows || []) {
-      if (!o.conversation_id) continue
-      const t = +new Date(o.timestamp)
-      if (t >= start && t < end) s.add(o.conversation_id)
-    }
+    for (const o of outRows || []) { if (!o.conversation_id) continue; const t = +new Date(o.timestamp); if (t >= start && t < end) s.add(o.conversation_id) }
     return s
   }
-  for (const o of outRows || []) if (o.conversation_id) respondedEver.add(o.conversation_id)
 
-  // Per-window aggregation. "inbound" = conversations CREATED in the window.
   const windowStats = (start: number, end: number) => {
     const inWin = convs.filter((c) => { const t = +new Date(c.created_at); return t >= start && t < end })
     const total = inWin.length
     const responded = inWin.filter((c) => respondedEver.has(c.id)).length
-    let afterHours = 0, opportunities = 0
+    let afterHours = 0, opportunities = 0, takeover = 0
     for (const c of inWin) {
       const ah = isAfterHours(c.created_at, hoursFor(c))
       if (ah === true) afterHours++
       if (ah === true || c.human_takeover === true) opportunities++
+      if (c.human_takeover === true) takeover++
     }
-    // Customers helped = distinct customers who received a RESPONSE in the window.
     const respConv = respondedInWindow(start, end)
-    const customers = new Set(
-      [...respConv].map((id) => convById.get(id)?.contact_id).filter((x): x is string => !!x),
-    ).size
-    return { total, responded, afterHours, opportunities, customers, coverage: total > 0 ? Math.round((responded / total) * 100) : null }
+    const customers = new Set([...respConv].map((id) => convById.get(id)?.contact_id).filter((x): x is string => !!x)).size
+    return { inWin, total, responded, afterHours, opportunities, takeover, customers, coverage: total > 0 ? Math.round((responded / total) * 100) : null }
   }
 
   const cur = windowStats(monthStart, nextStart)
@@ -120,31 +128,22 @@ export async function getImpactData(tenantId: string): Promise<ImpactData> {
   let oppLifetime = 0
   for (const c of convs) { const ah = isAfterHours(c.created_at, hoursFor(c)); if (ah === true || c.human_takeover === true) oppLifetime++ }
 
-  const timeReturnedHours = Math.round((cur.total * AVG_MINUTES_PER_CONVERSATION) / 60 * 10) / 10
-  const prevTimeReturned = (prev.total * AVG_MINUTES_PER_CONVERSATION) / 60
+  // Per-channel recap: responded conversations THIS period, grouped by channel (>0 only).
+  const counts = new Map<string, number>()
+  for (const c of cur.inWin) if (respondedEver.has(c.id) && c.channel) counts.set(c.channel, (counts.get(c.channel) || 0) + 1)
+  const channelBreakdown: ChannelStat[] = CHANNEL_LABELS
+    .map(({ channel, label }) => ({ channel, label, count: counts.get(channel) || 0 }))
+    .filter((c) => c.count > 0)
 
-  // ── Hero sentences (real numbers only; skip empties) ───────────────────────
-  const hero: string[] = []
-  if (cur.opportunities > 0) hero.push(`Scalix protected ${cur.opportunities} ${cur.opportunities === 1 ? 'opportunity' : 'opportunities'} while your business was unavailable.`)
-  if (cur.coverage !== null && cur.total > 0) hero.push(`Scalix stayed responsive to ${cur.coverage}% of the customers who reached out this month.`)
-  if (cur.customers > 0) hero.push(`${cur.customers} ${cur.customers === 1 ? 'customer' : 'customers'} received a response from Scalix this month.`)
-  if (cur.total > 0) hero.push(`Scalix handled ${cur.total} ${cur.total === 1 ? 'conversation' : 'conversations'} across your channels this month.`)
-
-  // ── "What Scalix Did For You" report (human sentences; non-zero only) ───────
-  const report: string[] = []
-  if (cur.responded > 0) report.push(`Scalix responded to ${cur.responded} customer ${cur.responded === 1 ? 'conversation' : 'conversations'}.`)
-  if (cur.customers > 0) report.push(`${cur.customers} different ${cur.customers === 1 ? 'customer' : 'customers'} received a response.`)
-  if (cur.afterHours > 0) report.push(`${cur.afterHours} ${cur.afterHours === 1 ? 'customer' : 'customers'} reached you outside business hours.`)
-  if (cur.opportunities > 0) report.push(`${cur.opportunities} ${cur.opportunities === 1 ? 'opportunity was' : 'opportunities were'} captured while you were unavailable.`)
-  if (cur.coverage !== null && cur.total > 0) report.push(`Scalix kept your business responsive ${cur.coverage}% of the time customers reached out.`)
-
-  // ── Attention Needed (real, actionable states only) ────────────────────────
+  // ── Attention Needed (real, customer-ACTIONABLE only) ──────────────────────
   const attention: AttentionItem[] = []
   const takenOver = convs.filter((c) => c.human_takeover === true && c.status === 'open').length
   if (takenOver > 0) attention.push({ label: `${takenOver} ${takenOver === 1 ? 'conversation' : 'conversations'} you're handling personally`, href: '/inbox' })
   const leadsNoFollowup = (leadRows || []).filter((l) => !l.responded_at).length
   if (leadsNoFollowup > 0) attention.push({ label: `${leadsNoFollowup} ${leadsNoFollowup === 1 ? 'lead' : 'leads'} awaiting follow-up`, href: '/dashboard?tab=leads' })
-  if ((undelivered || 0) > 0) attention.push({ label: `${undelivered} ${undelivered === 1 ? 'message' : 'messages'} didn't reach customers`, href: '/inbox' })
+  // Customer-fixable delivery failures only — A2P/carrier registration errors are excluded.
+  const fixableFailures = (failedRows || []).filter((r) => !r.error_code || !PLATFORM_DELIVERY_ERROR_CODES.has(String(r.error_code))).length
+  if (fixableFailures > 0) attention.push({ label: `${fixableFailures} ${fixableFailures === 1 ? 'message' : 'messages'} didn't reach customers`, href: '/inbox' })
 
   return {
     hasAnyData: convs.length > 0 || (outRows || []).length > 0,
@@ -153,11 +152,9 @@ export async function getImpactData(tenantId: string): Promise<ImpactData> {
     customersHelped: { value: cur.customers, lifetime: customersLifetime, trendPct: trendsAvailable ? pct(cur.customers, prev.customers) : null },
     opportunities: { value: cur.opportunities, lifetime: oppLifetime, trendPct: trendsAvailable ? pct(cur.opportunities, prev.opportunities) : null },
     conversationsManaged: { value: cur.total, trendPct: trendsAvailable ? pct(cur.total, prev.total) : null },
-    timeReturnedHours: { value: timeReturnedHours, trendPct: trendsAvailable ? pct(cur.total * AVG_MINUTES_PER_CONVERSATION, prevTimeReturned * 60) : null },
-    responseTimeAvailable: false,
     coveragePct: { value: cur.coverage, trendPct: trendsAvailable && prev.coverage !== null && cur.coverage !== null ? cur.coverage - prev.coverage : null },
-    report,
-    hero,
+    channelBreakdown,
+    humanTakeoverCount: cur.takeover,
     attention,
   }
 }
