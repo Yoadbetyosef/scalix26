@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { X, Phone, MessageSquare, Mail, Globe, MessageCircle, Search, ExternalLink, Loader2, Inbox, AlertTriangle, UserRound } from 'lucide-react'
+import { X, Phone, MessageSquare, Mail, Globe, MessageCircle, MessagesSquare, Camera, Search, ExternalLink, Loader2, Inbox, AlertTriangle, UserRound } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
+type OutcomeTag = { label: string; tone: 'green' | 'blue' | 'indigo' | 'teal' | 'gray' }
 type ProofRow = {
   id: string
   kind: 'conversation' | 'lead'
@@ -14,15 +15,22 @@ type ProofRow = {
   statusKey: 'responded' | 'takeover' | 'no_response' | 'awaiting_followup'
   summary: string
   href: string
+  tags: OutcomeTag[]
+  impactLines: string[]
 }
 
 export interface DrawerConfig { metric: string; title: string; subtitle: string; headerCount: string }
 
-const CHANNEL_ICON: Record<string, React.ElementType> = {
-  sms: MessageSquare, voice: Phone, email: Mail, instagram: Globe, facebook: Globe, whatsapp: MessageCircle, webchat: MessageCircle, lead: UserRound,
-}
-const CHANNEL_LABEL: Record<string, string> = {
-  sms: 'Text', voice: 'Phone', email: 'Email', instagram: 'Instagram', facebook: 'Facebook', whatsapp: 'WhatsApp', webchat: 'Web Chat', lead: 'Lead',
+// Distinct, colored channel identity — premium "works across every channel" feel.
+const CHANNEL: Record<string, { icon: React.ElementType; label: string; cls: string }> = {
+  sms: { icon: MessageSquare, label: 'Text', cls: 'bg-blue-50 text-blue-600' },
+  voice: { icon: Phone, label: 'Phone', cls: 'bg-emerald-50 text-emerald-600' },
+  email: { icon: Mail, label: 'Email', cls: 'bg-rose-50 text-rose-600' },
+  instagram: { icon: Camera, label: 'Instagram', cls: 'bg-pink-50 text-pink-600' },
+  facebook: { icon: Globe, label: 'Facebook', cls: 'bg-indigo-50 text-indigo-600' },
+  whatsapp: { icon: MessageCircle, label: 'WhatsApp', cls: 'bg-green-50 text-green-600' },
+  webchat: { icon: MessagesSquare, label: 'Web Chat', cls: 'bg-teal-50 text-teal-600' },
+  lead: { icon: UserRound, label: 'Lead', cls: 'bg-amber-50 text-amber-600' },
 }
 const STATUS: Record<ProofRow['statusKey'], { label: string; cls: string }> = {
   responded: { label: 'Responded by Scalix', cls: 'bg-[#4ecdc4]/15 text-[#3db8af]' },
@@ -30,23 +38,37 @@ const STATUS: Record<ProofRow['statusKey'], { label: string; cls: string }> = {
   no_response: { label: 'No response', cls: 'bg-amber-50 text-amber-700' },
   awaiting_followup: { label: 'Awaiting follow-up', cls: 'bg-amber-50 text-amber-700' },
 }
+const TAG_TONE: Record<OutcomeTag['tone'], string> = {
+  green: 'bg-emerald-50 text-emerald-700',
+  blue: 'bg-blue-50 text-blue-700',
+  indigo: 'bg-indigo-50 text-indigo-700',
+  teal: 'bg-[#4ecdc4]/15 text-[#3db8af]',
+  gray: 'bg-gray-100 text-gray-600',
+}
 
 function ProofRowItem({ row }: { row: ProofRow }) {
-  const Icon = CHANNEL_ICON[row.channel || ''] || MessageCircle
+  const ch = CHANNEL[row.channel || ''] || { icon: MessageCircle, label: row.channel || 'Conversation', cls: 'bg-gray-100 text-gray-500' }
+  const Icon = ch.icon
   const st = STATUS[row.statusKey]
   return (
     <Link href={row.href} className="block group">
       <div className="rounded-xl border border-gray-100 p-3.5 hover:border-[#4ecdc4]/40 hover:bg-gray-50/60 transition-colors">
         <div className="flex items-start gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 flex-shrink-0">
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${ch.cls}`}>
             <Icon className="w-[18px] h-[18px]" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-sm font-semibold text-gray-900 truncate">{row.name}</span>
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+              {row.tags.map((t, i) => (
+                <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TAG_TONE[t.tone]}`}>{t.label}</span>
+              ))}
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">{CHANNEL_LABEL[row.channel || ''] || row.channel || 'Conversation'} · {formatDateTime(row.createdAt)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{ch.label} · {formatDateTime(row.createdAt)}</p>
+            {row.impactLines.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">{row.impactLines.join(' · ')}</p>
+            )}
             {row.summary && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{row.summary}</p>}
             <span className="inline-flex items-center gap-1 text-xs font-medium text-[#3db8af] mt-2 group-hover:underline">
               Open conversation <ExternalLink className="w-3 h-3" />

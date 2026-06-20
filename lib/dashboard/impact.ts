@@ -134,6 +134,11 @@ export function isOpportunity(base: ImpactBase, c: Conv): boolean {
   const ah = isAfterHours(c.created_at, base.hoursFor(c))
   return ah === true || c.human_takeover === true
 }
+// Did this conversation start outside the agent's business hours? (structured;
+// reuses the same business-hours logic the metrics use). Used for outcome tags.
+export function afterHoursForConv(base: ImpactBase, c: Conv): boolean {
+  return isAfterHours(c.created_at, base.hoursFor(c)) === true
+}
 
 export function selectConversationsManaged(base: ImpactBase, start: number, end: number): Conv[] {
   return inWindow(base, start, end).sort(byNewest)

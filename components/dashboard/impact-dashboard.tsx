@@ -181,7 +181,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
         </ImpactCard>
 
         <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" desc="People who reached out while you were busy, unavailable, or after hours."
-          onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Customers who reached out while you were busy, unavailable, or after hours.', headerCount: `${data.opportunities.value}` }) : undefined}>
+          onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Scalix handled these customer moments while you focused on running your business.', headerCount: `${data.opportunities.value}` }) : undefined}>
           <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-gray-400">{data.opportunities.lifetime.toLocaleString()} since you started</span>
@@ -190,7 +190,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
         </ImpactCard>
 
         <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" desc="Calls, texts, emails, chats, and social messages Scalix helped manage."
-          onClick={data.conversationsManaged.value > 0 ? () => setDrawer({ metric: 'conversations_managed', title: `${data.conversationsManaged.value} Conversations Handled Without You`, subtitle: "Conversations Scalix helped manage so you didn't have to respond manually.", headerCount: `${data.conversationsManaged.value}` }) : undefined}>
+          onClick={data.conversationsManaged.value > 0 ? () => setDrawer({ metric: 'conversations_managed', title: `${data.conversationsManaged.value} Conversations Handled Without You`, subtitle: 'These conversations received responses without requiring your personal attention.', headerCount: `${data.conversationsManaged.value}` }) : undefined}>
           <BigNumber>{data.conversationsManaged.value.toLocaleString()}</BigNumber>
           <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
         </ImpactCard>
