@@ -777,19 +777,35 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           </div>
           )}
 
+          {/* Two INDEPENDENT settings — each its own unique id + htmlFor, its own
+              field, and its own handler. checked is strictly coerced to a boolean
+              so a null value can never flip the input to uncontrolled. */}
           <div>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.email_auto_reply} onChange={e => setForm(f => ({ ...f, email_auto_reply: e.target.checked }))} className="accent-[#4ecdc4] w-4 h-4" />
-              Auto-reply to incoming emails
-            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="email_auto_reply"
+                type="checkbox"
+                checked={form.email_auto_reply === true}
+                onChange={e => setForm(f => ({ ...f, email_auto_reply: e.target.checked }))}
+                className="accent-[#4ecdc4] w-4 h-4"
+              />
+              <label htmlFor="email_auto_reply" className="text-sm text-gray-700">Auto-reply to incoming emails</label>
+            </div>
             <p className="text-xs text-gray-400 mt-1">Applies to both options. When off, emails appear in the Inbox but the AI won&apos;t reply automatically.</p>
           </div>
 
           <div>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={form.email_handoff_after_first_reply} onChange={e => setForm(f => ({ ...f, email_handoff_after_first_reply: e.target.checked }))} className="accent-[#4ecdc4] w-4 h-4" disabled={!form.email_auto_reply} />
-              After the first auto-reply, hand the conversation to me (AI stops replying).
-            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="email_handoff_after_first_reply"
+                type="checkbox"
+                checked={form.email_handoff_after_first_reply === true}
+                onChange={e => setForm(f => ({ ...f, email_handoff_after_first_reply: e.target.checked }))}
+                className="accent-[#4ecdc4] w-4 h-4"
+                disabled={!form.email_auto_reply}
+              />
+              <label htmlFor="email_handoff_after_first_reply" className="text-sm text-gray-700">After the first auto-reply, hand the conversation to me (AI stops replying).</label>
+            </div>
             <p className="text-xs text-gray-400 mt-1">The AI sends one reply to acknowledge, then you take it from there — it won&apos;t send anything else in that email thread.</p>
           </div>
         </CardContent>
