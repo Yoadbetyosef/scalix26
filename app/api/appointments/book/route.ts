@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
   const email = typeof data.customer_email === 'string' && data.customer_email.trim() ? data.customer_email.trim() : null
   const service = typeof data.service_type === 'string' && data.service_type.trim() ? data.service_type.trim() : null
   const channel = typeof data.channel === 'string' && data.channel.trim() ? data.channel.trim() : 'voice'
+  // Optional: skip the customer confirmation SMS when the booking channel already
+  // confirms in-channel via SMS (avoids texting the same number twice). Default
+  // false → unchanged for voice / IG / FB.
+  const suppressCustomerSms = data.suppress_customer_sms === true
   const dateIso = parseDate(typeof data.date === 'string' ? data.date : '')
   const timeDb = parseTime(typeof data.time === 'string' ? data.time : '')
 
@@ -110,10 +114,13 @@ export async function POST(req: NextRequest) {
   const ownerEmail = tenant.email || null
 
   // 1) Customer → SMS confirmation, to the contact's number we already have.
-  try {
-    await sendSMS(phone, `✅ Confirmed! Your appointment is on ${when}. See you then! - ${business}`, fromNumber)
-  } catch (err) {
-    console.error('[book] customer SMS failed:', err instanceof Error ? err.message : err)
+  //    Skipped when the channel already confirms in-channel via SMS (suppress flag).
+  if (!suppressCustomerSms) {
+    try {
+      await sendSMS(phone, `✅ Confirmed! Your appointment is on ${when}. See you then! - ${business}`, fromNumber)
+    } catch (err) {
+      console.error('[book] customer SMS failed:', err instanceof Error ? err.message : err)
+    }
   }
   // 2) Owner → SMS + email that the AI booked an appointment.
   const ownerSms = `📅 New appointment: ${name || 'Customer'} on ${when} for ${service || 'service'}. Phone: ${phone}`

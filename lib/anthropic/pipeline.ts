@@ -1,6 +1,8 @@
+import type Anthropic from '@anthropic-ai/sdk'
 import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
+import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -241,21 +243,35 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // Booking flow: derive which fields are already collected from the whole
   // conversation (customer messages + the AI's own confirmations) and inject a
   // "collected so far" summary so the AI never re-asks for details it has.
+  const inBooking = bookingInProgress(chatMessages)
   let bookingStatus = ''
-  if (bookingInProgress(chatMessages)) {
+  if (inBooking) {
     bookingStatus = buildBookingStatus(await extractBookingFields(chatMessages))
   }
 
   const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
 
-  const response = await anthropic.messages.create({
-    model: isVoice ? VOICE_MODEL : MODEL,
-    max_tokens: isVoice ? 120 : 500,
-    system: systemPrompt,
-    messages: chatMessages,
-  })
-
-  const aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
+  // VOICE is UNCHANGED (single call, no tools — it books via the voice-server).
+  // Non-booking text conversations are also unchanged. Only text channels that are
+  // actively booking get the booking tools, so the AI actually persists the booking
+  // via /book — exactly the logic voice uses.
+  let aiResponse = ''
+  if (!isVoice && inBooking) {
+    aiResponse = await runTextBookingTurn(systemPrompt, chatMessages, {
+      leadToken: (tenant as { lead_intake_token?: string }).lead_intake_token || '',
+      channel: input.channelType, // 'sms' | 'instagram' | 'facebook'
+      customerPhoneFallback: input.channelType === 'sms' ? input.from : null,
+      appUrl: process.env.NEXT_PUBLIC_APP_URL || '',
+    })
+  } else {
+    const response = await anthropic.messages.create({
+      model: isVoice ? VOICE_MODEL : MODEL,
+      max_tokens: isVoice ? 120 : 500,
+      system: systemPrompt,
+      messages: chatMessages,
+    })
+    aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
+  }
 
   const now = new Date().toISOString()
   Promise.all([
@@ -284,6 +300,58 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     response: aiResponse,
     conversationId: conversationId!,
     skillTriggered: skillTriggered || undefined,
+  }
+}
+
+// Text-channel booking turn (SMS / Instagram / Facebook): runs the model with the
+// booking tools and executes any tool calls against the SAME /book + /available
+// endpoints voice uses. Returns the final assistant text. Fully fail-safe — on any
+// error it falls back to a plain reply so the pipeline never crashes.
+async function runTextBookingTurn(
+  systemPrompt: string,
+  chatMessages: { role: 'user' | 'assistant'; content: string }[],
+  ctx: BookingToolCtx,
+): Promise<string> {
+  const plainReply = async (): Promise<string> => {
+    try {
+      const r = await anthropic.messages.create({ model: MODEL, max_tokens: 500, system: systemPrompt, messages: chatMessages })
+      return r.content[0]?.type === 'text' ? r.content[0].text : ''
+    } catch { return '' }
+  }
+
+  // Without our own API URL we can't reach /book — answer normally (no tools).
+  if (!ctx.appUrl) return plainReply()
+
+  try {
+    const messages: Anthropic.MessageParam[] = chatMessages.map((m) => ({ role: m.role, content: m.content }))
+    let text = ''
+    for (let i = 0; i < 4; i++) {
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 500,
+        system: systemPrompt,
+        messages,
+        tools: BOOKING_TOOLS,
+      })
+
+      const textBlocks = response.content.filter((c): c is Anthropic.TextBlock => c.type === 'text')
+      if (textBlocks.length) text = textBlocks.map((b) => b.text).join(' ').trim()
+
+      const toolUses = response.content.filter((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use')
+      if (response.stop_reason !== 'tool_use' || toolUses.length === 0) break
+
+      messages.push({ role: 'assistant', content: response.content })
+      const results: Anthropic.ToolResultBlockParam[] = []
+      for (const tu of toolUses) {
+        const out = await executeBookingTool(tu.name, tu.input as Record<string, unknown>, ctx)
+        results.push({ type: 'tool_result', tool_use_id: tu.id, content: out })
+      }
+      messages.push({ role: 'user', content: results })
+    }
+    return text || (await plainReply())
+  } catch (err) {
+    console.error('[pipeline] booking turn failed — falling back to plain reply:', err instanceof Error ? err.message : err)
+    return plainReply()
   }
 }
 
