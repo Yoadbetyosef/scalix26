@@ -2,26 +2,29 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { X, Phone, MessageSquare, Mail, Globe, MessageCircle, MessagesSquare, Camera, Search, ExternalLink, Loader2, Inbox, AlertTriangle, UserRound } from 'lucide-react'
+import {
+  X, Phone, MessageSquare, Mail, Globe, MessageCircle, MessagesSquare, Camera, Search, ExternalLink,
+  Loader2, Inbox, AlertTriangle, UserRound, Sparkles, ChevronDown, ChevronUp, Clock, UserPlus, CalendarCheck, Send,
+} from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
-type OutcomeTag = { label: string; tone: 'green' | 'blue' | 'indigo' | 'teal' | 'gray' }
+type OutcomeTag = { label: string; tone: 'green' | 'blue' | 'purple' | 'indigo' | 'amber' | 'gray' }
 type ProofRow = {
   id: string
   kind: 'conversation' | 'lead'
   name: string
   channel: string | null
   createdAt: string
-  statusKey: 'responded' | 'takeover' | 'no_response' | 'awaiting_followup'
   summary: string
   href: string
-  tags: OutcomeTag[]
-  impactLines: string[]
+  pills: OutcomeTag[]
+  ownerTimeSaved: boolean
+  statusKind: 'saved' | 'takeover' | 'no_response'
 }
+type TimelineEvent = { at: string; kind: 'inbound' | 'outbound' | 'lead' | 'appointment' | 'followup'; text?: string; label?: string }
 
 export interface DrawerConfig { metric: string; title: string; subtitle: string; headerCount: string }
 
-// Distinct, colored channel identity — premium "works across every channel" feel.
 const CHANNEL: Record<string, { icon: React.ElementType; label: string; cls: string }> = {
   sms: { icon: MessageSquare, label: 'Text', cls: 'bg-blue-50 text-blue-600' },
   voice: { icon: Phone, label: 'Phone', cls: 'bg-emerald-50 text-emerald-600' },
@@ -32,27 +35,72 @@ const CHANNEL: Record<string, { icon: React.ElementType; label: string; cls: str
   webchat: { icon: MessagesSquare, label: 'Web Chat', cls: 'bg-teal-50 text-teal-600' },
   lead: { icon: UserRound, label: 'Lead', cls: 'bg-amber-50 text-amber-600' },
 }
-const STATUS: Record<ProofRow['statusKey'], { label: string; cls: string }> = {
-  responded: { label: 'Responded by Scalix', cls: 'bg-[#4ecdc4]/15 text-[#3db8af]' },
-  takeover: { label: 'You stepped in', cls: 'bg-indigo-50 text-indigo-600' },
-  no_response: { label: 'No response', cls: 'bg-amber-50 text-amber-700' },
-  awaiting_followup: { label: 'Awaiting follow-up', cls: 'bg-amber-50 text-amber-700' },
-}
 const TAG_TONE: Record<OutcomeTag['tone'], string> = {
-  green: 'bg-emerald-50 text-emerald-700',
+  green: 'bg-emerald-100 text-emerald-800',
   blue: 'bg-blue-50 text-blue-700',
+  purple: 'bg-purple-50 text-purple-700',
   indigo: 'bg-indigo-50 text-indigo-700',
-  teal: 'bg-[#4ecdc4]/15 text-[#3db8af]',
+  amber: 'bg-amber-50 text-amber-700',
   gray: 'bg-gray-100 text-gray-600',
+}
+const TL_ICON: Record<TimelineEvent['kind'], { icon: React.ElementType; cls: string }> = {
+  inbound: { icon: MessageSquare, cls: 'bg-gray-100 text-gray-500' },
+  outbound: { icon: Sparkles, cls: 'bg-[#4ecdc4]/15 text-[#3db8af]' },
+  lead: { icon: UserPlus, cls: 'bg-blue-50 text-blue-600' },
+  appointment: { icon: CalendarCheck, cls: 'bg-emerald-50 text-emerald-600' },
+  followup: { icon: Send, cls: 'bg-indigo-50 text-indigo-600' },
+}
+
+function ConversationTimeline({ conversationId }: { conversationId: string }) {
+  const [events, setEvents] = useState<TimelineEvent[] | null>(null)
+  const [error, setError] = useState(false)
+  useEffect(() => {
+    let active = true
+    setError(false); setEvents(null)
+    fetch(`/api/dashboard/impact/timeline?conversation=${conversationId}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => { if (active) setEvents(d.events || []) })
+      .catch(() => { if (active) setError(true) })
+    return () => { active = false }
+  }, [conversationId])
+
+  if (error) return <p className="text-xs text-amber-600 px-3 py-3">Couldn&apos;t load the timeline.</p>
+  if (events === null) return <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading timeline…</div>
+  if (events.length === 0) return <p className="text-xs text-gray-400 px-3 py-3">No recorded events.</p>
+
+  return (
+    <div className="px-3 pb-3 pt-1">
+      <ol className="relative border-l border-gray-200 ml-3 space-y-3">
+        {events.map((e, i) => {
+          const cfg = TL_ICON[e.kind]
+          const Icon = cfg.icon
+          const milestone = e.kind === 'lead' || e.kind === 'appointment' || e.kind === 'followup'
+          return (
+            <li key={i} className="ml-4">
+              <span className={`absolute -left-[13px] w-6 h-6 rounded-full flex items-center justify-center ${cfg.cls}`}>
+                <Icon className="w-3 h-3" />
+              </span>
+              <p className={`text-xs ${milestone ? 'font-semibold text-gray-800' : 'text-gray-700'}`}>
+                {milestone ? e.label : (e.kind === 'outbound' ? 'Scalix' : 'Customer')}
+              </p>
+              {!milestone && e.text && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{e.text}</p>}
+              <p className="text-[10px] text-gray-400 mt-0.5">{formatDateTime(e.at)}</p>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
 }
 
 function ProofRowItem({ row }: { row: ProofRow }) {
+  const [open, setOpen] = useState(false)
   const ch = CHANNEL[row.channel || ''] || { icon: MessageCircle, label: row.channel || 'Conversation', cls: 'bg-gray-100 text-gray-500' }
   const Icon = ch.icon
-  const st = STATUS[row.statusKey]
+  const expandable = row.kind === 'conversation'
   return (
-    <Link href={row.href} className="block group">
-      <div className="rounded-xl border border-gray-100 p-3.5 hover:border-[#4ecdc4]/40 hover:bg-gray-50/60 transition-colors">
+    <div className="rounded-xl border border-gray-100 overflow-hidden">
+      <button type="button" onClick={() => expandable && setOpen((v) => !v)} className={`w-full text-left p-3.5 ${expandable ? 'hover:bg-gray-50/60' : ''} transition-colors`}>
         <div className="flex items-start gap-3">
           <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${ch.cls}`}>
             <Icon className="w-[18px] h-[18px]" />
@@ -60,23 +108,45 @@ function ProofRowItem({ row }: { row: ProofRow }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-sm font-semibold text-gray-900 truncate">{row.name}</span>
-              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
-              {row.tags.map((t, i) => (
-                <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TAG_TONE[t.tone]}`}>{t.label}</span>
+              {row.pills.map((p, i) => (
+                <span key={i} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${TAG_TONE[p.tone]}`}>{p.label}</span>
               ))}
+              {row.statusKind === 'takeover' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600">You stepped in</span>}
+              {row.statusKind === 'no_response' && row.kind === 'conversation' && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">No response</span>}
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">{ch.label} · {formatDateTime(row.createdAt)}</p>
-            {row.impactLines.length > 0 && (
-              <p className="text-xs text-gray-500 mt-1">{row.impactLines.join(' · ')}</p>
+
+            {/* Consolidated automation block */}
+            {row.ownerTimeSaved && (
+              <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-100 px-2.5 py-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-xs font-bold text-emerald-800">Owner Time Saved</span>
+                </div>
+                <p className="text-[11px] text-emerald-700/90 mt-0.5">No owner involvement required · Handled automatically by Scalix.</p>
+              </div>
             )}
-            {row.summary && <p className="text-xs text-gray-600 mt-1.5 line-clamp-2">{row.summary}</p>}
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-[#3db8af] mt-2 group-hover:underline">
-              Open conversation <ExternalLink className="w-3 h-3" />
-            </span>
+
+            <p className="text-xs text-gray-400 mt-1.5">{ch.label} · {formatDateTime(row.createdAt)}</p>
+            {row.summary && <p className="text-xs text-gray-600 mt-1 line-clamp-2">{row.summary}</p>}
           </div>
+          {expandable && (open ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 mt-1" />)}
         </div>
-      </div>
-    </Link>
+      </button>
+
+      {open && expandable && (
+        <div className="border-t border-gray-100 bg-gray-50/40">
+          <ConversationTimeline conversationId={row.id} />
+          <Link href={row.href} className="flex items-center gap-1 text-xs font-medium text-[#3db8af] hover:underline px-3.5 pb-3">
+            Open conversation <ExternalLink className="w-3 h-3" />
+          </Link>
+        </div>
+      )}
+      {!expandable && (
+        <Link href={row.href} className="flex items-center gap-1 text-xs font-medium text-[#3db8af] hover:underline px-3.5 pb-3 -mt-1">
+          Open <ExternalLink className="w-3 h-3" />
+        </Link>
+      )}
+    </div>
   )
 }
 
@@ -84,6 +154,7 @@ export function DrillDownDrawer({ config, onClose }: { config: DrawerConfig | nu
   const [rows, setRows] = useState<ProofRow[]>([])
   const [total, setTotal] = useState(0)
   const [hasMore, setHasMore] = useState(false)
+  const [scoreboard, setScoreboard] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [q, setQ] = useState('')
@@ -99,6 +170,7 @@ export function DrillDownDrawer({ config, onClose }: { config: DrawerConfig | nu
       const data = await res.json()
       setTotal(data.total)
       setHasMore(data.hasMore)
+      setScoreboard(data.scoreboard || [])
       setRows((prev) => (offset === 0 ? data.rows : [...prev, ...data.rows]))
     } catch {
       setError(true)
@@ -109,10 +181,7 @@ export function DrillDownDrawer({ config, onClose }: { config: DrawerConfig | nu
 
   useEffect(() => {
     if (!metric) return
-    setRows([])
-    setQ('')
-    setTotal(0)
-    setHasMore(false)
+    setRows([]); setQ(''); setTotal(0); setHasMore(false); setScoreboard([])
     load(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metric])
@@ -126,34 +195,30 @@ export function DrillDownDrawer({ config, onClose }: { config: DrawerConfig | nu
       <div className={`fixed top-0 right-0 h-full w-full sm:max-w-md bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'}`}>
         {config && (
           <>
-            {/* Header */}
             <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-100">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-bold text-gray-900">{config.title}</h2>
                   <span className="text-xs font-semibold text-[#3db8af] bg-[#4ecdc4]/10 px-2 py-0.5 rounded-full">{config.headerCount}</span>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{config.subtitle}</p>
+                {scoreboard.length > 0 ? (
+                  <p className="text-xs text-gray-500 mt-1">{scoreboard.join(' · ')}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">{config.subtitle}</p>
+                )}
               </div>
               <button onClick={onClose} className="tap-target text-gray-400 hover:text-gray-600 flex-shrink-0 -mt-1 -mr-1 p-1"><X className="w-5 h-5" /></button>
             </div>
 
-            {/* Search (only when there are enough rows to warrant it) */}
             {rows.length > 8 && (
               <div className="px-5 pt-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search these records…"
-                    className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 text-sm focus:border-[#4ecdc4] focus:outline-none focus:ring-1 focus:ring-[#4ecdc4]"
-                  />
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search these records…" className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-200 text-sm focus:border-[#4ecdc4] focus:outline-none focus:ring-1 focus:ring-[#4ecdc4]" />
                 </div>
               </div>
             )}
 
-            {/* Body */}
             <div className="flex-1 overflow-y-auto p-5 space-y-2.5">
               {error ? (
                 <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 py-12">
