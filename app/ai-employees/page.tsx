@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Bot, Zap } from 'lucide-react'
@@ -20,6 +20,16 @@ export default async function AIEmployeesPage() {
     .select('*, channels(*), skills(*)')
     .eq('tenant_id', tenant.id)
     .order('created_at', { ascending: false })
+
+  // Email connection lives in connected_email_accounts (per-agent), NOT in the
+  // channels table — so the card's count/badges miss it. Read which agents have a
+  // connected email account (admin read, scoped to this verified tenant).
+  const { data: emailAccounts } = await createAdminClient()
+    .from('connected_email_accounts')
+    .select('ai_employee_id')
+    .eq('tenant_id', tenant.id)
+    .eq('status', 'connected')
+  const emailAgentIds = new Set((emailAccounts || []).map((a) => a.ai_employee_id).filter(Boolean))
 
   return (
     <div className="p-4 sm:p-6">
@@ -70,7 +80,7 @@ export default async function AIEmployeesPage() {
                 <div className="space-y-2 text-xs text-gray-500 mb-4">
                   <div className="flex items-center justify-between">
                     <span>Channels</span>
-                    <span className="font-medium text-gray-700">{emp.channels?.length || 0}</span>
+                    <span className="font-medium text-gray-700">{(emp.channels?.length || 0) + (emailAgentIds.has(emp.id) ? 1 : 0)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span>Active Skills</span>
@@ -84,6 +94,8 @@ export default async function AIEmployeesPage() {
                       {ch.type}
                     </Badge>
                   ))}
+                  {/* Email connection isn't a channels row — add its pill when connected. */}
+                  {emailAgentIds.has(emp.id) && <Badge variant="email">email</Badge>}
                 </div>
 
                 <div className="flex gap-2">
