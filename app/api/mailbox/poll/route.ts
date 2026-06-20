@@ -4,6 +4,7 @@ import { cronAuthorized } from '@/lib/reviews'
 import { getProvider } from '@/lib/mailbox'
 import { getValidAccount, listConnectedAccounts } from '@/lib/mailbox/account'
 import { generateEmailReply } from '@/lib/email/reply'
+import { isNonCustomerEmail, domainsFromEmails } from '@/lib/email/is-non-customer'
 import type { InboundMessage, MailAccount } from '@/lib/mailbox/types'
 
 // Loop prevention: only reply to a real, human, inbound customer email.
@@ -107,6 +108,17 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
     }
     if (agent.email_auto_reply === false) {
       console.log('[mailbox-poll] auto-reply OFF for agent', agent.id, '— leaving unread')
+      skipped++
+      continue
+    }
+
+    // Structured non-customer gate: never auto-reply to automated/notification/platform/
+    // self/own-domain senders. The inbound message is already stored above (stays in the
+    // Inbox); we just don't reply or treat it as a customer interaction.
+    const ncReason = isNonCustomerEmail(msg.fromEmail, domainsFromEmails([account.emailAddress])).reason
+    if (ncReason) {
+      console.log('[mailbox-poll] non-customer sender, not auto-replying:', msg.fromEmail, ncReason)
+      await provider.markProcessed(account, msg.providerMessageId)
       skipped++
       continue
     }

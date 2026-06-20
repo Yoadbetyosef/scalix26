@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
+import { isNonCustomerEmail, domainsFromEmails } from '@/lib/email/is-non-customer'
 
 const SECRET = process.env.RESEND_WEBHOOK_SECRET || process.env.RESEND_INBOUND_SECRET || ''
 
@@ -138,6 +139,16 @@ export async function POST(req: NextRequest) {
     console.log('[email-inbound] human_takeover active for conv', convId, '— storing only, notifying owner')
     await ownerNote('A customer replied in a conversation you have taken over.')
     return NextResponse.json({ ok: true, takenOver: true })
+  }
+
+  // Structured non-customer gate: never auto-reply to automated/notification/platform/
+  // self/own-domain senders. The inbound message is already stored above (stays in the
+  // Inbox); we just don't reply or treat it as a customer interaction.
+  const { data: ncAccts } = await supabase.from('connected_email_accounts').select('email_address').eq('tenant_id', tenant.id)
+  const ncReason = isNonCustomerEmail(fromEmail, domainsFromEmails((ncAccts || []).map((a) => a.email_address))).reason
+  if (ncReason) {
+    console.log('[email-inbound] non-customer sender, not auto-replying:', fromEmail, ncReason)
+    return NextResponse.json({ ok: true, blocked: ncReason })
   }
 
   if (!agent) {

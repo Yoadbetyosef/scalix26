@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isNonCustomerEmail, domainsFromEmails } from '@/lib/email/is-non-customer'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type Conv = {
@@ -73,15 +74,27 @@ function isAfterHours(createdAtIso: string, hours: AgentHours | undefined): bool
 
 export async function loadImpactBase(tenantId: string): Promise<ImpactBase> {
   const supabase = createAdminClient()
-  const [{ data: convRows }, { data: agentRows }, { data: outRows }, { data: leadRows }, { data: failedRows }] = await Promise.all([
+  const [{ data: convRows }, { data: agentRows }, { data: outRows }, { data: leadRows }, { data: failedRows }, { data: contactRows }, { data: acctRows }] = await Promise.all([
     supabase.from('conversations').select('id, contact_id, channel, created_at, human_takeover, status, ai_employee_id').eq('tenant_id', tenantId),
     supabase.from('ai_employees').select('id, business_hours, timezone').eq('tenant_id', tenantId),
     supabase.from('messages').select('conversation_id, timestamp').eq('tenant_id', tenantId).in('role', ['assistant', 'agent']),
     supabase.from('leads').select('id, contact_id, name, phone, created_at, responded_at').eq('tenant_id', tenantId),
     supabase.from('messages').select('error_code').eq('tenant_id', tenantId).in('delivery_status', ['undelivered', 'failed']),
+    supabase.from('contacts').select('id, email').eq('tenant_id', tenantId),
+    supabase.from('connected_email_accounts').select('email_address').eq('tenant_id', tenantId),
   ])
 
-  const convs = (convRows || []) as Conv[]
+  // EMAIL-ONLY data-quality gate: exclude non-customer email senders (automated /
+  // notification / platform / self / the tenant's OWN domain) from the dashboard — both
+  // metrics and drill-down, since they share base.convs (so count === records stays
+  // exact). SMS/voice are never filtered. Uncertain senders are kept (fail-safe).
+  const emailByContact = new Map((contactRows || []).map((c) => [c.id, c.email as string | null]))
+  const tenantDomains = domainsFromEmails((acctRows || []).map((a) => a.email_address))
+  const convs = ((convRows || []) as Conv[]).filter((c) => {
+    if (c.channel !== 'email') return true
+    const email = c.contact_id ? emailByContact.get(c.contact_id) : null
+    return !isNonCustomerEmail(email, tenantDomains).blocked
+  })
   const hoursByAgent = new Map<string, AgentHours>()
   for (const a of agentRows || []) hoursByAgent.set(a.id, { business_hours: a.business_hours as Record<string, string> | null, timezone: a.timezone })
   const primaryHours = (agentRows || [])[0] ? { business_hours: agentRows![0].business_hours as Record<string, string> | null, timezone: agentRows![0].timezone } : undefined
