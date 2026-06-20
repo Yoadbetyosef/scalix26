@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { ImpactData } from '@/lib/dashboard/impact'
+import { DrillDownDrawer, type DrawerConfig } from '@/components/dashboard/drill-down-drawer'
 
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   if (pct === null || pct === undefined) return null
@@ -17,9 +18,10 @@ function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   )
 }
 
-function ImpactCard({ icon: Icon, label, desc, children }: { icon: React.ElementType; label: string; desc: string; children: React.ReactNode }) {
+function ImpactCard({ icon: Icon, label, desc, children, onClick }: { icon: React.ElementType; label: string; desc: string; children: React.ReactNode; onClick?: () => void }) {
+  const clickable = !!onClick
   return (
-    <Card className="overflow-hidden">
+    <Card onClick={onClick} className={`overflow-hidden ${clickable ? 'cursor-pointer hover:shadow-md hover:border-[#4ecdc4]/40 transition-all' : ''}`}>
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center gap-2.5 mb-4">
           <div className="w-9 h-9 rounded-xl bg-[#4ecdc4]/10 flex items-center justify-center text-[#3db8af] flex-shrink-0">
@@ -29,6 +31,7 @@ function ImpactCard({ icon: Icon, label, desc, children }: { icon: React.Element
         </div>
         {children}
         <p className="text-xs text-gray-500 mt-2 leading-relaxed">{desc}</p>
+        {clickable && <p className="text-[11px] font-medium text-[#3db8af] mt-2">Click to view details →</p>}
       </CardContent>
     </Card>
   )
@@ -83,6 +86,9 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
   }, [heroLines.length])
   const line = heroLines.length ? heroLines[idx % heroLines.length] : null
 
+  // Drill-down drawer (proof). A card opens it only when its value > 0.
+  const [drawer, setDrawer] = useState<DrawerConfig | null>(null)
+
   return (
     <div className="space-y-6">
       {/* 1) HERO — rotating real-data lines (fixed height, smooth fade) */}
@@ -118,15 +124,27 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           </Card>
         ) : (
           <div className="space-y-2">
-            {data.attention.map((item, i) => (
-              <Link key={i} href={item.href} className="block">
+            {data.attention.map((item, i) => {
+              const inner = (
                 <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100/70 transition-colors">
                   <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
                   <span className="text-sm font-medium text-amber-900 flex-1">{item.label}</span>
                   <ArrowUpRight className="w-4 h-4 text-amber-400" />
                 </div>
-              </Link>
-            ))}
+              )
+              if (item.metric) {
+                const n = parseInt(item.label, 10) || 0
+                const meta = item.metric === 'attention_takeover'
+                  ? { title: "Conversations You're Handling", subtitle: "Open conversations you've stepped into." }
+                  : { title: 'Leads Awaiting Follow-up', subtitle: "Leads that haven't been contacted yet." }
+                return (
+                  <button key={i} onClick={() => setDrawer({ metric: item.metric!, title: meta.title, subtitle: meta.subtitle, headerCount: `${n}` })} className="block w-full text-left">
+                    {inner}
+                  </button>
+                )
+              }
+              return <Link key={i} href={item.href} className="block">{inner}</Link>
+            })}
           </div>
         )}
       </div>
@@ -151,9 +169,10 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
         </div>
       )}
 
-      {/* 4) IMPACT METRIC CARDS — exactly four */}
+      {/* 4) IMPACT METRIC CARDS — exactly four (clickable → proof drawer when value>0) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <ImpactCard icon={Users} label="Customers Assisted" desc="People who received a response without waiting on you.">
+        <ImpactCard icon={Users} label="Customers Assisted" desc="People who received a response without waiting on you."
+          onClick={data.customersHelped.value > 0 ? () => setDrawer({ metric: 'customers_assisted', title: `${data.customersHelped.value} Customers Assisted`, subtitle: 'People who received a response from your business through Scalix.', headerCount: `${data.customersHelped.value}` }) : undefined}>
           <BigNumber>{data.customersHelped.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-gray-400">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
@@ -161,7 +180,8 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           </div>
         </ImpactCard>
 
-        <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" desc="People who reached out while you were busy, unavailable, or after hours.">
+        <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" desc="People who reached out while you were busy, unavailable, or after hours."
+          onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Customers who reached out while you were busy, unavailable, or after hours.', headerCount: `${data.opportunities.value}` }) : undefined}>
           <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-gray-400">{data.opportunities.lifetime.toLocaleString()} since you started</span>
@@ -169,12 +189,14 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           </div>
         </ImpactCard>
 
-        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" desc="Calls, texts, emails, chats, and social messages Scalix helped manage.">
+        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" desc="Calls, texts, emails, chats, and social messages Scalix helped manage."
+          onClick={data.conversationsManaged.value > 0 ? () => setDrawer({ metric: 'conversations_managed', title: `${data.conversationsManaged.value} Conversations Handled Without You`, subtitle: "Conversations Scalix helped manage so you didn't have to respond manually.", headerCount: `${data.conversationsManaged.value}` }) : undefined}>
           <BigNumber>{data.conversationsManaged.value.toLocaleString()}</BigNumber>
           <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
         </ImpactCard>
 
-        <ImpactCard icon={Activity} label="Business Coverage" desc="Scalix kept your business responsive when customers reached out.">
+        <ImpactCard icon={Activity} label="Business Coverage" desc="Scalix kept your business responsive when customers reached out."
+          onClick={data.coveragePct.value !== null && data.coveragePct.total > 0 ? () => setDrawer({ metric: 'coverage', title: 'Business Coverage', subtitle: 'Every customer who reached out, and whether Scalix kept you responsive.', headerCount: `${data.coveragePct.value}%` }) : undefined}>
           {data.coveragePct.value === null ? (
             <>
               <p className="text-2xl font-semibold text-gray-300 leading-none">—</p>
@@ -217,6 +239,9 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           </CardContent>
         </Card>
       </div>
+
+      {/* Drill-down proof drawer (lazy-loads real records when opened) */}
+      <DrillDownDrawer config={drawer} onClose={() => setDrawer(null)} />
     </div>
   )
 }
