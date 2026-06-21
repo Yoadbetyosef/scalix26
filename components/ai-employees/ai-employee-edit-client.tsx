@@ -418,8 +418,8 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Onboarding welcome banner */}
       {onboarding && (
         <div className="rounded-2xl border border-[#4ecdc4]/30 bg-[#4ecdc4]/10 p-4 sm:p-5">
-          <h2 className="text-base font-bold text-gray-900">Welcome — meet your AI. Your number is live.</h2>
-          <p className="text-sm text-gray-600 mt-1">Fill in your business details, pick a voice, connect your channels, and scan your website. When you’re happy, hit <strong>Finish setup</strong>.</p>
+          <h2 className="text-base font-bold text-gray-900">Your AI employee is live — your number is already answering.</h2>
+          <p className="text-sm text-gray-600 mt-1">Finish the quick setup — business details, voice, channels, and website — to start protecting your business from missed calls, messages, and lost customers.</p>
           <Button onClick={finishSetup} loading={finishing} className="mt-3">Finish setup →</Button>
         </div>
       )}
