@@ -1,10 +1,26 @@
 import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Bot, Zap } from 'lucide-react'
+import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
+
+// Matching icon for a channel pill — official brand logos for FB/IG, lucide for the
+// generic channels. Display only.
+function channelIcon(type: string) {
+  const cls = 'w-3 h-3'
+  switch (type) {
+    case 'voice': return <Phone className={cls} />
+    case 'sms': return <MessageSquare className={cls} />
+    case 'email': return <Mail className={cls} />
+    case 'whatsapp': return <MessageCircle className={cls} />
+    case 'facebook': return <FacebookIcon className={cls} />
+    case 'instagram': return <InstagramIcon className={cls} />
+    default: return null
+  }
+}
 
 export default async function AIEmployeesPage() {
   const supabase = await createClient()
@@ -90,12 +106,12 @@ export default async function AIEmployeesPage() {
 
                 <div className="flex flex-wrap gap-1 mb-4">
                   {(emp.channels || []).slice(0, 3).map((ch: { id: string; type: string }) => (
-                    <Badge key={ch.id} variant={ch.type as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                      {ch.type}
+                    <Badge key={ch.id} variant={ch.type as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'} className="inline-flex items-center gap-1">
+                      {channelIcon(ch.type)}{ch.type}
                     </Badge>
                   ))}
                   {/* Email connection isn't a channels row — add its pill when connected. */}
-                  {emailAgentIds.has(emp.id) && <Badge variant="email">email</Badge>}
+                  {emailAgentIds.has(emp.id) && <Badge variant="email" className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />email</Badge>}
                 </div>
 
                 <div className="flex gap-2">

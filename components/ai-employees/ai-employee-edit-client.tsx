@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen, Clock } from 'lucide-react'
+import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
@@ -611,7 +612,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           {/* Facebook + Instagram — one OAuth flow connects both */}
           <div className="p-4 rounded-xl border border-gray-200 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <Share2 className="w-4 h-4 text-blue-600" />
+              <span className="flex items-center gap-1">
+                <FacebookIcon className="w-4 h-4" />
+                <InstagramIcon className="w-4 h-4" />
+              </span>
               <span className="font-semibold text-gray-800">Facebook & Instagram</span>
               {fbChannel && <Badge variant="connected">FB Connected</Badge>}
               {igChannel && <Badge variant="connected">IG Connected</Badge>}
@@ -624,7 +628,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
-                      <Share2 className="w-3 h-3" /> Facebook Page
+                      <FacebookIcon className="w-3 h-3" /> Facebook Page
                     </p>
                     <p className="text-sm font-medium text-gray-800 truncate">
                       {fbChannel
@@ -655,7 +659,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
-                      <MessageCircle className="w-3 h-3" /> Instagram Account
+                      <InstagramIcon className="w-3 h-3" /> Instagram Account
                     </p>
                     {igChannel ? (
                       <p className="text-sm font-medium text-gray-800 truncate">
@@ -695,9 +699,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   If your page has Instagram linked, both channels connect automatically.
                 </p>
                 <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
-                  <Button size="sm">
-                    <Share2 className="w-3.5 h-3.5 mr-1.5" />
-                    Connect with Facebook
+                  {/* Meta Facebook Login brand guidelines: official blue #1877F2, white "f". */}
+                  <Button size="sm" className="bg-[#1877F2] hover:bg-[#166fe0] text-white">
+                    <FacebookIcon className="w-3.5 h-3.5 mr-1.5" color="#FFFFFF" />
+                    Continue with Facebook
                   </Button>
                 </a>
                 <p className="text-xs text-gray-400">
