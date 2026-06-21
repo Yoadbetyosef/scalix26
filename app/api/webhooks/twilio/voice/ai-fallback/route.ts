@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { requestBaseUrl } from '@/lib/request-url'
 
 function escapeXml(str: string): string {
   return str
@@ -11,10 +12,11 @@ function escapeXml(str: string): string {
 }
 
 // Speak via Deepgram Aura TTS (served by /api/tts) when configured; fall back
-// to Twilio Polly when no Deepgram key is set, so voice never breaks.
-function ttsPlay(text: string): string {
+// to Twilio Polly when no Deepgram key is set, so voice never breaks. baseUrl is the
+// request host (Fix C) so the TTS URL stays on the call's domain.
+function ttsPlay(text: string, baseUrl: string): string {
   if (process.env.DEEPGRAM_API_KEY) {
-    return `<Play>${process.env.NEXT_PUBLIC_APP_URL}/api/tts?text=${encodeURIComponent(text)}</Play>`
+    return `<Play>${baseUrl}/api/tts?text=${encodeURIComponent(text)}</Play>`
   }
   return `<Say voice="Polly.Joanna-Neural">${escapeXml(text)}</Say>`
 }
@@ -25,15 +27,24 @@ export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
   const { To, DialCallStatus } = params
-  // forced=machine → the AMD callback redirected the caller here off a voicemail
-  // bridge. Always run the AI; never short-circuit on DialCallStatus.
+  // forced → the AMD callback sent the caller here off a voicemail bridge.
   const forced = req.nextUrl.searchParams.get('forced')
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
+  // Fix C: same domain as the incoming call.
+  const baseUrl = requestBaseUrl(req)
 
-  // A real human answered and the call finished — nothing to do. (Skipped when forced,
-  // since a machine-answer reports DialCallStatus=completed but isn't a human bridge.)
-  if (!forced && DialCallStatus === 'completed') {
+  // Voicemail rescue → hand off to the FULL realtime agent (same as the primary
+  // answer path) via the main voice route with ?ai=1, instead of the degraded
+  // turn-based fallback. (The AMD callback already routes there directly; this is a
+  // belt-and-suspenders path if anything still hits ai-fallback?forced.)
+  if (forced) {
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response><Redirect method="POST">${baseUrl}/api/webhooks/twilio/voice?ai=1</Redirect></Response>`
+    return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
+  }
+
+  // A real human answered and the call finished — nothing to do.
+  if (DialCallStatus === 'completed') {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response></Response>`
     return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
@@ -61,9 +72,9 @@ export async function POST(req: NextRequest) {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="${actionUrl}" method="POST" speechTimeout="auto" language="en-US" timeout="10">
-    ${ttsPlay(greeting)}
+    ${ttsPlay(greeting, baseUrl)}
   </Gather>
-  ${ttsPlay("I didn't catch that. Please call us back. Goodbye!")}
+  ${ttsPlay("I didn't catch that. Please call us back. Goodbye!", baseUrl)}
 </Response>`
 
   return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })

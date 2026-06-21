@@ -3,11 +3,12 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
 import { stripMarkdown } from '@/lib/utils'
+import { requestBaseUrl } from '@/lib/request-url'
 
 // How long the owner's phone rings before the AI receptionist takes over.
-// ~4 rings ≈ 20s — also below the carrier-voicemail pickup window, so the AI
-// answers before voicemail grabs the call (the AMD callback below is the backstop).
-const RING_TIMEOUT_SECONDS = 20 // ~4 rings before AI takes over
+// ~12s ≈ 2-3 rings — short enough to take over before voicemail typically grabs the
+// call; the AMD callback below is the backstop for when voicemail still answers.
+const RING_TIMEOUT_SECONDS = 12
 
 function escapeXml(str: string): string {
   return str
@@ -62,6 +63,9 @@ export async function POST(req: NextRequest) {
   const SpeechResult = params.SpeechResult || ''
 
   const conversationId = req.nextUrl.searchParams.get('cid') || undefined
+  // Set by the voicemail rescue (amd callback) to skip forwarding and answer with the
+  // FULL realtime agent. Does not affect the normal direct-answer or forward paths.
+  const directAi = req.nextUrl.searchParams.get('ai') === '1'
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
   const supabase = await createServiceClient()
@@ -164,17 +168,21 @@ export async function POST(req: NextRequest) {
     const forwardTo = agent?.forward_to_phone
     const greeting = agent?.greeting || 'Hello! Thank you for calling. How can I help you today?'
 
-    if (forwardTo) {
-      const fallbackAction = `${baseUrl}/api/webhooks/twilio/voice/ai-fallback`
-      const amdCallback = `${baseUrl}/api/webhooks/twilio/voice/amd`
+    if (forwardTo && !directAi) {
+      // Same-domain rescue (Fix C): build callbacks from the host the call came in on,
+      // so the AMD redirect + AI fallback stay on the same domain as this webhook.
+      const reqBase = requestBaseUrl(req)
+      const fallbackAction = `${reqBase}/api/webhooks/twilio/voice/ai-fallback`
+      const amdCallback = `${reqBase}/api/webhooks/twilio/voice/amd`
       // machineDetection on the dialed <Number> runs AMD on the owner's leg. If a
       // voicemail/machine answers, the amd callback redirects the caller to the AI.
       // answerOnBridge keeps the caller on ringback (not "answered") until a real
-      // human bridge. action catches no-answer/busy/failed → AI.
+      // human bridge. action catches no-answer/busy/failed → AI. The machineDetection*
+      // tuning makes AMD classify voicemail in a few seconds instead of up to 30.
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial timeout="${RING_TIMEOUT_SECONDS}" action="${fallbackAction}" method="POST" answerOnBridge="true">
-    <Number machineDetection="Enable" amdStatusCallback="${amdCallback}" amdStatusCallbackMethod="POST">${escapeXml(forwardTo)}</Number>
+    <Number machineDetection="Enable" machineDetectionTimeout="5" machineDetectionSpeechThreshold="1900" machineDetectionSpeechEndThreshold="1000" machineDetectionSilenceTimeout="3000" amdStatusCallback="${amdCallback}" amdStatusCallbackMethod="POST">${escapeXml(forwardTo)}</Number>
   </Dial>
 </Response>`
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
