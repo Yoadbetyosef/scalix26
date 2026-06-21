@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Bell, X, Phone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -32,6 +33,7 @@ function relativeTime(ts: number): string {
  * localStorage. Mounted from the Sidebar, so it runs on every page.
  */
 export function NotificationCenter() {
+  const router = useRouter()
   const [notifs, setNotifs] = useState<Notif[]>([])
   const [open, setOpen] = useState(false)
   const [tenantId, setTenantId] = useState<string | null>(null)
@@ -97,6 +99,17 @@ export function NotificationCenter() {
 
   const unread = notifs.filter((n) => !n.read).length
 
+  // Where a notification routes to its relevant existing record: a booked lead → the
+  // Appointments view, any other lead event → the Leads view. (Navigation only; nothing
+  // about how notifications are generated/stored/read changes.)
+  function hrefFor(n: Notif): string {
+    return n.type === 'booked' ? '/dashboard?tab=appointments' : '/dashboard?tab=leads'
+  }
+  function openNotif(n: Notif) {
+    router.push(hrefFor(n))
+    setOpen(false) // close the popover after navigating
+  }
+
   function toggle() {
     setOpen((o) => {
       const next = !o
@@ -148,7 +161,14 @@ export function NotificationCenter() {
                 </div>
               ) : (
                 notifs.map((n) => (
-                  <div key={n.id} className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-b-0">
+                  <div
+                    key={n.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openNotif(n)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotif(n) } }}
+                    className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-b-0 cursor-pointer hover:bg-gray-50 transition-colors"
+                  >
                     <span className="text-xl flex-shrink-0">{n.type === 'booked' ? '✅' : '🔥'}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">
@@ -162,6 +182,7 @@ export function NotificationCenter() {
                     {n.type !== 'booked' && n.phone && (
                       <a
                         href={`tel:${n.phone}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="tap-target inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af] flex-shrink-0"
                       >
                         <Phone className="w-3 h-3" /> Call
