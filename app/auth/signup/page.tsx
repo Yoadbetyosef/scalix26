@@ -61,7 +61,7 @@ export default function SignupPage() {
         const boot = await fetch('/api/onboarding/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessName: form.businessName, businessType: industry }),
+          body: JSON.stringify({ businessName: form.businessName, businessType: industry, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
         })
         const bj = await boot.json().catch(() => ({}))
         if (boot.ok && bj.employeeId) {

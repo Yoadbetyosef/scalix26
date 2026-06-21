@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { maxEmployeesForPlan, planLimitMessage } from '@/lib/plans'
+import { resolveTimezone } from '@/lib/timezone'
 import { seedDefaultSkills } from '@/lib/skills'
 
 // Create an additional AI employee + provision its dedicated number. The plan
@@ -13,7 +14,8 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json().catch(() => ({}))
-  const { name, voice, greeting, personality_score, business_name, industry, website, system_prompt } = body
+  const { name, voice, greeting, personality_score, business_name, industry, website, system_prompt, timezone: browserTz } = body
+  const resolvedTimezone = resolveTimezone({ browserTz })
 
   const service = await createServiceClient()
   const { data: tenant } = await service
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest) {
     industry: industry || null,
     website: website || null,
     system_prompt: system_prompt || null,
+    timezone: resolvedTimezone,
   }).select('id').single()
   if (error || !employee) {
     console.error('[agents/create] insert failed:', error?.message)

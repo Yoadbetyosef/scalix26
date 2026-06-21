@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
+import { resolveTimezone } from '@/lib/timezone'
 import { sendSMS } from '@/lib/twilio/client'
 import { notifyAdminNewUser } from '@/lib/admin/notify'
 import { maxEmployeesForPlan } from '@/lib/plans'
@@ -79,8 +80,12 @@ export async function POST(req: NextRequest) {
   const {
     businessName, ownerName, ownerPhone, businessType,
     websiteUrl, scrapedContent, services, pricing, specialInstructions,
-    googleReviewsLink, greeting, tone, voice, aiInstructions, faqs,
+    googleReviewsLink, greeting, tone, voice, aiInstructions, faqs, timezone: browserTz,
   } = body
+
+  // Resolve the business timezone once (browser tz primary, area code fallback) so
+  // availability/booking measure "now" in the right zone. Invisible to the user.
+  const resolvedTimezone = resolveTimezone({ browserTz, phone: ownerPhone })
 
   const serviceSupabase = await createServiceClient()
 
@@ -147,6 +152,7 @@ export async function POST(req: NextRequest) {
       industry: businessType,
       website: websiteUrl || null,
       forward_to_phone: ownerPhone || null,
+      timezone: resolvedTimezone,
     })
     .select('id')
     .single()

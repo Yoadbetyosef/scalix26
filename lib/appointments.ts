@@ -2,6 +2,35 @@
 // values like "tomorrow", "Monday", "June 15", "9:00 AM" — normalize them.
 
 const DEFAULT_TZ = 'America/New_York'
+
+// Minimum lead time (minutes) before a slot may be offered or booked. Single code
+// constant — clean seam to make per-agent later (no migration needed for it).
+export const MIN_LEAD_TIME_MINUTES = 60
+
+// "Now" in a business timezone, as the calendar day + minutes-since-midnight. Used to
+// drop past/too-soon slots. Fail-safe: bad tz falls back to the default zone.
+export function nowInTimezone(tz: string): { dateIso: string; minutes: number } {
+  let zone = tz
+  try { new Intl.DateTimeFormat('en-US', { timeZone: zone }) } catch { zone = DEFAULT_TZ }
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+      .formatToParts(new Date()).map((p) => [p.type, p.value]),
+  ) as Record<string, string>
+  return { dateIso: `${parts.year}-${parts.month}-${parts.day}`, minutes: (parseInt(parts.hour, 10) % 24) * 60 + parseInt(parts.minute, 10) }
+}
+
+// Minutes-since-midnight for a "HH:MM[:SS]" slot time.
+export function slotMinutes(slotTime: string): number {
+  const [h, m] = String(slotTime).split(':')
+  return parseInt(h, 10) * 60 + parseInt(m || '0', 10)
+}
+
+// Add N days to a YYYY-MM-DD date (calendar arithmetic; tz-agnostic for date-only).
+export function addDaysIso(dateIso: string, n: number): string {
+  const dt = new Date(`${dateIso}T12:00:00Z`)
+  dt.setUTCDate(dt.getUTCDate() + n)
+  return dt.toISOString().slice(0, 10)
+}
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
 

@@ -23,7 +23,7 @@ export function NewEmployeeLauncher() {
         const res = await fetch('/api/agents/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: '{}',
+          body: JSON.stringify({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
         })
         const json = await res.json().catch(() => ({}))
         if (res.status === 403) { setError(json.error || 'You’ve reached your plan’s employee limit.'); return }

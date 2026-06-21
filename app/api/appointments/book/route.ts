@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
-import { parseDate, parseTime, dayOfWeek, formatTime12 } from '@/lib/appointments'
+import { parseDate, parseTime, dayOfWeek, formatTime12, MIN_LEAD_TIME_MINUTES, nowInTimezone, slotMinutes } from '@/lib/appointments'
+import { getBusinessTimezone } from '@/lib/timezone'
 import { getCalendarAccess } from '@/lib/calendar/store'
 import { createCalendarEvent } from '@/lib/calendar/google'
 
@@ -25,11 +26,10 @@ export async function POST(req: NextRequest) {
   // confirms in-channel via SMS (avoids texting the same number twice). Default
   // false → unchanged for voice / IG / FB.
   const suppressCustomerSms = data.suppress_customer_sms === true
-  const dateIso = parseDate(typeof data.date === 'string' ? data.date : '')
   const timeDb = parseTime(typeof data.time === 'string' ? data.time : '')
 
   if (!leadToken || !phone) return NextResponse.json({ success: false, error: 'lead_token and customer_phone required' }, { status: 400 })
-  if (!dateIso || !timeDb) return NextResponse.json({ success: false, error: 'could not understand the date or time' })
+  if (!timeDb) return NextResponse.json({ success: false, error: 'could not understand the time' })
 
   const supabase = await createServiceClient()
   // NOTE: tenants has no owner_phone column — selecting it previously errored the
@@ -38,6 +38,18 @@ export async function POST(req: NextRequest) {
   const { data: tenant } = await supabase
     .from('tenants').select('id, business_name, phone, email, timezone').eq('lead_intake_token', leadToken).maybeSingle()
   if (!tenant) return NextResponse.json({ success: false, error: 'invalid token' }, { status: 404 })
+
+  // Resolve the business timezone, then parse the date in it ("today"/"tomorrow").
+  const tz = await getBusinessTimezone(tenant.id, tenant.timezone)
+  const dateIso = parseDate(typeof data.date === 'string' ? data.date : '', tz)
+  if (!dateIso) return NextResponse.json({ success: false, error: 'could not understand the date' })
+
+  // Booking guard (defense in depth): never book a slot in the past or within the
+  // minimum lead-time buffer, measured in the business timezone.
+  const now = nowInTimezone(tz)
+  if (dateIso < now.dateIso || (dateIso === now.dateIso && slotMinutes(timeDb) < now.minutes + MIN_LEAD_TIME_MINUTES)) {
+    return NextResponse.json({ success: false, error: 'that time has already passed — please pick a later time' })
+  }
 
   // The slot must exist for that weekday and not already be booked.
   const { data: slot } = await supabase.from('appointment_slots').select('id')
