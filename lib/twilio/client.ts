@@ -104,10 +104,15 @@ export async function sendSMS(to: string, body: string, from?: string) {
 
   // Default A2P path: route plain SMS/MMS through the approved Messaging Service via
   // env, so every number sends under the approved 10DLC campaign (no Error 30034).
-  // Twilio requires EXACTLY ONE of messagingServiceSid / from — so we OMIT `from`
-  // here. The service's Sender Pool picks the customer's own number as the sender.
+  // When we have the tenant's own number, pass `from` TOO — Twilio supports both
+  // together and will send from THAT specific sender in the pool, preserving
+  // per-tenant identity (without it the pool auto-picks any verified number). The
+  // `from` must be in the service's Sender Pool; our provisioned numbers are
+  // auto-attached on provision. Only when we have no `from` (e.g. admin/test) do we
+  // let the service pick.
   if (!isWhatsApp && MSID) {
     params.messagingServiceSid = MSID
+    if (from) params.from = from
   } else {
     // WhatsApp, OR no MSID configured (safety fallback so non-prod envs still send):
     // keep the original from-based behavior.
@@ -116,6 +121,9 @@ export async function sendSMS(to: string, body: string, from?: string) {
       console.warn('[sendSMS] TWILIO_MESSAGING_SERVICE_SID not set — sending with bare `from`; outbound may hit Error 30034 until the env var is configured')
     }
   }
+
+  // Confirm per-tenant identity in logs: which sender + which service each send used.
+  console.log(`[sendSMS] from=${params.from ?? '(pool-selected)'} service=${params.messagingServiceSid ?? '(none)'}${isWhatsApp ? ' channel=whatsapp' : ''}`)
 
   return client.messages.create(params)
 }
