@@ -67,6 +67,31 @@ export async function provisionAgentPhoneNumber(tenantId: string, agentId: strin
     voiceMethod: 'POST',
   })
 
+  // A2P 10DLC: attach the freshly purchased US number to our approved Messaging
+  // Service. Per Twilio, adding a number to a service whose campaign is approved
+  // AUTO-REGISTERS it to that campaign — no separate registration call — so the
+  // number's outbound SMS isn't rejected with Error 30034 "Message from an
+  // Unregistered Number". FAIL-SAFE + NON-BLOCKING: any failure here only logs;
+  // the customer still keeps their number and voice still works. IDEMPOTENT:
+  // Twilio code 21710 ("already exists in Messaging Service") is treated as success.
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID
+  if (messagingServiceSid) {
+    try {
+      await client.messaging.v1.services(messagingServiceSid)
+        .phoneNumbers.create({ phoneNumberSid: number.sid })
+      console.log(`[provision] attached ${number.phoneNumber} (${number.sid}) to Messaging Service ${messagingServiceSid} for tenant ${tenantId} — A2P-registered`)
+    } catch (err) {
+      const code = (err as { code?: number })?.code
+      if (code === 21710) {
+        console.log(`[provision] ${number.phoneNumber} already in Messaging Service ${messagingServiceSid} (tenant ${tenantId}) — ok`)
+      } else {
+        console.error(`[provision] FAILED to attach ${number.phoneNumber} (${number.sid}) to Messaging Service ${messagingServiceSid} for tenant ${tenantId} — SMS may hit 30034 until attached; retry manually:`, err instanceof Error ? err.message : err)
+      }
+    }
+  } else {
+    console.error(`[provision] TWILIO_MESSAGING_SERVICE_SID not set — ${number.phoneNumber} NOT attached to any Messaging Service (tenant ${tenantId}); outbound SMS may hit 30034`)
+  }
+
   await supabase.from('channels').insert([
     {
       tenant_id: tenantId,
