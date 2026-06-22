@@ -85,11 +85,14 @@ export function validateTwilioSignature(
 
 export async function sendSMS(to: string, body: string, from?: string) {
   const client = getTwilioClient()
-  const fromNumber = from || process.env.TWILIO_PHONE_NUMBER!
+
+  // WhatsApp must stay on the from-based path (the Messaging Service is SMS/MMS
+  // A2P only). Detect it from either side of the send.
+  const isWhatsApp = to.startsWith('whatsapp:') || (from?.startsWith('whatsapp:') ?? false)
+  const MSID = process.env.TWILIO_MESSAGING_SERVICE_SID
 
   const params: Parameters<typeof client.messages.create>[0] = {
     to,
-    from: fromNumber,
     // Plain-text channels (SMS + WhatsApp) — guarantee no markdown ships.
     body: stripMarkdown(body),
   }
@@ -99,12 +102,19 @@ export async function sendSMS(to: string, body: string, from?: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   if (appUrl) params.statusCallback = `${appUrl}/api/webhooks/twilio/sms-status`
 
-  // A3 (flag-gated): if this number is A2P-active, also pass its Messaging Service
-  // so the message is associated with the approved campaign. We keep `from` too, so
-  // the customer always sees their own number (deterministic sender + campaign).
-  if (MG_SEND_ENABLED && from) {
-    const routing = await getSmsRouting(from)
-    if (routing) params.messagingServiceSid = routing.messagingServiceSid
+  // Default A2P path: route plain SMS/MMS through the approved Messaging Service via
+  // env, so every number sends under the approved 10DLC campaign (no Error 30034).
+  // Twilio requires EXACTLY ONE of messagingServiceSid / from — so we OMIT `from`
+  // here. The service's Sender Pool picks the customer's own number as the sender.
+  if (!isWhatsApp && MSID) {
+    params.messagingServiceSid = MSID
+  } else {
+    // WhatsApp, OR no MSID configured (safety fallback so non-prod envs still send):
+    // keep the original from-based behavior.
+    params.from = from || process.env.TWILIO_PHONE_NUMBER!
+    if (!isWhatsApp && !MSID) {
+      console.warn('[sendSMS] TWILIO_MESSAGING_SERVICE_SID not set — sending with bare `from`; outbound may hit Error 30034 until the env var is configured')
+    }
   }
 
   return client.messages.create(params)
