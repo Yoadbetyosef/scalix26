@@ -858,7 +858,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
         <CardContent className="space-y-5">
-          <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} systemPrompt={form.system_prompt} />
+          <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} />
           <div>
             <Label>Call language</Label>
             <select

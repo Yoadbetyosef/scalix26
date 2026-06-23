@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Play, Mic, Square, Loader2 } from 'lucide-react'
+import { Play, Square } from 'lucide-react'
 
 export const VOICES = [
   { id: 'aura-2-asteria-en', name: 'Asteria', gender: 'Female', description: 'Warm & friendly' },
@@ -16,18 +16,6 @@ export const VOICES = [
 const headshot = (name: string) => `/avatars/${name.toLowerCase()}.png`
 
 const PREVIEW_TEXT = 'Hi! Thanks for calling. How can I help you today?'
-
-// Minimal Web Speech API typing (not in TS DOM lib).
-interface SpeechRec {
-  lang: string
-  interimResults: boolean
-  continuous: boolean
-  start: () => void
-  stop: () => void
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
-  onerror: (() => void) | null
-  onend: (() => void) | null
-}
 
 function WaveBars({ active }: { active: boolean }) {
   return (
@@ -47,13 +35,10 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
   const active = VOICES.some((v) => v.id === value) ? value : VOICES[0].id
   const selected = VOICES.find((v) => v.id === active)!
 
-  const [listening, setListening] = useState(false)
-  const [thinking, setThinking] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [status, setStatus] = useState('')
-  const recRef = useRef<SpeechRec | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const busy = listening || thinking || speaking
+  const busy = speaking
 
   // If the saved voice isn't one of the real options (legacy value), default it
   // so a Save persists a valid voice.
@@ -83,56 +68,10 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
     finally { setSpeaking(false); setStatus('') }
   }
 
-  async function handleSpeech(text: string) {
-    setThinking(true)
-    setStatus('Thinking…')
-    try {
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
-      })
-      const data = await res.json()
-      setThinking(false)
-      if (data.reply) {
-        setSpeaking(true)
-        setStatus('Speaking…')
-        await play(data.reply)
-      }
-    } catch {
-      toast.error('Something went wrong')
-    } finally {
-      setThinking(false)
-      setSpeaking(false)
-      setStatus('')
-    }
-  }
-
-  function startTalk() {
-    const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec }
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
-    if (!SR) { toast.error('Voice input is not supported in this browser'); return }
-    const rec = new SR()
-    rec.lang = 'en-US'
-    rec.interimResults = false
-    rec.continuous = false
-    recRef.current = rec
-    setListening(true)
-    setStatus('Listening…')
-    rec.onresult = (e) => {
-      const text = e.results[0][0].transcript
-      setListening(false)
-      handleSpeech(text)
-    }
-    rec.onerror = () => { setListening(false); setStatus('') }
-    rec.onend = () => setListening(false)
-    rec.start()
-  }
-
-  function stopTalk() {
-    try { recRef.current?.stop() } catch { /* noop */ }
+  // Stop an in-progress preview playback.
+  function stopPreview() {
     try { audioRef.current?.pause() } catch { /* noop */ }
-    setListening(false); setThinking(false); setSpeaking(false); setStatus('')
+    setSpeaking(false); setStatus('')
   }
 
   return (
@@ -178,30 +117,22 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
             <Play className="w-4 h-4" /> Preview
           </button>
 
-          {listening || thinking || speaking ? (
+          {speaking && (
             <button
               type="button"
-              onClick={stopTalk}
+              onClick={stopPreview}
               className="tap-target inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-red-500 text-white hover:bg-red-600"
             >
-              {thinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />} Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={startTalk}
-              className="tap-target inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af]"
-            >
-              <Mic className="w-4 h-4" /> Talk to me
+              <Square className="w-4 h-4" /> Stop
             </button>
           )}
 
-          {(listening || speaking) && <WaveBars active />}
+          {speaking && <WaveBars active />}
           {status && <span className="text-xs text-gray-500 ml-1">{status}</span>}
         </div>
 
         <p className="text-xs text-gray-400 mt-3">
-          Preview plays a sample. &ldquo;Talk to me&rdquo; lets you speak — the AI replies in this voice, just like a real call.
+          Preview plays a sample of the selected voice.
         </p>
       </div>
     </div>
