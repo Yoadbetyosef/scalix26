@@ -3,6 +3,7 @@ import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
+import { currentDateContext } from '@/lib/appointments'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -68,7 +69,7 @@ function buildSystemPrompt(
 You are ${employee.name}, an AI assistant for ${businessName}, a ${industry || 'home services'} company located in ${city || ''}, ${state || ''}.
 
 Business hours: ${hoursStr}
-Timezone: ${timezone}
+${currentDateContext(timezone)}
 Phone: ${phone || 'N/A'}
 Email: ${email || 'N/A'}
 Website: ${website || 'N/A'}

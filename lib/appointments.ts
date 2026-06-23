@@ -19,6 +19,20 @@ export function nowInTimezone(tz: string): { dateIso: string; minutes: number } 
   return { dateIso: `${parts.year}-${parts.month}-${parts.day}`, minutes: (parseInt(parts.hour, 10) % 24) * 60 + parseInt(parts.minute, 10) }
 }
 
+// Live current date/day/time in a business timezone, formatted as a prompt line the
+// agent can rely on as "today" (so it never states the wrong day and books relative
+// dates in the same zone). Call this PER REQUEST — it reads `new Date()` at call time,
+// never a cached/deploy-time value. Fail-safe: missing/invalid tz → the default zone.
+export function currentDateContext(tz: string | null | undefined): string {
+  let zone = DEFAULT_TZ
+  if (tz) { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); zone = tz } catch { /* keep default */ } }
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(new Date()) // e.g. "Monday, June 22, 2026, 9:50 AM"
+  return `CURRENT DATE & TIME: It is currently ${formatted} (${zone}). Treat this as "today" for everything you say and book — compute "tomorrow", "next Monday", etc. from it, and never state a different day of the week. Any date you pass to booking is interpreted in this timezone.`
+}
+
 // Minutes-since-midnight for a "HH:MM[:SS]" slot time.
 export function slotMinutes(slotTime: string): number {
   const [h, m] = String(slotTime).split(':')

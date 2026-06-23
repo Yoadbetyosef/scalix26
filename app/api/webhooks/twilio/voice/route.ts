@@ -4,6 +4,8 @@ import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
 import { stripMarkdown } from '@/lib/utils'
 import { requestBaseUrl } from '@/lib/request-url'
+import { getBusinessTimezone } from '@/lib/timezone'
+import { currentDateContext } from '@/lib/appointments'
 
 // How long the owner's phone rings before the AI receptionist takes over.
 // ~12s ≈ 2-3 rings — short enough to take over before voicemail typically grabs the
@@ -238,20 +240,31 @@ export async function POST(req: NextRequest) {
         voiceSystemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`
       }
 
-      const sp = escapeXml(voiceSystemPrompt)
       // Owner phone for the lead-alert SMS. Try owner_phone (may not exist yet),
       // fall back to the business phone, then the call-forwarding number.
       let ownerPhone = ''
       let leadToken = ''
-      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token').eq('id', channel.tenant_id).maybeSingle()
+      let tenantTz: string | null = null
+      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token, timezone').eq('id', channel.tenant_id).maybeSingle()
       if (tWith) {
         ownerPhone = tWith.owner_phone || tWith.phone || ''
         leadToken = tWith.lead_intake_token || ''
+        tenantTz = tWith.timezone || null
       } else {
-        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token').eq('id', channel.tenant_id).maybeSingle()
+        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token, timezone').eq('id', channel.tenant_id).maybeSingle()
         ownerPhone = tBase?.phone || ''
         leadToken = tBase?.lead_intake_token || ''
+        tenantTz = tBase?.timezone || null
       }
+
+      // Live, per-call current date/day/time in THIS tenant's timezone — resolved with
+      // the SAME function booking uses (agent tz → tenant tz → default) so the spoken
+      // day and the booked slot always agree. Recomputed every call (this handler runs
+      // per request), never frozen at deploy time.
+      const tz = await getBusinessTimezone(channel.tenant_id, tenantTz)
+      voiceSystemPrompt += `\n\n${currentDateContext(tz)}`
+
+      const sp = escapeXml(voiceSystemPrompt)
       ownerPhone = ownerPhone || agent?.forward_to_phone || ''
       // Live-transfer target: ONLY this agent's own configured transfer number.
       // NEVER tenant.phone (the business-profile number / lead-SMS recipient).
