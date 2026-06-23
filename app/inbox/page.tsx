@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MessageCircle, Search, Phone, Mail } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { formatDateTime, formatDuration, truncate } from '@/lib/utils'
+import { formatDateTime, formatDuration, truncate, looksLikeName, formatPhone } from '@/lib/utils'
+import { getBusinessTimezone } from '@/lib/timezone'
 
 const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS',
@@ -24,8 +25,12 @@ export default async function InboxPage({
   if (!user) redirect('/auth/login')
 
   const { data: tenant } = await supabase
-    .from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    .from('tenants').select('id, timezone').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (!tenant) redirect('/auth/signup')
+
+  // Display all conversation times in the tenant's business timezone (same source the
+  // agent/booking use), so a shared team sees one consistent, unambiguous time.
+  const tz = await getBusinessTimezone(tenant.id, tenant.timezone)
 
   const params = await searchParams
   const { status = 'all', channel = 'all', q = '' } = params
@@ -114,6 +119,14 @@ export default async function InboxPage({
           <div className="divide-y divide-gray-50">
             {filtered.map((conv) => {
               const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
+              const channelLabel = CHANNEL_LABELS[conv.channel] || conv.channel
+              // Show the contact name only if it looks like a real name (not a garbled
+              // voice utterance); otherwise fall back to phone + channel, then email.
+              const title = looksLikeName(contact?.name)
+                ? contact!.name
+                : contact?.phone
+                  ? `${formatPhone(contact.phone)} · ${channelLabel}`
+                  : contact?.email || 'Unknown'
               return (
                 <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
                   <div className="flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
@@ -127,7 +140,7 @@ export default async function InboxPage({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <p className="text-sm font-semibold text-gray-900">
-                          {contact?.name || contact?.phone || contact?.email || 'Unknown'}
+                          {title}
                         </p>
                         <Badge variant={conv.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
                           {conv.channel === 'voice' ? '📞 ' : conv.channel === 'email' ? '📧 ' : ''}{CHANNEL_LABELS[conv.channel] || conv.channel}
@@ -137,12 +150,16 @@ export default async function InboxPage({
                         )}
                       </div>
                       <p className="text-xs text-gray-500 truncate">
-                        {conv.summary ? truncate(conv.summary, 60) : 'No summary yet'}
+                        {conv.summary
+                          ? truncate(conv.summary, 60)
+                          : conv.channel === 'voice'
+                            ? (conv.duration_seconds != null ? `Voice call · ${formatDuration(conv.duration_seconds)}` : 'Voice call')
+                            : 'No summary yet'}
                       </p>
                     </div>
                     <div className="text-right flex-shrink-0 space-y-1 ml-2">
                       <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
-                      <p className="text-xs text-gray-400 whitespace-nowrap">{formatDateTime(conv.updated_at)}</p>
+                      <p className="text-xs text-gray-400 whitespace-nowrap">{formatDateTime(conv.updated_at, tz)}</p>
                     </div>
                   </div>
                 </Link>

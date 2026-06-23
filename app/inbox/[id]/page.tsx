@@ -3,7 +3,12 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { formatDateTime, formatDate, formatDuration, contactIdentifier } from '@/lib/utils'
+import { formatDateTime, formatDate, formatDuration, contactIdentifier, looksLikeName, formatPhone } from '@/lib/utils'
+import { getBusinessTimezone } from '@/lib/timezone'
+
+const CHANNEL_LABELS: Record<string, string> = {
+  sms: 'SMS', voice: 'Voice', whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', email: 'Email',
+}
 import { ConversationActions } from '@/components/inbox/conversation-actions'
 import { ConversationContactPanel } from '@/components/inbox/conversation-contact-panel'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
@@ -17,8 +22,12 @@ export default async function ConversationPage({ params, searchParams }: { param
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const { data: tenant } = await supabase.from('tenants').select('id, timezone').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (!tenant) redirect('/auth/signup')
+
+  // Conversation/message times shown in the tenant's business timezone (same source
+  // the agent/booking use), consistent with the inbox list.
+  const tz = await getBusinessTimezone(tenant.id, tenant.timezone)
 
   const { id } = await params
 
@@ -52,6 +61,14 @@ export default async function ConversationPage({ params, searchParams }: { param
   const ident = contactIdentifier(conv.channel, contact?.phone)
   const IdentIcon = ident && !ident.isPhone ? MessageCircle : Phone
 
+  // Same fallback as the inbox list (render-only): show the stored name only if it
+  // looks real, otherwise phone + channel — so existing junk-name rows stay consistent.
+  const headerTitle = looksLikeName(contact?.name)
+    ? contact!.name
+    : contact?.phone
+      ? `${formatPhone(contact.phone)} · ${CHANNEL_LABELS[conv.channel] || conv.channel}`
+      : contact?.email || 'Unknown'
+
   return (
     <div className="flex flex-col h-screen max-h-screen">
       {/* Header */}
@@ -64,12 +81,12 @@ export default async function ConversationPage({ params, searchParams }: { param
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold text-gray-900 truncate">
-            {contact?.name || contact?.phone || 'Unknown'}
+            {headerTitle}
           </h2>
           <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
             <span>{conv.channel === 'voice' ? '📞 voice' : conv.channel}</span>
             <span>·</span>
-            <span>{formatDate(conv.created_at)}</span>
+            <span>{formatDate(conv.created_at, tz)}</span>
             {conv.channel === 'voice' && conv.duration_seconds != null && (
               <><span>·</span><span>{formatDuration(conv.duration_seconds)}</span></>
             )}
@@ -128,7 +145,7 @@ export default async function ConversationPage({ params, searchParams }: { param
                     )}
                     <p className="text-sm">{msg.content}</p>
                     <p className={`text-xs mt-1 ${isOutbound ? 'text-white/70' : 'text-gray-400'}`}>
-                      {formatDateTime(msg.timestamp)}
+                      {formatDateTime(msg.timestamp, tz)}
                     </p>
                     {/* A2: surface a failed/undelivered SMS so it never looks "sent" silently. */}
                     {isOutbound && (msg.delivery_status === 'undelivered' || msg.delivery_status === 'failed') && (

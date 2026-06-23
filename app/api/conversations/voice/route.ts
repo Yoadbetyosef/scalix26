@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { looksLikeName } from '@/lib/utils'
 
 type TranscriptItem = { role?: string; content?: string }
 
@@ -17,7 +18,11 @@ export async function POST(req: NextRequest) {
 
   const leadToken = typeof data.lead_token === 'string' ? data.lead_token : undefined
   const phone = typeof data.contact_phone === 'string' ? data.contact_phone : undefined
-  const name = typeof data.contact_name === 'string' && data.contact_name.trim() ? data.contact_name.trim() : null
+  // The voice-server's name heuristic can capture a whole garbled utterance ("Did I
+  // call John Oreo add?"). Only keep it if it actually looks like a name — otherwise
+  // store null so junk never reaches contacts.name (which is the inbox title).
+  const rawName = typeof data.contact_name === 'string' && data.contact_name.trim() ? data.contact_name.trim() : null
+  const name = looksLikeName(rawName) ? rawName : null
   const durationSeconds = typeof data.duration_seconds === 'number' ? data.duration_seconds : null
   const transcript: TranscriptItem[] = Array.isArray(data.transcript) ? (data.transcript as TranscriptItem[]) : []
 
