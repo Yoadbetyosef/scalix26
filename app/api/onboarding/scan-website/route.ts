@@ -44,8 +44,12 @@ export async function POST(req: NextRequest) {
     const fetchRes = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ScalixBot/1.0)',
-        'Accept': 'text/html',
+        // Use a credible desktop-browser UA + browser-like Accept headers. A custom
+        // bot UA (e.g. "ScalixBot/1.0") trips some sites' CDN/WAF bot protection and
+        // gets a 403 on cache-miss, even though the content is plain server-rendered HTML.
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
       },
     }).finally(() => clearTimeout(timeout))
 
@@ -84,7 +88,7 @@ ${text}`,
     const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null && v !== ''))
     return NextResponse.json(clean)
   } catch (err) {
-    console.error('[onboarding/scan-website]', err)
+    console.error(`[onboarding/scan-website] ${url} -> ${err instanceof Error ? err.message : 'failed'}`)
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Scan failed' }, { status: 500 })
   }
 }
