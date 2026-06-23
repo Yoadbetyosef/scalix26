@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient } from '@/lib/supabase/server'
+import { browserScrapeHeaders } from '@/lib/scrape-headers'
 
 function extractFromHtml(html: string): string {
   // Extract meta tags (title, description, og tags)
@@ -63,11 +64,7 @@ export async function POST(req: NextRequest) {
     try {
       const res = await fetch(url, {
         signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-        },
+        headers: browserScrapeHeaders(),
       })
       clearTimeout(timeout)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -114,8 +111,8 @@ ${text}`,
     const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null && v !== ''))
     return NextResponse.json(clean)
   } catch (err) {
-    console.error('Scrape error:', err)
     const msg = err instanceof Error ? err.message : 'Unknown error'
+    console.error(`[ai/scrape-website] ${url} -> ${msg}`)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

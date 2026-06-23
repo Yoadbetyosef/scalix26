@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { browserScrapeHeaders, SCRAPER_ACCEPT_HTML } from '@/lib/scrape-headers'
 
 // Crawl can take a while (many fetches + 1 AI call). Allow up to 60s.
 export const maxDuration = 60
@@ -16,7 +17,6 @@ const MERGED_LIMIT = 45000     // cap of merged corpus sent to the model
 const PRODUCT_PAGE_CAP = 6     // don't spend the whole crawl on product-detail pages
                                // (their prices already come from products.json) — leave
                                // room for about/faq/contact/services/collections pages
-const UA = 'Mozilla/5.0 (compatible; ScalixBot/1.0)'
 
 // Path/anchor keywords that signal high-value pages (prices weighted highest).
 const PRICE_WORDS = ['pricing', 'prices', 'price', 'rates', 'packages', 'plans']
@@ -36,11 +36,11 @@ function isNoise(url: string): boolean {
 }
 
 interface FetchResult { ok: boolean; status: number; html: string; headers: Headers }
-async function fetchUrl(url: string, accept = 'text/html'): Promise<FetchResult | null> {
+async function fetchUrl(url: string, accept = SCRAPER_ACCEPT_HTML): Promise<FetchResult | null> {
   try {
     const c = new AbortController()
     const t = setTimeout(() => c.abort(), FETCH_TIMEOUT_MS)
-    const res = await fetch(url, { signal: c.signal, headers: { 'User-Agent': UA, Accept: accept } }).finally(() => clearTimeout(t))
+    const res = await fetch(url, { signal: c.signal, headers: browserScrapeHeaders(accept) }).finally(() => clearTimeout(t))
     const html = await res.text()
     return { ok: res.ok, status: res.status, html, headers: res.headers }
   } catch { return null }
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // 1. Homepage.
   const home = await fetchUrl(target)
   if (!home || !home.ok || home.html.length < 50) {
-    console.error(`[scan] homepage fetch failed for ${target} (status ${home?.status ?? 'n/a'})`)
+    console.error(`[scan] ${target} -> HTTP ${home?.status ?? 'error'} (homepage fetch failed)`)
     return NextResponse.json({ added: 0, error: "We couldn't read that website. Your details were saved — add services, pricing, and areas manually below." })
   }
   const homeNorm = (() => { const u = new URL(target); u.hash = ''; return u.toString() })()

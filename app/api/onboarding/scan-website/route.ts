@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient } from '@/lib/supabase/server'
+import { browserScrapeHeaders } from '@/lib/scrape-headers'
 
 function extractText(html: string): string {
   const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() || ''
@@ -43,14 +44,7 @@ export async function POST(req: NextRequest) {
 
     const fetchRes = await fetch(url, {
       signal: controller.signal,
-      headers: {
-        // Use a credible desktop-browser UA + browser-like Accept headers. A custom
-        // bot UA (e.g. "ScalixBot/1.0") trips some sites' CDN/WAF bot protection and
-        // gets a 403 on cache-miss, even though the content is plain server-rendered HTML.
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
+      headers: browserScrapeHeaders(),
     }).finally(() => clearTimeout(timeout))
 
     if (!fetchRes.ok) throw new Error(`HTTP ${fetchRes.status}`)
