@@ -47,6 +47,16 @@ function areaCodeForState(state: string | null | undefined): string | null {
   return (abbr && STATE_AREA_CODE[abbr]) || null
 }
 
+// Normalize a free-form US state (2-letter abbr OR full name) to its 2-letter code,
+// or null. Used for Twilio's inRegion search (which requires the ISO 2-letter code).
+export function stateToAbbr(state: string | null | undefined): string | null {
+  if (!state) return null
+  const raw = String(state).trim().toLowerCase()
+  if (!raw) return null
+  const abbr = raw.length === 2 ? raw.toUpperCase() : STATE_NAME_TO_ABBR[raw]
+  return abbr && /^[A-Z]{2}$/.test(abbr) ? abbr : null
+}
+
 // Fallback chain: explicit preference (future onboarding picker) → business phone
 // (forward_to_phone, then tenant phone) → state → null (caller uses any-local).
 export function deriveAreaCode(input: {

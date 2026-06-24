@@ -1,6 +1,6 @@
 import twilio from 'twilio'
 import { createServiceClient } from '@/lib/supabase/server'
-import { deriveAreaCode } from '@/lib/twilio/area-code'
+import { deriveAreaCode, stateToAbbr } from '@/lib/twilio/area-code'
 
 export async function provisionAgentPhoneNumber(tenantId: string, agentId: string): Promise<string | null> {
   const supabase = await createServiceClient()
@@ -19,45 +19,55 @@ export async function provisionAgentPhoneNumber(tenantId: string, agentId: strin
   const client = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
 
-  // Derive a local area code matching the customer's region (fail-safe). Reads the
-  // business phone (forward_to_phone → tenant.phone), then state. Any failure leaves
-  // areaCode undefined → identical to today's any-local search.
+  // Region-aware, progressive number search so a new number matches the customer's
+  // area — never random. Region is read from the freshly-saved agent/tenant rows; any
+  // missing field just skips its step. deriveAreaCode (phone → preferred) drives step 2.
+  let zip: string | null = null
+  let state: string | null = null
   let areaCode: number | undefined
   try {
     const [{ data: agent }, { data: tenant }] = await Promise.all([
-      supabase.from('ai_employees').select('forward_to_phone, state').eq('id', agentId).maybeSingle(),
-      supabase.from('tenants').select('phone, state').eq('id', tenantId).maybeSingle(),
+      supabase.from('ai_employees').select('forward_to_phone, state, zip').eq('id', agentId).maybeSingle(),
+      supabase.from('tenants').select('phone, state, zip').eq('id', tenantId).maybeSingle(),
     ])
+    zip = (agent?.zip || tenant?.zip || '').trim() || null
+    state = agent?.state || tenant?.state || null
     const derived = deriveAreaCode({
       forwardPhone: agent?.forward_to_phone,
       tenantPhone: tenant?.phone,
-      state: agent?.state || tenant?.state,
+      state,
     })
     if (derived) areaCode = parseInt(derived, 10)
   } catch (err) {
-    console.error('[provision] area-code derivation failed — using any-local:', err instanceof Error ? err.message : err)
+    console.error('[provision] region lookup failed — using any-local:', err instanceof Error ? err.message : err)
   }
 
+  type LocalOpts = { areaCode?: number; inPostalCode?: string; inRegion?: string }
   const baseOpts = { smsEnabled: true, voiceEnabled: true, limit: 5 }
   let available: { phoneNumber: string }[] = []
+  let matchedBy: 'zip' | 'areaCode' | 'state' | 'any' = 'any'
 
-  // Prefer the derived area code; on empty/error fall back to any US local so
-  // provisioning NEVER fails just because that area code has no inventory.
-  if (areaCode) {
+  // Run a search step only if nothing matched yet; guarded so it never throws and
+  // provisioning never aborts on a single step's error.
+  const trySearch = async (by: 'zip' | 'areaCode' | 'state' | 'any', opts: LocalOpts) => {
+    if (available.length) return
     try {
-      available = await client.availablePhoneNumbers('US').local.list({ ...baseOpts, areaCode })
+      const res = await client.availablePhoneNumbers('US').local.list({ ...baseOpts, ...opts })
+      if (res.length) { available = res; matchedBy = by }
     } catch (err) {
-      console.error(`[provision] area-code ${areaCode} search failed — falling back to any-local:`, err instanceof Error ? err.message : err)
-    }
-    if (!available.length) {
-      console.log(`[provision] no numbers in area code ${areaCode} — falling back to any-local`)
+      console.error(`[provision] search by ${by} failed:`, err instanceof Error ? err.message : err)
     }
   }
-  if (!available.length) {
-    available = await client.availablePhoneNumbers('US').local.list(baseOpts)
-  }
+
+  // 1) ZIP (most precise) → 2) area code (phone-derived) → 3) state → 4) any US local.
+  if (zip) await trySearch('zip', { inPostalCode: zip })
+  if (areaCode) await trySearch('areaCode', { areaCode })
+  const region = stateToAbbr(state)
+  if (region) await trySearch('state', { inRegion: region })
+  await trySearch('any', {})
 
   if (!available.length) return null
+  console.log(`[provision] ${tenantId} -> matched by ${matchedBy}`)
 
   const number = await client.incomingPhoneNumbers.create({
     phoneNumber: available[0].phoneNumber,
