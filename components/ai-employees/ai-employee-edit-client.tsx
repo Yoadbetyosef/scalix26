@@ -377,6 +377,16 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
       toast.success(`Phone number provisioned: ${data.phoneNumber}`)
+      // Flip the Phone card to Connected immediately: `channels` useState was seeded from
+      // props on mount and won't pick up router.refresh(). Mirror the two rows provision
+      // creates (sms + voice). The provision_phone action is idempotent, so this only
+      // reflects the result — it never double-provisions.
+      const num: string = data.phoneNumber
+      setChannels(prev => {
+        const others = prev.filter(c => c.type !== 'sms' && c.type !== 'voice')
+        const mk = (type: string): Channel => ({ id: `new-${type}`, type, status: 'connected', twilio_number: num, meta_page_id: null, credentials: {} })
+        return [...others, mk('sms'), mk('voice')]
+      })
       router.refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to provision phone')
