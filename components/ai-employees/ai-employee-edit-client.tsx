@@ -198,6 +198,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     email: employee.email || '',
     city: employee.city || '',
     state: employee.state || '',
+    zip: employee.zip || '',
     forward_to_phone: employee.forward_to_phone || '',
   })
 
@@ -309,6 +310,9 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       if (!res.ok) throw new Error('Save failed')
       setSavedSnapshot(editedSnapshot) // baseline = what we just saved → bar hides
       toast.success('Agent saved!')
+      // Deferred provisioning: buy the first number AFTER the address/ZIP is saved so it
+      // matches the customer's area. Idempotent — no-op if a number already exists.
+      if (!phoneChannel) await provisionPhone()
       router.refresh()
     } catch {
       toast.error('Failed to save')
@@ -329,6 +333,9 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         body: JSON.stringify({ ...form, business_hours: dayHoursToBusinessHours(businessHours), weekly_hours: appointmentHours }),
       })
       if (!res.ok) throw new Error('Save failed')
+      // Guarantee a number before leaving onboarding (region-aware from the saved ZIP;
+      // falls back to any-local if none). Idempotent — won't buy a second.
+      if (!phoneChannel) await provisionPhone()
       await fetch(`/api/agents/${employee.id}/finish`, { method: 'POST' }).catch(() => {})
       toast.success('You’re all set!')
       router.push('/dashboard')
@@ -488,6 +495,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             <div>
               <Label>State</Label>
               <Input className="mt-1.5" placeholder="NY" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
+            </div>
+            <div>
+              <Label>ZIP</Label>
+              <Input className="mt-1.5" placeholder="10001" inputMode="numeric" maxLength={5} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} />
             </div>
             <div className="sm:col-span-2">
               <div className="flex items-center gap-2">

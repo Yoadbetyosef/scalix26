@@ -75,7 +75,8 @@ export function PostOnboardingChecklist({ slug, aiPhoneNumber, initial }: Props)
       key: 'tested',
       done: !!state.tested,
       label: 'Send your first test message',
-      action: <Button size="sm" variant="outline" loading={sending} onClick={sendTest}>Send Test SMS</Button>,
+      // Only once a number exists — a numberless test SMS would fail.
+      action: aiPhoneNumber ? <Button size="sm" variant="outline" loading={sending} onClick={sendTest}>Send Test SMS</Button> : null,
     },
   ]
 

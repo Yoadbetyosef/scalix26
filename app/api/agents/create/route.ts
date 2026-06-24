@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { maxEmployeesForPlan, planLimitMessage } from '@/lib/plans'
 import { resolveTimezone } from '@/lib/timezone'
 import { seedDefaultSkills } from '@/lib/skills'
 
-// Create an additional AI employee + provision its dedicated number. The plan
-// limit is checked BEFORE any provisioning — we never buy a Twilio number and then
-// reject the create. Order: count vs PLANS[plan].maxEmployees → create → provision.
+// Create an additional AI employee. The plan limit is checked BEFORE create.
+// Provisioning is DEFERRED to the edit screen's save (after the owner enters their
+// ZIP) so the number matches their area — this route never buys a number.
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -30,10 +29,9 @@ export async function POST(req: NextRequest) {
     .from('ai_employees').select('id').eq('tenant_id', tenant.id).eq('setup_complete', false)
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
   if (draft?.id) {
-    let phoneNumber: string | null = null
-    try { phoneNumber = await provisionAgentPhoneNumber(tenant.id, draft.id) } catch { /* idempotent; non-fatal */ }
+    // Provisioning is deferred to the edit screen's save — don't buy a number here.
     console.log('[agents/create] reusing unfinished draft', draft.id)
-    return NextResponse.json({ success: true, employeeId: draft.id, reused: true, phoneNumber })
+    return NextResponse.json({ success: true, employeeId: draft.id, reused: true, phoneNumber: null })
   }
 
   // ── PLAN GATE (before create, before provision) ────────────────────────────
@@ -74,13 +72,8 @@ export async function POST(req: NextRequest) {
   // Seed the default skills (same set as the first agent) so every agent is identical.
   await seedDefaultSkills(service, tenant.id, employee.id)
 
-  // Provision a dedicated number AFTER the gate + create. Idempotent; non-fatal.
-  let phoneNumber: string | null = null
-  try {
-    phoneNumber = await provisionAgentPhoneNumber(tenant.id, employee.id)
-  } catch (err) {
-    console.error('[agents/create] provision failed:', err instanceof Error ? err.message : err)
-  }
-
-  return NextResponse.json({ success: true, employeeId: employee.id, phoneNumber })
+  // Provisioning is DEFERRED to the edit screen's save (after the ZIP is entered) so the
+  // first number matches the customer's area. The agent lands on /ai-employees/{id} with
+  // no number; saving the address (or finish-setup) provisions it region-aware.
+  return NextResponse.json({ success: true, employeeId: employee.id, phoneNumber: null })
 }

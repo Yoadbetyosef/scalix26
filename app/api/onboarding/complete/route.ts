@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { resolveTimezone } from '@/lib/timezone'
 import { sendSMS } from '@/lib/twilio/client'
 import { notifyAdminNewUser } from '@/lib/admin/notify'
@@ -180,13 +179,10 @@ export async function POST(req: NextRequest) {
   // Seed the default skills so the first agent matches additional agents exactly.
   await seedDefaultSkills(serviceSupabase, tenant.id, employee.id)
 
-  // Provision a dedicated phone number for this agent
-  let phoneNumber: string | null = null
-  try {
-    phoneNumber = await provisionAgentPhoneNumber(tenant.id, employee.id)
-  } catch (err) {
-    console.error('[onboarding] Phone provisioning failed:', err)
-  }
+  // Provisioning is DEFERRED: the agent is created here (at signup) WITHOUT a number.
+  // The first number is bought on the edit screen after the owner enters their ZIP, so
+  // it matches their area. A paying customer is backstopped by Stripe checkout.
+  const phoneNumber: string | null = null
 
   // WOW moment: text the owner from their brand-new AI number so they can
   // reply and test it immediately. Skip silently if we have no phone/number.
