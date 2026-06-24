@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { browserScrapeHeaders, SCRAPER_ACCEPT_HTML } from '@/lib/scrape-headers'
+import { PDFParse } from 'pdf-parse'
 
 // Crawl can take a while (many fetches + 1 AI call). Allow up to 60s.
 export const maxDuration = 60
@@ -21,6 +22,13 @@ const PRODUCT_PAGE_CAP = 6     // don't spend the whole crawl on product-detail 
 // Path/anchor keywords that signal high-value pages (prices weighted highest).
 const PRICE_WORDS = ['pricing', 'prices', 'price', 'rates', 'packages', 'plans']
 const VALUE_WORDS = ['services', 'service', 'products', 'product', 'collections', 'collection', 'shop', 'store', 'menu', 'about', 'faq', 'contact', 'areas', 'area']
+
+// PDF menus/price sheets: small businesses often link the real (priced) menu as a PDF
+// that the HTML crawl skips. Only fetch PDFs whose URL/anchor looks like a menu/price doc.
+const PDF_WORDS = ['menu', 'price', 'pricing', 'rates', 'catering', 'services', 'service', 'packages', 'specials', 'dinner', 'lunch', 'breakfast', 'platter']
+const MAX_PDFS = 3            // keep within the 60s budget
+const PDF_CHARS = 6000        // cap per PDF (same as a page); counts toward MERGED_LIMIT
+const PDF_TIMEOUT_MS = 12000  // hard time-box per PDF fetch+parse; slow PDFs are skipped
 
 function normalizeUrl(raw: string): string {
   const t = raw.trim()
@@ -44,6 +52,37 @@ async function fetchUrl(url: string, accept = SCRAPER_ACCEPT_HTML): Promise<Fetc
     const html = await res.text()
     return { ok: res.ok, status: res.status, html, headers: res.headers }
   } catch { return null }
+}
+
+// Best-effort, time-boxed PDF text extraction (menus/price sheets live in linked PDFs the
+// HTML crawl skips). Returns cleaned text (capped) or '' on any error/timeout/scanned-image
+// PDF — never throws, never blocks the scan.
+async function extractPdfText(url: string): Promise<string> {
+  try {
+    const c = new AbortController()
+    const t = setTimeout(() => c.abort(), PDF_TIMEOUT_MS)
+    const res = await fetch(url, { signal: c.signal, headers: browserScrapeHeaders('application/pdf') }).finally(() => clearTimeout(t))
+    if (!res.ok) { console.log(`[scan] pdf ${url} -> HTTP ${res.status}`); return '' }
+    const buf = Buffer.from(await res.arrayBuffer())
+    const parser = new PDFParse({ data: buf })
+    try {
+      const r = (await Promise.race([
+        parser.getText(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('pdf parse timeout')), PDF_TIMEOUT_MS)),
+      ])) as { text?: string }
+      return String(r.text || '')
+        .replace(/--\s*\d+\s*of\s*\d+\s*--/g, '\n') // strip pdf-parse page markers
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+        .slice(0, PDF_CHARS)
+    } finally {
+      await (parser as { destroy?: () => Promise<void> }).destroy?.()
+    }
+  } catch (err) {
+    console.log(`[scan] pdf ${url} skipped:`, err instanceof Error ? err.message : err)
+    return ''
+  }
 }
 
 function extractText(html: string, limit: number): string {
@@ -179,6 +218,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   for (const l of extractLinks(home.html, base)) if (!linkMap.has(l.url) || (l.anchor && !linkMap.get(l.url))) linkMap.set(l.url, l.anchor)
   for (const u of await discoverSitemap(origin, base)) { try { const nu = new URL(u); nu.hash = ''; if (!linkMap.has(nu.toString())) linkMap.set(nu.toString(), '') } catch { /* noop */ } }
 
+  // PDF menus/price sheets: pick menu/price-looking PDFs from the discovered links
+  // (ranked like pages), then extract their text in parallel (best-effort, time-boxed).
+  const pdfUrls = [...linkMap.entries()]
+    .filter(([u, anchor]) => /\.pdf(\?|$)/i.test(u) && PDF_WORDS.some((w) => `${u} ${anchor}`.toLowerCase().includes(w)))
+    .sort((a, b) => score(b[0], b[1]) - score(a[0], a[1]))
+    .map(([u]) => u)
+    .slice(0, MAX_PDFS)
+  const pdfParts: string[] = []
+  if (pdfUrls.length) {
+    const texts = await Promise.all(pdfUrls.map(extractPdfText))
+    pdfUrls.forEach((u, i) => {
+      if (texts[i]) { pdfParts.push(`PDF MENU/PRICING (${u}):\n${texts[i]}`); console.log(`[scan] pdf ${u} → extracted ${texts[i].length} chars`) }
+    })
+  }
+
   const ranked = [...linkMap.entries()]
     .filter(([u]) => !isNoise(u) && u !== homeNorm)
     .map(([u, a]) => ({ url: u, s: score(u, a) }))
@@ -214,7 +268,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     seen.add(key)
     corpusParts.push(`PAGE: ${p.url}\n${text}`)
   }
-  let corpus = corpusParts.join('\n\n---\n\n').slice(0, MERGED_LIMIT)
+  // PDF menu/price text first (high-value), then page text — all within MERGED_LIMIT.
+  let corpus = [...pdfParts, ...corpusParts].join('\n\n---\n\n').slice(0, MERGED_LIMIT)
   if (products.length) {
     corpus = `STRUCTURED PRODUCTS (exact prices):\n${products.slice(0, 80).map((p) => `${p.title} — ${p.price || 'n/a'}`).join('\n')}\n\n---\n\n${corpus}`.slice(0, MERGED_LIMIT)
   }

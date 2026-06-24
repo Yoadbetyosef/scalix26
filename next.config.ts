@@ -37,6 +37,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // pdf-parse bundles pdfjs; keep it external so Next doesn't bundle it (avoids
+  // worker/bundling issues in the serverless function that runs the website crawler).
+  serverExternalPackages: ["pdf-parse"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
