@@ -66,7 +66,10 @@ Return ONLY valid JSON (use null for fields not found — never invent data):
   "business_name": "business name or null",
   "phone": "phone number or null",
   "areas": "cities or regions served or null",
-  "hours": "business hours or null"
+  "hours": "business hours or null",
+  "city": "the city the business is physically located in, or null",
+  "state": "2-letter US state code of the business location, or null",
+  "zip": "5-digit ZIP code of the business location, or null"
 }
 
 Website content:

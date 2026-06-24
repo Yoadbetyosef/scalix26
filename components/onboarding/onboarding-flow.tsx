@@ -33,6 +33,9 @@ interface OnboardingData {
   voice: string
   aiInstructions: string
   faqs: FAQ[]
+  city: string
+  state: string
+  zip: string
 }
 
 interface Props {
@@ -132,6 +135,9 @@ export function OnboardingFlow({ tenant, channels }: Props) {
     faqs: [
       { q: 'How fast can you come?', a: 'We typically arrive within 30 minutes.' },
     ],
+    city: '',
+    state: '',
+    zip: '',
   }), [tenant.business_name, tenant.industry])
 
   const [data, setData] = useState<OnboardingData>(() => {
@@ -218,6 +224,14 @@ export function OnboardingFlow({ tenant, channels }: Props) {
           scraped.hours && `Hours: ${scraped.hours}`,
         ].filter(Boolean).join('\n')
         set('scrapedContent', content)
+        // Prefill location from the scrape — only-if-empty so we never clobber what the
+        // user typed; the ZIP/City/State fields in Step 3 stay fully editable.
+        setData(prev => ({
+          ...prev,
+          city: prev.city || scraped.city || '',
+          state: prev.state || scraped.state || '',
+          zip: prev.zip || (typeof scraped.zip === 'string' ? scraped.zip.replace(/\D/g, '').slice(0, 5) : '') || '',
+        }))
         setScanMessages([
           { text: '✅ Scanned your website', ok: true },
           { text: '✅ Found your services', ok: true },
@@ -261,6 +275,15 @@ export function OnboardingFlow({ tenant, channels }: Props) {
   }
 
   async function goStep4() {
+    // Region gate: a valid 5-digit ZIP is required so the provisioned number matches
+    // the customer's area (the provisioning chain searches by ZIP first).
+    const zip = data.zip.trim()
+    if (!/^\d{5}$/.test(zip)) {
+      setErrors({ zip: 'Please enter your 5-digit ZIP so your AI number matches your area 😊' })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+    setErrors({})
     setSaving(true)
     try {
       const res = await fetch('/api/onboarding/complete', {
@@ -550,6 +573,27 @@ export function OnboardingFlow({ tenant, channels }: Props) {
             <p className="text-gray-500 mb-6 sm:mb-8">Your AI will use this to answer customers. You can always change it later.</p>
 
             <div className="space-y-6">
+              {/* Business location — drives a local phone number that matches the area.
+                  ZIP is required; City/State auto-fill from the scrape but stay editable. */}
+              <div>
+                <Label className="text-base font-semibold text-gray-800">Your business location</Label>
+                <p className="text-sm text-gray-400 mb-2">We use your ZIP to give you a phone number in your area.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="col-span-2">
+                    <Input placeholder="City" value={data.city} onChange={e => set('city', e.target.value)} />
+                  </div>
+                  <Input placeholder="State" maxLength={2} value={data.state} onChange={e => set('state', e.target.value.toUpperCase())} />
+                  <Input
+                    placeholder="ZIP *"
+                    inputMode="numeric"
+                    maxLength={5}
+                    value={data.zip}
+                    onChange={e => { set('zip', e.target.value.replace(/\D/g, '').slice(0, 5)); if (errors.zip) setErrors({}) }}
+                  />
+                </div>
+                {errors.zip && <p className="text-red-500 text-sm mt-1">{errors.zip}</p>}
+              </div>
+
               {/* Greeting */}
               <div>
                 <Label className="text-base font-semibold text-gray-800">AI Greeting</Label>

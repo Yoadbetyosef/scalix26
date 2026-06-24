@@ -81,7 +81,15 @@ export async function POST(req: NextRequest) {
     businessName, ownerName, ownerPhone, businessType,
     websiteUrl, scrapedContent, services, pricing, specialInstructions,
     googleReviewsLink, greeting, tone, voice, aiInstructions, faqs, timezone: browserTz,
+    city, state, zip,
   } = body
+
+  // Region (drives a local phone number). ZIP must be exactly 5 digits to store; the
+  // onboarding UI already gates on this, this is defense-in-depth.
+  const zipDigits = typeof zip === 'string' ? zip.replace(/\D/g, '').slice(0, 5) : ''
+  const zipClean = zipDigits.length === 5 ? zipDigits : null
+  const cityClean = typeof city === 'string' && city.trim() ? city.trim() : null
+  const stateClean = typeof state === 'string' && state.trim() ? state.trim() : null
 
   // Resolve the business timezone once (browser tz primary, area code fallback) so
   // availability/booking measure "now" in the right zone. Invisible to the user.
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
   // business phone so the post-onboarding checklist can text them).
   await serviceSupabase
     .from('tenants')
-    .update({ business_name: businessName, industry: businessType, phone: ownerPhone || null })
+    .update({ business_name: businessName, industry: businessType, phone: ownerPhone || null, city: cityClean, state: stateClean, zip: zipClean })
     .eq('id', tenant.id)
 
   const systemPrompt = buildSystemPrompt({
@@ -153,6 +161,9 @@ export async function POST(req: NextRequest) {
       website: websiteUrl || null,
       forward_to_phone: ownerPhone || null,
       timezone: resolvedTimezone,
+      city: cityClean,
+      state: stateClean,
+      zip: zipClean,
     })
     .select('id')
     .single()
