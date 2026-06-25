@@ -775,11 +775,16 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               </div>
             ) : (
               <div className="mt-3">
-                <p className="text-sm text-gray-500 mb-3">Connect Gmail or Google Workspace. The AI replies directly from your own address, with full email threading.</p>
-                <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
-                  <Button type="button" size="sm">Connect Gmail</Button>
-                </a>
-                <p className="text-xs text-gray-400 mt-2">You&apos;ll be redirected to Google to grant access. Microsoft 365 support is coming soon.</p>
+                <p className="text-sm text-gray-500 mb-3">Connect Gmail/Google Workspace or Outlook/Microsoft 365. The AI replies directly from your own address, with full email threading.</p>
+                <div className="flex items-center gap-2">
+                  <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
+                    <Button type="button" size="sm">Connect Gmail</Button>
+                  </a>
+                  <a href={`/api/auth/microsoft/connect?agentId=${employee.id}`}>
+                    <Button type="button" size="sm" variant="outline">Connect Outlook</Button>
+                  </a>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">You&apos;ll be redirected to Google or Microsoft to grant access.</p>
               </div>
             )}
           </div>
