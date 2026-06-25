@@ -6,6 +6,7 @@ import { parseDate, parseTime, dayOfWeek, formatTime12, MIN_LEAD_TIME_MINUTES, n
 import { getBusinessTimezone } from '@/lib/timezone'
 import { getCalendarAccess } from '@/lib/calendar/store'
 import { createCalendarEvent } from '@/lib/calendar/google'
+import { createMicrosoftCalendarEvent } from '@/lib/calendar/microsoft'
 
 function friendlyDate(dateIso: string): string {
   return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString('en-US', {
@@ -96,12 +97,16 @@ export async function POST(req: NextRequest) {
       const endH = String((h + 1) % 24).padStart(2, '0')
       const startDateTime = `${dateIso}T${timeDb}`
       const endDateTime = `${dateIso}T${endH}:${String(m).padStart(2, '0')}:00`
-      const ev = await createCalendarEvent(access.accessToken, access.calendarId, {
+      const eventInput = {
         summary: `${service || 'Appointment'} — ${name || 'Customer'}`,
         description: `Booked by your AI via ${channel}.\nContact: ${phone}${email ? `\nEmail: ${email}` : ''}`,
         start: { dateTime: startDateTime, timeZone: tz },
         end: { dateTime: endDateTime, timeZone: tz },
-      })
+      }
+      // Dispatch by provider — Microsoft writes to the default calendar (no calendarId).
+      const ev = access.provider === 'microsoft'
+        ? await createMicrosoftCalendarEvent(access.accessToken, eventInput)
+        : await createCalendarEvent(access.accessToken, access.calendarId, eventInput)
       if (ev?.id) await supabase.from('appointments').update({ google_event_id: ev.id }).eq('id', appt.id)
     }
   } catch (err) {

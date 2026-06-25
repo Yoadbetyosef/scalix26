@@ -16,12 +16,15 @@ export async function GET() {
   const status = await getCalendarStatus(tenantId)
   if (!status.connected) return NextResponse.json({ connected: false, calendars: [] })
 
-  // List calendars for the picker (best-effort — never break the status read).
+  // Calendar picker is Google-only for now (Outlook v1 uses the default calendar).
+  // Best-effort — never break the status read.
   let calendars: { id: string; summary: string; primary: boolean }[] = []
-  try {
-    const access = await getCalendarAccess(tenantId)
-    if (access) calendars = await listCalendars(access.accessToken)
-  } catch { /* leave empty */ }
+  if (status.provider === 'google') {
+    try {
+      const access = await getCalendarAccess(tenantId)
+      if (access) calendars = await listCalendars(access.accessToken)
+    } catch { /* leave empty */ }
+  }
 
-  return NextResponse.json({ connected: true, email: status.email, calendarId: status.calendarId, calendars })
+  return NextResponse.json({ connected: true, provider: status.provider, email: status.email, calendarId: status.calendarId, calendars })
 }

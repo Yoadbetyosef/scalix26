@@ -1,13 +1,16 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { encrypt, decrypt } from '@/lib/mailbox/crypto'
 import { refreshCalendarToken, type CalendarTokens } from './google'
+import { refreshMicrosoftCalendarToken } from './microsoft'
 
-// Per-tenant Google Calendar connection store. Tokens are encrypted at rest
-// (reuses lib/mailbox/crypto). All writes use the admin client (server-only).
+// Per-tenant calendar connection store (Google or Microsoft/Outlook). Tokens are
+// encrypted at rest (reuses lib/mailbox/crypto). All writes use the admin client.
 
-const COLS = 'id, tenant_id, email_address, access_token, refresh_token, token_expiry, scopes, calendar_id, calendar_summary, status'
+export type CalendarProvider = 'google' | 'microsoft'
 
-export async function saveCalendar(opts: { tenantId: string; tokens: CalendarTokens; calendarId?: string; calendarSummary?: string | null }): Promise<void> {
+const COLS = 'id, tenant_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, calendar_id, calendar_summary, status'
+
+export async function saveCalendar(opts: { tenantId: string; provider?: CalendarProvider; tokens: CalendarTokens; calendarId?: string; calendarSummary?: string | null }): Promise<void> {
   const supabase = createAdminClient()
   const encAccess = encrypt(opts.tokens.accessToken)
   const encRefresh = opts.tokens.refreshToken ? encrypt(opts.tokens.refreshToken) : null
@@ -15,6 +18,7 @@ export async function saveCalendar(opts: { tenantId: string; tokens: CalendarTok
   await supabase.from('connected_calendars').delete().eq('tenant_id', opts.tenantId)
   const { error } = await supabase.from('connected_calendars').insert({
     tenant_id: opts.tenantId,
+    provider: opts.provider || 'google',
     email_address: opts.tokens.email || null,
     access_token: encAccess,
     refresh_token: encRefresh,
@@ -27,11 +31,11 @@ export async function saveCalendar(opts: { tenantId: string; tokens: CalendarTok
   if (error) throw new Error('connected_calendars insert failed: ' + error.message)
 }
 
-export async function getCalendarStatus(tenantId: string): Promise<{ connected: boolean; email?: string | null; calendarId?: string; calendarSummary?: string | null }> {
+export async function getCalendarStatus(tenantId: string): Promise<{ connected: boolean; provider?: CalendarProvider; email?: string | null; calendarId?: string; calendarSummary?: string | null }> {
   const supabase = createAdminClient()
-  const { data } = await supabase.from('connected_calendars').select('email_address, calendar_id, calendar_summary, status').eq('tenant_id', tenantId).maybeSingle()
+  const { data } = await supabase.from('connected_calendars').select('provider, email_address, calendar_id, calendar_summary, status').eq('tenant_id', tenantId).maybeSingle()
   if (!data || data.status !== 'connected') return { connected: false }
-  return { connected: true, email: data.email_address, calendarId: data.calendar_id, calendarSummary: data.calendar_summary }
+  return { connected: true, provider: (data.provider as CalendarProvider) || 'google', email: data.email_address, calendarId: data.calendar_id, calendarSummary: data.calendar_summary }
 }
 
 export async function setCalendarSelection(tenantId: string, calendarId: string, calendarSummary: string | null): Promise<void> {
@@ -46,10 +50,13 @@ export async function disconnectCalendar(tenantId: string): Promise<void> {
 
 // Returns a valid (refreshed if needed) access token + the selected calendar id,
 // or null if not connected / refresh failed. Never throws — callers are fail-safe.
-export async function getCalendarAccess(tenantId: string): Promise<{ accessToken: string; calendarId: string } | null> {
+export async function getCalendarAccess(tenantId: string): Promise<{ accessToken: string; calendarId: string; provider: CalendarProvider } | null> {
   const supabase = createAdminClient()
   const { data } = await supabase.from('connected_calendars').select(COLS).eq('tenant_id', tenantId).maybeSingle()
   if (!data || data.status !== 'connected') return null
+
+  // null/legacy rows are Google — preserves the existing path exactly.
+  const provider: CalendarProvider = (data.provider as CalendarProvider) || 'google'
 
   let accessToken: string
   try { accessToken = decrypt(data.access_token) } catch { return null }
@@ -58,7 +65,9 @@ export async function getCalendarAccess(tenantId: string): Promise<{ accessToken
   if (Date.now() > expiry - 60_000) {
     if (!data.refresh_token) return null
     try {
-      const refreshed = await refreshCalendarToken(decrypt(data.refresh_token))
+      const refreshed = provider === 'microsoft'
+        ? await refreshMicrosoftCalendarToken(decrypt(data.refresh_token))
+        : await refreshCalendarToken(decrypt(data.refresh_token))
       accessToken = refreshed.accessToken
       await supabase.from('connected_calendars')
         .update({ access_token: encrypt(accessToken), token_expiry: new Date(refreshed.expiresAt).toISOString() })
@@ -68,7 +77,7 @@ export async function getCalendarAccess(tenantId: string): Promise<{ accessToken
       return null
     }
   }
-  return { accessToken, calendarId: data.calendar_id || 'primary' }
+  return { accessToken, calendarId: data.calendar_id || 'primary', provider }
 }
 
 // Resolve the logged-in user's tenant id (one tenant per user). Used by the
