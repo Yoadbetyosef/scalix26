@@ -1,11 +1,12 @@
 import { googleProvider } from './google'
+import { microsoftProvider } from './microsoft'
 import type { MailProvider, MailProviderName } from './types'
 
-// Provider registry. Add Microsoft 365 later by creating lib/mailbox/microsoft.ts
-// (same MailProvider interface) and registering it here.
+// Provider registry. Each provider implements the same MailProvider interface; the
+// account layer + poll loop dispatch via getProvider(row.provider).
 const PROVIDERS: Partial<Record<MailProviderName, MailProvider>> = {
   google: googleProvider,
-  // microsoft: microsoftProvider,
+  microsoft: microsoftProvider,
 }
 
 export function getProvider(name: MailProviderName): MailProvider {
