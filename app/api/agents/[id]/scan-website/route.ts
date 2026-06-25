@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { browserScrapeHeaders, SCRAPER_ACCEPT_HTML } from '@/lib/scrape-headers'
-import { PDFParse } from 'pdf-parse'
 
 // Crawl can take a while (many fetches + 1 AI call). Allow up to 60s.
 export const maxDuration = 60
@@ -64,6 +63,10 @@ async function extractPdfText(url: string): Promise<string> {
     const res = await fetch(url, { signal: c.signal, headers: browserScrapeHeaders('application/pdf') }).finally(() => clearTimeout(t))
     if (!res.ok) { console.log(`[scan] pdf ${url} -> HTTP ${res.status}`); return '' }
     const buf = Buffer.from(await res.arrayBuffer())
+    // Lazy-load pdf-parse (pulls in ~36MB of pdfjs) ONLY when a site actually has menu
+    // PDFs. Keeping it off the module top level means PDF-less scans never load it, so
+    // the common case behaves exactly like before the PDF feature (pre-95ab82c).
+    const { PDFParse } = await import('pdf-parse')
     const parser = new PDFParse({ data: buf })
     try {
       const r = (await Promise.race([
