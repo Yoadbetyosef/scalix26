@@ -10,9 +10,10 @@ const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS', voice: 'Voice', whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', email: 'Email',
 }
 import { ConversationActions } from '@/components/inbox/conversation-actions'
-import { ConversationContactPanel } from '@/components/inbox/conversation-contact-panel'
+import { ConversationContactPanel, CustomerProfileBlock } from '@/components/inbox/conversation-contact-panel'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
 import { MessageComposer } from '@/components/inbox/message-composer'
+import { getCustomerProfile } from '@/lib/customer/profile'
 
 export default async function ConversationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
   const { from } = await searchParams
@@ -58,6 +59,10 @@ export default async function ConversationPage({ params, searchParams }: { param
     messageCount: messages?.length || 0,
   }
 
+  // Customer Profile V1 (read-only, additive). Fail-safe: returns an empty profile
+  // on any error or missing data, in which case the block hides itself.
+  const profile = contact?.id ? await getCustomerProfile(tenant.id, contact.id) : null
+
   const ident = contactIdentifier(conv.channel, contact?.phone)
   const IdentIcon = ident && !ident.isPhone ? MessageCircle : Phone
 
@@ -98,7 +103,7 @@ export default async function ConversationPage({ params, searchParams }: { param
           <HumanTakeover conversationId={id} active={conv.human_takeover === true} />
           <ConversationActions conversationId={id} currentStatus={conv.status} />
           {/* Mobile contact info trigger */}
-          <ConversationContactPanel contact={contactInfo} />
+          <ConversationContactPanel contact={contactInfo} profile={profile} />
         </div>
       </div>
 
@@ -222,6 +227,8 @@ export default async function ConversationPage({ params, searchParams }: { param
               </div>
             </div>
           </div>
+
+          <CustomerProfileBlock profile={profile} className="mt-6 pt-4" />
         </div>
       </div>
     </div>

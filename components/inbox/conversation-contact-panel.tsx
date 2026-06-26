@@ -5,6 +5,7 @@ import { Info, X, Phone, MessageSquare, MessageCircle, User } from 'lucide-react
 import { Badge } from '@/components/ui/badge'
 import { contactIdentifier } from '@/lib/utils'
 import Link from 'next/link'
+import type { CustomerProfile } from '@/lib/customer/profile'
 
 interface ContactInfo {
   id?: string
@@ -16,7 +17,90 @@ interface ContactInfo {
   messageCount: number
 }
 
-export function ConversationContactPanel({ contact }: { contact: ContactInfo }) {
+// Read-only Customer Profile V1 block. Renders nothing when the profile is empty,
+// so panels for new/unknown contacts look exactly as they did before this feature.
+// Shows only existing facts (no AI guesses, no memory). Reused on desktop + mobile.
+export function CustomerProfileBlock({
+  profile,
+  className,
+}: {
+  profile?: CustomerProfile | null
+  className?: string
+}) {
+  if (!profile || profile.isEmpty) return null
+
+  const hasFacts =
+    !!profile.stageLabel ||
+    profile.totalConversations != null ||
+    !!profile.lastInteractionLabel ||
+    !!profile.leadStatus ||
+    !!profile.language
+
+  return (
+    <div className={`border-t border-gray-100 ${className || ''}`}>
+      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Customer Profile</h3>
+
+      <div className="space-y-3">
+        {hasFacts && (
+          <div className="space-y-2 text-xs">
+            {profile.stageLabel && (
+              <div className="flex justify-between"><span className="text-gray-500">Stage</span><span className="font-medium text-gray-700">{profile.stageLabel}</span></div>
+            )}
+            {profile.totalConversations != null && (
+              <div className="flex justify-between"><span className="text-gray-500">Conversations</span><span className="font-medium text-gray-700">{profile.totalConversations}</span></div>
+            )}
+            {profile.lastInteractionLabel && (
+              <div className="flex justify-between"><span className="text-gray-500">Last seen</span><span className="font-medium text-gray-700">{profile.lastInteractionLabel}</span></div>
+            )}
+            {profile.leadStatus && (
+              <div className="flex justify-between"><span className="text-gray-500">Lead</span><span className="font-medium text-gray-700 capitalize">{profile.leadStatus}</span></div>
+            )}
+            {profile.language && (
+              <div className="flex justify-between"><span className="text-gray-500">Language</span><span className="font-medium text-gray-700">{profile.language}</span></div>
+            )}
+          </div>
+        )}
+
+        {profile.recentAppointments.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Recent appointments</p>
+            <ul className="space-y-1">
+              {profile.recentAppointments.map((a) => (
+                <li key={a.id} className="text-xs text-gray-600 flex justify-between gap-2">
+                  <span className="truncate">{a.serviceType || 'Appointment'}{a.status ? ` · ${a.status}` : ''}</span>
+                  {a.dateLabel && <span className="text-gray-400 flex-shrink-0">{a.dateLabel}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {profile.recentSummaries.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Recent conversations</p>
+            <ul className="space-y-2">
+              {profile.recentSummaries.map((s) => (
+                <li key={s.id} className="text-xs text-gray-600">
+                  <span className="text-gray-400">{[s.dateLabel, s.channel].filter(Boolean).join(' · ')}</span>
+                  <p className="text-gray-600">{s.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {profile.notes && (
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Notes</p>
+            <p className="text-xs text-gray-600 whitespace-pre-wrap">{profile.notes}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function ConversationContactPanel({ contact, profile }: { contact: ContactInfo; profile?: CustomerProfile | null }) {
   const [open, setOpen] = useState(false)
 
   const ident = contactIdentifier(contact.channel, contact.phone)
@@ -95,6 +179,8 @@ export function ConversationContactPanel({ contact }: { contact: ContactInfo }) 
                 <span className="font-medium text-gray-700">{contact.messageCount}</span>
               </div>
             </div>
+
+            <CustomerProfileBlock profile={profile} className="px-5 py-4" />
 
             {contact.id && (
               <div className="px-5 pb-8">
