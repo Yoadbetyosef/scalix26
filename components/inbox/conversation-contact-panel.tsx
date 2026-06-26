@@ -17,9 +17,92 @@ interface ContactInfo {
   messageCount: number
 }
 
-// Read-only Customer Profile V1 block. Renders nothing when the profile is empty,
-// so panels for new/unknown contacts look exactly as they did before this feature.
-// Shows only existing facts (no AI guesses, no memory). Reused on desktop + mobile.
+// ─── Customer Intelligence Card helpers ─────────────────────────────────────
+// All deterministic, fact-only (no AI, no invented data). Pure functions of the
+// Sprint-001 profile data, so the component stays presentational.
+
+const LEAD_OPEN = new Set(['new', 'contacted', 'called_back'])
+const LEAD_LABELS: Record<string, string> = {
+  new: 'New lead', contacted: 'Contacted', booked: 'Booked', called_back: 'Called back', dismissed: 'Dismissed',
+}
+
+function truncate(value: string, max: number): string {
+  const t = value.replace(/\s+/g, ' ').trim()
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t
+}
+
+function tms(iso: string | null): number {
+  if (!iso) return 0
+  const t = new Date(iso).getTime()
+  return isNaN(t) ? 0 : t
+}
+
+function isDefaultLanguage(lang: string | null): boolean {
+  if (!lang) return true
+  return ['en', 'eng', 'english'].includes(lang.trim().toLowerCase())
+}
+
+function typePillClass(type: CustomerProfile['customerType']): string {
+  switch (type) {
+    case 'active':
+    case 'returning': return 'bg-[#4ecdc4]/15 text-[#3db8af]'
+    case 'new': return 'bg-blue-50 text-blue-600'
+    case 'dormant': return 'bg-amber-50 text-amber-700'
+    default: return 'bg-gray-100 text-gray-600'
+  }
+}
+
+// "What happened last time?" — one factual sentence.
+function buildPrimaryInsight(p: CustomerProfile): string | null {
+  const appt = p.recentAppointments[0]
+  if (appt) {
+    const svc = appt.serviceType || 'an appointment'
+    if (appt.status === 'completed') return `Last completed ${svc}${appt.dateLabel ? ` on ${appt.dateLabel}` : ''}.`
+    if (appt.status === 'cancelled') return `A previous ${svc} was cancelled.`
+    return `Upcoming ${svc}${appt.dateLabel ? ` on ${appt.dateLabel}` : ''} (confirmed).`
+  }
+  if (p.leadStatus && LEAD_OPEN.has(p.leadStatus)) {
+    return `Reached out previously but hasn’t booked yet.`
+  }
+  const s = p.recentSummaries[0]
+  if (s?.summary) return truncate(s.summary, 140)
+  return null
+}
+
+// "What should happen next?" — deterministic recommendation, never an AI guess.
+function buildNextStep(p: CustomerProfile): string | null {
+  const appt = p.recentAppointments[0]
+  if (appt?.status === 'cancelled') return 'Ask if they’d like to reschedule.'
+  if (appt && appt.status !== 'completed' && appt.status !== 'cancelled') {
+    return 'No action needed — appointment is on the calendar.'
+  }
+  if (p.leadStatus && LEAD_OPEN.has(p.leadStatus)) return 'Ask if they still want help with their previous request.'
+  if (p.customerType === 'dormant') return 'Re-engage — it’s been a while since their last visit.'
+  if (appt?.status === 'completed') return 'Offer a follow-up or the next service.'
+  return 'No action needed yet.'
+}
+
+interface TimelineItem { key: string; kind: 'appointment' | 'conversation'; label: string; dateLabel: string; at: number }
+
+// "Timeline preview" — most recent 3 dated events across appointments + conversations.
+function buildTimeline(p: CustomerProfile): TimelineItem[] {
+  const items: TimelineItem[] = []
+  for (const a of p.recentAppointments) {
+    items.push({
+      key: `a-${a.id}`, kind: 'appointment',
+      label: `${a.serviceType || 'Appointment'}${a.status ? ` · ${a.status}` : ''}`,
+      dateLabel: a.dateLabel, at: tms(a.at),
+    })
+  }
+  for (const s of p.recentSummaries) {
+    items.push({ key: `c-${s.id}`, kind: 'conversation', label: truncate(s.summary, 90), dateLabel: s.dateLabel, at: tms(s.at) })
+  }
+  return items.sort((x, y) => y.at - x.at).slice(0, 3)
+}
+
+// Read-only Customer Intelligence Card. Renders nothing when the profile is empty,
+// so panels for new/unknown contacts look exactly as before. Owner-friendly, answers
+// who / what happened / what to know / what next in ~5 seconds. Reused desktop + mobile.
 export function CustomerProfileBlock({
   profile,
   className,
@@ -29,73 +112,67 @@ export function CustomerProfileBlock({
 }) {
   if (!profile || profile.isEmpty) return null
 
-  const hasFacts =
-    !!profile.stageLabel ||
-    profile.totalConversations != null ||
-    !!profile.lastInteractionLabel ||
-    !!profile.leadStatus ||
-    !!profile.language
+  const insight = buildPrimaryInsight(profile)
+  const nextStep = buildNextStep(profile)
+  const timeline = buildTimeline(profile)
+  const leadLabel = profile.leadStatus ? (LEAD_LABELS[profile.leadStatus] || profile.leadStatus) : null
+  const showLanguage = !isDefaultLanguage(profile.language)
+  const hasContext = !!profile.lastInteractionLabel || !!leadLabel || showLanguage
 
   return (
     <div className={`border-t border-gray-100 ${className || ''}`}>
-      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Customer Profile</h3>
-
-      <div className="space-y-3">
-        {hasFacts && (
-          <div className="space-y-2 text-xs">
-            {profile.stageLabel && (
-              <div className="flex justify-between"><span className="text-gray-500">Stage</span><span className="font-medium text-gray-700">{profile.stageLabel}</span></div>
-            )}
-            {profile.totalConversations != null && (
-              <div className="flex justify-between"><span className="text-gray-500">Conversations</span><span className="font-medium text-gray-700">{profile.totalConversations}</span></div>
-            )}
-            {profile.lastInteractionLabel && (
-              <div className="flex justify-between"><span className="text-gray-500">Last seen</span><span className="font-medium text-gray-700">{profile.lastInteractionLabel}</span></div>
-            )}
-            {profile.leadStatus && (
-              <div className="flex justify-between"><span className="text-gray-500">Lead</span><span className="font-medium text-gray-700 capitalize">{profile.leadStatus}</span></div>
-            )}
-            {profile.language && (
-              <div className="flex justify-between"><span className="text-gray-500">Language</span><span className="font-medium text-gray-700">{profile.language}</span></div>
-            )}
-          </div>
-        )}
-
-        {profile.recentAppointments.length > 0 && (
-          <div>
-            <p className="text-xs text-gray-400 mb-1">Recent appointments</p>
-            <ul className="space-y-1">
-              {profile.recentAppointments.map((a) => (
-                <li key={a.id} className="text-xs text-gray-600 flex justify-between gap-2">
-                  <span className="truncate">{a.serviceType || 'Appointment'}{a.status ? ` · ${a.status}` : ''}</span>
-                  {a.dateLabel && <span className="text-gray-400 flex-shrink-0">{a.dateLabel}</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {profile.recentSummaries.length > 0 && (
-          <div>
-            <p className="text-xs text-gray-400 mb-1">Recent conversations</p>
-            <ul className="space-y-2">
-              {profile.recentSummaries.map((s) => (
-                <li key={s.id} className="text-xs text-gray-600">
-                  <span className="text-gray-400">{[s.dateLabel, s.channel].filter(Boolean).join(' · ')}</span>
-                  <p className="text-gray-600">{s.summary}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {profile.notes && (
-          <div>
-            <p className="text-xs text-gray-400 mb-1">Notes</p>
-            <p className="text-xs text-gray-600 whitespace-pre-wrap">{profile.notes}</p>
-          </div>
+      {/* Header — customer type badge (business-friendly, no confidence noise) */}
+      <div className="flex items-center gap-2 mb-2.5">
+        {profile.customerTypeLabel ? (
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${typePillClass(profile.customerType)}`}>
+            {profile.customerTypeLabel}
+          </span>
+        ) : (
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</h3>
         )}
       </div>
+
+      {/* Primary insight — what happened last time */}
+      {insight && <p className="text-sm text-gray-800 leading-snug mb-3">{insight}</p>}
+
+      {/* Important context — only non-empty rows */}
+      {hasContext && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-xs">
+          {profile.lastInteractionLabel && (
+            <span><span className="text-gray-400">Last seen </span><span className="font-medium text-gray-700">{profile.lastInteractionLabel}</span></span>
+          )}
+          {leadLabel && (
+            <span><span className="text-gray-400">Lead </span><span className="font-medium text-gray-700">{leadLabel}</span></span>
+          )}
+          {showLanguage && (
+            <span><span className="text-gray-400">Language </span><span className="font-medium text-gray-700">{profile.language}</span></span>
+          )}
+        </div>
+      )}
+
+      {/* Recommended next step — deterministic */}
+      {nextStep && (
+        <div className="mb-3 rounded-lg bg-[#4ecdc4]/[0.07] border border-[#4ecdc4]/20 px-3 py-2">
+          <p className="text-[10px] font-semibold text-[#3db8af] uppercase tracking-wide mb-0.5">Recommended next step</p>
+          <p className="text-sm text-gray-800 leading-snug">{nextStep}</p>
+        </div>
+      )}
+
+      {/* Timeline preview — last 2–3 events */}
+      {timeline.length > 0 && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Recent activity</p>
+          <ul className="space-y-2">
+            {timeline.map((t) => (
+              <li key={t.key} className="flex items-start gap-2 text-xs">
+                <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.kind === 'appointment' ? 'bg-[#4ecdc4]' : 'bg-gray-300'}`} />
+                <span className="flex-1 min-w-0 text-gray-600">{t.label}</span>
+                {t.dateLabel && <span className="text-gray-400 flex-shrink-0">{t.dateLabel}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

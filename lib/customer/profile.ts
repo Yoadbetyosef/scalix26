@@ -16,6 +16,8 @@ export interface ProfileSummaryItem {
   channel: string
   summary: string
   dateLabel: string
+  /** Raw ISO timestamp for chronological ordering (presentation uses dateLabel). */
+  at: string | null
 }
 
 export interface ProfileAppointmentItem {
@@ -23,6 +25,8 @@ export interface ProfileAppointmentItem {
   serviceType: string | null
   status: string | null
   dateLabel: string
+  /** Raw ISO date for chronological ordering (presentation uses dateLabel). */
+  at: string | null
 }
 
 export interface CustomerProfile {
@@ -37,6 +41,13 @@ export interface CustomerProfile {
   lastInteractionLabel: string | null
   stage: CustomerStage | null
   stageLabel: string | null
+  /**
+   * Business-friendly customer classification derived from REAL evidence
+   * (visible interactions + recency), independent of the unreliable
+   * contacts.total_conversations counter. Drives the intelligence-card badge.
+   */
+  customerType: CustomerStage | null
+  customerTypeLabel: string | null
   leadStatus: string | null
   recentSummaries: ProfileSummaryItem[]
   recentAppointments: ProfileAppointmentItem[]
@@ -53,9 +64,42 @@ const EMPTY_PROFILE: CustomerProfile = {
   lastInteractionLabel: null,
   stage: null,
   stageLabel: null,
+  customerType: null,
+  customerTypeLabel: null,
   leadStatus: null,
   recentSummaries: [],
   recentAppointments: [],
+}
+
+const CUSTOMER_TYPE_LABELS: Record<CustomerStage, string> = {
+  new: 'New Customer',
+  active: 'Active Customer',
+  returning: 'Returning Customer',
+  dormant: 'Dormant Customer',
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null
+  const t = new Date(iso).getTime()
+  if (isNaN(t)) return null
+  return Math.floor((Date.now() - t) / 86_400_000)
+}
+
+// Truthful customer type. `interactionCount` is a floor that already accounts for
+// the conversations we can actually SHOW, so we never label someone "New" while
+// displaying their prior conversations. Pure facts (count + recency) — no AI guess.
+function deriveCustomerType(
+  interactionCount: number,
+  lastInteraction: string | null,
+  hasAppointment: boolean
+): CustomerStage | null {
+  if (interactionCount === 0 && !hasAppointment) return null
+  if (interactionCount <= 1 && !hasAppointment) return 'new'
+  const days = daysSince(lastInteraction)
+  if (days == null) return 'returning'
+  if (days <= 45) return 'active'
+  if (days <= 180) return 'returning'
+  return 'dormant'
 }
 
 // Deterministic, fixed-format date label computed server-side. Using a fixed locale
@@ -144,6 +188,7 @@ export async function getCustomerProfile(
         channel: s.channel || '',
         summary: s.summary,
         dateLabel: fmtDate(s.created_at) || '',
+        at: s.created_at ?? null,
       }))
 
     const recentAppointments: ProfileAppointmentItem[] = (apptsRes.data || []).map((a) => ({
@@ -151,6 +196,7 @@ export async function getCustomerProfile(
       serviceType: a.service_type ?? null,
       status: a.status ?? null,
       dateLabel: fmtDate(a.slot_date) || '',
+      at: a.slot_date ?? null,
     }))
 
     const totalConversations = (c?.total_conversations ?? null) as number | null
@@ -158,6 +204,12 @@ export async function getCustomerProfile(
     const notes = c?.notes && c.notes.trim() ? c.notes : null
     const language = c?.language || null
     const { stage, label: stageLabel } = deriveStage(totalConversations, lastInteraction)
+
+    // Truthful classification: count at least what we can show, so the badge never
+    // contradicts the visible activity (root cause of the "Conversations: 0" distrust).
+    const interactionCount = Math.max(totalConversations ?? 0, recentSummaries.length)
+    const customerType = deriveCustomerType(interactionCount, lastInteraction, recentAppointments.length > 0)
+    const customerTypeLabel = customerType ? CUSTOMER_TYPE_LABELS[customerType] : null
 
     // "Has history" gates whether the block is shown at all. Bare identity
     // (name/phone) alone is already shown by the existing contact panel, so the
@@ -184,6 +236,8 @@ export async function getCustomerProfile(
       lastInteractionLabel: fmtDate(lastInteraction),
       stage,
       stageLabel,
+      customerType,
+      customerTypeLabel,
       leadStatus: lead?.status ?? null,
       recentSummaries,
       recentAppointments,
