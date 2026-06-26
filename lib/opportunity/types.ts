@@ -223,7 +223,8 @@ export interface DecisionTraceEntry {
   detectorId: string
   detectorVersion: number
   matched: boolean
-  status: OpportunityStatus
+  /** Resolved opportunity status — present only when matched (non-matches have none). */
+  status?: OpportunityStatus
   score?: number
   blockedBy?: BlockerRef[]
   reason?: string
