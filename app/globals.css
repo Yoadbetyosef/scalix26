@@ -1,5 +1,88 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Scalix Visual DNA — theme tokens (Tailwind v4 @theme). ADDITIVE: these only
+   ADD utilities (bg-accent, text-ink, rounded-card, shadow-e2, ease-standard …)
+   and CSS vars. Tailwind's default palette/spacing/radius remain intact.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Color — primary */
+  --color-accent: #4ECDC4;          /* the one accent */
+  --color-accent-strong: #3DB8AF;   /* teal text/hover on light (AA) */
+  --color-ink: #1A1F36;             /* primary text */
+  --color-subtle: #5B6172;          /* DNA text-secondary */
+  --color-muted: #8A90A2;           /* DNA text-muted */
+
+  /* Color — backgrounds / surfaces */
+  --color-canvas: #F7F8FA;          /* L0 app background */
+  --color-surface: #FFFFFF;         /* L1 cards/content */
+  --color-sunken: #F2F4F7;          /* wells, table headers */
+
+  /* Color — borders (DNA: border / border-strong) */
+  --color-hairline: #EEF0F4;
+  --color-hairline-strong: #E2E5EC;
+
+  /* Color — semantic (muted, desaturated) */
+  --color-success: #2FB57E;
+  --color-warning: #E0A33E;
+  --color-danger: #E2574C;
+  --color-info: #4B82E0;
+
+  /* Radius (→ rounded-input / rounded-button / rounded-card / rounded-dialog) */
+  --radius-input: 8px;
+  --radius-button: 10px;
+  --radius-card: 16px;
+  --radius-dialog: 20px;
+
+  /* Elevation (→ shadow-e1 … shadow-e4) — soft, navy-tinted */
+  --shadow-e1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.04);
+  --shadow-e2: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-e3: 0 12px 32px rgba(16, 24, 40, 0.12);
+  --shadow-e4: 0 8px 24px rgba(16, 24, 40, 0.10);
+
+  /* Motion easing (→ ease-standard / ease-emphasized / ease-state) */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --ease-state: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Plain reference vars (durations + type scale). Defined only; NOT applied
+   globally — future components opt in. */
+:root {
+  /* Motion durations */
+  --sx-duration-instant: 90ms;
+  --sx-duration-fast: 120ms;
+  --sx-duration-base: 200ms;
+  --sx-duration-slow: 320ms;
+  --sx-duration-moment: 1500ms;
+  --sx-duration-presence: 2800ms;
+
+  /* Type scale — sizes */
+  --sx-text-display: 2rem;     /* 32 */
+  --sx-text-h1: 1.5rem;        /* 24 */
+  --sx-text-h2: 1.25rem;       /* 20 */
+  --sx-text-h3: 1rem;          /* 16 */
+  --sx-text-body: 0.875rem;    /* 14 */
+  --sx-text-small: 0.8125rem;  /* 13 */
+  --sx-text-caption: 0.75rem;  /* 12 */
+  --sx-text-micro: 0.6875rem;  /* 11 */
+
+  /* Type scale — weights (no thin <450, no loud >700) */
+  --sx-weight-body: 450;
+  --sx-weight-label: 500;
+  --sx-weight-medium: 550;
+  --sx-weight-semibold: 600;
+  --sx-weight-strong: 650;
+  --sx-weight-display: 700;
+
+  /* Type scale — line-heights / tracking */
+  --sx-leading-tight: 1.15;
+  --sx-leading-snug: 1.3;
+  --sx-leading-body: 1.5;
+  --sx-tracking-tight: -0.02em;
+  --sx-tracking-caption: 0.02em;
+}
+
 :root {
   --sidebar: #1a1f36;
   --sidebar-hover: #252b4a;
@@ -82,5 +165,63 @@ a[role="button"]:not([aria-disabled="true"]):active,
 .tap-target:active {
   transform: scale(0.97);
   opacity: 0.85;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Scalix utilities (sx- namespaced). Inert until referenced; nothing existing
+   uses these, so they cause no visual change on current pages.
+   ────────────────────────────────────────────────────────────────────────── */
+.sx-surface {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+}
+.sx-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-e1);
+}
+.sx-text-muted { color: var(--color-muted); }
+.sx-tabular { font-variant-numeric: tabular-nums; }
+.sx-focus-ring:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Token-based "motion-safe" transition — only applies when motion is allowed. */
+@media (prefers-reduced-motion: no-preference) {
+  .sx-transition {
+    transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+    transition-duration: var(--sx-duration-base);
+    transition-timing-function: var(--ease-standard);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Accessibility baselines
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Non-invasive keyboard focus. :where(...) has ZERO specificity, so any
+   component that defines its own focus-visible (e.g. the Button's ring) wins —
+   no double rings. Generic/unstyled interactive elements get a clean outline. */
+:where(a, button, input, select, textarea, summary, [tabindex], [role="button"]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+:where(a, button, input, select, textarea, summary, [tabindex], [role="button"]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Reduced-motion baseline: near-disable animation/transition for users who
+   request it. State still updates instantly; the idle/voice loops stop. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
