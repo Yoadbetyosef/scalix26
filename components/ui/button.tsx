@@ -3,15 +3,15 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4ecdc4] disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-button text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-[#4ecdc4] text-white hover:bg-[#3db8af]',
+        default: 'bg-accent text-white hover:bg-accent-strong',
         destructive: 'bg-red-500 text-white hover:bg-red-600',
-        outline: 'border border-[#e5e7eb] bg-white hover:bg-gray-50 text-gray-700',
-        ghost: 'hover:bg-gray-100 text-gray-700',
-        link: 'text-[#4ecdc4] underline-offset-4 hover:underline',
+        outline: 'border border-hairline-strong bg-surface hover:bg-sunken text-gray-700',
+        ghost: 'hover:bg-sunken text-gray-700',
+        link: 'text-accent underline-offset-4 hover:underline',
         sidebar: 'text-gray-300 hover:bg-[#252b4a] hover:text-white w-full justify-start',
         'sidebar-active': 'bg-[#252b4a] text-white w-full justify-start',
       },

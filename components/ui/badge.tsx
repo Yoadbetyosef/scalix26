@@ -10,7 +10,7 @@ const badgeVariants = cva(
         active: 'bg-green-100 text-green-700',
         draft: 'bg-gray-100 text-gray-600',
         open: 'bg-blue-100 text-blue-700',
-        resolved: 'bg-[#4ecdc4]/10 text-[#3db8af]',
+        resolved: 'bg-accent/10 text-accent-strong',
         closed: 'bg-red-100 text-red-700',
         connected: 'bg-green-100 text-green-700',
         disconnected: 'bg-gray-100 text-gray-500',
