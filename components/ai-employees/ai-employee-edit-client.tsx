@@ -135,7 +135,7 @@ interface Props {
   knowledgeBase: KBEntry[]
   metaConnected?: boolean
   metaError?: string
-  emailAccount?: { id: string; provider: string; email_address: string; status: string } | null
+  emailAccounts?: { id: string; provider: string; email_address: string; status: string; is_primary: boolean }[]
   googleConnected?: boolean
   googleError?: string
   onboarding?: boolean
@@ -149,6 +149,7 @@ const GOOGLE_ERRORS: Record<string, string> = {
   cancelled: 'Email connection was cancelled.',
   invalid_state: 'Security check failed. Please try again.',
   token_failed: 'Could not connect your inbox. Please try again.',
+  mailbox_limit: 'You can connect up to 3 mailboxes per agent. Disconnect one first.',
 }
 
 const META_ERRORS: Record<string, string> = {
@@ -176,7 +177,7 @@ function relativeTime(iso: string): string {
   return `${mon} month${mon === 1 ? '' : 's'} ago`
 }
 
-export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccount, googleConnected, googleError, onboarding, skills, availabilitySlots, googleReviewUrl, reviewEnabled }: Props) {
+export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccounts = [], googleConnected, googleError, onboarding, skills, availabilitySlots, googleReviewUrl, reviewEnabled }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -230,23 +231,40 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     if (googleError) toast.error(GOOGLE_ERRORS[googleError] || 'Connection failed.')
   }, [metaConnected, metaError, googleConnected, googleError])
 
-  const [disconnectingEmail, setDisconnectingEmail] = useState(false)
-  async function disconnectEmailInbox() {
-    if (!confirm('Disconnect this inbox? The AI will stop reading and replying from it.')) return
-    setDisconnectingEmail(true)
+  const [emailBusy, setEmailBusy] = useState(false)
+  async function disconnectMailbox(accountId: string) {
+    if (!confirm('Disconnect this mailbox? The AI will stop reading and replying from it.')) return
+    setEmailBusy(true)
     try {
       const res = await fetch(`/api/agents/${employee.id}/channels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'disconnect_email' }),
+        body: JSON.stringify({ action: 'disconnect_email', accountId }),
       })
       if (!res.ok) throw new Error()
-      toast.success('Inbox disconnected')
+      toast.success('Mailbox disconnected')
       router.refresh()
     } catch {
       toast.error('Failed to disconnect')
     } finally {
-      setDisconnectingEmail(false)
+      setEmailBusy(false)
+    }
+  }
+  async function setPrimaryMailbox(accountId: string) {
+    setEmailBusy(true)
+    try {
+      const res = await fetch(`/api/agents/${employee.id}/channels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_primary_email', accountId }),
+      })
+      if (!res.ok) throw new Error()
+      toast.success('Primary mailbox updated')
+      router.refresh()
+    } catch {
+      toast.error('Failed to update primary')
+    } finally {
+      setEmailBusy(false)
     }
   }
 
@@ -749,43 +767,55 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 <Mail className="w-4 h-4" /> Connect your inbox
                 <span className="text-[11px] font-medium text-[#1a9d92] bg-[#e7f8f6] rounded px-1.5 py-0.5">Recommended</span>
               </span>
-              {emailAccount && emailAccount.status === 'connected' && <Badge variant="connected">Connected</Badge>}
-              {emailAccount && emailAccount.status === 'error' && <Badge variant="disconnected">Reconnect needed</Badge>}
-              {!emailAccount && <Badge variant="disconnected">Not connected</Badge>}
+              <span className="text-xs text-gray-400">{emailAccounts.length}/3 mailboxes</span>
             </div>
 
-            {emailAccount ? (
-              <div className="mt-3 space-y-3">
-                {emailAccount.status === 'error' && (
-                  <p className="text-sm text-red-600">Access to <span className="font-mono">{emailAccount.email_address}</span> expired or was revoked. Reconnect so the AI can keep reading and replying.</p>
-                )}
-                {emailAccount.status === 'connected' && (
-                  <p className="text-sm text-gray-600">Connected as <span className="font-mono">{emailAccount.email_address}</span>. The AI reads new customer emails and replies natively from this address.</p>
-                )}
+            {/* Connected mailboxes (up to 3 — all feed the same shared inbox). */}
+            {emailAccounts.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {emailAccounts.map((acct) => (
+                  <div key={acct.id} className="flex items-center justify-between gap-2 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-800 font-mono truncate">{acct.email_address}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {acct.status === 'connected'
+                          ? <Badge variant="connected">Connected</Badge>
+                          : <Badge variant="disconnected">Reconnect needed</Badge>}
+                        {acct.is_primary && <span className="text-[11px] font-medium text-gray-500 bg-white border border-gray-200 rounded px-1.5 py-0.5">Primary</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {acct.status === 'error' && (
+                        <a href={`/api/auth/${acct.provider === 'microsoft' ? 'microsoft' : 'google'}/connect?agentId=${employee.id}`}>
+                          <Button type="button" size="sm" variant="outline">Reconnect</Button>
+                        </a>
+                      )}
+                      {!acct.is_primary && acct.status === 'connected' && emailAccounts.length > 1 && (
+                        <Button type="button" size="sm" variant="outline" disabled={emailBusy} onClick={() => setPrimaryMailbox(acct.id)}>Set primary</Button>
+                      )}
+                      <Button type="button" size="sm" variant="outline" disabled={emailBusy} onClick={() => disconnectMailbox(acct.id)} aria-label="Disconnect mailbox">
+                        <Link2Off className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {emailAccounts.length < 3 ? (
+              <div className="mt-3">
+                <p className="text-sm text-gray-500 mb-2">{emailAccounts.length === 0 ? 'Connect Gmail/Google Workspace or Outlook/Microsoft 365 — the AI replies from your own address, with full threading.' : 'Add another mailbox (up to 3). Both feed the same shared inbox.'}</p>
                 <div className="flex items-center gap-2">
-                  {emailAccount.status === 'error' && (
-                    <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
-                      <Button type="button" size="sm">Reconnect Gmail</Button>
-                    </a>
-                  )}
-                  <Button type="button" variant="outline" size="sm" disabled={disconnectingEmail} onClick={disconnectEmailInbox}>
-                    <Link2Off className="w-3 h-3 mr-1" /> Disconnect
-                  </Button>
+                  <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
+                    <Button type="button" size="sm" variant={emailAccounts.length ? 'outline' : undefined}>{emailAccounts.length ? 'Add Gmail' : 'Connect Gmail'}</Button>
+                  </a>
+                  <a href={`/api/auth/microsoft/connect?agentId=${employee.id}`}>
+                    <Button type="button" size="sm" variant="outline">{emailAccounts.length ? 'Add Outlook' : 'Connect Outlook'}</Button>
+                  </a>
                 </div>
               </div>
             ) : (
-              <div className="mt-3">
-                <p className="text-sm text-gray-500 mb-3">Connect Gmail/Google Workspace or Outlook/Microsoft 365. The AI replies directly from your own address, with full email threading.</p>
-                <div className="flex items-center gap-2">
-                  <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
-                    <Button type="button" size="sm">Connect Gmail</Button>
-                  </a>
-                  <a href={`/api/auth/microsoft/connect?agentId=${employee.id}`}>
-                    <Button type="button" size="sm" variant="outline">Connect Outlook</Button>
-                  </a>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">You&apos;ll be redirected to Google or Microsoft to grant access.</p>
-              </div>
+              <p className="text-xs text-gray-400 mt-3">You&apos;ve reached the limit of 3 mailboxes. Disconnect one to add another.</p>
             )}
           </div>
 

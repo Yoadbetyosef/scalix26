@@ -44,11 +44,12 @@ export default async function AIEmployeeEditPage({
   // Connected OAuth mailbox (Gmail/Workspace) for this agent, if any. Uses the
   // admin client because connected_email_accounts has RLS with no read policy
   // (it holds encrypted tokens — server-only access).
-  const { data: emailAccount } = await createAdminClient()
+  const { data: emailAccounts } = await createAdminClient()
     .from('connected_email_accounts')
-    .select('id, provider, email_address, status')
+    .select('id, provider, email_address, status, is_primary')
     .eq('ai_employee_id', id)
-    .maybeSingle()
+    .order('is_primary', { ascending: false })
+    .order('created_at', { ascending: true })
 
   // The 3 fixed Business-Details fields vs everything else (free-form KB).
   const BUSINESS_TITLES = ['Pricing', 'Service Areas', "What We Don't Do"]
@@ -69,7 +70,7 @@ export default async function AIEmployeeEditPage({
         knowledgeBase={knowledgeBase}
         metaConnected={sp.meta_connected === 'true'}
         metaError={sp.meta_error}
-        emailAccount={emailAccount || null}
+        emailAccounts={emailAccounts || []}
         googleConnected={sp.google_connected === 'true'}
         googleError={sp.google_error}
         onboarding={sp.onboarding === '1'}

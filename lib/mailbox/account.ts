@@ -20,6 +20,15 @@ export interface AccountRow {
 
 const COLS = 'id, tenant_id, ai_employee_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, history_id, status, created_at'
 
+// Max mailboxes a single agent can connect (cap enforced in the connect flow, not just UI).
+export const MAX_MAILBOXES_PER_AGENT = 3
+
+// Thrown by saveAccount when the 4th mailbox is attempted — the OAuth callbacks map this
+// to a clear ?…_error=mailbox_limit redirect.
+export class MailboxLimitError extends Error {
+  constructor() { super('mailbox_limit'); this.name = 'MailboxLimitError' }
+}
+
 // Insert/replace the connection for an agent (one per agent+provider). Tokens are
 // encrypted before they ever touch the DB.
 export async function saveAccount(opts: {
@@ -42,8 +51,21 @@ export async function saveAccount(opts: {
     throw e
   }
 
+  // Existing mailboxes for this agent. Cap at MAX_MAILBOXES_PER_AGENT; dedupe is per
+  // EXACT mailbox so a re-connect replaces only itself while a different address is added.
+  const { data: existing } = await supabase.from('connected_email_accounts')
+    .select('id, provider, email_address, is_primary').eq('ai_employee_id', opts.aiEmployeeId)
+  const rows = existing || []
+  const same = rows.find((r) => r.provider === opts.provider && r.email_address === opts.tokens.email)
+  if (!same && rows.length >= MAX_MAILBOXES_PER_AGENT) {
+    throw new MailboxLimitError()
+  }
+  // First mailbox for the agent → primary; a re-connect keeps its prior primary flag.
+  const isPrimary = same ? !!same.is_primary : rows.length === 0
+
+  // Replace ONLY the same mailbox on re-connect (not every account of this provider).
   const { error: delErr } = await supabase.from('connected_email_accounts')
-    .delete().eq('ai_employee_id', opts.aiEmployeeId).eq('provider', opts.provider)
+    .delete().eq('ai_employee_id', opts.aiEmployeeId).eq('provider', opts.provider).eq('email_address', opts.tokens.email)
   if (delErr) console.error('[mailbox] saveAccount: delete error (continuing):', delErr.message)
 
   const { error } = await supabase.from('connected_email_accounts').insert({
@@ -57,6 +79,7 @@ export async function saveAccount(opts: {
     scopes: opts.tokens.scopes,
     history_id: opts.tokens.historyId,
     status: 'connected',
+    is_primary: isPrimary,
   })
   if (error) {
     console.error('[mailbox] saveAccount: INSERT FAILED:', error.message, '| details:', error.details, '| hint:', error.hint, '| code:', error.code)

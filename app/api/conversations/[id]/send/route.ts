@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Load conversation via RLS (owner only).
   const { data: conv } = await authed
     .from('conversations')
-    .select('id, tenant_id, channel, human_takeover, ai_employee_id, summary, contact:contacts(phone, email)')
+    .select('id, tenant_id, channel, human_takeover, ai_employee_id, summary, email_account_id, contact:contacts(phone, email)')
     .eq('id', id)
     .single()
 
@@ -101,12 +101,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const inReplyTo = lastIn?.email_message_id || ''
         const threadId = lastIn?.email_thread_id || ''
 
-        // Prefer a connected mailbox (Gmail) — sends natively from the owner's address.
+        // Reply from the mailbox that RECEIVED this thread; fall back to the agent's
+        // primary mailbox, then its earliest connected one. (Supports N mailboxes/agent.)
         const admin = createAdminClient()
-        let acctRow = (await admin.from('connected_email_accounts').select(ACCOUNT_COLS)
-          .eq('ai_employee_id', conv.ai_employee_id).eq('status', 'connected').maybeSingle()).data
-        if (!acctRow) acctRow = (await admin.from('connected_email_accounts').select(ACCOUNT_COLS)
-          .eq('tenant_id', conv.tenant_id).eq('status', 'connected').limit(1).maybeSingle()).data
+        let acctRow: AccountRow | null = null
+        if (conv.email_account_id) {
+          acctRow = (await admin.from('connected_email_accounts').select(ACCOUNT_COLS)
+            .eq('id', conv.email_account_id).eq('status', 'connected').maybeSingle()).data as AccountRow | null
+        }
+        if (!acctRow) {
+          acctRow = (await admin.from('connected_email_accounts').select(ACCOUNT_COLS)
+            .eq('ai_employee_id', conv.ai_employee_id).eq('status', 'connected')
+            .order('is_primary', { ascending: false }).order('created_at', { ascending: true })
+            .limit(1).maybeSingle()).data as AccountRow | null
+        }
+        if (!acctRow) {
+          acctRow = (await admin.from('connected_email_accounts').select(ACCOUNT_COLS)
+            .eq('tenant_id', conv.tenant_id).eq('status', 'connected')
+            .order('is_primary', { ascending: false }).order('created_at', { ascending: true })
+            .limit(1).maybeSingle()).data as AccountRow | null
+        }
 
         if (acctRow) {
           const account = await getValidAccount(acctRow as AccountRow)

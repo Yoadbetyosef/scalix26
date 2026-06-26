@@ -77,7 +77,8 @@ export async function GET(req: NextRequest) {
 
     return clearNonce(NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?google_connected=true`))
   } catch (err) {
+    const limit = err instanceof Error && err.message === 'mailbox_limit'
     console.error('[google/callback] connect FAILED:', err instanceof Error ? err.message : err)
-    return clearNonce(NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?google_error=token_failed`))
+    return clearNonce(NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?google_error=${limit ? 'mailbox_limit' : 'token_failed'}`))
   }
 }

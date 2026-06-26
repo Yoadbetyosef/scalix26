@@ -70,10 +70,11 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
     if (existing) {
       convId = existing.id
       convTakeover = existing.human_takeover === true
-      await supabase.from('conversations').update({ summary: msg.subject, updated_at: nowIso }).eq('id', convId)
+      // Stamp the receiving mailbox so replies go from the address that got the thread.
+      await supabase.from('conversations').update({ summary: msg.subject, updated_at: nowIso, email_account_id: account.id }).eq('id', convId)
     } else {
       const { data: created } = await supabase.from('conversations')
-        .insert({ tenant_id: account.tenantId, ai_employee_id: agent?.id ?? null, contact_id: contactId, channel: 'email', status: 'open', summary: msg.subject })
+        .insert({ tenant_id: account.tenantId, ai_employee_id: agent?.id ?? null, contact_id: contactId, channel: 'email', status: 'open', summary: msg.subject, email_account_id: account.id })
         .select('id').single()
       convId = created?.id ?? null
     }

@@ -110,12 +110,16 @@ export async function POST(
   // ── Disconnect a connected email mailbox (OAuth) ────────────────────────────
   if (action === 'disconnect_email') {
     const adminSupabase = createAdminClient() // bypass RLS for token table
-    const { data: accounts } = await adminSupabase
-      .from('connected_email_accounts')
-      .select('id, provider, refresh_token')
-      .eq('ai_employee_id', agentId)
+    // Optional accountId → disconnect just THAT mailbox; otherwise disconnect all.
+    const accountId = typeof body.accountId === 'string' ? body.accountId : null
+    let q = adminSupabase.from('connected_email_accounts')
+      .select('id, provider, refresh_token, is_primary').eq('ai_employee_id', agentId)
+    if (accountId) q = q.eq('id', accountId)
+    const { data: accounts } = await q
 
+    let removedPrimary = false
     for (const acct of accounts || []) {
+      if (acct.is_primary) removedPrimary = true
       // Best-effort token revocation at the provider, then remove the row.
       if (acct.provider === 'google' && acct.refresh_token) {
         try {
@@ -130,7 +134,27 @@ export async function POST(
         }
       }
     }
-    await adminSupabase.from('connected_email_accounts').delete().eq('ai_employee_id', agentId)
+    if (accountId) await adminSupabase.from('connected_email_accounts').delete().eq('id', accountId).eq('ai_employee_id', agentId)
+    else await adminSupabase.from('connected_email_accounts').delete().eq('ai_employee_id', agentId)
+
+    // If we removed the primary but other mailboxes remain, promote the earliest one.
+    if (removedPrimary) {
+      const { data: rest } = await adminSupabase.from('connected_email_accounts')
+        .select('id').eq('ai_employee_id', agentId).order('created_at', { ascending: true }).limit(1)
+      if (rest && rest[0]) await adminSupabase.from('connected_email_accounts').update({ is_primary: true }).eq('id', rest[0].id)
+    }
+    return NextResponse.json({ success: true })
+  }
+
+  // ── Set a connected mailbox as the agent's PRIMARY (reply-from fallback) ─────
+  if (action === 'set_primary_email') {
+    const accountId = typeof body.accountId === 'string' ? body.accountId : ''
+    if (!accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
+    const adminSupabase = createAdminClient()
+    await adminSupabase.from('connected_email_accounts').update({ is_primary: false }).eq('ai_employee_id', agentId)
+    const { error } = await adminSupabase.from('connected_email_accounts')
+      .update({ is_primary: true }).eq('id', accountId).eq('ai_employee_id', agentId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true })
   }
 
