@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
 import { currentDateContext } from '@/lib/appointments'
+import { getRecognitionContext, recognitionPromptBlock } from '@/lib/customer/recognition'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -250,7 +251,24 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     bookingStatus = buildBookingStatus(await extractBookingFields(chatMessages))
   }
 
-  const systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
+  let systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
+
+  // Returning-customer recognition (Sprint 002) — TEXT CHANNELS ONLY, behind a
+  // default-OFF flag. Injects a delimited, untrusted "background context" block only
+  // for high-confidence returning customers. Fail-open: any error, low/medium
+  // confidence, or flag off → injects nothing → behavior identical to today.
+  if (!isVoice && process.env.CUSTOMER_RECOGNITION_TEXT_ENABLED === 'true') {
+    try {
+      const rec = await getRecognitionContext({
+        tenantId: input.tenantId,
+        contactId: contact?.id,
+        contactName: contact?.name,
+        excludeConversationId: conversationId,
+      })
+      const recBlock = recognitionPromptBlock(rec)
+      if (recBlock) systemPrompt += `\n\n${recBlock}`
+    } catch { /* ignore — recognition is best-effort */ }
+  }
 
   // VOICE is UNCHANGED (single call, no tools — it books via the voice-server).
   // Non-booking text conversations are also unchanged. Only text channels that are
