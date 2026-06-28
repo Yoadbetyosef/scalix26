@@ -119,8 +119,8 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
                   </a>
                   {a.status !== 'completed' && (
                     <button onClick={() => markCompleted(a.id)} disabled={busy === a.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50">
-                      <Check className="w-3.5 h-3.5" /> {busy === a.id ? '…' : 'Mark Completed'}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-hairline-strong text-ink shadow-e1 hover:bg-sunken hover:shadow-e2 transition-all disabled:opacity-50">
+                      <Check className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} /> {busy === a.id ? '…' : 'Mark Completed'}
                     </button>
                   )}
                   {a.review_sent_at ? (
@@ -129,8 +129,8 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
                     </span>
                   ) : (
                     <button onClick={() => sendReview(a.id)} disabled={busy === a.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">
-                      <Star className="w-3.5 h-3.5" /> {busy === a.id ? '…' : 'Send Review Now'}
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-hairline-strong text-ink shadow-e1 hover:bg-sunken hover:shadow-e2 transition-all disabled:opacity-50">
+                      <Star className="w-3.5 h-3.5 text-amber-500" /> {busy === a.id ? '…' : 'Send Review Now'}
                     </button>
                   )}
                   {!a.skip_review && !a.review_sent_at && (
