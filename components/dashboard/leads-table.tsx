@@ -17,11 +17,14 @@ const SOURCE_LABELS: Record<LeadSource, string> = {
   other: 'Other',
 }
 
-const STATUS_CONFIG: Record<LeadStatus, { label: string; emoji: string; card: string; border: string; badge: string }> = {
-  new:       { label: 'New',       emoji: '🔥', card: 'bg-orange-50',  border: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700' },
-  contacted: { label: 'Open',      emoji: '🔔', card: 'bg-white',      border: 'border-l-blue-400',   badge: 'bg-blue-50 text-blue-700' },
-  booked:    { label: 'Booked',    emoji: '✅', card: 'bg-green-50',   border: 'border-l-green-500',  badge: 'bg-green-100 text-green-700' },
-  dismissed: { label: 'Dismissed', emoji: '🚫', card: 'bg-gray-50',    border: 'border-l-gray-300',   badge: 'bg-gray-100 text-gray-500' },
+// Status → color, where color communicates state (not decoration): a hot New lead
+// carries a soft tint + accent bar; everything else stays calm white with a quiet
+// status dot. No emoji — a colored dot reads premium and consistent.
+const STATUS_CONFIG: Record<LeadStatus, { label: string; dot: string; card: string; border: string; badge: string }> = {
+  new:       { label: 'New',       dot: 'bg-amber-400',   card: 'bg-amber-50/50', border: 'border-l-amber-400',         badge: 'bg-amber-100 text-amber-700' },
+  contacted: { label: 'Open',      dot: 'bg-blue-400',    card: 'bg-white',       border: 'border-l-blue-400',          badge: 'bg-blue-50 text-blue-700' },
+  booked:    { label: 'Booked',    dot: 'bg-emerald-500', card: 'bg-white',       border: 'border-l-emerald-500',       badge: 'bg-emerald-50 text-emerald-700' },
+  dismissed: { label: 'Dismissed', dot: 'bg-muted',       card: 'bg-white',       border: 'border-l-hairline-strong',   badge: 'bg-sunken text-muted' },
 }
 
 function relativeTime(iso: string): string {
@@ -30,6 +33,16 @@ function relativeTime(iso: string): string {
   if (sec < 3600) return `${Math.floor(sec / 60)} min ago`
   if (sec < 86400) return `${Math.floor(sec / 3600)} hr ago`
   return `${Math.floor(sec / 86400)} d ago`
+}
+
+function StatPill({ dot, n, label }: { dot: string; n: number; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <span className={`h-2 w-2 rounded-full ${dot}`} />
+      <span className="sx-tabular font-medium text-ink">{n}</span>
+      <span className="text-subtle">{label}</span>
+    </span>
+  )
 }
 
 export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<string, string> }) {
@@ -64,25 +77,27 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
 
   if (!rows.length) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400 bg-white rounded-xl border border-gray-100 shadow-sm">
-        <TrendingUp className="w-12 h-12 mb-3" />
-        <p className="text-sm">No leads yet</p>
-        <p className="text-xs text-gray-400 mt-1 text-center px-4">Leads appear here automatically when a customer reaches out from any source</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center sx-card">
+        <div className="w-14 h-14 rounded-2xl bg-sunken flex items-center justify-center text-subtle mb-4">
+          <TrendingUp className="w-7 h-7" strokeWidth={1.5} />
+        </div>
+        <p className="text-base font-light text-ink">No leads yet</p>
+        <p className="text-sm text-muted mt-1 max-w-xs">Leads appear here automatically when a customer reaches out from any source.</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-3">
-      {/* Summary header */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 text-sm font-medium">
-        <span className="text-orange-600">🔥 {counts.new} New</span>
-        <span className="text-blue-600">🔔 {counts.contacted} Open</span>
-        <span className="text-green-600">✅ {counts.booked} Booked</span>
+      {/* Summary header — quiet, tabular, colored dots instead of emoji */}
+      <div className="flex flex-wrap items-center gap-x-7 gap-y-2 sx-card px-5 py-3.5 text-sm">
+        <StatPill dot="bg-amber-400" n={counts.new} label="New" />
+        <StatPill dot="bg-blue-400" n={counts.contacted} label="Open" />
+        <StatPill dot="bg-emerald-500" n={counts.booked} label="Booked" />
       </div>
 
       {/* Lead cards */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {visibleRows.map((lead) => {
           const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.contacted
           const href = links[lead.id]
@@ -91,18 +106,18 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
             <div
               key={lead.id}
               onClick={href ? () => router.push(href) : undefined}
-              className={`rounded-xl border border-gray-100 border-l-4 shadow-sm p-4 transition-colors ${cfg.card} ${cfg.border} ${isDismissed ? 'opacity-60' : ''} ${href ? 'cursor-pointer hover:brightness-[0.98]' : ''}`}
+              className={`rounded-2xl border border-hairline border-l-[3px] shadow-e1 p-4 sm:p-5 transition-all ${cfg.card} ${cfg.border} ${isDismissed ? 'opacity-60' : ''} ${href ? 'cursor-pointer hover:shadow-e2 hover:-translate-y-0.5' : ''}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900 truncate">{lead.name || 'Unknown'}</span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.badge}`}>
-                      {cfg.emoji} {cfg.label}
+                    <span className="font-medium text-ink truncate">{lead.name || 'Unknown'}</span>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.badge}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} /> {cfg.label}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1 break-all">{lead.phone}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-sm text-subtle mt-1 break-all">{lead.phone}</p>
+                  <p className="text-xs text-muted mt-0.5">
                     {SOURCE_LABELS[lead.source] || lead.source} • {relativeTime(lead.created_at)}
                   </p>
                 </div>
@@ -113,7 +128,7 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                     <a
                       href={`tel:${lead.phone}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af]"
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-ink text-white shadow-e1 transition-all hover:bg-ink/90 hover:shadow-e2"
                     >
                       <Phone className="w-3.5 h-3.5" /> Call Now
                     </a>
@@ -122,7 +137,7 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                     <button
                       onClick={(e) => updateStatus(e, lead.id, 'booked')}
                       disabled={updating === lead.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50"
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                     >
                       <Check className="w-3.5 h-3.5" /> {updating === lead.id ? '…' : 'Mark as Booked'}
                     </button>
@@ -131,7 +146,7 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                     <button
                       onClick={(e) => updateStatus(e, lead.id, 'dismissed')}
                       disabled={updating === lead.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-gray-400 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium text-muted hover:text-ink hover:bg-sunken disabled:opacity-50"
                     >
                       <X className="w-3.5 h-3.5" /> Dismiss
                     </button>
@@ -140,7 +155,7 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                     <button
                       onClick={(e) => updateStatus(e, lead.id, 'contacted')}
                       disabled={updating === lead.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-sunken text-subtle hover:bg-hairline-strong disabled:opacity-50"
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> {updating === lead.id ? '…' : 'Restore'}
                     </button>
@@ -156,7 +171,7 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
       {dismissedCount > 0 && (
         <button
           onClick={() => setShowDismissed((s) => !s)}
-          className="text-xs font-medium text-gray-400 hover:text-gray-600 px-1"
+          className="text-xs font-medium text-muted hover:text-ink px-1"
         >
           {showDismissed ? 'Hide dismissed' : `Show dismissed (${dismissedCount})`}
         </button>

@@ -77,19 +77,19 @@ export default async function ConversationPage({ params, searchParams }: { param
   return (
     <div className="flex flex-col h-screen max-h-screen">
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-gray-100 flex-shrink-0">
-        <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-hairline flex-shrink-0">
+        <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:text-ink hover:bg-sunken flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-[#4ecdc4]/15 text-[#4ecdc4]' : 'bg-gray-100 text-gray-600'}`}>
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-accent/10 text-accent-strong' : 'bg-sunken text-subtle'}`}>
           {conv.channel === 'voice' ? <Phone className="w-4 h-4" /> : (contact?.name?.[0] || contact?.phone?.[0] || '?')}
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-gray-900 truncate">
+          <h2 className="text-sm font-semibold text-ink truncate">
             {headerTitle}
           </h2>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
-            <span>{conv.channel === 'voice' ? '📞 voice' : conv.channel}</span>
+          <div className="flex items-center gap-1.5 text-xs text-subtle flex-wrap">
+            <span>{conv.channel === 'voice' ? 'Voice' : conv.channel}</span>
             <span>·</span>
             <span>{formatDate(conv.created_at, tz)}</span>
             {conv.channel === 'voice' && conv.duration_seconds != null && (
@@ -112,7 +112,7 @@ export default async function ConversationPage({ params, searchParams }: { param
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Human takeover banner */}
           {conv.human_takeover && (
-            <div className="mx-4 sm:mx-6 mt-4 px-4 py-2.5 bg-[#1a1f36] text-white rounded-xl flex items-center gap-2 flex-shrink-0">
+            <div className="mx-4 sm:mx-6 mt-4 px-4 py-2.5 bg-ink text-white rounded-2xl flex items-center gap-2 flex-shrink-0">
               <User className="w-4 h-4 flex-shrink-0" />
               <p className="text-sm font-medium">You are now handling this conversation</p>
             </div>
@@ -120,9 +120,9 @@ export default async function ConversationPage({ params, searchParams }: { param
 
           {/* AI Summary */}
           {conv.summary && (
-            <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-[#4ecdc4]/5 rounded-xl border border-[#4ecdc4]/20 flex-shrink-0">
-              <p className="text-xs font-semibold text-[#3db8af] mb-1">AI Summary</p>
-              <p className="text-sm text-gray-700">{conv.summary}</p>
+            <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-accent/[0.06] rounded-2xl border border-accent/15 flex-shrink-0">
+              <p className="text-xs font-semibold text-accent-strong mb-1">AI Summary</p>
+              <p className="text-sm text-ink">{conv.summary}</p>
             </div>
           )}
 
@@ -139,17 +139,17 @@ export default async function ConversationPage({ params, searchParams }: { param
                   <div
                     className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
                       isAgent
-                        ? 'bg-[#1a1f36] text-white rounded-br-sm'
+                        ? 'bg-ink text-white rounded-br-md ring-1 ring-accent/40'
                         : msg.role === 'assistant'
-                        ? 'bg-[#4ecdc4] text-white rounded-br-sm'
-                        : 'bg-white border border-gray-100 text-gray-900 rounded-bl-sm'
+                        ? 'bg-ink text-white rounded-br-md'
+                        : 'bg-sunken text-ink rounded-bl-md'
                     }`}
                   >
                     {isAgent && (
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/60 mb-0.5">Agent</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-accent/90 mb-0.5">You · Agent</p>
                     )}
-                    <p className="text-sm">{msg.content}</p>
-                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/70' : 'text-gray-400'}`}>
+                    <p className="text-sm leading-relaxed">{msg.content}</p>
+                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/55' : 'text-muted'}`}>
                       {formatDateTime(msg.timestamp, tz)}
                     </p>
                     {/* A2: surface a failed/undelivered SMS so it never looks "sent" silently. */}
@@ -169,46 +169,46 @@ export default async function ConversationPage({ params, searchParams }: { param
         </div>
 
         {/* Contact Sidebar — desktop only */}
-        <div className="w-64 border-l border-gray-100 bg-white p-4 overflow-auto flex-shrink-0 hidden lg:block">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Contact</h3>
+        <div className="w-64 border-l border-hairline bg-white p-4 overflow-auto flex-shrink-0 hidden lg:block">
+          <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-3">Contact</h3>
 
           <div className="space-y-3">
             {contact?.name && (
               <div className="flex items-center gap-2 text-sm">
-                <User className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-700">{contact.name}</span>
+                <User className="w-4 h-4 text-muted" />
+                <span className="text-ink">{contact.name}</span>
               </div>
             )}
             {ident && (
               <div className="flex items-start gap-2 text-sm">
-                <IdentIcon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                <IdentIcon className="w-4 h-4 text-muted flex-shrink-0 mt-0.5" />
                 <div className="min-w-0">
                   {ident.isPhone ? (
-                    <a href={`tel:${ident.value}`} className="text-[#4ecdc4] break-all">{ident.value}</a>
+                    <a href={`tel:${ident.value}`} className="text-ink font-medium hover:underline break-all">{ident.value}</a>
                   ) : (
-                    <span className="text-gray-700 break-all">{ident.value}</span>
+                    <span className="text-ink break-all">{ident.value}</span>
                   )}
-                  <p className="text-xs text-gray-400">{ident.label}</p>
+                  <p className="text-xs text-muted">{ident.label}</p>
                 </div>
               </div>
             )}
             {contact?.email && (
               <div className="flex items-center gap-2 text-sm">
-                <MessageSquare className="w-4 h-4 text-gray-400" />
-                <span className="text-gray-700 truncate">{contact.email}</span>
+                <MessageSquare className="w-4 h-4 text-muted" />
+                <span className="text-ink truncate">{contact.email}</span>
               </div>
             )}
           </div>
 
           {contact?.id && (
-            <Link href={`/contacts/${contact.id}`} className="mt-4 block text-xs text-[#4ecdc4] hover:underline">
+            <Link href={`/contacts/${contact.id}`} className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-subtle hover:text-ink transition-colors">
               View full profile →
             </Link>
           )}
 
-          <div className="mt-6 pt-4 border-t border-gray-100">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Details</h3>
-            <div className="space-y-2 text-xs text-gray-500">
+          <div className="mt-6 pt-4 border-t border-hairline">
+            <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-3">Details</h3>
+            <div className="space-y-2 text-xs text-subtle">
               <div className="flex justify-between">
                 <span>Channel</span>
                 <Badge variant={conv.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
@@ -223,7 +223,7 @@ export default async function ConversationPage({ params, searchParams }: { param
               </div>
               <div className="flex justify-between">
                 <span>Messages</span>
-                <span className="font-medium text-gray-700">{messages?.length || 0}</span>
+                <span className="font-medium text-ink">{messages?.length || 0}</span>
               </div>
             </div>
           </div>

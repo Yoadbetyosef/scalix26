@@ -40,7 +40,7 @@ export function MessageComposer({ conversationId }: Props) {
   }
 
   return (
-    <div className="px-3 sm:px-4 py-3 border-t border-gray-100 bg-white flex-shrink-0">
+    <div className="px-3 sm:px-4 py-3 border-t border-hairline bg-white flex-shrink-0">
       <form onSubmit={submit} className="flex gap-2">
         <Input
           value={value}

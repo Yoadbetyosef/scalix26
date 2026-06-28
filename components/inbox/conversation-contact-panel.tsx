@@ -45,10 +45,10 @@ function isDefaultLanguage(lang: string | null): boolean {
 function typePillClass(type: CustomerProfile['customerType']): string {
   switch (type) {
     case 'active':
-    case 'returning': return 'bg-[#4ecdc4]/15 text-[#3db8af]'
+    case 'returning': return 'bg-accent/10 text-accent-strong'
     case 'new': return 'bg-blue-50 text-blue-600'
     case 'dormant': return 'bg-amber-50 text-amber-700'
-    default: return 'bg-gray-100 text-gray-600'
+    default: return 'bg-sunken text-subtle'
   }
 }
 
@@ -120,7 +120,7 @@ export function CustomerProfileBlock({
   const hasContext = !!profile.lastInteractionLabel || !!leadLabel || showLanguage
 
   return (
-    <div className={`border-t border-gray-100 ${className || ''}`}>
+    <div className={`border-t border-hairline ${className || ''}`}>
       {/* Header — customer type badge (business-friendly, no confidence noise) */}
       <div className="flex items-center gap-2 mb-2.5">
         {profile.customerTypeLabel ? (
@@ -128,46 +128,46 @@ export function CustomerProfileBlock({
             {profile.customerTypeLabel}
           </span>
         ) : (
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</h3>
+          <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide">Customer</h3>
         )}
       </div>
 
       {/* Primary insight — what happened last time */}
-      {insight && <p className="text-sm text-gray-800 leading-snug mb-3">{insight}</p>}
+      {insight && <p className="text-sm text-ink leading-snug mb-3">{insight}</p>}
 
       {/* Important context — only non-empty rows */}
       {hasContext && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 mb-3 text-xs">
           {profile.lastInteractionLabel && (
-            <span><span className="text-gray-400">Last seen </span><span className="font-medium text-gray-700">{profile.lastInteractionLabel}</span></span>
+            <span><span className="text-muted">Last seen </span><span className="font-medium text-ink">{profile.lastInteractionLabel}</span></span>
           )}
           {leadLabel && (
-            <span><span className="text-gray-400">Lead </span><span className="font-medium text-gray-700">{leadLabel}</span></span>
+            <span><span className="text-muted">Lead </span><span className="font-medium text-ink">{leadLabel}</span></span>
           )}
           {showLanguage && (
-            <span><span className="text-gray-400">Language </span><span className="font-medium text-gray-700">{profile.language}</span></span>
+            <span><span className="text-muted">Language </span><span className="font-medium text-ink">{profile.language}</span></span>
           )}
         </div>
       )}
 
       {/* Recommended next step — deterministic */}
       {nextStep && (
-        <div className="mb-3 rounded-lg bg-[#4ecdc4]/[0.07] border border-[#4ecdc4]/20 px-3 py-2">
-          <p className="text-[10px] font-semibold text-[#3db8af] uppercase tracking-wide mb-0.5">Recommended next step</p>
-          <p className="text-sm text-gray-800 leading-snug">{nextStep}</p>
+        <div className="mb-3 rounded-xl bg-accent/[0.06] border border-accent/15 px-3 py-2.5">
+          <p className="text-[10px] font-semibold text-accent-strong uppercase tracking-wide mb-0.5">Recommended next step</p>
+          <p className="text-sm text-ink leading-snug">{nextStep}</p>
         </div>
       )}
 
       {/* Timeline preview — last 2–3 events */}
       {timeline.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Recent activity</p>
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1.5">Recent activity</p>
           <ul className="space-y-2">
             {timeline.map((t) => (
               <li key={t.key} className="flex items-start gap-2 text-xs">
-                <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.kind === 'appointment' ? 'bg-[#4ecdc4]' : 'bg-gray-300'}`} />
-                <span className="flex-1 min-w-0 text-gray-600">{t.label}</span>
-                {t.dateLabel && <span className="text-gray-400 flex-shrink-0">{t.dateLabel}</span>}
+                <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.kind === 'appointment' ? 'bg-accent' : 'bg-hairline-strong'}`} />
+                <span className="flex-1 min-w-0 text-subtle">{t.label}</span>
+                {t.dateLabel && <span className="text-muted flex-shrink-0">{t.dateLabel}</span>}
               </li>
             ))}
           </ul>
@@ -188,7 +188,7 @@ export function ConversationContactPanel({ contact, profile }: { contact: Contac
       {/* Trigger — mobile only */}
       <button
         onClick={() => setOpen(true)}
-        className="lg:hidden w-11 h-11 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
+        className="lg:hidden w-11 h-11 flex items-center justify-center rounded-full bg-sunken text-subtle hover:bg-hairline-strong transition-colors"
         aria-label="Contact info"
       >
         <Info className="w-4 h-4" />
@@ -199,11 +199,11 @@ export function ConversationContactPanel({ contact, profile }: { contact: Contac
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
           <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[70vh] overflow-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <span className="font-semibold text-gray-900">Contact Info</span>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <span className="font-semibold text-ink">Contact Info</span>
               <button
                 onClick={() => setOpen(false)}
-                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500"
+                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-sunken text-subtle"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -212,48 +212,48 @@ export function ConversationContactPanel({ contact, profile }: { contact: Contac
             <div className="px-5 py-4 space-y-3">
               {contact.name && (
                 <div className="flex items-center gap-3 text-sm">
-                  <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span className="text-gray-700">{contact.name}</span>
+                  <User className="w-4 h-4 text-muted flex-shrink-0" />
+                  <span className="text-ink">{contact.name}</span>
                 </div>
               )}
               {ident && (
                 <div className="flex items-start gap-3 text-sm">
-                  <IdentIcon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                  <IdentIcon className="w-4 h-4 text-muted flex-shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     {ident.isPhone ? (
-                      <a href={`tel:${ident.value}`} className="text-[#4ecdc4] break-all">{ident.value}</a>
+                      <a href={`tel:${ident.value}`} className="text-ink font-medium hover:underline break-all">{ident.value}</a>
                     ) : (
-                      <span className="text-gray-700 break-all">{ident.value}</span>
+                      <span className="text-ink break-all">{ident.value}</span>
                     )}
-                    <p className="text-xs text-gray-400">{ident.label}</p>
+                    <p className="text-xs text-muted">{ident.label}</p>
                   </div>
                 </div>
               )}
               {contact.email && (
                 <div className="flex items-center gap-3 text-sm">
-                  <MessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  <span className="text-gray-700 break-all">{contact.email}</span>
+                  <MessageSquare className="w-4 h-4 text-muted flex-shrink-0" />
+                  <span className="text-ink break-all">{contact.email}</span>
                 </div>
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-gray-100 space-y-3">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Details</h3>
+            <div className="px-5 py-4 border-t border-hairline space-y-3">
+              <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide">Details</h3>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-500">Channel</span>
+                <span className="text-subtle">Channel</span>
                 <Badge variant={contact.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
                   {contact.channel}
                 </Badge>
               </div>
               {contact.sentiment && (
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-500">Sentiment</span>
+                  <span className="text-subtle">Sentiment</span>
                   <Badge variant={contact.sentiment as 'positive' | 'neutral' | 'negative'}>{contact.sentiment}</Badge>
                 </div>
               )}
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-500">Messages</span>
-                <span className="font-medium text-gray-700">{contact.messageCount}</span>
+                <span className="text-subtle">Messages</span>
+                <span className="font-medium text-ink">{contact.messageCount}</span>
               </div>
             </div>
 
@@ -263,7 +263,7 @@ export function ConversationContactPanel({ contact, profile }: { contact: Contac
               <div className="px-5 pb-8">
                 <Link
                   href={`/contacts/${contact.id}`}
-                  className="block text-center text-sm text-[#4ecdc4] font-medium py-3 border border-[#4ecdc4]/30 rounded-xl hover:bg-[#4ecdc4]/5"
+                  className="block text-center text-sm text-ink font-medium py-3 border border-hairline-strong rounded-xl hover:bg-sunken transition-colors"
                   onClick={() => setOpen(false)}
                 >
                   View Full Profile →
