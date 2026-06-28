@@ -92,7 +92,7 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
         <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" /><span className="sx-tabular font-medium text-ink">{counts.upcoming}</span><span className="text-subtle">Upcoming</span></span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-2 sx-stagger">
         {rows.map((a) => {
           const cfg = STATUS_STYLES[a.status] || STATUS_STYLES.confirmed
           return (

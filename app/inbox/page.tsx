@@ -151,7 +151,7 @@ export default async function InboxPage({
             </EmptyState>
           )
         ) : (
-          <div className="space-y-2 p-3 sm:p-4">
+          <div className="space-y-2 p-3 sm:p-4 sx-stagger">
             {filtered.map((conv) => {
               const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
               const channelLabel = CHANNEL_LABELS[conv.channel] || conv.channel

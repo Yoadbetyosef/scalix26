@@ -94,7 +94,7 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
       </div>
 
       {/* Lead cards */}
-      <div className="space-y-2.5">
+      <div className="space-y-2.5 sx-stagger">
         {visibleRows.map((lead) => {
           const cfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG.contacted
           const href = links[lead.id]

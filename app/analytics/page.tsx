@@ -50,7 +50,7 @@ export default async function AnalyticsPage() {
         <p className="text-sm text-muted mt-1">AI Employee performance — last 30 days</p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sx-stagger">
         {stats.map(({ label, value, sub, icon: Icon, tone }) => (
           <Card key={label}>
             <CardContent className="p-5">

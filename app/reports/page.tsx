@@ -29,7 +29,7 @@ export default async function ReportsPage() {
       </div>
 
       {/* Templates */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sx-stagger">
         {REPORT_TEMPLATES.map(template => {
           const Icon = template.icon
           return (
