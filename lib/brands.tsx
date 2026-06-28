@@ -1,4 +1,5 @@
-import { Lock, Zap } from 'lucide-react'
+import { Lock } from 'lucide-react'
+import { ScalixLogo } from '@/components/brand/scalix-logo'
 
 export interface BrandConfig {
   name: string
@@ -31,11 +32,9 @@ export const BRANDS: Record<string, BrandConfig> = {
     tagline: 'Sign in to your AI employee platform',
     trialDays: 14,
     logo: (
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-[#4ecdc4] rounded-lg flex items-center justify-center">
-          <Zap className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-2xl font-bold text-[#1a1f36] tracking-tight">Scalix26</span>
+      <div className="flex items-center gap-2.5">
+        <ScalixLogo size={30} />
+        <span className="text-xl font-semibold uppercase tracking-[0.08em] text-[#1a1f36]">Scalix26</span>
       </div>
     ),
   },

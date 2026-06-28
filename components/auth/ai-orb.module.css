@@ -1,0 +1,94 @@
+/* Scalix AI object — the signature brand element.
+   A living voice waveform inside a glassy lens, wrapped in the brand's blue→cyan→
+   purple gradient ring (an evolution of the SCALIX26 logo). Breathes slowly and
+   morphs like a calm voice visualizer. Transform/opacity only; static + intentional
+   under reduced motion. Fills its parent (size is set by the layout). */
+
+.root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  isolation: isolate;
+  animation: breathe 5s ease-in-out infinite;
+}
+
+/* Soft colorful light cast behind the lens */
+.glow {
+  position: absolute;
+  inset: -28%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, #5aa8f2 20%, transparent) 0%,
+    color-mix(in oklab, #8e9bf0 12%, transparent) 32%,
+    transparent 62%
+  );
+  animation: glowPulse 7s ease-in-out infinite;
+}
+
+/* The glassy white lens the waveform lives in */
+.lens {
+  position: absolute;
+  inset: 6%;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 40% 32%, #ffffff 0%, #fbfbff 55%, #f4f4fb 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.9),
+    inset 0 -10px 20px -10px rgba(80, 90, 160, 0.18),
+    0 26px 52px -26px rgba(90, 120, 200, 0.32);
+}
+
+/* The brand gradient ring (echoes the logo), slowly rotating */
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  padding: 2px;
+  background: conic-gradient(from 130deg, #4ecdc4, #41c8e8, #5aa8f2, #8e9bf0, #b79be8, #6fd7cf, #4ecdc4);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.85;
+  animation: ringSpin 44s linear infinite;
+}
+
+/* The voice waveform */
+.bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.4%;
+}
+.bar {
+  width: 3.4%;
+  border-radius: 9999px;
+  transform-origin: center;
+  animation: barWave var(--dur, 1.8s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(0.99); }
+  50% { transform: scale(1.01); }
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.6; transform: scale(0.97); }
+  50% { opacity: 0.92; transform: scale(1.05); }
+}
+@keyframes ringSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes barWave {
+  0%, 100% { transform: scaleY(0.55); }
+  50% { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .glow,
+  .ring,
+  .bar { animation: none !important; }
+}

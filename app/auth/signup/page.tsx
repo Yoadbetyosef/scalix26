@@ -4,24 +4,25 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Check, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
+import { AuthShell } from '@/components/auth/auth-shell'
+import { SocialButtons } from '@/components/auth/social-buttons'
+
+const inputClass =
+  'h-12 w-full rounded-xl border border-hairline bg-white px-4 text-[15px] text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.05)]'
 
 export default function SignupPage() {
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
 
-  useEffect(() => { setBrand(detectBrand()) }, [])
+  useEffect(() => {
+    setBrand(detectBrand())
+  }, [])
 
-  const [form, setForm] = useState({
-    businessName: '',
-    email: '',
-    password: '',
-  })
+  const [form, setForm] = useState({ businessName: '', email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -82,93 +83,94 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
-          {brand.logo}
+    <AuthShell
+      brandLogo={brand.logo}
+      headline="Create your AI employee."
+      subheadline="Start automating every conversation in minutes."
+    >
+      <form onSubmit={handleSignup} className="space-y-4">
+        <div className="space-y-2">
+          <label htmlFor="businessName" className="text-sm font-medium text-ink">Business name</label>
+          <input
+            id="businessName"
+            required
+            value={form.businessName}
+            onChange={(e) => setForm((f) => ({ ...f, businessName: e.target.value }))}
+            placeholder="Smith's Locksmith Services"
+            className={inputClass}
+          />
         </div>
 
-        {/* Trial benefits */}
-        <div className="bg-[#4ecdc4]/10 rounded-xl p-4 mb-6 border border-[#4ecdc4]/20">
-          <p className="text-sm font-medium text-[#1a1f36] mb-2">
-            {brand.trialDays}-day free trial includes:
-          </p>
-          {['1 AI Employee', '500 conversations', 'SMS + Voice', 'No credit card required'].map(f => (
-            <div key={f} className="flex items-center gap-2 text-sm text-gray-700">
-              <Check className="w-3.5 h-3.5 text-[#4ecdc4]" />
-              {f}
-            </div>
-          ))}
+        <div className="space-y-2">
+          <label htmlFor="email" className="text-sm font-medium text-ink">Work email</label>
+          <input
+            id="email"
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            placeholder="you@company.com"
+            className={inputClass}
+          />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Create your account</h1>
-
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="businessName">Business Name</Label>
-              <Input
-                id="businessName"
-                placeholder="Smith's Locksmith Services"
-                value={form.businessName}
-                onChange={e => setForm(f => ({ ...f, businessName: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email">Work Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@company.com"
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Min. 8 characters"
-                  minLength={8}
-                  value={form.password}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  required
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-            <Button type="submit" className="w-full" loading={loading}>
-              Start Free Trial
-            </Button>
-          </form>
-
-          <p className="text-center text-sm text-gray-500 mt-6">
-            Already have an account?{' '}
-            <Link href="/auth/login" className="text-[#4ecdc4] font-medium hover:underline">
-              Sign in
-            </Link>
-          </p>
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-sm font-medium text-ink">Password</label>
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              minLength={8}
+              required
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              placeholder="Min. 8 characters"
+              className={`${inputClass} pr-11`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted transition-colors hover:text-ink"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
+
+        {error && (
+          <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-2.5 text-sm text-danger">
+            {error}
+          </div>
+        )}
+
+        <Button
+          type="submit"
+          loading={loading}
+          className="mt-1 h-12 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-sm transition-all hover:bg-black/90 hover:shadow-md"
+        >
+          Continue
+        </Button>
+
+        <p className="text-center text-xs text-muted">
+          {brand.trialDays}-day free trial &middot; no credit card required
+        </p>
+      </form>
+
+      <div className="my-6 flex items-center gap-4">
+        <span className="h-px flex-1 bg-hairline" />
+        <span className="text-xs text-muted">or</span>
+        <span className="h-px flex-1 bg-hairline" />
       </div>
-    </div>
+
+      <SocialButtons />
+
+      <p className="mt-8 text-center text-sm text-subtle">
+        Already have an account?{' '}
+        <Link href="/auth/login" className="font-medium text-ink transition-opacity hover:opacity-70">
+          Sign in &rarr;
+        </Link>
+      </p>
+    </AuthShell>
   )
 }
