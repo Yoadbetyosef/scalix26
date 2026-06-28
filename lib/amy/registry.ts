@@ -1,5 +1,6 @@
 import { type ContextSource, type SourceContext } from './types'
 import { conversationsSource } from './sources/conversations'
+import { transcriptSource } from './sources/transcript'
 import { contactsSource } from './sources/contacts'
 import { appointmentsSource } from './sources/appointments'
 import { leadsSource } from './sources/leads'
@@ -12,6 +13,7 @@ import { knowledgeSource } from './sources/knowledge'
 const SOURCES: ContextSource[] = [
   metricsSource,
   conversationsSource,
+  transcriptSource,
   contactsSource,
   appointmentsSource,
   leadsSource,
@@ -36,11 +38,12 @@ export async function runTool(ctx: SourceContext, name: string, args: Record<str
 // A broad tenant-scoped snapshot for grounding the realtime voice agent (which can't
 // call tools mid-conversation). Reuses the same sources — single source of truth.
 export async function buildSnapshot(ctx: SourceContext): Promise<string> {
-  const [metrics, recent, appts, leads] = await Promise.all([
+  const [metrics, lastTranscript, recent, appts, leads] = await Promise.all([
     runTool(ctx, 'get_business_metrics', { days: 7 }),
+    runTool(ctx, 'get_conversation_transcript', {}),
     runTool(ctx, 'search_conversations', { limit: 5 }),
     runTool(ctx, 'get_appointments', { when: 'upcoming' }),
     runTool(ctx, 'get_leads', {}),
   ])
-  return [metrics, recent, appts, leads].join('\n\n')
+  return [metrics, lastTranscript, recent, appts, leads].join('\n\n')
 }
