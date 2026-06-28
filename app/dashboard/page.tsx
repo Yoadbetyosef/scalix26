@@ -154,10 +154,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   )
 
   if (activeTab === 'overview' && impactData) {
-    const employeeName =
-      (aiEmployees as { name?: string | null; status?: string | null }[]).find((e) => e.status === 'active')?.name ||
-      (aiEmployees as { name?: string | null }[])[0]?.name ||
-      'Your AI'
+    const employeesTyped = aiEmployees as { name?: string | null; status?: string | null; voice?: string | null }[]
+    const primaryEmployee = employeesTyped.find((e) => e.status === 'active') || employeesTyped[0]
+    const employeeName = primaryEmployee?.name || 'Your AI'
+    const employeeVoice = primaryEmployee?.voice ?? null
 
     const handled = impactData.conversationsManaged.value
     const booked = appointments_list.filter((a) => a.status === 'confirmed' || a.status === 'completed').length
@@ -178,6 +178,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     topSection = (
       <DashboardHero
         employeeName={employeeName}
+        employeeVoice={employeeVoice}
         presenceState={presenceState}
         stateSentence={stateSentence}
         businessName={tenant.business_name || ''}

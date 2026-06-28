@@ -1,13 +1,15 @@
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { AiOrb } from '@/components/brand/ai-orb'
+import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
+import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
 
 export type PresenceState = 'ready' | 'working' | 'attention'
 
 export interface DashboardHeroProps {
   employeeName: string
+  employeeVoice?: string | null
   presenceState: PresenceState
   stateSentence: string
   businessName: string
@@ -22,12 +24,13 @@ export interface DashboardHeroProps {
  */
 export function DashboardHero({
   employeeName,
+  employeeVoice,
   presenceState,
   stateSentence,
   businessName,
   figures,
 }: DashboardHeroProps) {
-  const dotColor = presenceState === 'attention' ? 'bg-warning' : 'bg-accent'
+  const status: EmployeeStatus = presenceState === 'attention' ? 'attention' : 'on_duty'
   const eyebrow = businessName ? `${employeeName} · AI Employee · ${businessName}` : `${employeeName} · AI Employee`
 
   return (
@@ -50,14 +53,9 @@ export function DashboardHero({
           <AiOrb />
         </div>
 
-        {/* Name — secondary, light */}
-        <p className="mt-8 inline-flex items-center gap-2 text-sm text-subtle">
-          <span className="relative flex h-2 w-2 flex-shrink-0" aria-hidden="true">
-            {presenceState !== 'attention' && (
-              <span className={cn('absolute inline-flex h-full w-full rounded-full opacity-40 animate-ping', dotColor)} />
-            )}
-            <span className={cn('relative inline-flex h-2 w-2 rounded-full', dotColor)} />
-          </span>
+        {/* Name + face — the employee's identity, the same headshot shown everywhere */}
+        <p className="mt-8 inline-flex items-center gap-2.5 text-sm text-subtle">
+          <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="sm" />
           <span>{eyebrow}</span>
         </p>
 

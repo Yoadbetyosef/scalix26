@@ -15,6 +15,8 @@ import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Buildi
 import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
+import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
+import { employeeStatus } from '@/lib/employee'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
 import { BusinessDetails } from '@/components/ai-employees/business-details'
 import { SkillsEditor } from '@/components/ai-employees/skills-editor'
@@ -474,7 +476,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="flex items-center gap-3">
           {onboarding ? (
-            <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
+            <>
+              <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
+              <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
+            </>
           ) : (
             <>
               <Link href="/ai-employees">
@@ -482,6 +487,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   <ArrowLeft className="w-4 h-4 mr-1" /> Back
                 </Button>
               </Link>
+              <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
               <div>
                 <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
                 <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>

@@ -5,6 +5,8 @@ import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle, Camera } fro
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
+import { employeeStatus } from '@/lib/employee'
 import { FacebookIcon } from '@/components/icons/brand-icons'
 
 // Matching icon for a channel chip — official brand logos for FB/IG, lucide for the
@@ -30,16 +32,6 @@ function channelIcon(type: string) {
 
 const CHANNEL_LABELS: Record<string, string> = {
   voice: 'Voice', sms: 'SMS', email: 'Email', whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram',
-}
-
-// The chosen voice has a real headshot (public/avatars/<name>.png) — show the face of
-// the voice the customer actually hears. Legacy/unknown voices fall back to the initial.
-const VOICE_AVATAR: Record<string, string> = {
-  'aura-2-asteria-en': '/avatars/asteria.png',
-  'aura-2-andromeda-en': '/avatars/andromeda.png',
-  'aura-2-thalia-en': '/avatars/thalia.png',
-  'aura-2-odysseus-en': '/avatars/odysseus.png',
-  'aura-2-arcas-en': '/avatars/arcas.png',
 }
 
 export default async function AIEmployeesPage() {
@@ -106,7 +98,6 @@ export default async function AIEmployeesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sx-stagger">
           {employees.map(emp => {
             const live = emp.status === 'active'
-            const voiceAvatar = VOICE_AVATAR[emp.voice as string]
             const channelCount = (emp.channels?.length || 0) + (emailAgentIds.has(emp.id) ? 1 : 0)
             const activeSkills = emp.skills?.filter((s: { active: boolean }) => s.active).length || 0
             const channels: { id: string; type: string }[] = [
@@ -118,20 +109,7 @@ export default async function AIEmployeesPage() {
                 <CardContent className="p-6">
                   {/* Identity — the employee, alive */}
                   <div className="flex items-start gap-3.5 mb-6">
-                    <div className="relative flex-shrink-0">
-                      {voiceAvatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={voiceAvatar} alt={`${emp.name}'s voice`} className="w-12 h-12 rounded-full object-cover ring-1 ring-hairline" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sunken to-hairline ring-1 ring-hairline flex items-center justify-center text-ink text-lg font-light">
-                          {emp.name[0]}
-                        </div>
-                      )}
-                      {/* Live presence dot — green & breathing when on duty, quiet when draft */}
-                      <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${live ? 'bg-emerald-500' : 'bg-muted'}`}>
-                        {live && <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />}
-                      </span>
-                    </div>
+                    <EmployeeAvatar name={emp.name} voice={emp.voice} status={employeeStatus(emp.status)} size="md" />
                     <div className="flex-1 min-w-0 pt-0.5">
                       <h3 className="text-base font-medium tracking-tight text-ink truncate">{emp.name}</h3>
                       <p className="mt-1 inline-flex items-center gap-1.5 text-xs">
