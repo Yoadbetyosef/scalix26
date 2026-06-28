@@ -139,17 +139,17 @@ export default async function ConversationPage({ params, searchParams }: { param
                   <div
                     className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
                       isAgent
-                        ? 'bg-ink text-white rounded-br-md ring-1 ring-accent/40'
+                        ? 'bg-accent-strong text-white rounded-br-md'
                         : msg.role === 'assistant'
-                        ? 'bg-ink text-white rounded-br-md'
+                        ? 'bg-accent text-white rounded-br-md'
                         : 'bg-sunken text-ink rounded-bl-md'
                     }`}
                   >
                     {isAgent && (
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-accent/90 mb-0.5">You · Agent</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 mb-0.5">You · Agent</p>
                     )}
                     <p className="text-sm leading-relaxed">{msg.content}</p>
-                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/55' : 'text-muted'}`}>
+                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/60' : 'text-muted'}`}>
                       {formatDateTime(msg.timestamp, tz)}
                     </p>
                     {/* A2: surface a failed/undelivered SMS so it never looks "sent" silently. */}
