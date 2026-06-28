@@ -5,7 +5,17 @@ import {
   PieChart, Pie, Cell, Legend, BarChart, Bar
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { TrendingUp, CheckCircle2, BarChart3 } from 'lucide-react'
 import { format, subDays } from 'date-fns'
+
+// Apple-style colored section tile for chart headers.
+function ChartIcon({ icon: Icon, tone }: { icon: typeof TrendingUp; tone: string }) {
+  return (
+    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-[10px] ${tone} text-white shadow-e1`}>
+      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+    </span>
+  )
+}
 
 interface Conversation {
   channel: string
@@ -14,12 +24,14 @@ interface Conversation {
   duration_seconds: number | null
 }
 
+// Canonical channel colors — consistent with the channel tiles across the app.
 const CHANNEL_COLORS: Record<string, string> = {
-  sms: '#3b82f6',
-  voice: '#8b5cf6',
-  whatsapp: '#22c55e',
-  instagram: '#ec4899',
-  facebook: '#6366f1',
+  voice: '#06b6d4',     // cyan
+  sms: '#10b981',       // emerald
+  email: '#8b5cf6',     // violet
+  whatsapp: '#22c55e',  // green
+  facebook: '#2563eb',  // blue
+  instagram: '#ec4899', // pink
 }
 
 export function AnalyticsCharts({ conversations }: { tenantId: string; conversations: Conversation[] }) {
@@ -44,7 +56,7 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
     return acc
   }, {})
   const statusData = [
-    { name: 'AI Resolved', value: statusCounts['resolved'] || 0, color: '#5B6CF0' },
+    { name: 'AI Resolved', value: statusCounts['resolved'] || 0, color: '#10b981' },
     { name: 'Open', value: statusCounts['open'] || 0, color: '#3b82f6' },
     { name: 'Closed', value: statusCounts['closed'] || 0, color: '#ef4444' },
   ]
@@ -53,7 +65,7 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card className="lg:col-span-2">
         <CardHeader>
-          <CardTitle>Conversations Over Time</CardTitle>
+          <CardTitle className="flex items-center gap-2.5"><ChartIcon icon={TrendingUp} tone="bg-blue-500" /> Conversations Over Time</CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={220}>
@@ -75,11 +87,11 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
 
       <Card>
         <CardHeader>
-          <CardTitle>Resolution Status</CardTitle>
+          <CardTitle className="flex items-center gap-2.5"><ChartIcon icon={CheckCircle2} tone="bg-emerald-500" /> Resolution Status</CardTitle>
         </CardHeader>
         <CardContent>
           {conversations.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No data yet</div>
+            <div className="h-48 flex items-center justify-center text-muted text-sm">No data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
@@ -96,11 +108,11 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
 
       <Card>
         <CardHeader>
-          <CardTitle>Channel Distribution</CardTitle>
+          <CardTitle className="flex items-center gap-2.5"><ChartIcon icon={BarChart3} tone="bg-violet-500" /> Channel Distribution</CardTitle>
         </CardHeader>
         <CardContent>
           {channelData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-gray-400 text-sm">No data yet</div>
+            <div className="h-48 flex items-center justify-center text-muted text-sm">No data yet</div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={channelData} barSize={28}>

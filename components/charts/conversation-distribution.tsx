@@ -35,7 +35,7 @@ export function ConversationDistributionChart({ tenantId }: { tenantId: string }
   const total = data.reduce((s, d) => s + d.value, 0)
   if (total === 0) {
     return (
-      <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+      <div className="h-48 flex items-center justify-center text-muted text-sm">
         No conversation data yet
       </div>
     )

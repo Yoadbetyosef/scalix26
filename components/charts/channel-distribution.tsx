@@ -2,12 +2,14 @@
 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
+// Canonical channel colors — consistent with the channel tiles across the app.
 const CHANNEL_COLORS: Record<string, string> = {
-  sms: '#3b82f6',
-  voice: '#8b5cf6',
+  voice: '#06b6d4',
+  sms: '#10b981',
+  email: '#8b5cf6',
   whatsapp: '#22c55e',
+  facebook: '#2563eb',
   instagram: '#ec4899',
-  facebook: '#6366f1',
 }
 
 interface Conversation {
@@ -25,7 +27,7 @@ export function ChannelDistributionChart({ conversations }: { conversations: Con
 
   if (data.length === 0) {
     return (
-      <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
+      <div className="h-48 flex items-center justify-center text-muted text-sm">
         No channel data yet
       </div>
     )

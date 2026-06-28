@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { MessagesSquare, CheckCircle2, Clock, Bot } from 'lucide-react'
 import { AnalyticsCharts } from '@/components/charts/analytics-charts'
 
 export default async function AnalyticsPage() {
@@ -36,26 +37,29 @@ export default async function AnalyticsPage() {
     : 0
 
   const stats = [
-    { label: 'Total Conversations', value: total.toLocaleString(), sub: 'Last 30 days' },
-    { label: 'First Contact Resolution', value: `${fcr}%`, sub: 'AI resolved without transfer' },
-    { label: 'Avg Handle Time', value: `${Math.floor(avgDuration / 60)}m ${avgDuration % 60}s`, sub: 'Per conversation' },
-    { label: 'AI Handled', value: `${fcr}%`, sub: 'vs transferred to human' },
+    { label: 'Total Conversations', value: total.toLocaleString(), sub: 'Last 30 days', icon: MessagesSquare, tone: 'bg-blue-500' },
+    { label: 'First Contact Resolution', value: `${fcr}%`, sub: 'AI resolved without transfer', icon: CheckCircle2, tone: 'bg-emerald-500' },
+    { label: 'Avg Handle Time', value: `${Math.floor(avgDuration / 60)}m ${avgDuration % 60}s`, sub: 'Per conversation', icon: Clock, tone: 'bg-amber-500' },
+    { label: 'AI Handled', value: `${fcr}%`, sub: 'vs transferred to human', icon: Bot, tone: 'bg-violet-500' },
   ]
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="text-sm text-gray-500 mt-0.5">AI Employee performance — last 30 days</p>
+        <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Analytics</h1>
+        <p className="text-sm text-muted mt-1">AI Employee performance — last 30 days</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map(({ label, value, sub }) => (
+        {stats.map(({ label, value, sub, icon: Icon, tone }) => (
           <Card key={label}>
             <CardContent className="p-5">
-              <p className="text-xs text-gray-500 mb-1">{label}</p>
-              <p className="text-2xl font-bold text-gray-900">{value}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
+              <div className={`w-9 h-9 rounded-xl ${tone} flex items-center justify-center text-white shadow-e1 mb-3`}>
+                <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
+              </div>
+              <p className="sx-tabular text-2xl sm:text-3xl font-light tracking-tight text-ink leading-none">{value}</p>
+              <p className="text-xs font-medium text-subtle mt-2">{label}</p>
+              <p className="text-xs text-muted mt-0.5">{sub}</p>
             </CardContent>
           </Card>
         ))}
