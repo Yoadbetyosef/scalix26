@@ -10,22 +10,32 @@ import { DrillDownDrawer, type DrawerConfig } from '@/components/dashboard/drill
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   if (pct === null || pct === undefined) return null
   const up = pct >= 0
+  // Positive momentum reads green (Apple-style), a dip stays quiet — never alarming.
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs font-medium text-muted">
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up ? 'text-emerald-600' : 'text-muted'}`}>
       {up ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
       {Math.abs(pct)}{suffix} vs last month
     </span>
   )
 }
 
-function ImpactCard({ icon: Icon, label, desc, children, onClick }: { icon: React.ElementType; label: string; desc: string; children: React.ReactNode; onClick?: () => void }) {
+// Apple-style colored icon tile — the element that brings the metric alive while the
+// surface stays calm/white.
+const TILE_TONES = {
+  blue: 'bg-blue-500',
+  green: 'bg-emerald-500',
+  purple: 'bg-violet-500',
+  amber: 'bg-amber-500',
+} as const
+
+function ImpactCard({ icon: Icon, label, desc, tone, children, onClick }: { icon: React.ElementType; label: string; desc: string; tone: keyof typeof TILE_TONES; children: React.ReactNode; onClick?: () => void }) {
   const clickable = !!onClick
   return (
-    <Card onClick={onClick} className={`overflow-hidden ${clickable ? 'cursor-pointer hover:shadow-e2 transition-shadow' : ''}`}>
+    <Card onClick={onClick} className={`overflow-hidden ${clickable ? 'cursor-pointer hover:shadow-e2 hover:-translate-y-0.5 transition-all' : ''}`}>
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-center gap-2.5 mb-5">
-          <div className="w-9 h-9 rounded-xl bg-sunken flex items-center justify-center text-subtle flex-shrink-0">
-            <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          <div className={`w-9 h-9 rounded-xl ${TILE_TONES[tone]} flex items-center justify-center text-white shadow-e1 flex-shrink-0`}>
+            <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
           </div>
           <span className="text-sm font-medium text-subtle">{label}</span>
         </div>
@@ -121,7 +131,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
 
       {/* 4) IMPACT METRIC CARDS — exactly four (clickable → proof drawer when value>0) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <ImpactCard icon={Users} label="Customers Assisted" desc="People who received a response without waiting on you."
+        <ImpactCard icon={Users} label="Customers Assisted" tone="blue" desc="People who received a response without waiting on you."
           onClick={data.customersHelped.value > 0 ? () => setDrawer({ metric: 'customers_assisted', title: `${data.customersHelped.value} Customers Assisted`, subtitle: 'People who received a response from your business through Scalix.', headerCount: `${data.customersHelped.value}` }) : undefined}>
           <BigNumber>{data.customersHelped.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
@@ -130,7 +140,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           </div>
         </ImpactCard>
 
-        <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" desc="People who reached out while you were busy, unavailable, or after hours."
+        <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" tone="green" desc="People who reached out while you were busy, unavailable, or after hours."
           onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Scalix handled these customer moments while you focused on running your business.', headerCount: `${data.opportunities.value}` }) : undefined}>
           <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
@@ -139,13 +149,13 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           </div>
         </ImpactCard>
 
-        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" desc="Calls, texts, emails, chats, and social messages Scalix helped manage."
+        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" tone="purple" desc="Calls, texts, emails, chats, and social messages Scalix helped manage."
           onClick={data.conversationsManaged.value > 0 ? () => setDrawer({ metric: 'conversations_managed', title: `${data.conversationsManaged.value} Conversations Handled Without You`, subtitle: 'These conversations received responses without requiring your personal attention.', headerCount: `${data.conversationsManaged.value}` }) : undefined}>
           <BigNumber>{data.conversationsManaged.value.toLocaleString()}</BigNumber>
           <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
         </ImpactCard>
 
-        <ImpactCard icon={Activity} label="Business Coverage" desc="Scalix kept your business responsive when customers reached out."
+        <ImpactCard icon={Activity} label="Business Coverage" tone="amber" desc="Scalix kept your business responsive when customers reached out."
           onClick={data.coveragePct.value !== null && data.coveragePct.total > 0 ? () => setDrawer({ metric: 'coverage', title: 'Business Coverage', subtitle: 'Every customer who reached out, and whether Scalix kept you responsive.', headerCount: `${data.coveragePct.value}%` }) : undefined}>
           {data.coveragePct.value === null ? (
             <>
@@ -173,15 +183,15 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
             ) : (
               <ul className="space-y-3">
                 <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-subtle flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                   <span className="text-sm sm:text-[15px] text-gray-700">Responded across your channels: <span className="font-medium text-gray-900">{channelLine}</span>.</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-subtle flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                   <span className="text-sm sm:text-[15px] text-gray-700">{takeoverLine}</span>
                 </li>
                 <li className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-subtle flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
                   <span className="text-sm sm:text-[15px] text-gray-700">Kept your business responsive whenever customers reached out.</span>
                 </li>
               </ul>

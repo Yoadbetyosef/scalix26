@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ElementType } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen, Clock } from 'lucide-react'
+import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen, Clock, Bot, Mic, Wand2, Briefcase } from 'lucide-react'
 import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
 import Link from 'next/link'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
@@ -44,6 +44,16 @@ const TIME_SLOTS: { value: string; label: string }[] = (() => {
   }
   return out
 })()
+
+// Apple-style colored section tile — gives every section its own living identity on a
+// calm white canvas. Color is the element, not decoration.
+function SectionIcon({ icon: Icon, tone }: { icon: ElementType; tone: string }) {
+  return (
+    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-[10px] ${tone} text-white shadow-e1`}>
+      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+    </span>
+  )
+}
 
 function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel: string }) {
   return (
@@ -495,7 +505,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Business Identity */}
       <Card>
         <CardHeader>
-          <CardTitle>Business Identity</CardTitle>
+          <CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Building2} tone="bg-blue-500" /> Business Identity</CardTitle>
           <p className="text-sm text-subtle">This agent represents a separate business identity with its own contact info.</p>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -564,7 +574,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Channels */}
       <Card>
         <CardHeader>
-          <CardTitle>Channels</CardTitle>
+          <CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Share2} tone="bg-indigo-500" /> Channels</CardTitle>
           <p className="text-sm text-subtle">Connect any combination of channels. Each channel is optional — the agent handles whatever is connected.</p>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -756,7 +766,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Email — channel order: Phone → Facebook/Instagram → Email */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#5B6CF0]" /> Email</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Mail} tone="bg-violet-500" /> Email</CardTitle></CardHeader>
         <CardContent className="space-y-5">
           <p className="text-sm text-subtle">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
 
@@ -890,7 +900,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Basic Info */}
       <Card>
-        <CardHeader><CardTitle>AI Persona</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Bot} tone="bg-pink-500" /> AI Persona</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div>
             <Label>Agent Name</Label>
@@ -912,7 +922,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Voice */}
       <Card>
-        <CardHeader><CardTitle>Voice</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Mic} tone="bg-cyan-500" /> Voice</CardTitle></CardHeader>
         <CardContent className="space-y-5">
           <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} />
           <div>
@@ -935,7 +945,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Custom Instructions */}
       <Card>
-        <CardHeader><CardTitle>Custom Instructions</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Wand2} tone="bg-amber-500" /> Custom Instructions</CardTitle></CardHeader>
         <CardContent>
           <Textarea
             rows={5}
@@ -948,7 +958,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Business Details */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-[#5B6CF0]" /> Business Details</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Briefcase} tone="bg-emerald-500" /> Business Details</CardTitle></CardHeader>
         <CardContent>
           <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
         </CardContent>
@@ -956,7 +966,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Skills */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#5B6CF0]" /> Skills</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Sparkles} tone="bg-fuchsia-500" /> Skills</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-subtle mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
           <SkillsEditor agentId={employee.id} initial={skills || []} />
@@ -966,7 +976,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* SECTION 2 — Appointment Availability (drives booking; backed by appointment_slots) */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#5B6CF0]" /> Appointment Availability</CardTitle>
+          <CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Clock} tone="bg-sky-500" /> Appointment Availability</CardTitle>
           <p className="text-sm text-subtle">When you&apos;ll take appointments. The AI only books inside these windows — separate from your open hours.</p>
         </CardHeader>
         <CardContent>
@@ -990,7 +1000,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Knowledge Base */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-[#5B6CF0]" /> Knowledge Base</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={BookOpen} tone="bg-orange-500" /> Knowledge Base</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-subtle mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
           <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />

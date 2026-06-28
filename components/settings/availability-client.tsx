@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Star } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,7 +51,7 @@ export function AvailabilityClient({
 
   const content = (
     <Card>
-      <CardHeader><CardTitle>Google Reviews</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="flex items-center gap-2.5"><span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-yellow-500 text-white shadow-e1"><Star className="h-[18px] w-[18px]" strokeWidth={2} /></span> Google Reviews</CardTitle></CardHeader>
       <CardContent className="space-y-4">
         <div>
           <Label>Google review link</Label>

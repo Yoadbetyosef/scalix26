@@ -1,22 +1,28 @@
 import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle } from 'lucide-react'
+import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
+import { FacebookIcon } from '@/components/icons/brand-icons'
 
 // Matching icon for a channel chip — official brand logos for FB/IG, lucide for the
 // generic channels. Display only.
+// Apple-style channel colors — the icon tile carries the channel's identity.
+const CHANNEL_TONE: Record<string, string> = {
+  voice: 'bg-cyan-500', sms: 'bg-emerald-500', email: 'bg-violet-500',
+  whatsapp: 'bg-green-500', facebook: 'bg-blue-600', instagram: 'bg-pink-500',
+}
+
 function channelIcon(type: string) {
-  const cls = 'w-3.5 h-3.5'
+  const cls = 'w-3 h-3'
   switch (type) {
     case 'voice': return <Phone className={cls} strokeWidth={1.75} />
     case 'sms': return <MessageSquare className={cls} strokeWidth={1.75} />
     case 'email': return <Mail className={cls} strokeWidth={1.75} />
     case 'whatsapp': return <MessageCircle className={cls} strokeWidth={1.75} />
-    case 'facebook': return <FacebookIcon className={cls} />
-    case 'instagram': return <InstagramIcon className={cls} />
+    case 'facebook': return <FacebookIcon className={cls} color="#FFFFFF" />
+    case 'instagram': return <Camera className={cls} strokeWidth={2} />
     default: return null
   }
 }
@@ -135,8 +141,9 @@ export default async function AIEmployeesPage() {
                   {channels.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-6">
                       {channels.slice(0, 4).map((ch) => (
-                        <span key={ch.id} className="inline-flex items-center gap-1.5 rounded-full bg-white ring-1 ring-hairline px-2.5 py-1 text-xs font-medium text-subtle">
-                          {channelIcon(ch.type)}{CHANNEL_LABELS[ch.type] || ch.type}
+                        <span key={ch.id} className="inline-flex items-center gap-1.5 rounded-full bg-sunken py-1 pl-1 pr-2.5 text-xs font-medium text-ink">
+                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded-md ${CHANNEL_TONE[ch.type] || 'bg-muted'} text-white`}>{channelIcon(ch.type)}</span>
+                          {CHANNEL_LABELS[ch.type] || ch.type}
                         </span>
                       ))}
                       {channels.length > 4 && (
