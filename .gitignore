@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Ask Amy realtime proxy deps
+amy-realtime-server/node_modules

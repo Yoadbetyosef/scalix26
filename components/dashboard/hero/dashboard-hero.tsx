@@ -4,6 +4,7 @@ import { AiOrb } from '@/components/brand/ai-orb'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
+import { AskAmy, type AmyBriefing } from './ask-amy'
 
 export type PresenceState = 'ready' | 'working' | 'attention'
 
@@ -14,6 +15,7 @@ export interface DashboardHeroProps {
   stateSentence: string
   businessName: string
   figures: WorkFigure[]
+  briefing: AmyBriefing
 }
 
 /**
@@ -29,12 +31,13 @@ export function DashboardHero({
   stateSentence,
   businessName,
   figures,
+  briefing,
 }: DashboardHeroProps) {
   const status: EmployeeStatus = presenceState === 'attention' ? 'attention' : 'on_duty'
   const eyebrow = businessName ? `${employeeName} · AI Employee · ${businessName}` : `${employeeName} · AI Employee`
 
   return (
-    <section className="relative flex min-h-[68vh] flex-col justify-center py-10 sm:min-h-[74vh] sx-animate-in">
+    <section className="relative py-6 sm:py-8 sx-animate-in">
       {/* The one preserved action — a quiet whisper in the corner */}
       <div className="absolute right-0 top-0 z-10">
         <Link
@@ -47,32 +50,33 @@ export function DashboardHero({
         </Link>
       </div>
 
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center text-center">
-        {/* The living presence */}
-        <div className="h-44 w-44 sm:h-52 sm:w-52">
-          <AiOrb />
+      <div className="mx-auto max-w-5xl">
+        {/* Identity — the AI presence + who's on duty (compact) */}
+        <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left">
+          <div className="h-24 w-24 flex-shrink-0 sm:h-28 sm:w-28">
+            <AiOrb />
+          </div>
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-2.5 text-sm text-subtle">
+              <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="sm" />
+              <span>{eyebrow}</span>
+            </p>
+            <h1 className="mt-2 max-w-xl text-balance text-xl font-light leading-snug tracking-tight text-ink sm:text-2xl lg:text-[26px]">
+              {stateSentence}
+            </h1>
+          </div>
         </div>
 
-        {/* Name + face — the employee's identity, the same headshot shown everywhere */}
-        <p className="mt-8 inline-flex items-center gap-2.5 text-sm text-subtle">
-          <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="sm" />
-          <span>{eyebrow}</span>
-        </p>
-
-        {/* The soul — her spoken status, large and thin */}
-        <h1 className="mt-4 max-w-2xl text-balance text-2xl font-light leading-[1.18] tracking-tight text-ink sm:text-3xl lg:text-[38px]">
-          {stateSentence}
-        </h1>
-
-        {/* The work — large, calm figures that dominate the first screen */}
-        <div className="mt-12 w-full sm:mt-14">
-          <TodayWork figures={figures} />
+        {/* Band — Talk to Amy + the day's numbers, both above the fold.
+            Mobile: numbers first, then talk. Desktop: talk left, numbers right. */}
+        <div className="mt-7 grid gap-x-10 gap-y-7 sm:mt-8 lg:grid-cols-2 lg:items-center">
+          <div className="order-2 lg:order-1">
+            <AskAmy briefing={briefing} />
+          </div>
+          <div className="order-1 lg:order-2 lg:border-l lg:border-hairline lg:pl-10">
+            <TodayWork figures={figures} />
+          </div>
         </div>
-      </div>
-
-      {/* Subtle "scroll for details" affordance */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
-        <span className="text-[11px] uppercase tracking-[0.18em] text-muted/70">Details below</span>
       </div>
     </section>
   )

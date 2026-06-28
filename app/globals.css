@@ -189,6 +189,19 @@ body {
   @keyframes sx-drift-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-38px, -26px) scale(1.1); } }
   .sx-drift-1 { animation: sx-drift-1 19s ease-in-out infinite; }
   .sx-drift-2 { animation: sx-drift-2 23s ease-in-out infinite; }
+
+  /* Subtle breathing for Amy's avatar while she's in a live conversation. */
+  @keyframes sx-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  .sx-breathe { animation: sx-breathe 3.4s ease-in-out infinite; }
+
+  /* Living voice ring — the SCALIX waveform identity, slowly rotating while Amy speaks. */
+  @keyframes sx-spin { to { transform: rotate(360deg); } }
+  .sx-ring-live {
+    background: conic-gradient(from 0deg, #22D3EE, #41c8e8, #5B6CF0, #8e9bf0, #A855F7, #b79be8, #22D3EE);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    animation: sx-spin 3.2s linear infinite;
+  }
 }
 
 /* Tap highlight off — we provide our own press feedback */

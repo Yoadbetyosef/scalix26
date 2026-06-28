@@ -13,13 +13,13 @@ export interface WorkFigure {
  */
 export function TodayWork({ figures }: { figures: WorkFigure[] }) {
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 sm:gap-x-8">
+    <div className="grid grid-cols-2 gap-x-8 gap-y-5 sm:gap-y-6">
       {figures.map((f) => (
-        <div key={f.label} className="flex flex-col items-center">
-          <span className="sx-tabular text-5xl font-light leading-none tracking-tight text-ink sm:text-6xl">
+        <div key={f.label} className="flex flex-col items-center lg:items-start">
+          <span className="sx-tabular text-4xl font-light leading-none tracking-tight text-ink sm:text-5xl">
             {f.value === null ? '—' : <CountUp value={f.value} suffix={f.suffix} />}
           </span>
-          <span className="mt-3.5 text-xs tracking-wide text-subtle sm:text-sm">{f.label}</span>
+          <span className="mt-2 text-xs tracking-wide text-subtle sm:text-sm">{f.label}</span>
         </div>
       ))}
     </div>

@@ -175,10 +175,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           ? 'On duty — watching every channel. Nothing needs you.'
           : 'On duty, watching your channels. Nothing needs you yet.'
 
+    // Amy's knowledge — built entirely from the real data already on this page.
+    const todayStr = new Date().toLocaleDateString('en-CA')
+    const appointmentsToday = appointments_list.filter((a) => a.slot_date === todayStr && a.status !== 'cancelled').length
+    const briefing = {
+      employeeName,
+      employeeVoice,
+      handled,
+      booked,
+      recovered,
+      coverage: answered,
+      channelLine: impactData.channelBreakdown.map((c) => `${c.count} ${c.label}`).join(', ') || undefined,
+      attention: impactData.attention.map((a) => ({ label: a.label, href: a.href })),
+      leadsAwaiting: stats.activeLeads,
+      callsAnswered: stats.totalCalls,
+      textsHandled: stats.textMessages,
+      appointmentsToday,
+    }
+
     topSection = (
       <DashboardHero
         employeeName={employeeName}
         employeeVoice={employeeVoice}
+        briefing={briefing}
         presenceState={presenceState}
         stateSentence={stateSentence}
         businessName={tenant.business_name || ''}
