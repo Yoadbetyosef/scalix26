@@ -7,6 +7,7 @@ import {
   Loader2, Inbox, AlertTriangle, UserRound, Sparkles, ChevronDown, ChevronUp, Clock, UserPlus, CalendarCheck, Send,
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
+import { AiThinking } from '@/components/brand/ai-thinking'
 
 type OutcomeTag = { label: string; tone: 'green' | 'blue' | 'purple' | 'indigo' | 'amber' | 'gray' }
 type ProofRow = {
@@ -227,9 +228,8 @@ export function DrillDownDrawer({ config, onClose }: { config: DrawerConfig | nu
                   <button onClick={() => load(0)} className="mt-3 text-sm font-medium text-[#4338CA] hover:underline">Try again</button>
                 </div>
               ) : loading && rows.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted py-12">
-                  <Loader2 className="w-8 h-8 animate-spin mb-3" />
-                  <p className="text-sm">Loading records…</p>
+                <div className="flex items-center justify-center h-full py-12">
+                  <AiThinking label="Gathering the proof…" />
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted py-12 text-center">

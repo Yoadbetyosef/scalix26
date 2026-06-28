@@ -52,7 +52,12 @@ export function DashboardHero({
 
         {/* Name — secondary, light */}
         <p className="mt-8 inline-flex items-center gap-2 text-sm text-subtle">
-          <span className={cn('h-1.5 w-1.5 flex-shrink-0 rounded-full', dotColor)} aria-hidden="true" />
+          <span className="relative flex h-2 w-2 flex-shrink-0" aria-hidden="true">
+            {presenceState !== 'attention' && (
+              <span className={cn('absolute inline-flex h-full w-full rounded-full opacity-40 animate-ping', dotColor)} />
+            )}
+            <span className={cn('relative inline-flex h-2 w-2 rounded-full', dotColor)} />
+          </span>
           <span>{eyebrow}</span>
         </p>
 

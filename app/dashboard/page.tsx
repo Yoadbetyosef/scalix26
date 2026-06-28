@@ -182,10 +182,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         stateSentence={stateSentence}
         businessName={tenant.business_name || ''}
         figures={[
-          { value: String(handled), label: 'Handled' },
-          { value: String(booked), label: 'Booked' },
-          { value: String(recovered), label: 'Recovered' },
-          { value: answered != null ? `${answered}%` : '—', label: 'Answered' },
+          { value: handled, label: 'Handled' },
+          { value: booked, label: 'Booked' },
+          { value: recovered, label: 'Recovered' },
+          { value: answered, suffix: '%', label: 'Answered' },
         ]}
       />
     )
