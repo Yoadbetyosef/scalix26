@@ -52,10 +52,10 @@ function ProgressBar({ step }: { step: number }) {
   return (
     <div className="w-full max-w-xl mx-auto mb-8 px-4">
       <div className="flex justify-between items-center mb-2">
-        <span className="text-sm font-medium text-gray-500">Step {step} of 4</span>
+        <span className="text-sm font-medium text-subtle">Step {step} of 4</span>
         <span className="text-sm font-semibold text-[#5B6CF0]">{pct}%</span>
       </div>
-      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+      <div className="h-2 bg-hairline-strong rounded-full overflow-hidden">
         <div
           className="h-full bg-[#5B6CF0] rounded-full transition-all duration-500 ease-out"
           style={{ width: `${pct}%` }}
@@ -328,14 +328,14 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
         {/* ═══════════════════════════════════════════════════════ STEP 1 */}
         {step === 1 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Let&apos;s set up your AI assistant</h1>
-            <p className="text-gray-500 mb-6 sm:mb-8">Takes less than 4 minutes. We promise. 🙌</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-hairline p-5 sm:p-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-ink mb-1">Let&apos;s set up your AI assistant</h1>
+            <p className="text-subtle mb-6 sm:mb-8">Takes less than 4 minutes. We promise. 🙌</p>
 
             <div className="space-y-5">
               <div>
-                <Label className="text-base font-semibold text-gray-800">Business name</Label>
-                <p className="text-sm text-gray-400 mb-2">The name customers see when they call or text</p>
+                <Label className="text-base font-semibold text-ink">Business name</Label>
+                <p className="text-sm text-muted mb-2">The name customers see when they call or text</p>
                 <Input
                   className="h-12 text-base"
                   placeholder="Smith's Locksmith Services"
@@ -346,8 +346,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               </div>
 
               <div>
-                <Label className="text-base font-semibold text-gray-800">Your first name</Label>
-                <p className="text-sm text-gray-400 mb-2">So your AI can introduce itself properly</p>
+                <Label className="text-base font-semibold text-ink">Your first name</Label>
+                <p className="text-sm text-muted mb-2">So your AI can introduce itself properly</p>
                 <Input
                   className="h-12 text-base"
                   placeholder="John"
@@ -358,8 +358,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               </div>
 
               <div>
-                <Label className="text-base font-semibold text-gray-800">Your business phone number <span className="text-gray-400 font-normal">(optional)</span></Label>
-                <p className="text-sm text-gray-400 mb-2">We'll forward urgent calls to this number</p>
+                <Label className="text-base font-semibold text-ink">Your business phone number <span className="text-muted font-normal">(optional)</span></Label>
+                <p className="text-sm text-muted mb-2">We'll forward urgent calls to this number</p>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">🇺🇸</span>
                   <Input
@@ -374,8 +374,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
               {!tenant.industry && (
               <div>
-                <Label className="text-base font-semibold text-gray-800">What type of business?</Label>
-                <p className="text-sm text-gray-400 mb-2">Your AI will use this to give better answers</p>
+                <Label className="text-base font-semibold text-ink">What type of business?</Label>
+                <p className="text-sm text-muted mb-2">Your AI will use this to give better answers</p>
                 <div className="grid grid-cols-2 gap-2 mt-2">
                   {BUSINESS_TYPES.map(type => {
                     const raw = type.split(' ').slice(1).join(' ')
@@ -388,7 +388,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                         className={`h-12 px-4 rounded-xl border-2 text-sm font-medium transition-all text-left ${
                           selected
                             ? 'border-[#5B6CF0] bg-[#5B6CF0]/10 text-[#5B6CF0]'
-                            : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                            : 'border-hairline-strong text-ink hover:border-hairline-strong hover:bg-sunken'
                         }`}
                       >
                         {type}
@@ -409,14 +409,14 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
         {/* ═══════════════════════════════════════════════════════ STEP 2 */}
         {step === 2 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Paste your website</h1>
-            <p className="text-gray-500 mb-2">Our AI will scan it and automatically learn your services and pricing. No manual typing needed.</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-hairline p-5 sm:p-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-ink mb-1">Paste your website</h1>
+            <p className="text-subtle mb-2">Our AI will scan it and automatically learn your services and pricing. No manual typing needed.</p>
             <p className="text-[#5B6CF0] text-sm font-medium mb-6 sm:mb-8">✨ No website? No problem — scroll down</p>
 
             <div className="space-y-5">
               <div>
-                <Label className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                <Label className="text-base font-semibold text-ink flex items-center gap-2">
                   <Globe className="w-4 h-4" /> Your website URL
                 </Label>
                 <div className="relative mt-2">
@@ -440,9 +440,9 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
               {/* Scan animation */}
               {scanMessages.length > 0 && (
-                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                <div className="bg-sunken rounded-xl p-4 space-y-2">
                   {scanMessages.map((msg, i) => (
-                    <p key={i} className={`text-sm font-medium ${msg.ok ? 'text-gray-700' : 'text-amber-600'} ${i === scanMessages.length - 1 && scanning ? 'animate-pulse' : ''}`}>
+                    <p key={i} className={`text-sm font-medium ${msg.ok ? 'text-ink' : 'text-amber-600'} ${i === scanMessages.length - 1 && scanning ? 'animate-pulse' : ''}`}>
                       {msg.text}
                     </p>
                   ))}
@@ -482,10 +482,10 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               )}
 
               {showManual && (
-                <div className="space-y-4 pt-2 border-t border-gray-100">
-                  <p className="text-sm font-semibold text-gray-600">Tell your AI about your business</p>
+                <div className="space-y-4 pt-2 border-t border-hairline">
+                  <p className="text-sm font-semibold text-subtle">Tell your AI about your business</p>
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Services you offer</Label>
+                    <Label className="text-sm font-medium text-ink">Services you offer</Label>
                     <Textarea
                       className="mt-2 text-sm"
                       rows={3}
@@ -495,7 +495,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                     />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Your pricing</Label>
+                    <Label className="text-sm font-medium text-ink">Your pricing</Label>
                     <Textarea
                       className="mt-2 text-sm"
                       rows={2}
@@ -505,7 +505,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                     />
                   </div>
                   <div>
-                    <Label className="text-sm font-medium text-gray-700">Anything else the AI should know?</Label>
+                    <Label className="text-sm font-medium text-ink">Anything else the AI should know?</Label>
                     <Textarea
                       className="mt-2 text-sm"
                       rows={2}
@@ -518,12 +518,12 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               )}
 
               {/* Google Reviews */}
-              <div className="pt-2 border-t border-gray-100">
-                <Label className="text-base font-semibold text-gray-800 flex items-center gap-2">
+              <div className="pt-2 border-t border-hairline">
+                <Label className="text-base font-semibold text-ink flex items-center gap-2">
                   <Star className="w-4 h-4 text-yellow-500" />
-                  Google Reviews link <span className="text-gray-400 font-normal text-sm">(optional)</span>
+                  Google Reviews link <span className="text-muted font-normal text-sm">(optional)</span>
                 </Label>
-                <p className="text-sm text-gray-400 mt-1 mb-2">After every completed job, your AI will automatically invite customers to leave you a review.</p>
+                <p className="text-sm text-muted mt-1 mb-2">After every completed job, your AI will automatically invite customers to leave you a review.</p>
                 <Input
                   className="h-12 text-sm"
                   type="url"
@@ -545,15 +545,15 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
         {/* ═══════════════════════════════════════════════════════ STEP 3 */}
         {step === 3 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Customize how your AI talks</h1>
-            <p className="text-gray-500 mb-6 sm:mb-8">Your AI will use this to answer customers. You can always change it later.</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-hairline p-5 sm:p-8">
+            <h1 className="text-2xl sm:text-3xl font-bold text-ink mb-1">Customize how your AI talks</h1>
+            <p className="text-subtle mb-6 sm:mb-8">Your AI will use this to answer customers. You can always change it later.</p>
 
             <div className="space-y-6">
               {/* Greeting */}
               <div>
-                <Label className="text-base font-semibold text-gray-800">AI Greeting</Label>
-                <p className="text-sm text-gray-400 mb-2">What your AI says when a customer first reaches out</p>
+                <Label className="text-base font-semibold text-ink">AI Greeting</Label>
+                <p className="text-sm text-muted mb-2">What your AI says when a customer first reaches out</p>
                 <Textarea
                   className="text-sm"
                   rows={4}
@@ -569,8 +569,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
               {/* Tone */}
               <div>
-                <Label className="text-base font-semibold text-gray-800">Tone of voice</Label>
-                <p className="text-sm text-gray-400 mb-3">How should your AI sound?</p>
+                <Label className="text-base font-semibold text-ink">Tone of voice</Label>
+                <p className="text-sm text-muted mb-3">How should your AI sound?</p>
                 <div className="grid grid-cols-3 gap-3">
                   {([
                     { id: 'friendly', label: 'Friendly', desc: 'Warm and approachable' },
@@ -584,11 +584,11 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                       className={`p-4 rounded-xl border-2 text-center transition-all ${
                         data.tone === t.id
                           ? 'border-[#5B6CF0] bg-[#5B6CF0]/10'
-                          : 'border-gray-200 hover:border-gray-300'
+                          : 'border-hairline-strong hover:border-hairline-strong'
                       }`}
                     >
-                      <div className="text-sm font-semibold text-gray-800">{t.label}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{t.desc}</div>
+                      <div className="text-sm font-semibold text-ink">{t.label}</div>
+                      <div className="text-xs text-subtle mt-0.5">{t.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -596,10 +596,10 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
               {/* Special instructions */}
               <div>
-                <Label className="text-base font-semibold text-gray-800">
-                  Special instructions <span className="text-gray-400 font-normal">(optional)</span>
+                <Label className="text-base font-semibold text-ink">
+                  Special instructions <span className="text-muted font-normal">(optional)</span>
                 </Label>
-                <p className="text-sm text-gray-400 mb-2">Anything specific your AI should always say or never say</p>
+                <p className="text-sm text-muted mb-2">Anything specific your AI should always say or never say</p>
                 <Textarea
                   className="text-sm"
                   rows={3}
@@ -611,14 +611,14 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
               {/* FAQs */}
               <div>
-                <Label className="text-base font-semibold text-gray-800">
-                  Common questions <span className="text-gray-400 font-normal">(optional)</span>
+                <Label className="text-base font-semibold text-ink">
+                  Common questions <span className="text-muted font-normal">(optional)</span>
                 </Label>
-                <p className="text-sm text-gray-400 mb-3">Add questions your customers frequently ask — your AI will answer them automatically</p>
+                <p className="text-sm text-muted mb-3">Add questions your customers frequently ask — your AI will answer them automatically</p>
 
                 <div className="space-y-3">
                   {data.faqs.map((faq, i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl p-4">
+                    <div key={i} className="bg-sunken rounded-xl p-4">
                       <div className="flex items-start gap-2 mb-2">
                         <div className="flex-1">
                           <Input
@@ -638,7 +638,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                           <button
                             type="button"
                             onClick={() => removeFaq(i)}
-                            className="text-gray-400 hover:text-red-400 transition-colors mt-0.5 p-1"
+                            className="text-muted hover:text-red-400 transition-colors mt-0.5 p-1"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -673,8 +673,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
             <Confetti />
             <div className="text-center mb-8">
               <div className="text-6xl mb-4">🎉</div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">Your AI is ready.</h1>
-              <p className="text-lg text-gray-600">
+              <h1 className="text-3xl sm:text-4xl font-bold text-ink mb-2">Your AI is ready.</h1>
+              <p className="text-lg text-subtle">
                 Welcome, {data.ownerName || 'friend'}! <strong>{data.businessName}</strong> now has a 24/7 AI assistant.
               </p>
             </div>
@@ -682,12 +682,12 @@ export function OnboardingFlow({ tenant, channels }: Props) {
             {/* First move: share your booking link */}
             {bookingUrl && (
               <div className="rounded-2xl border-2 border-[#5B6CF0] bg-[#5B6CF0]/5 p-5 sm:p-6 mb-4">
-                <h2 className="text-lg font-bold text-gray-900">🎉 Your AI is live. Here&apos;s your first move:</h2>
-                <p className="text-sm text-gray-600 mt-1 mb-4">
+                <h2 className="text-lg font-bold text-ink">🎉 Your AI is live. Here&apos;s your first move:</h2>
+                <p className="text-sm text-subtle mt-1 mb-4">
                   Share your booking link — anyone who clicks it gets a text from your AI within seconds.
                 </p>
                 <div className="flex gap-2">
-                  <code className="flex-1 min-w-0 truncate bg-white border border-gray-200 rounded-xl px-3 h-12 flex items-center text-sm text-gray-700">
+                  <code className="flex-1 min-w-0 truncate bg-white border border-hairline-strong rounded-xl px-3 h-12 flex items-center text-sm text-ink">
                     {bookingUrl}
                   </code>
                   <Button className="h-12 px-4 flex-shrink-0" onClick={copyBookingLink}>
@@ -695,27 +695,27 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                     <span className="hidden sm:inline">Copy Link</span>
                   </Button>
                 </div>
-                <p className="text-sm text-gray-500 mt-3">Paste it in your Google Business Profile right now. It takes 30 seconds.</p>
+                <p className="text-sm text-subtle mt-3">Paste it in your Google Business Profile right now. It takes 30 seconds.</p>
               </div>
             )}
 
             <div className="space-y-4">
               {/* Card 1: Test call */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-hairline p-6">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                     <Phone className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">Test your AI right now</h3>
-                    <p className="text-sm text-gray-500">Give it a call — it&apos;s live!</p>
+                    <h3 className="font-bold text-ink">Test your AI right now</h3>
+                    <p className="text-sm text-subtle">Give it a call — it&apos;s live!</p>
                   </div>
                 </div>
                 {phoneNumber ? (
                   <>
-                    <div className="bg-gray-50 rounded-xl p-4 text-center mb-4">
-                      <p className="text-sm text-gray-500 mb-1">Your AI phone number</p>
-                      <p className="text-2xl font-bold text-gray-900 tracking-wider">{phoneNumber}</p>
+                    <div className="bg-sunken rounded-xl p-4 text-center mb-4">
+                      <p className="text-sm text-subtle mb-1">Your AI phone number</p>
+                      <p className="text-2xl font-bold text-ink tracking-wider">{phoneNumber}</p>
                     </div>
                     <a href={`tel:${phoneNumber}`}>
                       <Button className="w-full h-12 text-base">
@@ -731,14 +731,14 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               </div>
 
               {/* Card 2: More channels */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-hairline p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                     <span className="text-xl">📱</span>
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">Connect more channels</h3>
-                    <p className="text-sm text-gray-500">Reach customers everywhere they are</p>
+                    <h3 className="font-bold text-ink">Connect more channels</h3>
+                    <p className="text-sm text-subtle">Reach customers everywhere they are</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -750,25 +750,25 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                     <a key={ch.label} href={ch.href}>
                       <button
                         type="button"
-                        className="w-full h-12 flex items-center gap-2 px-4 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-700 hover:border-[#5B6CF0] hover:text-[#5B6CF0] transition-all"
+                        className="w-full h-12 flex items-center gap-2 px-4 rounded-xl border-2 border-hairline-strong text-sm font-medium text-ink hover:border-[#5B6CF0] hover:text-[#5B6CF0] transition-all"
                       >
                         <span>{ch.emoji}</span> {ch.label}
                       </button>
                     </a>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 text-center mt-3">You can connect these anytime from Settings</p>
+                <p className="text-xs text-muted text-center mt-3">You can connect these anytime from Settings</p>
               </div>
 
               {/* Card 3: Dashboard */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="bg-white rounded-2xl shadow-sm border border-hairline p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 bg-[#5B6CF0]/20 rounded-xl flex items-center justify-center">
                     <LayoutDashboard className="w-5 h-5 text-[#5B6CF0]" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900">Your dashboard is ready</h3>
-                    <p className="text-sm text-gray-500">See all your calls, messages, and leads in one place</p>
+                    <h3 className="font-bold text-ink">Your dashboard is ready</h3>
+                    <p className="text-sm text-subtle">See all your calls, messages, and leads in one place</p>
                   </div>
                 </div>
                 <Button
@@ -777,11 +777,11 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 >
                   Take me to my dashboard →
                 </Button>
-                <p className="text-xs text-gray-400 text-center mt-2">Your AI is already answering calls.</p>
+                <p className="text-xs text-muted text-center mt-2">Your AI is already answering calls.</p>
               </div>
             </div>
 
-            <p className="text-center text-sm text-gray-400 mt-8">
+            <p className="text-center text-sm text-muted mt-8">
               Your AI is working 24/7. You&apos;ve got this! 💪
             </p>
           </>

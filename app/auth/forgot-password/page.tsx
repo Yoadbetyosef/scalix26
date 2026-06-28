@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
           {brand.logo}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-hairline p-8">
           {sent ? (
             <div className="text-center">
               <div className="w-14 h-14 bg-[#5B6CF0]/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -52,9 +52,9 @@ export default function ForgotPasswordPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Check your email</h1>
-              <p className="text-gray-500 mb-6">
-                We sent a password reset link to <span className="font-medium text-gray-700">{email}</span>
+              <h1 className="text-2xl font-bold text-ink mb-2">Check your email</h1>
+              <p className="text-subtle mb-6">
+                We sent a password reset link to <span className="font-medium text-ink">{email}</span>
               </p>
               <Link href="/auth/login">
                 <Button variant="outline" className="w-full">
@@ -65,8 +65,8 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Reset password</h1>
-              <p className="text-gray-500 mb-6">Enter your email and we&apos;ll send you a reset link</p>
+              <h1 className="text-2xl font-bold text-ink mb-2">Reset password</h1>
+              <p className="text-subtle mb-6">Enter your email and we&apos;ll send you a reset link</p>
 
               <form onSubmit={handleReset} className="space-y-4">
                 <div className="space-y-1.5">
@@ -85,7 +85,7 @@ export default function ForgotPasswordPage() {
                 </Button>
               </form>
 
-              <Link href="/auth/login" className="flex items-center justify-center gap-1.5 text-sm text-gray-500 mt-6 py-3 hover:text-gray-700">
+              <Link href="/auth/login" className="flex items-center justify-center gap-1.5 text-sm text-subtle mt-6 py-3 hover:text-ink">
                 <ArrowLeft className="w-4 h-4" />
                 Back to login
               </Link>

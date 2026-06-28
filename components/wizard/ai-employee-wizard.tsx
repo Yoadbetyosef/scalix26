@@ -148,8 +148,8 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
           <Zap className="w-4 h-4 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Create AI Employee</h1>
-          <p className="text-sm text-gray-500">Set up your 24/7 AI customer service agent</p>
+          <h1 className="text-xl font-bold text-ink">Create AI Employee</h1>
+          <p className="text-sm text-subtle">Set up your 24/7 AI customer service agent</p>
         </div>
       </div>
 
@@ -165,24 +165,24 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
                     ? 'bg-[#5B6CF0] text-white'
                     : step === s.id
                     ? 'bg-[#1a1f36] text-white'
-                    : 'bg-gray-200 text-gray-500'
+                    : 'bg-hairline-strong text-subtle'
                 )}
               >
                 {step > s.id ? <Check className="w-4 h-4" /> : s.id}
               </div>
-              <span className={cn('text-xs mt-1 hidden sm:block', step === s.id ? 'text-gray-900 font-medium' : 'text-gray-400')}>
+              <span className={cn('text-xs mt-1 hidden sm:block', step === s.id ? 'text-ink font-medium' : 'text-muted')}>
                 {s.title}
               </span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={cn('h-0.5 flex-1 mx-1', step > s.id ? 'bg-[#5B6CF0]' : 'bg-gray-200')} />
+              <div className={cn('h-0.5 flex-1 mx-1', step > s.id ? 'bg-[#5B6CF0]' : 'bg-hairline-strong')} />
             )}
           </div>
         ))}
       </div>
 
       {/* Step Content */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
+      <div className="bg-white rounded-2xl border border-hairline shadow-sm p-6 mb-6">
         {step === 1 && <Step1BusinessInfo tenant={tenant} data={data} updateData={updateData} />}
         {step === 2 && <Step2CreateEmployee data={data} updateData={updateData} />}
         {step === 3 && <Step3KnowledgeBase tenant={tenant} data={data} updateData={updateData} />}

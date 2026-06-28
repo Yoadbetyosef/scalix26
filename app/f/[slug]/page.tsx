@@ -29,17 +29,17 @@ export default async function BookingPage({ params }: { params: Promise<{ slug: 
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-hairline p-6 sm:p-8">
           <div className="text-center mb-6">
             <div className="w-12 h-12 bg-[#5B6CF0] rounded-xl flex items-center justify-center mx-auto mb-4">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{tenant.business_name}</h1>
-            <p className="text-gray-500 text-sm mt-1.5">Leave your details and we&apos;ll text you right back — usually within seconds.</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-ink">{tenant.business_name}</h1>
+            <p className="text-subtle text-sm mt-1.5">Leave your details and we&apos;ll text you right back — usually within seconds.</p>
           </div>
           <BookingForm token={tenant.lead_intake_token} />
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4">Powered by Scalix</p>
+        <p className="text-center text-xs text-muted mt-4">Powered by Scalix</p>
       </div>
     </div>
   )

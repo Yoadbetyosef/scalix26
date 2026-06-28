@@ -51,9 +51,9 @@ export default function UpdatePasswordPage() {
           {brand.logo}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Set new password</h1>
-          <p className="text-gray-500 mb-6">Choose a strong password for your account</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-hairline p-8">
+          <h1 className="text-2xl font-bold text-ink mb-2">Set new password</h1>
+          <p className="text-subtle mb-6">Choose a strong password for your account</p>
 
           <form onSubmit={handleUpdate} className="space-y-4">
             <div className="space-y-1.5">

@@ -86,8 +86,8 @@ export function Step4Skills({ data, updateData }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Skills</h2>
-        <p className="text-sm text-gray-500">Choose what your AI employee can do. You can change these anytime.</p>
+        <h2 className="text-lg font-semibold text-ink mb-1">Skills</h2>
+        <p className="text-sm text-subtle">Choose what your AI employee can do. You can change these anytime.</p>
       </div>
 
       <div className="space-y-3">
@@ -97,19 +97,19 @@ export function Step4Skills({ data, updateData }: Props) {
           return (
             <div
               key={skill.type}
-              className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
+              className="flex items-start gap-4 p-4 rounded-xl border border-hairline hover:bg-sunken transition-colors"
             >
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-[#5B6CF0]/10' : 'bg-gray-100'}`}>
-                <Icon className={`w-4 h-4 ${active ? 'text-[#5B6CF0]' : 'text-gray-400'}`} />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-[#5B6CF0]/10' : 'bg-sunken'}`}>
+                <Icon className={`w-4 h-4 ${active ? 'text-[#5B6CF0]' : 'text-muted'}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-gray-900">{skill.name}</p>
+                  <p className="text-sm font-medium text-ink">{skill.name}</p>
                   {skill.recommended && (
                     <span className="text-xs bg-[#5B6CF0]/10 text-[#4338CA] px-2 py-0.5 rounded-full">Recommended</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-0.5">{skill.description}</p>
+                <p className="text-xs text-subtle mt-0.5">{skill.description}</p>
               </div>
               <Switch
                 checked={active}
@@ -121,7 +121,7 @@ export function Step4Skills({ data, updateData }: Props) {
         })}
       </div>
 
-      <p className="text-xs text-gray-400 text-center">
+      <p className="text-xs text-muted text-center">
         {data.activeSkills.length} of {SKILLS.length} skills enabled
       </p>
     </div>

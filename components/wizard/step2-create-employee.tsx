@@ -21,8 +21,8 @@ export function Step2CreateEmployee({ data, updateData }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Create Your AI Employee</h2>
-        <p className="text-sm text-gray-500">Customize how your AI employee looks, sounds, and communicates.</p>
+        <h2 className="text-lg font-semibold text-ink mb-1">Create Your AI Employee</h2>
+        <p className="text-sm text-subtle">Customize how your AI employee looks, sounds, and communicates.</p>
       </div>
 
       <div>
@@ -50,7 +50,7 @@ export function Step2CreateEmployee({ data, updateData }: Props) {
           value={emp.greeting}
           onChange={e => update('greeting', e.target.value)}
         />
-        <p className="text-xs text-gray-400 mt-1">This is the first message customers receive.</p>
+        <p className="text-xs text-muted mt-1">This is the first message customers receive.</p>
       </div>
     </div>
   )

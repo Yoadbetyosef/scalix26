@@ -79,7 +79,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           <Card>
             <CardContent className="p-5 sm:p-6 flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-              <span className="text-sm text-gray-700">You&apos;re all caught up — Scalix has everything handled.</span>
+              <span className="text-sm text-ink">You&apos;re all caught up — Scalix has everything handled.</span>
             </CardContent>
           </Card>
         ) : (
@@ -111,18 +111,18 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
 
       {/* 3) WHAT WOULD HAVE HAPPENED WITHOUT SCALIX — only when there's something to say */}
       {opp > 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-5 sm:p-6">
+        <div className="rounded-2xl border border-hairline-strong bg-gradient-to-br from-sunken to-white p-5 sm:p-6">
           <div className="flex items-center gap-2 mb-3">
-            <ShieldAlert className="w-5 h-5 text-gray-400" />
+            <ShieldAlert className="w-5 h-5 text-muted" />
             <h2 className="text-lg sm:text-xl font-normal text-ink">What Would Have Happened Without Scalix</h2>
           </div>
-          <p className="text-sm text-gray-500 mb-3">Without Scalix, these customer moments could have been missed.</p>
+          <p className="text-sm text-subtle mb-3">Without Scalix, these customer moments could have been missed.</p>
           <ul className="space-y-2">
-            <li className="text-sm sm:text-[15px] text-gray-700">
-              <span className="font-semibold text-gray-900">{opp}</span>
+            <li className="text-sm sm:text-[15px] text-ink">
+              <span className="font-semibold text-ink">{opp}</span>
               {` potential ${opp === 1 ? 'customer' : 'customers'} reached out while you were unavailable.`}
             </li>
-            <li className="text-sm sm:text-[15px] text-gray-700">
+            <li className="text-sm sm:text-[15px] text-ink">
               Without an instant reply, some may have waited — or moved on to another business.
             </li>
           </ul>
@@ -135,7 +135,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           onClick={data.customersHelped.value > 0 ? () => setDrawer({ metric: 'customers_assisted', title: `${data.customersHelped.value} Customers Assisted`, subtitle: 'People who received a response from your business through Scalix.', headerCount: `${data.customersHelped.value}` }) : undefined}>
           <BigNumber>{data.customersHelped.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-gray-400">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
+            <span className="text-xs text-muted">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
             <Trend pct={data.customersHelped.trendPct} />
           </div>
         </ImpactCard>
@@ -144,7 +144,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Scalix handled these customer moments while you focused on running your business.', headerCount: `${data.opportunities.value}` }) : undefined}>
           <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
           <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-gray-400">{data.opportunities.lifetime.toLocaleString()} since you started</span>
+            <span className="text-xs text-muted">{data.opportunities.lifetime.toLocaleString()} since you started</span>
             <Trend pct={data.opportunities.trendPct} />
           </div>
         </ImpactCard>
@@ -159,8 +159,8 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
           onClick={data.coveragePct.value !== null && data.coveragePct.total > 0 ? () => setDrawer({ metric: 'coverage', title: 'Business Coverage', subtitle: 'Every customer who reached out, and whether Scalix kept you responsive.', headerCount: `${data.coveragePct.value}%` }) : undefined}>
           {data.coveragePct.value === null ? (
             <>
-              <p className="text-2xl font-semibold text-gray-300 leading-none">—</p>
-              <p className="text-xs text-gray-400 mt-2">Appears once customers reach out this month.</p>
+              <p className="text-2xl font-semibold text-muted leading-none">—</p>
+              <p className="text-xs text-muted mt-2">Appears once customers reach out this month.</p>
             </>
           ) : (
             <>
@@ -179,20 +179,20 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
         <Card>
           <CardContent className="p-5 sm:p-6">
             {data.channelBreakdown.length === 0 ? (
-              <p className="text-sm text-gray-500">Scalix is ready — as customers reach out, {businessName}&apos;s recap will appear here.</p>
+              <p className="text-sm text-subtle">Scalix is ready — as customers reach out, {businessName}&apos;s recap will appear here.</p>
             ) : (
               <ul className="space-y-3">
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm sm:text-[15px] text-gray-700">Responded across your channels: <span className="font-medium text-gray-900">{channelLine}</span>.</span>
+                  <span className="text-sm sm:text-[15px] text-ink">Responded across your channels: <span className="font-medium text-ink">{channelLine}</span>.</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm sm:text-[15px] text-gray-700">{takeoverLine}</span>
+                  <span className="text-sm sm:text-[15px] text-ink">{takeoverLine}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm sm:text-[15px] text-gray-700">Kept your business responsive whenever customers reached out.</span>
+                  <span className="text-sm sm:text-[15px] text-ink">Kept your business responsive whenever customers reached out.</span>
                 </li>
               </ul>
             )}

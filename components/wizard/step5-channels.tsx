@@ -64,8 +64,8 @@ export function Step5Channels({ data, updateData }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Communication Channels</h2>
-        <p className="text-sm text-gray-500">Choose how customers can reach your AI employee. Connect channels after setup.</p>
+        <h2 className="text-lg font-semibold text-ink mb-1">Communication Channels</h2>
+        <p className="text-sm text-subtle">Choose how customers can reach your AI employee. Connect channels after setup.</p>
       </div>
 
       <div className="space-y-3">
@@ -75,14 +75,14 @@ export function Step5Channels({ data, updateData }: Props) {
           return (
             <div
               key={channel.type}
-              className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
+              className="flex items-start gap-4 p-4 rounded-xl border border-hairline hover:bg-sunken transition-colors"
             >
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? channel.color : 'bg-gray-100 text-gray-400'}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? channel.color : 'bg-sunken text-muted'}`}>
                 <Icon className="w-4 h-4" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">{channel.name}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{channel.description}</p>
+                <p className="text-sm font-medium text-ink">{channel.name}</p>
+                <p className="text-xs text-subtle mt-0.5">{channel.description}</p>
                 {channel.note && active && (
                   <p className="text-xs text-[#5B6CF0] mt-1">{channel.note}</p>
                 )}
@@ -97,9 +97,9 @@ export function Step5Channels({ data, updateData }: Props) {
         })}
       </div>
 
-      <div className="bg-[#1a1f36]/5 rounded-xl p-4 text-sm text-gray-600">
+      <div className="bg-[#1a1f36]/5 rounded-xl p-4 text-sm text-subtle">
         <p className="font-medium mb-1">What happens when you click &quot;Go Live&quot;?</p>
-        <ul className="space-y-1 text-xs text-gray-500 list-disc list-inside">
+        <ul className="space-y-1 text-xs text-subtle list-disc list-inside">
           <li>Your AI employee becomes active immediately</li>
           <li>SMS/Voice: a Twilio number will be provisioned for you</li>
           <li>Instagram/Facebook: you'll connect in Settings after setup</li>

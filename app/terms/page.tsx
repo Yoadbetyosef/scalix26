@@ -15,14 +15,14 @@ export default function TermsPage() {
               </svg>
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Terms of Service</h1>
-          <p className="text-gray-500">Last updated: May 30, 2026</p>
+          <h1 className="text-4xl font-bold text-ink mb-3">Terms of Service</h1>
+          <p className="text-subtle">Last updated: May 30, 2026</p>
         </div>
 
-        <div className="prose prose-gray max-w-none space-y-8 text-gray-700 leading-relaxed">
+        <div className="prose prose-gray max-w-none space-y-8 text-ink leading-relaxed">
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">1. Acceptance of Terms</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">1. Acceptance of Terms</h2>
             <p>
               By using this platform or communicating with a business powered by our AI, you agree to
               these Terms of Service. If you do not agree, please discontinue use.
@@ -30,7 +30,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">2. Service Description</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">2. Service Description</h2>
             <p>
               We provide AI-powered customer communication tools for home services businesses.
               Our platform enables businesses to respond automatically to customer inquiries via SMS,
@@ -39,7 +39,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">3. SMS Communications</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">3. SMS Communications</h2>
             <p className="mb-3">
               By texting a phone number powered by our platform, you agree to the following:
             </p>
@@ -58,7 +58,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Business Accounts</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">4. Business Accounts</h2>
             <p>
               Businesses using this platform agree to use it only for lawful customer
               communications. You are responsible for ensuring your use of SMS messaging complies
@@ -67,7 +67,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">5. AI Limitations</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">5. AI Limitations</h2>
             <p>
               Our AI assistant is designed to help with common customer inquiries. Responses are
               generated automatically and may not always be accurate. For urgent matters, always
@@ -77,7 +77,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Limitation of Liability</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">6. Limitation of Liability</h2>
             <p>
               This platform is provided "as is." We are not liable for indirect, incidental, or
               consequential damages arising from your use of our services. Our total liability
@@ -86,7 +86,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Changes to Terms</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">7. Changes to Terms</h2>
             <p>
               We may update these terms from time to time. Continued use of our services after
               changes constitutes acceptance of the new terms.
@@ -94,7 +94,7 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Contact</h2>
+            <h2 className="text-xl font-semibold text-ink mb-3">8. Contact</h2>
             <p>
               Questions about these terms?{' '}
               <a href="mailto:legal@mylocksmithai.com" className="text-[#5B6CF0] hover:underline">

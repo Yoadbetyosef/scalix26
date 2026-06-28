@@ -65,8 +65,8 @@ export function Step1BusinessInfo({ tenant, data, updateData }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Business Information</h2>
-        <p className="text-sm text-gray-500">Paste your website URL to auto-fill, or fill in manually.</p>
+        <h2 className="text-lg font-semibold text-ink mb-1">Business Information</h2>
+        <p className="text-sm text-subtle">Paste your website URL to auto-fill, or fill in manually.</p>
       </div>
 
       {/* Website scan */}
@@ -103,7 +103,7 @@ export function Step1BusinessInfo({ tenant, data, updateData }: Props) {
         <div className="col-span-2 sm:col-span-1">
           <Label>Industry</Label>
           <select
-            className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
+            className="flex h-10 w-full rounded-lg border border-hairline-strong bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
             value={info.industry || ''}
             onChange={e => handleChange('industry', e.target.value)}
           >

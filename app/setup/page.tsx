@@ -55,9 +55,9 @@ export default function SetupPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Set up your business</h1>
-          <p className="text-gray-500 mb-6">Tell us about your business to get started.</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-hairline p-8">
+          <h1 className="text-2xl font-bold text-ink mb-2">Set up your business</h1>
+          <p className="text-subtle mb-6">Tell us about your business to get started.</p>
 
           <form onSubmit={handleSetup} className="space-y-4">
             <div>
@@ -73,7 +73,7 @@ export default function SetupPage() {
             <div>
               <Label>Industry</Label>
               <select
-                className="flex h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
+                className="flex h-11 w-full rounded-lg border border-hairline-strong bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
                 value={industry}
                 onChange={e => setIndustry(e.target.value)}
                 required

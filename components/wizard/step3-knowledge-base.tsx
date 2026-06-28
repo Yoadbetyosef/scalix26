@@ -81,8 +81,8 @@ export function Step3KnowledgeBase({ tenant, data, updateData }: Props) {
     <div className="space-y-5">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">Knowledge Base</h2>
-          <p className="text-sm text-gray-500">Add information your AI employee will use to answer customer questions.</p>
+          <h2 className="text-lg font-semibold text-ink mb-1">Knowledge Base</h2>
+          <p className="text-sm text-subtle">Add information your AI employee will use to answer customer questions.</p>
         </div>
         {tenant.industry && FAQ_TEMPLATES[tenant.industry] && (
           <Button variant="outline" size="sm" onClick={addTemplate}>
@@ -95,7 +95,7 @@ export function Step3KnowledgeBase({ tenant, data, updateData }: Props) {
       {/* Existing items */}
       <div className="space-y-3">
         {items.map((item, i) => (
-          <div key={i} className="p-4 rounded-xl border border-gray-100 bg-gray-50 space-y-2">
+          <div key={i} className="p-4 rounded-xl border border-hairline bg-sunken space-y-2">
             <div className="flex items-center gap-2">
               <Input
                 value={item.title}
@@ -122,8 +122,8 @@ export function Step3KnowledgeBase({ tenant, data, updateData }: Props) {
       </div>
 
       {/* Add new */}
-      <div className="p-4 rounded-xl border-2 border-dashed border-gray-200 space-y-3">
-        <p className="text-sm font-medium text-gray-700">Add Custom Entry</p>
+      <div className="p-4 rounded-xl border-2 border-dashed border-hairline-strong space-y-3">
+        <p className="text-sm font-medium text-ink">Add Custom Entry</p>
         <div className="space-y-2">
           <Input
             placeholder="Topic (e.g. 'Payment Methods')"
@@ -144,7 +144,7 @@ export function Step3KnowledgeBase({ tenant, data, updateData }: Props) {
       </div>
 
       {items.length === 0 && (
-        <p className="text-center text-sm text-gray-400 py-4">
+        <p className="text-center text-sm text-muted py-4">
           Add knowledge base entries so your AI can answer customer questions accurately.
         </p>
       )}

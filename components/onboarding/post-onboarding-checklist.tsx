@@ -86,15 +86,15 @@ export function PostOnboardingChecklist({ slug, aiPhoneNumber, initial }: Props)
     <div className="bg-white rounded-2xl border border-[#5B6CF0]/30 shadow-sm overflow-hidden">
       <div className="bg-[#5B6CF0]/10 px-4 sm:px-5 py-3 flex items-center gap-2">
         <Sparkles className="w-4 h-4 text-[#5B6CF0] flex-shrink-0" />
-        <p className="text-sm font-semibold text-gray-900">Get started — {doneCount}/4 done</p>
+        <p className="text-sm font-semibold text-ink">Get started — {doneCount}/4 done</p>
       </div>
-      <div className="divide-y divide-gray-50">
+      <div className="divide-y divide-hairline">
         {items.map(it => (
           <div key={it.key} className="flex items-center gap-3 px-4 sm:px-5 py-3">
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${it.done ? 'bg-green-500 text-white' : 'border-2 border-gray-200'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${it.done ? 'bg-green-500 text-white' : 'border-2 border-hairline-strong'}`}>
               {it.done && <Check className="w-3.5 h-3.5" />}
             </div>
-            <p className={`flex-1 min-w-0 text-sm ${it.done ? 'text-gray-400 line-through' : 'text-gray-800 font-medium'}`}>{it.label}</p>
+            <p className={`flex-1 min-w-0 text-sm ${it.done ? 'text-muted line-through' : 'text-ink font-medium'}`}>{it.label}</p>
             {!it.done && it.action && <div className="flex-shrink-0">{it.action}</div>}
           </div>
         ))}
