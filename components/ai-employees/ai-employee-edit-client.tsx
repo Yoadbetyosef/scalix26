@@ -51,7 +51,7 @@ function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (
       aria-label={ariaLabel}
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="h-10 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 focus:border-[#4ecdc4] focus:outline-none focus:ring-1 focus:ring-[#4ecdc4]"
+      className="h-10 rounded-xl border border-hairline-strong bg-white px-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
     >
       {TIME_SLOTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
     </select>
@@ -63,23 +63,23 @@ function WeeklyHoursGrid({ hours, onUpdate }: {
   onUpdate: (day: string, next: Partial<DayHours>) => void
 }) {
   return (
-    <div className="mt-3 rounded-xl border border-gray-200 divide-y divide-gray-100">
+    <div className="mt-3 rounded-xl border border-hairline divide-y divide-hairline">
       {DAYS.map(day => {
         const { isOpen, open, close } = hours[day]
         return (
           <div key={day} className="flex items-center gap-3 px-3 sm:px-4 py-3">
             <div className="flex items-center gap-2.5 w-28 sm:w-36 shrink-0">
               <Switch checked={isOpen} onCheckedChange={v => onUpdate(day, { isOpen: v })} aria-label={`${DAY_LABELS[day]} open`} />
-              <span className="text-sm font-medium text-gray-700">{DAY_LABELS[day]}</span>
+              <span className="text-sm font-medium text-ink">{DAY_LABELS[day]}</span>
             </div>
             {isOpen ? (
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <TimeSelect value={open} onChange={v => onUpdate(day, { open: v })} ariaLabel={`${DAY_LABELS[day]} opening time`} />
-                <span className="text-xs text-gray-400">to</span>
+                <span className="text-xs text-muted">to</span>
                 <TimeSelect value={close} onChange={v => onUpdate(day, { close: v })} ariaLabel={`${DAY_LABELS[day]} closing time`} />
               </div>
             ) : (
-              <span className="flex-1 text-sm text-gray-400 italic">Closed</span>
+              <span className="flex-1 text-sm text-muted italic">Closed</span>
             )}
           </div>
         )
@@ -454,8 +454,8 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Onboarding welcome banner */}
       {onboarding && (
         <div className="rounded-2xl border border-[#4ecdc4]/30 bg-[#4ecdc4]/10 p-4 sm:p-5">
-          <h2 className="text-base font-bold text-gray-900">Your AI employee is live — your number is already answering.</h2>
-          <p className="text-sm text-gray-600 mt-1">Finish the quick setup — business details, voice, channels, and website — to start protecting your business from missed calls, messages, and lost customers.</p>
+          <h2 className="text-base font-light tracking-tight text-ink">Your AI employee is live — your number is already answering.</h2>
+          <p className="text-sm text-subtle mt-1">Finish the quick setup — business details, voice, channels, and website — to start protecting your business from missed calls, messages, and lost customers.</p>
           <Button onClick={finishSetup} loading={finishing} className="mt-3">Finish setup →</Button>
         </div>
       )}
@@ -464,7 +464,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
         <div className="flex items-center gap-3">
           {onboarding ? (
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{employee.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
           ) : (
             <>
               <Link href="/ai-employees">
@@ -473,7 +473,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 </Button>
               </Link>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{employee.name}</h1>
+                <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
                 <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>
               </div>
             </>
@@ -496,7 +496,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader>
           <CardTitle>Business Identity</CardTitle>
-          <p className="text-sm text-gray-500">This agent represents a separate business identity with its own contact info.</p>
+          <p className="text-sm text-subtle">This agent represents a separate business identity with its own contact info.</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -540,11 +540,11 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 </Button>
               </div>
               {websiteConnected ? (
-                <p className="text-xs text-gray-500 mt-1">Last scanned {relativeTime(employee.website_scanned_at!)} · {kbCount} item{kbCount === 1 ? '' : 's'} added.</p>
+                <p className="text-xs text-subtle mt-1">Last scanned {relativeTime(employee.website_scanned_at!)} · {kbCount} item{kbCount === 1 ? '' : 's'} added.</p>
               ) : websiteChanged ? (
                 <p className="text-xs text-amber-600 mt-1">Website changed — scan to update the agent&apos;s knowledge.</p>
               ) : (
-                <p className="text-xs text-gray-400 mt-1">Optional. We&apos;ll read your site and add services, pricing, service areas, and hours to the agent&apos;s knowledge below. Nothing is invented — anything not on your site, you can fill in manually.</p>
+                <p className="text-xs text-muted mt-1">Optional. We&apos;ll read your site and add services, pricing, service areas, and hours to the agent&apos;s knowledge below. Nothing is invented — anything not on your site, you can fill in manually.</p>
               )}
             </div>
           </div>
@@ -552,10 +552,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           {/* SECTION 1 — Business Hours (informational; answers "what are your hours?") */}
           <div>
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-500" />
+              <Clock className="w-4 h-4 text-subtle" />
               <Label className="text-base font-semibold">Business Hours</Label>
             </div>
-            <p className="text-xs text-gray-400 mt-1">When a customer asks what hours you&apos;re open, this is what the AI tells them. (This does not control appointment booking.)</p>
+            <p className="text-xs text-muted mt-1">When a customer asks what hours you&apos;re open, this is what the AI tells them. (This does not control appointment booking.)</p>
             <WeeklyHoursGrid hours={businessHours} onUpdate={updateBusinessHours} />
           </div>
         </CardContent>
@@ -565,22 +565,22 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader>
           <CardTitle>Channels</CardTitle>
-          <p className="text-sm text-gray-500">Connect any combination of channels. Each channel is optional — the agent handles whatever is connected.</p>
+          <p className="text-sm text-subtle">Connect any combination of channels. Each channel is optional — the agent handles whatever is connected.</p>
         </CardHeader>
         <CardContent className="space-y-5">
 
           {/* Phone (calls + SMS) */}
-          <div className="p-4 rounded-xl border border-gray-200 space-y-3">
+          <div className="p-5 rounded-2xl border border-hairline space-y-3">
             <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-600" />
-              <span className="font-semibold text-gray-800">Phone (calls + SMS)</span>
+              <Phone className="w-4 h-4 text-subtle" />
+              <span className="font-semibold text-ink">Phone (calls + SMS)</span>
               {phoneChannel && <Badge variant="connected">Connected</Badge>}
             </div>
 
             {phoneChannel ? (
               <div className="space-y-3">
                 {/* How it works — matches the real ring-through behavior */}
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
                   <p className="text-sm font-semibold text-blue-900 mb-1.5">How it works</p>
                   <ol className="text-sm text-blue-700 space-y-1">
                     <li>1. A customer calls your AI line</li>
@@ -590,28 +590,28 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 </div>
 
                 {/* Your AI line */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-0.5">Your AI line</p>
-                  <p className="text-lg font-bold text-gray-900 tracking-wider">{phoneChannel.twilio_number}</p>
-                  <p className="text-xs text-gray-400 mt-1.5">This is the line your AI receptionist answers on. Use it as your business number, or forward your existing number to it — either way, your own phone always rings first.</p>
+                <div className="bg-sunken rounded-xl p-3">
+                  <p className="text-xs text-subtle mb-0.5">Your AI line</p>
+                  <p className="text-lg font-light tracking-tight text-ink tracking-wider">{phoneChannel.twilio_number}</p>
+                  <p className="text-xs text-muted mt-1.5">This is the line your AI receptionist answers on. Use it as your business number, or forward your existing number to it — either way, your own phone always rings first.</p>
                 </div>
 
                 {/* A4: texting (SMS / A2P) status — calls are instant; texting needs carrier verification. */}
                 {smsChannel && (() => {
                   const s = smsChannel.sms_status || 'pending_verification'
                   if (s === 'active') {
-                    return <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" /> Texting: active</div>
+                    return <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl p-3"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" /> Texting: active</div>
                   }
                   if (s === 'failed') {
-                    return <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5" /> Texting needs attention — carrier verification didn&apos;t complete. We&apos;ll reach out to finish it.</div>
+                    return <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl p-3"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5" /> Texting needs attention — carrier verification didn&apos;t complete. We&apos;ll reach out to finish it.</div>
                   }
-                  return <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-3"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" /> 📞 Calls are live now. 💬 Texting is being verified and will activate soon.</div>
+                  return <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" /> 📞 Calls are live now. 💬 Texting is being verified and will activate soon.</div>
                 })()}
 
                 {/* Your phone number (rings first) */}
                 <div>
                   <Label className="text-sm">Your phone number</Label>
-                  <p className="text-xs text-gray-400 mb-1.5">Enter your cell or office number. When a customer calls, your phone rings first — if you don&apos;t answer within 4 rings, your AI receptionist picks up so you never miss a lead.</p>
+                  <p className="text-xs text-muted mb-1.5">Enter your cell or office number. When a customer calls, your phone rings first — if you don&apos;t answer within 4 rings, your AI receptionist picks up so you never miss a lead.</p>
                   <Input
                     className="h-11 text-sm"
                     type="tel"
@@ -622,7 +622,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   {form.forward_to_phone.trim() ? (
                     <p className="text-xs text-green-600 mt-1.5">✓ Connected — your phone rings first, your AI catches anything you miss.</p>
                   ) : (
-                    <p className="text-xs text-gray-500 mt-1.5">No number yet — your AI answers every call directly.</p>
+                    <p className="text-xs text-subtle mt-1.5">No number yet — your AI answers every call directly.</p>
                   )}
                 </div>
 
@@ -639,7 +639,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-gray-500">No phone number assigned. Provision a dedicated number for this agent — handles both inbound calls and SMS.</p>
+                <p className="text-sm text-subtle">No phone number assigned. Provision a dedicated number for this agent — handles both inbound calls and SMS.</p>
                 <Button onClick={provisionPhone} loading={provisioningPhone} size="sm">
                   <Phone className="w-3.5 h-3.5 mr-1.5" />
                   {provisioningPhone ? 'Provisioning...' : 'Get Phone Number'}
@@ -649,13 +649,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           </div>
 
           {/* Facebook + Instagram — one OAuth flow connects both */}
-          <div className="p-4 rounded-xl border border-gray-200 space-y-3">
+          <div className="p-5 rounded-2xl border border-hairline space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="flex items-center gap-1">
                 <FacebookIcon className="w-4 h-4" />
                 <InstagramIcon className="w-4 h-4" />
               </span>
-              <span className="font-semibold text-gray-800">Facebook & Instagram</span>
+              <span className="font-semibold text-ink">Facebook & Instagram</span>
               {fbChannel && <Badge variant="connected">FB Connected</Badge>}
               {igChannel && <Badge variant="connected">IG Connected</Badge>}
               {!fbChannel && !igChannel && <Badge variant="disconnected">Not connected</Badge>}
@@ -664,15 +664,15 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             {(fbChannel || igChannel) ? (
               <div className="space-y-3">
                 {/* Facebook row */}
-                <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
+                <div className="bg-sunken rounded-xl p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                    <p className="text-xs text-subtle mb-0.5 flex items-center gap-1">
                       <FacebookIcon className="w-3 h-3" /> Facebook Page
                     </p>
-                    <p className="text-sm font-medium text-gray-800 truncate">
+                    <p className="text-sm font-medium text-ink truncate">
                       {fbChannel
                         ? ((fbChannel.credentials as Record<string, string>)?.page_name || fbChannel.meta_page_id)
-                        : <span className="text-gray-400 italic">Not connected</span>}
+                        : <span className="text-muted italic">Not connected</span>}
                     </p>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
@@ -695,19 +695,19 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 </div>
 
                 {/* Instagram row */}
-                <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between gap-3">
+                <div className="bg-sunken rounded-xl p-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+                    <p className="text-xs text-subtle mb-0.5 flex items-center gap-1">
                       <InstagramIcon className="w-3 h-3" /> Instagram Account
                     </p>
                     {igChannel ? (
-                      <p className="text-sm font-medium text-gray-800 truncate">
+                      <p className="text-sm font-medium text-ink truncate">
                         {(igChannel.credentials as Record<string, string>)?.username
                           ? `@${(igChannel.credentials as Record<string, string>).username}`
                           : igChannel.meta_page_id}
                       </p>
                     ) : (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted">
                         Not connected — link Instagram to your Facebook page first, then reconnect.
                       </p>
                     )}
@@ -733,7 +733,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-subtle">
                   Connect your Facebook Page and Instagram Business Account with one click.
                   If your page has Instagram linked, both channels connect automatically.
                 </p>
@@ -744,7 +744,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                     Continue with Facebook
                   </Button>
                 </a>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted">
                   You&apos;ll be redirected to Facebook to choose which page to connect.
                 </p>
               </div>
@@ -758,30 +758,30 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#4ecdc4]" /> Email</CardTitle></CardHeader>
         <CardContent className="space-y-5">
-          <p className="text-sm text-gray-500">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
+          <p className="text-sm text-subtle">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
 
           {/* Option B — Connect your own inbox (Gmail OAuth). Recommended. */}
-          <div className="rounded-lg border border-gray-200 p-4">
+          <div className="rounded-2xl border border-hairline p-5">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-gray-800 flex items-center gap-2">
+              <span className="font-semibold text-ink flex items-center gap-2">
                 <Mail className="w-4 h-4" /> Connect your inbox
                 <span className="text-[11px] font-medium text-[#1a9d92] bg-[#e7f8f6] rounded px-1.5 py-0.5">Recommended</span>
               </span>
-              <span className="text-xs text-gray-400">{emailAccounts.length}/3 mailboxes</span>
+              <span className="text-xs text-muted">{emailAccounts.length}/3 mailboxes</span>
             </div>
 
             {/* Connected mailboxes (up to 3 — all feed the same shared inbox). */}
             {emailAccounts.length > 0 && (
               <div className="mt-3 space-y-2">
                 {emailAccounts.map((acct) => (
-                  <div key={acct.id} className="flex items-center justify-between gap-2 rounded-md border border-gray-100 bg-gray-50 px-3 py-2">
+                  <div key={acct.id} className="flex items-center justify-between gap-2 rounded-xl border border-hairline bg-sunken px-3 py-2.5">
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-800 font-mono truncate">{acct.email_address}</p>
+                      <p className="text-sm text-ink font-mono truncate">{acct.email_address}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {acct.status === 'connected'
                           ? <Badge variant="connected">Connected</Badge>
                           : <Badge variant="disconnected">Reconnect needed</Badge>}
-                        {acct.is_primary && <span className="text-[11px] font-medium text-gray-500 bg-white border border-gray-200 rounded px-1.5 py-0.5">Primary</span>}
+                        {acct.is_primary && <span className="text-[11px] font-medium text-subtle bg-white border border-hairline rounded px-1.5 py-0.5">Primary</span>}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -804,7 +804,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
             {emailAccounts.length < 3 ? (
               <div className="mt-3">
-                <p className="text-sm text-gray-500 mb-2">{emailAccounts.length === 0 ? 'Connect Gmail/Google Workspace or Outlook/Microsoft 365 — the AI replies from your own address, with full threading.' : 'Add another mailbox (up to 3). Both feed the same shared inbox.'}</p>
+                <p className="text-sm text-subtle mb-2">{emailAccounts.length === 0 ? 'Connect Gmail/Google Workspace or Outlook/Microsoft 365 — the AI replies from your own address, with full threading.' : 'Add another mailbox (up to 3). Both feed the same shared inbox.'}</p>
                 <div className="flex items-center gap-2">
                   <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
                     <Button type="button" size="sm" variant={emailAccounts.length ? 'outline' : undefined}>{emailAccounts.length ? 'Add Gmail' : 'Connect Gmail'}</Button>
@@ -815,7 +815,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-gray-400 mt-3">You&apos;ve reached the limit of 3 mailboxes. Disconnect one to add another.</p>
+              <p className="text-xs text-muted mt-3">You&apos;ve reached the limit of 3 mailboxes. Disconnect one to add another.</p>
             )}
           </div>
 
@@ -823,17 +823,17 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               (backend inbound webhook + reply path stay fully active; we'll re-expose
               this per-brand later). Render-gated only — do not delete. */}
           {false && (
-          <div className="rounded-lg border border-gray-200 p-4">
-            <span className="font-semibold text-gray-800 flex items-center gap-2"><Share2 className="w-4 h-4" /> Or forward your email</span>
-            <p className="text-sm text-gray-500 mt-1">No inbox connection — just forward your business email to the address below and the AI handles replies.</p>
+          <div className="rounded-2xl border border-hairline p-5">
+            <span className="font-semibold text-ink flex items-center gap-2"><Share2 className="w-4 h-4" /> Or forward your email</span>
+            <p className="text-sm text-subtle mt-1">No inbox connection — just forward your business email to the address below and the AI handles replies.</p>
             <div className="flex items-center gap-2 mt-3">
-              <Input readOnly value={`${tenantSlug}@mail.mylocksmithai.com`} className="bg-gray-50 font-mono text-sm" />
+              <Input readOnly value={`${tenantSlug}@mail.mylocksmithai.com`} className="bg-sunken font-mono text-sm" />
               <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(`${tenantSlug}@mail.mylocksmithai.com`); toast.success('Copied') }}>Copy</Button>
             </div>
             <div className="mt-3">
               <Label>Reply-from email (optional)</Label>
               <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.reply_from_email} onChange={e => setForm(f => ({ ...f, reply_from_email: e.target.value }))} />
-              <p className="text-xs text-gray-400 mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
+              <p className="text-xs text-muted mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
             </div>
           </div>
           )}
@@ -863,7 +863,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   <label
                     key={opt.value}
                     htmlFor={`email_mode_${opt.value}`}
-                    className={`flex gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selected === opt.value ? 'border-[#4ecdc4] bg-[#4ecdc4]/5' : 'border-gray-200 hover:border-gray-300'}`}
+                    className={`flex gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${selected === opt.value ? 'border-accent/40 bg-accent/5 shadow-e1' : 'border-hairline hover:border-hairline-strong hover:bg-sunken/50'}`}
                   >
                     <input
                       id={`email_mode_${opt.value}`}
@@ -875,10 +875,10 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                     />
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-gray-800">{opt.title}</span>
+                        <span className="text-sm font-medium text-ink">{opt.title}</span>
                         {opt.recommended && <span className="text-[10px] font-semibold uppercase tracking-wide text-[#3db8af] bg-[#4ecdc4]/15 px-1.5 py-0.5 rounded">Recommended</span>}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{opt.help}</p>
+                      <p className="text-xs text-muted mt-0.5">{opt.help}</p>
                     </div>
                   </label>
                 ))}
@@ -920,13 +920,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             <select
               value={form.voice_language}
               onChange={e => setForm(f => ({ ...f, voice_language: e.target.value }))}
-              className="mt-1.5 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+              className="mt-1.5 w-full rounded-xl border border-hairline-strong bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
             >
               <option value="en">English</option>
               <option value="es">Spanish (Español)</option>
               <option value="bilingual">Bilingual (English + Spanish)</option>
             </select>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-muted mt-1">
               Language the agent understands and speaks on phone calls. Bilingual auto-detects and switches between English and Spanish. (Text channels already reply in the caller&apos;s language.)
             </p>
           </div>
@@ -958,7 +958,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#4ecdc4]" /> Skills</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
+          <p className="text-sm text-subtle mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
           <SkillsEditor agentId={employee.id} initial={skills || []} />
         </CardContent>
       </Card>
@@ -967,7 +967,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#4ecdc4]" /> Appointment Availability</CardTitle>
-          <p className="text-sm text-gray-500">When you&apos;ll take appointments. The AI only books inside these windows — separate from your open hours.</p>
+          <p className="text-sm text-subtle">When you&apos;ll take appointments. The AI only books inside these windows — separate from your open hours.</p>
         </CardHeader>
         <CardContent>
           <div className="flex justify-end">
@@ -992,7 +992,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-[#4ecdc4]" /> Knowledge Base</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
+          <p className="text-sm text-subtle mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
           <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />
         </CardContent>
       </Card>
@@ -1003,7 +1003,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           it's "Finish setup"; when editing it's "Save Changes". */}
       <Card>
         <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-subtle">
             {onboarding ? 'Finish setting up this AI employee.' : 'Save all changes to this AI employee.'}
           </p>
           {onboarding ? (
@@ -1016,8 +1016,8 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Danger Zone — destructive actions only. The green primary action moved up
           to the Save card above so it never sits beside the red Delete. */}
-      <Card className="border-red-200">
-        <CardHeader><CardTitle className="text-red-600">Danger Zone</CardTitle></CardHeader>
+      <Card className="border-danger/20">
+        <CardHeader><CardTitle className="text-danger">Danger Zone</CardTitle></CardHeader>
         <CardContent>
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" />
@@ -1030,8 +1030,11 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           handleSave/payload/loading state as the header + bottom buttons. */}
       {isDirty && !onboarding && (
         <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-gray-200 bg-white shadow-lg px-4 py-2.5">
-            <span className="text-sm text-gray-600">You have unsaved changes</span>
+          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-hairline bg-white shadow-e3 px-5 py-2.5">
+            <span className="inline-flex items-center gap-2 text-sm text-subtle">
+              <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
+              Unsaved changes
+            </span>
             <Button onClick={handleSave} loading={saving} size="sm">Save Changes</Button>
           </div>
         </div>

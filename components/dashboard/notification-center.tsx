@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, X, Phone } from 'lucide-react'
+import { Bell, X, Phone, Check, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Notif = {
@@ -127,11 +127,11 @@ export function NotificationCenter() {
       <button
         onClick={toggle}
         aria-label="Notifications"
-        className="fixed bottom-20 right-4 md:bottom-4 z-50 w-14 h-14 rounded-full bg-[#1a1f36] text-white shadow-lg flex items-center justify-center hover:bg-[#252b4a] transition-colors"
+        className="fixed bottom-20 right-4 md:bottom-4 z-50 w-14 h-14 rounded-full bg-ink text-white shadow-e3 flex items-center justify-center transition-all duration-200 hover:bg-ink/90 hover:shadow-e4 hover:-translate-y-0.5 active:scale-95"
       >
-        <Bell className="w-6 h-6" />
+        <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full border-2 border-white">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 flex items-center justify-center bg-danger text-white text-[11px] font-semibold rounded-full ring-2 ring-white">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
@@ -140,56 +140,65 @@ export function NotificationCenter() {
       {open && (
         <>
           {/* Backdrop (mobile only) */}
-          <div className="md:hidden fixed inset-0 bg-black/40 z-50 animate-fade-in" onClick={() => setOpen(false)} />
+          <div className="md:hidden fixed inset-0 bg-ink/30 backdrop-blur-sm z-50 animate-fade-in" onClick={() => setOpen(false)} />
 
           {/* Panel: bottom-sheet on mobile, floating card on desktop */}
-          <div className="fixed z-50 bg-white shadow-2xl flex flex-col animate-slide-up
-                          inset-x-0 bottom-0 max-h-[75vh] rounded-t-2xl
-                          md:inset-x-auto md:bottom-24 md:right-4 md:w-96 md:max-h-[28rem] md:rounded-xl md:border md:border-gray-100">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
-              <span className="font-semibold text-gray-900 flex items-center gap-2">🔔 Notifications</span>
-              <button onClick={() => setOpen(false)} aria-label="Close" className="w-9 h-9 -mr-2 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
+          <div className="fixed z-50 bg-white shadow-e4 flex flex-col animate-slide-up
+                          inset-x-0 bottom-0 max-h-[75vh] rounded-t-3xl
+                          md:inset-x-auto md:bottom-24 md:right-4 md:w-[26rem] md:max-h-[30rem] md:rounded-3xl md:border md:border-hairline">
+            <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
+              <span className="text-[15px] font-medium tracking-tight text-ink">Notifications</span>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="w-9 h-9 -mr-2 flex items-center justify-center rounded-full hover:bg-sunken text-muted transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-y-auto flex-1 px-2 pb-2 space-y-1">
               {notifs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                  <Bell className="w-10 h-10 mb-2" />
-                  <p className="text-sm">No notifications yet</p>
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-sunken flex items-center justify-center text-muted mb-3">
+                    <Bell className="w-6 h-6" strokeWidth={1.5} />
+                  </div>
+                  <p className="text-sm text-subtle">You&apos;re all caught up</p>
+                  <p className="text-xs text-muted mt-0.5">New leads and bookings will appear here.</p>
                 </div>
               ) : (
-                notifs.map((n) => (
-                  <div
-                    key={n.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openNotif(n)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotif(n) } }}
-                    className="flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-b-0 cursor-pointer hover:bg-gray-50 transition-colors"
-                  >
-                    <span className="text-xl flex-shrink-0">{n.type === 'booked' ? '✅' : '🔥'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {n.type === 'booked' ? 'Lead booked' : 'New lead'} — {n.name || 'Unknown'}
-                      </p>
-                      {n.type !== 'booked' && n.phone && (
-                        <p className="text-xs text-gray-500 mt-0.5 truncate">{n.phone}</p>
+                notifs.map((n) => {
+                  const booked = n.type === 'booked'
+                  return (
+                    <div
+                      key={n.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openNotif(n)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotif(n) } }}
+                      className="flex items-center gap-3 px-3 py-3 rounded-2xl cursor-pointer hover:bg-sunken transition-colors"
+                    >
+                      {/* Colored indicator tile — booked is a calm win, a new lead is energy */}
+                      <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${booked ? 'bg-emerald-50 text-emerald-600' : 'bg-accent/10 text-accent-strong'}`}>
+                        {booked ? <Check className="w-[18px] h-[18px]" strokeWidth={2} /> : <Sparkles className="w-[18px] h-[18px]" strokeWidth={1.75} />}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-ink truncate">
+                          {booked ? 'Appointment booked' : 'New lead'} · {n.name || 'Unknown'}
+                        </p>
+                        {!booked && n.phone && (
+                          <p className="text-xs text-subtle mt-0.5 truncate">{n.phone}</p>
+                        )}
+                        <p className="text-xs text-muted mt-0.5">{relativeTime(n.ts)}</p>
+                      </div>
+                      {!booked && n.phone && (
+                        <a
+                          href={`tel:${n.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="tap-target inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-ink text-white hover:bg-ink/90 transition-colors flex-shrink-0"
+                        >
+                          <Phone className="w-3.5 h-3.5" strokeWidth={2} /> Call
+                        </a>
                       )}
-                      <p className="text-xs text-gray-400 mt-0.5">{relativeTime(n.ts)}</p>
                     </div>
-                    {n.type !== 'booked' && n.phone && (
-                      <a
-                        href={`tel:${n.phone}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="tap-target inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af] flex-shrink-0"
-                      >
-                        <Phone className="w-3 h-3" /> Call
-                      </a>
-                    )}
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </div>

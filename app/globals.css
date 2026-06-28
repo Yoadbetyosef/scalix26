@@ -28,11 +28,13 @@
   --color-danger: #E2574C;
   --color-info: #4B82E0;
 
-  /* Radius (→ rounded-input / rounded-button / rounded-card / rounded-dialog) */
-  --radius-input: 8px;
-  --radius-button: 10px;
-  --radius-card: 16px;
-  --radius-dialog: 20px;
+  /* Radius (→ rounded-input / rounded-button / rounded-card / rounded-dialog).
+     Larger, more premium — App-004. Bumping the tokens cascades the new radii
+     across every rounded-card / rounded-button / rounded-input in the app. */
+  --radius-input: 12px;
+  --radius-button: 12px;
+  --radius-card: 20px;
+  --radius-dialog: 24px;
 
   /* Elevation (→ shadow-e1 … shadow-e4) — soft, navy-tinted */
   --shadow-e1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.04);

@@ -2,24 +2,27 @@ import { createClient, createServiceClient, createAdminClient } from '@/lib/supa
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
 
-// Matching icon for a channel pill — official brand logos for FB/IG, lucide for the
+// Matching icon for a channel chip — official brand logos for FB/IG, lucide for the
 // generic channels. Display only.
 function channelIcon(type: string) {
-  const cls = 'w-3 h-3'
+  const cls = 'w-3.5 h-3.5'
   switch (type) {
-    case 'voice': return <Phone className={cls} />
-    case 'sms': return <MessageSquare className={cls} />
-    case 'email': return <Mail className={cls} />
-    case 'whatsapp': return <MessageCircle className={cls} />
+    case 'voice': return <Phone className={cls} strokeWidth={1.75} />
+    case 'sms': return <MessageSquare className={cls} strokeWidth={1.75} />
+    case 'email': return <Mail className={cls} strokeWidth={1.75} />
+    case 'whatsapp': return <MessageCircle className={cls} strokeWidth={1.75} />
     case 'facebook': return <FacebookIcon className={cls} />
     case 'instagram': return <InstagramIcon className={cls} />
     default: return null
   }
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  voice: 'Voice', sms: 'SMS', email: 'Email', whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram',
 }
 
 export default async function AIEmployeesPage() {
@@ -48,15 +51,19 @@ export default async function AIEmployeesPage() {
   const emailAgentIds = new Set((emailAccounts || []).map((a) => a.ai_employee_id).filter(Boolean))
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-5 gap-3">
+    <div className="p-4 sm:p-8 max-w-6xl mx-auto">
+      <div className="flex items-end justify-between mb-8 gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">AI Employees</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{employees?.length || 0} employees</p>
+          <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">AI Employees</h1>
+          <p className="text-sm text-muted mt-1">
+            {employees?.length
+              ? `${employees.length} ${employees.length === 1 ? 'employee' : 'employees'} working for you`
+              : 'Your digital team'}
+          </p>
         </div>
         <Link href="/ai-employees/new" className="flex-shrink-0">
           <Button>
-            <Plus className="w-4 h-4 mr-1.5" />
+            <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">New AI Employee</span>
             <span className="sm:hidden">New</span>
           </Button>
@@ -64,69 +71,94 @@ export default async function AIEmployeesPage() {
       </div>
 
       {!employees?.length ? (
-        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-          <Bot className="w-12 h-12 mb-3" />
-          <p className="text-sm font-medium">No AI employees yet</p>
-          <p className="text-xs mt-1">Create your first AI employee to start handling customer communications</p>
-          <Link href="/ai-employees/new">
-            <Button className="mt-4">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Create AI Employee
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-sunken flex items-center justify-center text-subtle mb-5">
+            <Bot className="w-8 h-8" strokeWidth={1.5} />
+          </div>
+          <p className="text-lg font-light text-ink">No AI employees yet</p>
+          <p className="text-sm text-muted mt-1.5 max-w-xs">Hire your first digital employee to start handling every call, text, and message.</p>
+          <Link href="/ai-employees/new" className="mt-6">
+            <Button>
+              <Plus className="w-4 h-4" />
+              Create your first employee
             </Button>
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {employees.map(emp => (
-            <Card key={emp.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-[#4ecdc4]/10 flex items-center justify-center text-[#4ecdc4] text-lg font-bold flex-shrink-0">
-                    {emp.name[0]}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-900">{emp.name}</h3>
-                      <Badge variant={emp.status as 'active' | 'draft'}>{emp.status}</Badge>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {employees.map(emp => {
+            const live = emp.status === 'active'
+            const channelCount = (emp.channels?.length || 0) + (emailAgentIds.has(emp.id) ? 1 : 0)
+            const activeSkills = emp.skills?.filter((s: { active: boolean }) => s.active).length || 0
+            const channels: { id: string; type: string }[] = [
+              ...((emp.channels || []) as { id: string; type: string }[]),
+              ...(emailAgentIds.has(emp.id) ? [{ id: `${emp.id}-email`, type: 'email' }] : []),
+            ]
+            return (
+              <Card key={emp.id} className="group hover:shadow-e3 hover:-translate-y-0.5 transition-all duration-300">
+                <CardContent className="p-6">
+                  {/* Identity — the employee, alive */}
+                  <div className="flex items-start gap-3.5 mb-6">
+                    <div className="relative flex-shrink-0">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sunken to-hairline ring-1 ring-hairline flex items-center justify-center text-ink text-lg font-light">
+                        {emp.name[0]}
+                      </div>
+                      {/* Live presence dot — green & breathing when on duty, quiet when draft */}
+                      <span className={`absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-white ${live ? 'bg-emerald-500' : 'bg-muted'}`}>
+                        {live && <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60" />}
+                      </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5 truncate">{emp.greeting}</p>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <h3 className="text-base font-medium tracking-tight text-ink truncate">{emp.name}</h3>
+                      <p className="mt-1 inline-flex items-center gap-1.5 text-xs">
+                        <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-emerald-500' : 'bg-muted'}`} />
+                        <span className={live ? 'text-emerald-600 font-medium' : 'text-muted'}>
+                          {live ? 'On duty · watching every channel' : 'Draft · not live yet'}
+                        </span>
+                      </p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2 text-xs text-gray-500 mb-4">
-                  <div className="flex items-center justify-between">
-                    <span>Channels</span>
-                    <span className="font-medium text-gray-700">{(emp.channels?.length || 0) + (emailAgentIds.has(emp.id) ? 1 : 0)}</span>
+                  {/* The work it carries — real figures, large and calm */}
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="rounded-2xl bg-sunken/60 px-4 py-3">
+                      <p className="sx-tabular text-2xl font-light text-ink leading-none">{channelCount}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-muted mt-1.5">Channels</p>
+                    </div>
+                    <div className="rounded-2xl bg-sunken/60 px-4 py-3">
+                      <p className="sx-tabular text-2xl font-light text-ink leading-none">{activeSkills}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-muted mt-1.5">Active skills</p>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span>Active Skills</span>
-                    <span className="font-medium text-gray-700">{emp.skills?.filter((s: { active: boolean }) => s.active).length || 0}</span>
-                  </div>
-                </div>
 
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {(emp.channels || []).slice(0, 3).map((ch: { id: string; type: string }) => (
-                    <Badge key={ch.id} variant={ch.type as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'} className="inline-flex items-center gap-1">
-                      {channelIcon(ch.type)}{ch.type}
-                    </Badge>
-                  ))}
-                  {/* Email connection isn't a channels row — add its pill when connected. */}
-                  {emailAgentIds.has(emp.id) && <Badge variant="email" className="inline-flex items-center gap-1"><Mail className="w-3 h-3" />email</Badge>}
-                </div>
-
-                <div className="flex gap-2">
-                  <Link href={`/ai-employees/${emp.id}`} className="flex-1">
-                    <Button variant="outline" size="sm" className="w-full">Edit</Button>
-                  </Link>
-                  {emp.status === 'draft' && (
-                    <Button size="sm" className="flex-shrink-0">
-                      <Zap className="w-3.5 h-3.5 mr-1" />Go Live
-                    </Button>
+                  {/* Connected channels — neutral chips, the channel icon does the talking */}
+                  {channels.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-6">
+                      {channels.slice(0, 4).map((ch) => (
+                        <span key={ch.id} className="inline-flex items-center gap-1.5 rounded-full bg-white ring-1 ring-hairline px-2.5 py-1 text-xs font-medium text-subtle">
+                          {channelIcon(ch.type)}{CHANNEL_LABELS[ch.type] || ch.type}
+                        </span>
+                      ))}
+                      {channels.length > 4 && (
+                        <span className="inline-flex items-center rounded-full bg-sunken px-2.5 py-1 text-xs font-medium text-muted">+{channels.length - 4}</span>
+                      )}
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+
+                  <div className="flex gap-2">
+                    <Link href={`/ai-employees/${emp.id}`} className="flex-1">
+                      <Button variant="outline" size="sm" className="w-full">Configure</Button>
+                    </Link>
+                    {emp.status === 'draft' && (
+                      <Button size="sm" className="flex-shrink-0">
+                        <Zap className="w-3.5 h-3.5" />Go Live
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>

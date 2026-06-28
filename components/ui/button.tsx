@@ -3,17 +3,22 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-button text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-50',
+  // Premium base — SCALIX language. Smooth motion, soft focus ring (ink, not teal),
+  // gentle press. Color comes from the variant; the brand waveform stays the accent.
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-button text-sm font-medium transition-all duration-200 ease-[cubic-bezier(0.2,0,0,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink/15 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
   {
     variants: {
       variant: {
-        default: 'bg-accent text-white hover:bg-accent-strong',
-        destructive: 'bg-red-500 text-white hover:bg-red-600',
-        outline: 'border border-hairline-strong bg-surface hover:bg-sunken text-gray-700',
-        ghost: 'hover:bg-sunken text-gray-700',
-        link: 'text-accent underline-offset-4 hover:underline',
-        sidebar: 'text-gray-300 hover:bg-[#252b4a] hover:text-white w-full justify-start',
-        'sidebar-active': 'bg-[#252b4a] text-white w-full justify-start',
+        // Primary — near-black ink, slight elevation that lifts on hover (Apple/Linear).
+        default: 'bg-ink text-white shadow-e1 hover:bg-ink/90 hover:shadow-e2 hover:-translate-y-px',
+        // Destructive — minimal, elegant, never aggressive. Quiet red that warms on hover.
+        destructive: 'bg-white text-danger border border-danger/20 hover:border-danger/40 hover:bg-danger/[0.04]',
+        // Secondary — white, soft border, clean hover, subtle float.
+        outline: 'border border-hairline-strong bg-white text-ink shadow-e1 hover:bg-sunken hover:shadow-e2 hover:-translate-y-px',
+        ghost: 'text-subtle hover:bg-sunken hover:text-ink',
+        link: 'text-ink underline-offset-4 hover:underline',
+        sidebar: 'text-subtle hover:bg-sunken hover:text-ink w-full justify-start',
+        'sidebar-active': 'bg-sunken text-ink w-full justify-start',
       },
       size: {
         default: 'h-11 px-4 py-2',
