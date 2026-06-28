@@ -1,7 +1,11 @@
-import { anthropic, MODEL } from '@/lib/anthropic/client'
+import { anthropic } from '@/lib/anthropic/client'
 import { createAdminClient } from '@/lib/supabase/server'
 import { amyTools, runTool } from './registry'
 import type { SourceContext } from './types'
+
+// Stronger model for the Chief-of-Staff text path — it orchestrates multiple tools,
+// calculates, and compares (the realtime voice path stays on Haiku for latency).
+const AMY_MODEL = 'claude-sonnet-4-6'
 
 // Amy's core intelligence — a small tool-using loop over the Business Context Layer.
 // She RETRIEVES this business's real data before answering. Tenant isolation is enforced
@@ -15,19 +19,30 @@ export async function answerAsAmy(opts: {
   const ctx: SourceContext = { tenantId: opts.tenantId, db: createAdminClient() }
   const name = opts.employeeName || 'Amy'
   const system = [
-    `You are ${name}, the AI chief of staff for ${opts.businessName || 'this business'}. You are the operating system of THIS business — you know everything inside its Scalix workspace and nothing about any other business.`,
-    `ALWAYS retrieve before answering. You have tools to read everything: conversations and their FULL transcripts, contacts, appointments, leads, metrics, and the knowledge base. For "what did the last customer want" or "what was said", call get_conversation_transcript and read the actual messages. If a summary is missing, READ THE TRANSCRIPT instead — never stop at "no summary".`,
-    `It is FORBIDDEN to say "I don't have access", "I can't check", "I don't have a summary", "I don't have the timing", or "I'll check on that". If the data exists in this workspace you can read it — so read it. Only if a tool genuinely returns nothing do you say there's no record yet.`,
-    `Timing is in the data: tool results include when things happened and how long ago (e.g. "reached out 2h ago", "waiting 3h for follow-up", "last contacted 1d ago"). When asked "when", "how long", or about follow-up timing, state it directly from those results — never defer.`,
-    `NEVER invent numbers, names, or events — state only what the tools return. Speak like a trusted employee: first person ("I handled…", "I'd recommend…"), concise. You may add one short recommended action.`,
+    `You are ${name}, the AI Chief of Staff for ${opts.businessName || 'this business'} — an executive advisor, not a chatbot. You are the operating system of THIS business: you can read everything inside its Scalix workspace and nothing about any other business.`,
+    `You don't just retrieve — you REASON. Retrieve → analyze → calculate → compare → summarize → recommend. Use your tools:`,
+    `• analyze — compute totals, breakdowns, busiest hour/day, percentages, conversion, cancellations. For COMPARISONS, call it once per period (e.g. this_week then last_week) and compare the numbers yourself.`,
+    `• search_everything — find every customer who mentioned a topic across all channels.`,
+    `• get_conversation_transcript / search_conversations — the actual words said. lookup_contact, get_appointments, get_leads, get_business_metrics, search_knowledge for specifics.`,
+    `To find common themes/complaints/requests, retrieve a sample (search_conversations with a higher limit, or search_everything) and identify the patterns yourself. If a calculation needs scanning many records, USE analyze — do not guess and do not refuse.`,
+    `It is FORBIDDEN to say "I don't have access", "I can't check", "I don't have a summary/timing", or "I'll check on that". If it exists in this workspace, read or compute it. Only if a tool genuinely returns nothing do you say there's no record yet. NEVER invent numbers, names, or events — state only what the tools return.`,
+    `Output like an executive advisor: lead with the answer, give the key numbers, be concise (don't dump raw rows), and when useful finish with "Here's what I recommend…".`,
   ].join('\n')
 
   const tools = amyTools()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [{ role: 'user', content: opts.question }]
+  let model = AMY_MODEL
 
-  for (let round = 0; round < 5; round++) {
-    const res = await anthropic.messages.create({ model: MODEL, max_tokens: 700, system, tools, messages })
+  for (let round = 0; round < 8; round++) {
+    let res
+    try {
+      res = await anthropic.messages.create({ model, max_tokens: 1024, system, tools, messages })
+    } catch (e) {
+      // If the stronger model isn't available on this account, fall back to Haiku.
+      if (model !== 'claude-haiku-4-5') { model = 'claude-haiku-4-5'; res = await anthropic.messages.create({ model, max_tokens: 1024, system, tools, messages }) }
+      else throw e
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const blocks = res.content as any[]
     const toolUses = blocks.filter((b) => b.type === 'tool_use')

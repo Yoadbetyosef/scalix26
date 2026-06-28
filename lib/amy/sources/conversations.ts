@@ -19,7 +19,7 @@ export const conversationsSource: ContextSource = {
     const query = str(args.query)
     const channel = str(args.channel)
     const status = str(args.status)
-    const limit = Math.min(num(args.limit, 8), 15)
+    const limit = Math.min(num(args.limit, 8), 30)
 
     // Keyword search hits the actual transcript/message text, tenant-scoped via an inner
     // join on the conversation's tenant_id (messages have no tenant_id of their own).

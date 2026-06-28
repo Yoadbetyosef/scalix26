@@ -6,12 +6,16 @@ import { appointmentsSource } from './sources/appointments'
 import { leadsSource } from './sources/leads'
 import { metricsSource } from './sources/metrics'
 import { knowledgeSource } from './sources/knowledge'
+import { analyzeSource } from './sources/analyze'
+import { searchSource } from './sources/search'
 
 // ── The registry ────────────────────────────────────────────────────────────────
 // Add a new data source here (one line) and Amy can use it immediately. Her core
 // agent loop + prompt never change. Every source is strictly tenant-scoped.
 const SOURCES: ContextSource[] = [
   metricsSource,
+  analyzeSource,
+  searchSource,
   conversationsSource,
   transcriptSource,
   contactsSource,
