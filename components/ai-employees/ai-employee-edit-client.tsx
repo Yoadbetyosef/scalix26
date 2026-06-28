@@ -549,7 +549,14 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                   {scanningWebsite ? 'Scanning…' : websiteConnected ? 'Re-scan' : 'Scan website'}
                 </Button>
               </div>
-              {websiteConnected ? (
+              {scanningWebsite ? (
+                <p className="text-xs text-accent-strong mt-1.5 inline-flex items-center gap-2">
+                  <span className="flex items-end gap-[2px] h-3" aria-hidden="true">
+                    {[0, 1, 2].map((i) => <span key={i} className="sx-wavebar w-[2px] h-full rounded-full bg-accent" style={{ animationDelay: `${i * 0.15}s` }} />)}
+                  </span>
+                  Scanning your business…
+                </p>
+              ) : websiteConnected ? (
                 <p className="text-xs text-subtle mt-1">Last scanned {relativeTime(employee.website_scanned_at!)} · {kbCount} item{kbCount === 1 ? '' : 's'} added.</p>
               ) : websiteChanged ? (
                 <p className="text-xs text-amber-600 mt-1">Website changed — scan to update the agent&apos;s knowledge.</p>
