@@ -59,6 +59,11 @@ export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefi
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
         streamRef.current = stream
 
+        // Ground the voice agent in THIS business's real data (tenant-scoped snapshot).
+        let snapshot = ''
+        try { const r = await fetch('/api/ai/amy/snapshot'); if (r.ok) snapshot = (await r.json()).snapshot || '' } catch { /* greeting still works without it */ }
+        if (cancelled) return
+
         const ws = new WebSocket(PROXY_URL)
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws
@@ -70,7 +75,7 @@ export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefi
           ws.send(JSON.stringify({
             type: 'config',
             voice: TTS_VOICE(briefing.employeeVoice),
-            prompt: buildRealtimePrompt(briefing),
+            prompt: buildRealtimePrompt(briefing) + (snapshot ? `\n\nCURRENT BUSINESS DATA (real, this business only — answer from it, never say you lack access):\n${snapshot}` : ''),
             greeting: `Hi, I'm on duty. Ask me what changed while you were away.`,
             inputSampleRate: ctx.sampleRate,
             eot: 0.7,

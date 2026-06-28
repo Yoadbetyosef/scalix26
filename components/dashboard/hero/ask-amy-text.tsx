@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { ArrowUp, AudioLines } from 'lucide-react'
-import { type AmyBriefing, TTS_VOICE, buildSystemPrompt } from './ask-amy-shared'
+import { type AmyBriefing, TTS_VOICE } from './ask-amy-shared'
 
 // Typed fallback for Ask Amy. Realtime voice is the primary experience; this is the
 // quiet "Type instead" path. Streams the reply and speaks it in her real voice.
@@ -29,9 +29,10 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
     unlock()
     setInput(''); setQuestion(q); setAnswer(''); setBusy(true)
     try {
-      const res = await fetch('/api/ai/chat', {
+      // Chief-of-Staff path: Amy retrieves THIS business's real data before answering.
+      const res = await fetch('/api/ai/amy', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q, system_prompt: buildSystemPrompt(briefing) }),
+        body: JSON.stringify({ message: q }),
       })
       if (!res.ok || !res.body) throw new Error()
       const reader = res.body.getReader(); const dec = new TextDecoder(); let acc = ''
