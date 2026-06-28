@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { ImpactData } from '@/lib/dashboard/impact'
 import { DrillDownDrawer, type DrawerConfig } from '@/components/dashboard/drill-down-drawer'
+import { CountUp } from '@/components/ui/count-up'
 
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   if (pct === null || pct === undefined) return null
@@ -130,10 +131,10 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
       )}
 
       {/* 4) IMPACT METRIC CARDS — exactly four (clickable → proof drawer when value>0) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sx-stagger">
         <ImpactCard icon={Users} label="Customers Assisted" tone="blue" desc="People who received a response without waiting on you."
           onClick={data.customersHelped.value > 0 ? () => setDrawer({ metric: 'customers_assisted', title: `${data.customersHelped.value} Customers Assisted`, subtitle: 'People who received a response from your business through Scalix.', headerCount: `${data.customersHelped.value}` }) : undefined}>
-          <BigNumber>{data.customersHelped.value.toLocaleString()}</BigNumber>
+          <BigNumber><CountUp value={data.customersHelped.value} /></BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-muted">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
             <Trend pct={data.customersHelped.trendPct} />
@@ -142,7 +143,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
 
         <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" tone="green" desc="People who reached out while you were busy, unavailable, or after hours."
           onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Scalix handled these customer moments while you focused on running your business.', headerCount: `${data.opportunities.value}` }) : undefined}>
-          <BigNumber>{data.opportunities.value.toLocaleString()}</BigNumber>
+          <BigNumber><CountUp value={data.opportunities.value} /></BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-muted">{data.opportunities.lifetime.toLocaleString()} since you started</span>
             <Trend pct={data.opportunities.trendPct} />
@@ -151,7 +152,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
 
         <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" tone="purple" desc="Calls, texts, emails, chats, and social messages Scalix helped manage."
           onClick={data.conversationsManaged.value > 0 ? () => setDrawer({ metric: 'conversations_managed', title: `${data.conversationsManaged.value} Conversations Handled Without You`, subtitle: 'These conversations received responses without requiring your personal attention.', headerCount: `${data.conversationsManaged.value}` }) : undefined}>
-          <BigNumber>{data.conversationsManaged.value.toLocaleString()}</BigNumber>
+          <BigNumber><CountUp value={data.conversationsManaged.value} /></BigNumber>
           <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
         </ImpactCard>
 
@@ -164,7 +165,7 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
             </>
           ) : (
             <>
-              <BigNumber>{data.coveragePct.value}%</BigNumber>
+              <BigNumber><CountUp value={data.coveragePct.value} suffix="%" /></BigNumber>
               <div className="mt-1.5"><Trend pct={data.coveragePct.trendPct} suffix=" pts" /></div>
             </>
           )}

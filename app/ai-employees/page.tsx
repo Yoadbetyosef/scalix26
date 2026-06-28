@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 import { FacebookIcon } from '@/components/icons/brand-icons'
 
 // Matching icon for a channel chip — official brand logos for FB/IG, lucide for the
@@ -77,21 +78,22 @@ export default async function AIEmployeesPage() {
       </div>
 
       {!employees?.length ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="w-16 h-16 rounded-3xl bg-sunken flex items-center justify-center text-subtle mb-5">
-            <Bot className="w-8 h-8" strokeWidth={1.5} />
-          </div>
-          <p className="text-lg font-light text-ink">No AI employees yet</p>
-          <p className="text-sm text-muted mt-1.5 max-w-xs">Hire your first digital employee to start handling every call, text, and message.</p>
-          <Link href="/ai-employees/new" className="mt-6">
-            <Button>
-              <Plus className="w-4 h-4" />
-              Create your first employee
-            </Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={Bot}
+          title="Hire your first AI employee"
+          action={
+            <Link href="/ai-employees/new">
+              <Button>
+                <Plus className="w-4 h-4" />
+                Create your first employee
+              </Button>
+            </Link>
+          }
+        >
+          In a few minutes you&rsquo;ll have a digital employee answering every call, text, and message — working 24/7 so you never miss a customer.
+        </EmptyState>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 sx-stagger">
           {employees.map(emp => {
             const live = emp.status === 'active'
             const channelCount = (emp.channels?.length || 0) + (emailAgentIds.has(emp.id) ? 1 : 0)

@@ -5,6 +5,7 @@ import { Calendar, Check, BellOff, Phone, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { EmptyState } from '@/components/ui/empty-state'
 import { formatTime12 } from '@/lib/appointments'
 
 export type Appointment = {
@@ -77,13 +78,9 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
 
   if (!rows.length) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center sx-card">
-        <div className="w-14 h-14 rounded-2xl bg-sunken flex items-center justify-center text-subtle mb-4">
-          <Calendar className="w-7 h-7" strokeWidth={1.5} />
-        </div>
-        <p className="text-base font-light text-ink">No appointments yet</p>
-        <p className="text-sm text-muted mt-1 max-w-xs">Appointments booked by the AI appear here. Set your times in Settings → Availability.</p>
-      </div>
+      <EmptyState icon={Calendar} title="Ready to start booking">
+        Your AI is standing by to book appointments the moment a customer asks — they&rsquo;ll land here automatically, with no back-and-forth.
+      </EmptyState>
     )
   }
 

@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { TrendingUp, Phone, Check, X, RotateCcw } from 'lucide-react'
+import { TrendingUp, Phone, Check, X, RotateCcw, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { Lead, LeadSource, LeadStatus } from '@/types'
 
 const SOURCE_LABELS: Record<LeadSource, string> = {
@@ -77,13 +78,9 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
 
   if (!rows.length) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center sx-card">
-        <div className="w-14 h-14 rounded-2xl bg-sunken flex items-center justify-center text-subtle mb-4">
-          <TrendingUp className="w-7 h-7" strokeWidth={1.5} />
-        </div>
-        <p className="text-base font-light text-ink">No leads yet</p>
-        <p className="text-sm text-muted mt-1 max-w-xs">Leads appear here automatically when a customer reaches out from any source.</p>
-      </div>
+      <EmptyState icon={ShieldCheck} title="You&rsquo;re protected">
+        The next missed opportunity shows up here the instant it happens — captured by your AI before it becomes a lost customer.
+      </EmptyState>
     )
   }
 

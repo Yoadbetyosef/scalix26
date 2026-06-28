@@ -31,7 +31,7 @@ export function DashboardHero({
   const eyebrow = businessName ? `${employeeName} · AI Employee · ${businessName}` : `${employeeName} · AI Employee`
 
   return (
-    <section className="relative flex min-h-[68vh] flex-col justify-center py-10 sm:min-h-[74vh]">
+    <section className="relative flex min-h-[68vh] flex-col justify-center py-10 sm:min-h-[74vh] sx-animate-in">
       {/* The one preserved action — a quiet whisper in the corner */}
       <div className="absolute right-0 top-0 z-10">
         <Link

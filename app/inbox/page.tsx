@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MessageCircle, Search, Phone, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { EmptyState } from '@/components/ui/empty-state'
 import { formatDateTime, formatDuration, truncate, looksLikeName, formatPhone } from '@/lib/utils'
 import { getBusinessTimezone } from '@/lib/timezone'
 
@@ -139,10 +140,16 @@ export default async function InboxPage({
       {/* Conversation List */}
       <div className="flex-1 overflow-auto">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted">
-            <MessageCircle className="w-10 h-10 mb-2" />
-            <p className="text-sm">No conversations found</p>
-          </div>
+          (q || status !== 'all' || channel !== 'all') ? (
+            <div className="flex flex-col items-center justify-center h-64 text-muted">
+              <MessageCircle className="w-10 h-10 mb-2" strokeWidth={1.5} />
+              <p className="text-sm">No conversations match your filters</p>
+            </div>
+          ) : (
+            <EmptyState icon={MessageCircle} title="Your AI employee is ready">
+              The moment someone calls, texts, emails, or messages your business, the conversation appears here — answered, summarized, and ready for you.
+            </EmptyState>
+          )
         ) : (
           <div className="space-y-2 p-3 sm:p-4">
             {filtered.map((conv) => {

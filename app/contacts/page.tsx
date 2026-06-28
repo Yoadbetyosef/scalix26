@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Phone, Mail, MessageCircle, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { EmptyState } from '@/components/ui/empty-state'
 import { formatDate, isSocialChannel } from '@/lib/utils'
 
 // Soft channel tint for contact avatars — a quiet touch of life, the channel color
@@ -39,11 +40,9 @@ export default async function ContactsPage() {
       </div>
 
       {!contacts?.length ? (
-        <div className="flex flex-col items-center justify-center h-64 text-muted">
-          <Users className="w-12 h-12 mb-3" />
-          <p className="text-sm">No contacts yet</p>
-          <p className="text-xs text-muted mt-1 text-center">Contacts are created automatically when customers reach out</p>
-        </div>
+        <EmptyState icon={Users} title="Your address book builds itself">
+          Every person your AI talks to — across calls, texts, email, and social — is saved here automatically, with their full history.
+        </EmptyState>
       ) : (
         <>
           {/* Mobile card list */}

@@ -149,6 +149,41 @@ body {
 }
 .animate-orb-idle { animation: orb-breathe 2.6s ease-in-out infinite; transform-origin: center; }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Sprint 5 — living motion. transform/opacity only (GPU, 60fps), every effect
+   gated behind prefers-reduced-motion so the product fully stills on request.
+   Motion here communicates "my AI is working" — never decoration.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* Sections / cards ease in (fade + gentle rise) */
+  @keyframes sx-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .sx-animate-in { animation: sx-fade-up 0.5s var(--ease-standard) both; }
+
+  /* Staggered list/grid entrance — children settle into place in sequence */
+  .sx-stagger > * { animation: sx-fade-up 0.45s var(--ease-standard) both; }
+  .sx-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+  .sx-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+  .sx-stagger > *:nth-child(3) { animation-delay: 0.12s; }
+  .sx-stagger > *:nth-child(4) { animation-delay: 0.16s; }
+  .sx-stagger > *:nth-child(5) { animation-delay: 0.20s; }
+  .sx-stagger > *:nth-child(6) { animation-delay: 0.24s; }
+  .sx-stagger > *:nth-child(7) { animation-delay: 0.28s; }
+  .sx-stagger > *:nth-child(8) { animation-delay: 0.32s; }
+
+  /* AI waveform loader bars — the brand's "thinking" signal */
+  @keyframes sx-wave { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+  .sx-wavebar { animation: sx-wave 1s ease-in-out infinite; transform-origin: center bottom; }
+
+  /* Skeleton shimmer for loading lists */
+  @keyframes sx-shimmer { 100% { transform: translateX(100%); } }
+  .sx-shimmer { position: relative; overflow: hidden; }
+  .sx-shimmer::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(91, 108, 240, 0.10), transparent); animation: sx-shimmer 1.6s ease-in-out infinite; }
+
+  /* Soft "listening" halo — idle/empty states quietly signal the AI is ready */
+  @keyframes sx-halo { 0% { transform: scale(0.85); opacity: 0.45; } 70%, 100% { transform: scale(1.9); opacity: 0; } }
+  .sx-halo { animation: sx-halo 2.8s ease-out infinite; }
+}
+
 /* Tap highlight off — we provide our own press feedback */
 * { -webkit-tap-highlight-color: transparent; }
 

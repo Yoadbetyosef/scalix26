@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-react'
+import { AiThinking } from '@/components/brand/ai-thinking'
 
 // New Employee uses the SAME full edit page as onboarding: create + provision a number
 // behind a brief spinner, then land on /ai-employees/{id}?onboarding=1. No confirm
@@ -50,9 +50,8 @@ export function NewEmployeeLauncher() {
   }
 
   return (
-    <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <Loader2 className="w-8 h-8 text-[#5B6CF0] animate-spin" />
-      <p className="text-sm text-subtle mt-3">Setting up your new AI employee and its number…</p>
+    <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center sx-animate-in">
+      <AiThinking label="Preparing your AI employee and its phone number…" />
     </div>
   )
 }
