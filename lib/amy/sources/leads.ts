@@ -1,4 +1,4 @@
-import { type ContextSource, str } from '../types'
+import { type ContextSource, str, relAgo } from '../types'
 
 export const leadsSource: ContextSource = {
   id: 'get_leads',
@@ -23,7 +23,10 @@ export const leadsSource: ContextSource = {
     const head = Object.entries(counts).map(([s, n]) => `${n} ${s}`).join(', ')
     const lines = data.slice(0, 10).map((l) => {
       const waiting = !l.responded_at && (l.status === 'new' || l.status === 'contacted')
-      return `- ${l.name || 'Unknown'} (${l.phone || '—'}) · ${l.source} · ${l.status}${waiting ? ' · ⏳ awaiting follow-up' : ''}`
+      const timing = waiting
+        ? ` · reached out ${relAgo(l.created_at)}, ⏳ waiting ${relAgo(l.created_at)} for follow-up`
+        : l.responded_at ? ` · last contacted ${relAgo(l.responded_at)}` : ` · reached out ${relAgo(l.created_at)}`
+      return `- ${l.name || 'Unknown'} (${l.phone || '—'}) · ${l.source} · ${l.status}${timing}`
     })
     return `Leads (${head}):\n${lines.join('\n')}`
   },

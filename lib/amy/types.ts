@@ -29,3 +29,14 @@ export interface ContextSource {
 
 export const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 export const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
+
+/** Human "how long ago" so sources always carry timing (Amy never defers on "when"). */
+export function relAgo(iso?: string | null): string {
+  if (!iso) return 'unknown'
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60); if (m < 60) return `${m} min ago`
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`
+  return `${Math.floor(d / 30)}mo ago`
+}
