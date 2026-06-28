@@ -31,7 +31,7 @@ function WaveViz({ level, mode }: { level: number; mode: Mode }) {
       <defs>
         <radialGradient id="vd-orb" cx="42%" cy="38%" r="65%">
           <stop offset="0%" stopColor="#a7f3eb" />
-          <stop offset="40%" stopColor="#4ecdc4" />
+          <stop offset="40%" stopColor="#5B6CF0" />
           <stop offset="75%" stopColor="#38bdf8" />
           <stop offset="100%" stopColor="#818cf8" />
         </radialGradient>
@@ -44,7 +44,7 @@ function WaveViz({ level, mode }: { level: number; mode: Mode }) {
         <>
           <circle cx="32" cy="32" r={ring2} fill="none" stroke="#38bdf8" strokeWidth="2"
             strokeOpacity={0.12 + l * 0.22} className="transition-all duration-75 ease-out" />
-          <circle cx="32" cy="32" r={ring1} fill="none" stroke="#4ecdc4" strokeWidth="2.5"
+          <circle cx="32" cy="32" r={ring1} fill="none" stroke="#5B6CF0" strokeWidth="2.5"
             strokeOpacity={0.22 + l * 0.35} className="transition-all duration-75 ease-out" />
         </>
       )}
@@ -81,7 +81,7 @@ export function VoiceDemo({ value, onChange }: { value: string; onChange: (voice
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-medium text-gray-700">Choose your AI voice</p>
+      <p className="text-sm font-medium text-ink">Choose your AI voice</p>
 
       {/* Voice picker */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -93,26 +93,26 @@ export function VoiceDemo({ value, onChange }: { value: string; onChange: (voice
               type="button"
               onClick={() => onChange(v.id)}
               className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-colors ${
-                isSel ? 'border-[#4ecdc4] bg-[#4ecdc4]/10' : 'border-gray-200 hover:border-gray-300'
+                isSel ? 'border-[#5B6CF0] bg-[#5B6CF0]/10' : 'border-hairline-strong hover:border-hairline-strong'
               }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={avatarUrl(v.name)} alt={v.name} className="w-12 h-12 rounded-full object-cover bg-white border border-gray-100" />
-              <span className="text-sm font-semibold text-gray-900">{v.name}</span>
-              <span className="text-[11px] text-gray-400 leading-tight text-center">{v.gender}</span>
+              <img src={avatarUrl(v.name)} alt={v.name} className="w-12 h-12 rounded-full object-cover bg-white border border-hairline" />
+              <span className="text-sm font-semibold text-ink">{v.name}</span>
+              <span className="text-[11px] text-muted leading-tight text-center">{v.gender}</span>
             </button>
           )
         })}
       </div>
 
       {/* Demo stage */}
-      <div className="rounded-xl border-2 border-[#4ecdc4] bg-[#4ecdc4]/5 p-5">
+      <div className="rounded-xl border-2 border-[#5B6CF0] bg-[#5B6CF0]/5 p-5">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={avatarUrl(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full object-cover bg-white border border-gray-100" />
+          <img src={avatarUrl(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full object-cover bg-white border border-hairline" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900">{selected.name}</p>
-            <p className="text-xs text-gray-500">{selected.description} • {selected.gender}</p>
+            <p className="font-semibold text-ink">{selected.name}</p>
+            <p className="text-xs text-subtle">{selected.description} • {selected.gender}</p>
           </div>
           <WaveViz level={0} mode="idle" />
         </div>
@@ -121,7 +121,7 @@ export function VoiceDemo({ value, onChange }: { value: string; onChange: (voice
           <button
             type="button"
             onClick={() => preview(active)}
-            className="tap-target inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[#4ecdc4] text-white hover:bg-[#3db8af]"
+            className="tap-target inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-ink text-white hover:bg-ink/90"
           >
             <Play className="w-4 h-4" /> Preview
           </button>

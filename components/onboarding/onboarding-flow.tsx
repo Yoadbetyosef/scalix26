@@ -53,11 +53,11 @@ function ProgressBar({ step }: { step: number }) {
     <div className="w-full max-w-xl mx-auto mb-8 px-4">
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm font-medium text-gray-500">Step {step} of 4</span>
-        <span className="text-sm font-semibold text-[#4ecdc4]">{pct}%</span>
+        <span className="text-sm font-semibold text-[#5B6CF0]">{pct}%</span>
       </div>
       <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
         <div
-          className="h-full bg-[#4ecdc4] rounded-full transition-all duration-500 ease-out"
+          className="h-full bg-[#5B6CF0] rounded-full transition-all duration-500 ease-out"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -67,7 +67,7 @@ function ProgressBar({ step }: { step: number }) {
 
 // ─── Confetti ────────────────────────────────────────────────────────────────
 
-const CONFETTI_COLORS = ['#4ecdc4', '#ff6b6b', '#ffe66d', '#a8e6cf', '#7ec8e3', '#ffd93d']
+const CONFETTI_COLORS = ['#5B6CF0', '#ff6b6b', '#ffe66d', '#a8e6cf', '#7ec8e3', '#ffd93d']
 
 function Confetti() {
   const pieces = Array.from({ length: 40 }, (_, i) => ({
@@ -317,7 +317,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
     <div className="min-h-screen bg-[#f8f9fa] py-8 px-4">
       {/* Logo */}
       <div className="flex justify-center mb-6">
-        <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
+        <div className="w-10 h-10 bg-[#5B6CF0] rounded-xl flex items-center justify-center">
           <span className="text-white font-bold text-xl">S</span>
         </div>
       </div>
@@ -387,7 +387,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                         onClick={() => set('businessType', raw)}
                         className={`h-12 px-4 rounded-xl border-2 text-sm font-medium transition-all text-left ${
                           selected
-                            ? 'border-[#4ecdc4] bg-[#4ecdc4]/10 text-[#4ecdc4]'
+                            ? 'border-[#5B6CF0] bg-[#5B6CF0]/10 text-[#5B6CF0]'
                             : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                         }`}
                       >
@@ -412,7 +412,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-8">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Paste your website</h1>
             <p className="text-gray-500 mb-2">Our AI will scan it and automatically learn your services and pricing. No manual typing needed.</p>
-            <p className="text-[#4ecdc4] text-sm font-medium mb-6 sm:mb-8">✨ No website? No problem — scroll down</p>
+            <p className="text-[#5B6CF0] text-sm font-medium mb-6 sm:mb-8">✨ No website? No problem — scroll down</p>
 
             <div className="space-y-5">
               <div>
@@ -430,7 +430,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                   {data.websiteUrl && !scanning && !scanDone && (
                     <button
                       onClick={() => startScan()}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#4ecdc4] text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-[#3db8af] transition-colors"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-[#5B6CF0] text-white text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-[#4338CA] transition-colors"
                     >
                       Scan →
                     </button>
@@ -451,7 +451,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                       {[0, 1, 2].map(i => (
                         <div
                           key={i}
-                          className="w-2 h-2 bg-[#4ecdc4] rounded-full animate-bounce"
+                          className="w-2 h-2 bg-[#5B6CF0] rounded-full animate-bounce"
                           style={{ animationDelay: `${i * 0.15}s` }}
                         />
                       ))}
@@ -475,7 +475,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 <button
                   type="button"
                   onClick={() => setShowManual(true)}
-                  className="text-sm text-[#4ecdc4] hover:underline font-medium"
+                  className="text-sm text-[#5B6CF0] hover:underline font-medium"
                 >
                   Don&apos;t have a website? Enter your info manually →
                 </button>
@@ -583,7 +583,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                       onClick={() => set('tone', t.id)}
                       className={`p-4 rounded-xl border-2 text-center transition-all ${
                         data.tone === t.id
-                          ? 'border-[#4ecdc4] bg-[#4ecdc4]/10'
+                          ? 'border-[#5B6CF0] bg-[#5B6CF0]/10'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
@@ -651,7 +651,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                 <button
                   type="button"
                   onClick={addFaq}
-                  className="mt-3 flex items-center gap-2 text-sm text-[#4ecdc4] font-medium hover:underline"
+                  className="mt-3 flex items-center gap-2 text-sm text-[#5B6CF0] font-medium hover:underline"
                 >
                   <Plus className="w-4 h-4" /> Add Question & Answer
                 </button>
@@ -681,7 +681,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
 
             {/* First move: share your booking link */}
             {bookingUrl && (
-              <div className="rounded-2xl border-2 border-[#4ecdc4] bg-[#4ecdc4]/5 p-5 sm:p-6 mb-4">
+              <div className="rounded-2xl border-2 border-[#5B6CF0] bg-[#5B6CF0]/5 p-5 sm:p-6 mb-4">
                 <h2 className="text-lg font-bold text-gray-900">🎉 Your AI is live. Here&apos;s your first move:</h2>
                 <p className="text-sm text-gray-600 mt-1 mb-4">
                   Share your booking link — anyone who clicks it gets a text from your AI within seconds.
@@ -750,7 +750,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
                     <a key={ch.label} href={ch.href}>
                       <button
                         type="button"
-                        className="w-full h-12 flex items-center gap-2 px-4 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-700 hover:border-[#4ecdc4] hover:text-[#4ecdc4] transition-all"
+                        className="w-full h-12 flex items-center gap-2 px-4 rounded-xl border-2 border-gray-200 text-sm font-medium text-gray-700 hover:border-[#5B6CF0] hover:text-[#5B6CF0] transition-all"
                       >
                         <span>{ch.emoji}</span> {ch.label}
                       </button>
@@ -763,8 +763,8 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               {/* Card 3: Dashboard */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-[#4ecdc4]/20 rounded-xl flex items-center justify-center">
-                    <LayoutDashboard className="w-5 h-5 text-[#4ecdc4]" />
+                  <div className="w-10 h-10 bg-[#5B6CF0]/20 rounded-xl flex items-center justify-center">
+                    <LayoutDashboard className="w-5 h-5 text-[#5B6CF0]" />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900">Your dashboard is ready</h3>

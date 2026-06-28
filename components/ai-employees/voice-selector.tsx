@@ -23,7 +23,7 @@ function WaveBars({ active }: { active: boolean }) {
       {[0, 1, 2, 3, 4].map((i) => (
         <span
           key={i}
-          className={`w-1 rounded-full ${active ? 'voice-bar bg-[#4ecdc4]' : 'bg-gray-200'} h-5`}
+          className={`w-1 rounded-full ${active ? 'voice-bar bg-[#5B6CF0]' : 'bg-hairline-strong'} h-5`}
           style={active ? { animationDelay: `${i * 0.12}s` } : undefined}
         />
       ))}
@@ -76,7 +76,7 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
 
   return (
     <div className="space-y-4">
-      <p className="text-sm font-medium text-gray-700">Choose your AI voice</p>
+      <p className="text-sm font-medium text-ink">Choose your AI voice</p>
 
       {/* Voice picker grid — real headshots */}
       <div className="flex flex-wrap gap-3">
@@ -86,24 +86,24 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
             type="button"
             onClick={() => onChange(v.id)}
             className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-colors ${
-              active === v.id ? 'border-[#4ecdc4] bg-[#4ecdc4]/10' : 'border-gray-200 hover:border-gray-300'
+              active === v.id ? 'border-[#5B6CF0] bg-[#5B6CF0]/10' : 'border-hairline-strong hover:border-hairline-strong'
             }`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={headshot(v.name)} alt={v.name} className="w-14 h-14 rounded-full object-cover" />
-            <span className="text-xs font-medium text-gray-700">{v.name}</span>
+            <span className="text-xs font-medium text-ink">{v.name}</span>
           </button>
         ))}
       </div>
 
       {/* Selected voice — demo card */}
-      <div className="rounded-xl border-2 border-[#4ecdc4] bg-[#4ecdc4]/5 p-4">
+      <div className="rounded-xl border-2 border-[#5B6CF0] bg-[#5B6CF0]/5 p-4">
         <div className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={headshot(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full object-cover" />
           <div>
-            <p className="font-semibold text-gray-900">{selected.name}</p>
-            <p className="text-xs text-gray-500">{selected.description} • {selected.gender}</p>
+            <p className="font-semibold text-ink">{selected.name}</p>
+            <p className="text-xs text-subtle">{selected.description} • {selected.gender}</p>
           </div>
         </div>
 
@@ -112,7 +112,7 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
             type="button"
             onClick={preview}
             disabled={busy}
-            className="tap-target inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="tap-target inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-white border border-hairline-strong text-ink hover:bg-sunken disabled:opacity-50"
           >
             <Play className="w-4 h-4" /> Preview
           </button>
@@ -128,10 +128,10 @@ export function VoiceSelector({ value, onChange }: { value: string; onChange: (v
           )}
 
           {speaking && <WaveBars active />}
-          {status && <span className="text-xs text-gray-500 ml-1">{status}</span>}
+          {status && <span className="text-xs text-subtle ml-1">{status}</span>}
         </div>
 
-        <p className="text-xs text-gray-400 mt-3">
+        <p className="text-xs text-muted mt-3">
           Preview plays a sample of the selected voice.
         </p>
       </div>

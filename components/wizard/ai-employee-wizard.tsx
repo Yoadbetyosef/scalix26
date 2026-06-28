@@ -144,7 +144,7 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
-        <div className="w-9 h-9 bg-[#4ecdc4] rounded-lg flex items-center justify-center">
+        <div className="w-9 h-9 bg-[#5B6CF0] rounded-lg flex items-center justify-center">
           <Zap className="w-4 h-4 text-white" />
         </div>
         <div>
@@ -162,7 +162,7 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
                 className={cn(
                   'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors',
                   step > s.id
-                    ? 'bg-[#4ecdc4] text-white'
+                    ? 'bg-[#5B6CF0] text-white'
                     : step === s.id
                     ? 'bg-[#1a1f36] text-white'
                     : 'bg-gray-200 text-gray-500'
@@ -175,7 +175,7 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
               </span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={cn('h-0.5 flex-1 mx-1', step > s.id ? 'bg-[#4ecdc4]' : 'bg-gray-200')} />
+              <div className={cn('h-0.5 flex-1 mx-1', step > s.id ? 'bg-[#5B6CF0]' : 'bg-gray-200')} />
             )}
           </div>
         ))}

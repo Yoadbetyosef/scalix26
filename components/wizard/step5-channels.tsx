@@ -84,7 +84,7 @@ export function Step5Channels({ data, updateData }: Props) {
                 <p className="text-sm font-medium text-gray-900">{channel.name}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{channel.description}</p>
                 {channel.note && active && (
-                  <p className="text-xs text-[#4ecdc4] mt-1">{channel.note}</p>
+                  <p className="text-xs text-[#5B6CF0] mt-1">{channel.note}</p>
                 )}
               </div>
               <Switch

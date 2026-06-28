@@ -35,10 +35,10 @@ export function SkillsEditor({ agentId, initial }: { agentId: string; initial: {
   return (
     <div className="space-y-2.5">
       {SKILL_CATALOG.map((s) => (
-        <div key={s.type} className="flex items-start gap-3 p-3 rounded-lg border border-gray-100">
+        <div key={s.type} className="flex items-start gap-3 p-3 rounded-lg border border-hairline">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900">{s.name}</p>
-            <p className="text-xs text-gray-500">{s.description}</p>
+            <p className="text-sm font-medium text-ink">{s.name}</p>
+            <p className="text-xs text-subtle">{s.description}</p>
           </div>
           <Switch checked={!!active[s.type]} onCheckedChange={() => toggle(s.type)} disabled={busy === s.type} className="flex-shrink-0 mt-1" />
         </div>

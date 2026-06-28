@@ -161,7 +161,7 @@ export default function TestAIPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-base sm:text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-[#4ecdc4] flex-shrink-0" />
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-[#5B6CF0] flex-shrink-0" />
               <span className="truncate">Test AI Employee</span>
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
@@ -201,8 +201,8 @@ export default function TestAIPage() {
         <div className="flex flex-col items-center justify-center flex-1 gap-8">
           {!callActive ? (
             <div className="text-center">
-              <div className="w-24 h-24 rounded-full bg-[#4ecdc4]/10 flex items-center justify-center mx-auto mb-6">
-                <Bot className="w-12 h-12 text-[#4ecdc4]" />
+              <div className="w-24 h-24 rounded-full bg-[#5B6CF0]/10 flex items-center justify-center mx-auto mb-6">
+                <Bot className="w-12 h-12 text-[#5B6CF0]" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Simulate a Phone Call</h2>
               <p className="text-gray-500 text-sm mb-8">Your AI employee will greet you and respond to your voice</p>
@@ -218,11 +218,11 @@ export default function TestAIPage() {
             <div className="text-center">
               {/* Call status */}
               <div className="relative w-28 h-28 mx-auto mb-6">
-                <div className={cn('w-28 h-28 rounded-full flex items-center justify-center', speaking ? 'bg-[#4ecdc4]' : listening ? 'bg-blue-500' : 'bg-gray-200')}>
+                <div className={cn('w-28 h-28 rounded-full flex items-center justify-center', speaking ? 'bg-[#5B6CF0]' : listening ? 'bg-blue-500' : 'bg-gray-200')}>
                   <Bot className="w-14 h-14 text-white" />
                 </div>
                 {(speaking || listening) && (
-                  <div className={cn('absolute inset-0 rounded-full animate-ping opacity-25', speaking ? 'bg-[#4ecdc4]' : 'bg-blue-500')} />
+                  <div className={cn('absolute inset-0 rounded-full animate-ping opacity-25', speaking ? 'bg-[#5B6CF0]' : 'bg-blue-500')} />
                 )}
               </div>
 
@@ -238,7 +238,7 @@ export default function TestAIPage() {
               {messages.length > 0 && (
                 <div className="max-w-md mx-auto mt-4 max-h-40 overflow-auto space-y-2 text-left">
                   {messages.slice(-4).map((msg, i) => (
-                    <div key={i} className={cn('text-xs px-3 py-2 rounded-lg', msg.role === 'assistant' ? 'bg-[#4ecdc4]/10 text-gray-700' : 'bg-gray-100 text-gray-600 text-right')}>
+                    <div key={i} className={cn('text-xs px-3 py-2 rounded-lg', msg.role === 'assistant' ? 'bg-[#5B6CF0]/10 text-gray-700' : 'bg-gray-100 text-gray-600 text-right')}>
                       {msg.content.length > 120 ? msg.content.slice(0, 120) + '...' : msg.content}
                     </div>
                   ))}
@@ -274,7 +274,7 @@ export default function TestAIPage() {
           <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-4">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-3">
-                <Bot className="w-14 h-14 text-[#4ecdc4]/30" />
+                <Bot className="w-14 h-14 text-[#5B6CF0]/30" />
                 <div className="text-center">
                   <p className="text-sm font-medium text-gray-500">Chat with your AI Employee</p>
                   <p className="text-xs mt-1">Try: "I need to book an AC service"</p>
@@ -289,7 +289,7 @@ export default function TestAIPage() {
 
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'assistant' ? 'bg-[#4ecdc4]/10 text-[#4ecdc4]' : 'bg-[#1a1f36] text-white'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${msg.role === 'assistant' ? 'bg-[#5B6CF0]/10 text-[#5B6CF0]' : 'bg-[#1a1f36] text-white'}`}>
                   {msg.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                 </div>
                 <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm ${msg.role === 'assistant' ? 'bg-white border border-gray-100 text-gray-800 shadow-sm' : 'bg-[#1a1f36] text-white'}`}>
@@ -300,14 +300,14 @@ export default function TestAIPage() {
 
             {loading && (
               <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#4ecdc4]/10 flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-[#4ecdc4]" />
+                <div className="w-8 h-8 rounded-full bg-[#5B6CF0]/10 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-[#5B6CF0]" />
                 </div>
                 <div className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
                   <div className="flex gap-1 items-center">
-                    <span className="w-2 h-2 bg-[#4ecdc4] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-[#4ecdc4] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-[#4ecdc4] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="w-2 h-2 bg-[#5B6CF0] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-[#5B6CF0] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-[#5B6CF0] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
                 </div>
               </div>

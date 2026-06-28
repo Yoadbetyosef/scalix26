@@ -31,7 +31,7 @@ export default async function BookingPage({ params }: { params: Promise<{ slug: 
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
           <div className="text-center mb-6">
-            <div className="w-12 h-12 bg-[#4ecdc4] rounded-xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 bg-[#5B6CF0] rounded-xl flex items-center justify-center mx-auto mb-4">
               <Zap className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{tenant.business_name}</h1>

@@ -99,14 +99,14 @@ export function Step4Skills({ data, updateData }: Props) {
               key={skill.type}
               className="flex items-start gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors"
             >
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-[#4ecdc4]/10' : 'bg-gray-100'}`}>
-                <Icon className={`w-4 h-4 ${active ? 'text-[#4ecdc4]' : 'text-gray-400'}`} />
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-[#5B6CF0]/10' : 'bg-gray-100'}`}>
+                <Icon className={`w-4 h-4 ${active ? 'text-[#5B6CF0]' : 'text-gray-400'}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-gray-900">{skill.name}</p>
                   {skill.recommended && (
-                    <span className="text-xs bg-[#4ecdc4]/10 text-[#3db8af] px-2 py-0.5 rounded-full">Recommended</span>
+                    <span className="text-xs bg-[#5B6CF0]/10 text-[#4338CA] px-2 py-0.5 rounded-full">Recommended</span>
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">{skill.description}</p>

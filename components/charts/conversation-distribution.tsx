@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { createClient } from '@/lib/supabase/client'
 
-const COLORS = ['#4ecdc4', '#1a1f36']
+const COLORS = ['#5B6CF0', '#1a1f36']
 
 export function ConversationDistributionChart({ tenantId }: { tenantId: string }) {
   const [data, setData] = useState([

@@ -39,7 +39,7 @@ export function ChannelDistributionChart({ conversations }: { conversations: Con
         <Tooltip />
         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
           {data.map((entry) => (
-            <Cell key={entry.channel} fill={CHANNEL_COLORS[entry.channel] || '#4ecdc4'} />
+            <Cell key={entry.channel} fill={CHANNEL_COLORS[entry.channel] || '#5B6CF0'} />
           ))}
         </Bar>
       </BarChart>

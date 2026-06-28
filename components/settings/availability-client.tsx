@@ -58,7 +58,7 @@ export function AvailabilityClient({
           <Input className="mt-1.5" placeholder="https://g.page/r/..." value={reviewUrl} onChange={(e) => setReviewUrl(e.target.value)} />
         </div>
         <label className="flex items-center gap-2 text-sm text-ink">
-          <input type="checkbox" checked={autoReview} onChange={(e) => setAutoReview(e.target.checked)} className="accent-[#4ecdc4] w-4 h-4" />
+          <input type="checkbox" checked={autoReview} onChange={(e) => setAutoReview(e.target.checked)} className="accent-[#5B6CF0] w-4 h-4" />
           Auto-send a review request 3 hours after each appointment
         </label>
         <Button onClick={saveReviews} loading={savingReview} className="w-full sm:w-auto">Save Review Settings</Button>

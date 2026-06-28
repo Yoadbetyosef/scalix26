@@ -67,10 +67,10 @@ export function CalendarConnect({ agentId }: { agentId: string }) {
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-gray-200 p-4">
+    <div className="mt-4 rounded-xl border border-hairline-strong p-4">
       <div className="flex items-center gap-2">
-        <Calendar className="w-4 h-4 text-gray-600" />
-        <span className="font-semibold text-gray-800 text-sm">{status?.connected ? (status.provider === 'microsoft' ? 'Outlook Calendar' : 'Google Calendar') : 'Calendar'}</span>
+        <Calendar className="w-4 h-4 text-subtle" />
+        <span className="font-semibold text-ink text-sm">{status?.connected ? (status.provider === 'microsoft' ? 'Outlook Calendar' : 'Google Calendar') : 'Calendar'}</span>
         {status?.connected && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
             <Check className="w-3 h-3" /> Connected
@@ -79,10 +79,10 @@ export function CalendarConnect({ agentId }: { agentId: string }) {
       </div>
 
       {status === null ? (
-        <p className="text-xs text-gray-400 mt-2">Checking…</p>
+        <p className="text-xs text-muted mt-2">Checking…</p>
       ) : !status.connected ? (
         <div className="mt-2">
-          <p className="text-xs text-gray-500 mb-3">Connect a calendar to automatically add booked appointments as calendar events. Optional — booking works either way.</p>
+          <p className="text-xs text-subtle mb-3">Connect a calendar to automatically add booked appointments as calendar events. Optional — booking works either way.</p>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => { window.location.href = `/api/auth/google/calendar/connect?agentId=${encodeURIComponent(agentId)}` }}>
               Connect Google Calendar
@@ -94,17 +94,17 @@ export function CalendarConnect({ agentId }: { agentId: string }) {
         </div>
       ) : (
         <div className="mt-2 space-y-3">
-          <p className="text-xs text-gray-500">
-            Booked appointments are added to your calendar{status.email ? <> · <span className="text-gray-700">{status.email}</span></> : null}.
+          <p className="text-xs text-subtle">
+            Booked appointments are added to your calendar{status.email ? <> · <span className="text-ink">{status.email}</span></> : null}.
           </p>
           {status.calendars && status.calendars.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Calendar for new appointments</label>
+              <label className="block text-xs font-medium text-subtle mb-1">Calendar for new appointments</label>
               <select
                 value={status.calendarId || 'primary'}
                 disabled={busy}
                 onChange={(e) => selectCalendar(e.target.value)}
-                className="h-10 w-full max-w-xs rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-700 focus:border-[#4ecdc4] focus:outline-none focus:ring-1 focus:ring-[#4ecdc4]"
+                className="h-10 w-full max-w-xs rounded-lg border border-hairline-strong bg-white px-2.5 text-sm text-ink focus:border-[#5B6CF0] focus:outline-none focus:ring-1 focus:ring-[#5B6CF0]"
               >
                 {status.calendars.map((c) => (
                   <option key={c.id} value={c.id}>{c.summary}{c.primary ? ' (primary)' : ''}</option>

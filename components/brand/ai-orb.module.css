@@ -44,7 +44,7 @@
   inset: 0;
   border-radius: 9999px;
   padding: 2px;
-  background: conic-gradient(from 130deg, #4ecdc4, #41c8e8, #5aa8f2, #8e9bf0, #b79be8, #6fd7cf, #4ecdc4);
+  background: conic-gradient(from 130deg, #22D3EE, #41c8e8, #5aa8f2, #5B6CF0, #8e9bf0, #A855F7, #b79be8, #22D3EE);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);

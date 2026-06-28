@@ -76,15 +76,15 @@ export function KnowledgeBaseEditor({
         editingId === e.id ? (
           <EntryForm key={e.id} draft={draft} setDraft={setDraft} onSave={save} onCancel={cancel} saving={saving} />
         ) : (
-          <div key={e.id} className="border border-gray-100 rounded-lg p-3">
+          <div key={e.id} className="border border-hairline rounded-lg p-3">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-semibold text-gray-900">{e.title}</p>
+              <p className="text-sm font-semibold text-ink">{e.title}</p>
               <div className="flex items-center gap-1 flex-shrink-0">
-                <button onClick={() => startEdit(e)} className="text-gray-400 hover:text-gray-700 p-1"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => remove(e.id)} className="text-gray-400 hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
+                <button onClick={() => startEdit(e)} className="text-muted hover:text-ink p-1"><Pencil className="w-3.5 h-3.5" /></button>
+                <button onClick={() => remove(e.id)} className="text-muted hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-1 whitespace-pre-wrap line-clamp-3">{e.content}</p>
+            <p className="text-xs text-subtle mt-1 whitespace-pre-wrap line-clamp-3">{e.content}</p>
           </div>
         ),
       )}
@@ -110,7 +110,7 @@ function EntryForm({
   saving: boolean
 }) {
   return (
-    <div className="border-2 border-[#4ecdc4]/40 rounded-lg p-3 space-y-2">
+    <div className="border-2 border-[#5B6CF0]/40 rounded-lg p-3 space-y-2">
       <Input placeholder="Title (e.g. Pricing, Service Area)" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
       <Textarea rows={3} placeholder="Details the AI should know…" value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} />
       <div className="flex gap-2">

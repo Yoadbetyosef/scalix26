@@ -103,7 +103,7 @@ export function Step1BusinessInfo({ tenant, data, updateData }: Props) {
         <div className="col-span-2 sm:col-span-1">
           <Label>Industry</Label>
           <select
-            className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
+            className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
             value={info.industry || ''}
             onChange={e => handleChange('industry', e.target.value)}
           >

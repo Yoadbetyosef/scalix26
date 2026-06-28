@@ -83,9 +83,9 @@ export function PostOnboardingChecklist({ slug, aiPhoneNumber, initial }: Props)
   const doneCount = items.filter(i => i.done).length
 
   return (
-    <div className="bg-white rounded-2xl border border-[#4ecdc4]/30 shadow-sm overflow-hidden">
-      <div className="bg-[#4ecdc4]/10 px-4 sm:px-5 py-3 flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-[#4ecdc4] flex-shrink-0" />
+    <div className="bg-white rounded-2xl border border-[#5B6CF0]/30 shadow-sm overflow-hidden">
+      <div className="bg-[#5B6CF0]/10 px-4 sm:px-5 py-3 flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-[#5B6CF0] flex-shrink-0" />
         <p className="text-sm font-semibold text-gray-900">Get started — {doneCount}/4 done</p>
       </div>
       <div className="divide-y divide-gray-50">

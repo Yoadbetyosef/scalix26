@@ -53,15 +53,15 @@ export function MetaPagePickerClient({ agentId, pages }: Props) {
 
   return (
     <div className="w-full max-w-md">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+      <div className="bg-white rounded-2xl shadow-sm border border-hairline p-6 sm:p-8">
         <div className="flex justify-center mb-5">
-          <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-[#5B6CF0] rounded-xl flex items-center justify-center">
             <span className="text-white font-bold text-xl">S</span>
           </div>
         </div>
 
-        <h1 className="text-xl font-bold text-gray-900 mb-1">Choose a Facebook Page</h1>
-        <p className="text-sm text-gray-500 mb-6">
+        <h1 className="text-xl font-bold text-ink mb-1">Choose a Facebook Page</h1>
+        <p className="text-sm text-subtle mb-6">
           Select which page to connect to this agent. If the page has an Instagram Business Account linked, it will be connected automatically.
         </p>
 
@@ -73,13 +73,13 @@ export function MetaPagePickerClient({ agentId, pages }: Props) {
               onClick={() => setSelected(page.id)}
               className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                 selected === page.id
-                  ? 'border-[#4ecdc4] bg-[#4ecdc4]/5'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-[#5B6CF0] bg-[#5B6CF0]/5'
+                  : 'border-hairline-strong hover:border-hairline-strong'
               }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 truncate">{page.name}</p>
+                  <p className="font-semibold text-ink truncate">{page.name}</p>
                   <div className="flex items-center gap-3 mt-1 flex-wrap">
                     <span className="flex items-center gap-1 text-xs text-blue-600">
                       <Share2 className="w-3 h-3" /> Facebook
@@ -92,7 +92,7 @@ export function MetaPagePickerClient({ agentId, pages }: Props) {
                   </div>
                 </div>
                 {selected === page.id && (
-                  <CheckCircle2 className="w-5 h-5 text-[#4ecdc4] flex-shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-[#5B6CF0] flex-shrink-0" />
                 )}
               </div>
             </button>

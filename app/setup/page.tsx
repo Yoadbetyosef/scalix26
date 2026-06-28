@@ -50,7 +50,7 @@ export default function SetupPage() {
     <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center mb-8">
-          <div className="w-10 h-10 bg-[#4ecdc4] rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-[#5B6CF0] rounded-xl flex items-center justify-center">
             <Zap className="w-5 h-5 text-white" />
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function SetupPage() {
             <div>
               <Label>Industry</Label>
               <select
-                className="flex h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
+                className="flex h-11 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm mt-1.5 focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
                 value={industry}
                 onChange={e => setIndustry(e.target.value)}
                 required

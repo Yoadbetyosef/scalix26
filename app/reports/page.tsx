@@ -34,8 +34,8 @@ export default async function ReportsPage() {
           <Card key={template.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[#4ecdc4]/10 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-4 h-4 text-[#4ecdc4]" />
+                <div className="w-9 h-9 rounded-lg bg-[#5B6CF0]/10 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 text-[#5B6CF0]" />
                 </div>
                 <div className="flex-1">
                   <h3 className="font-semibold text-gray-900 text-sm">{template.name}</h3>

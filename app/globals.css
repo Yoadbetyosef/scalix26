@@ -6,9 +6,11 @@
    and CSS vars. Tailwind's default palette/spacing/radius remain intact.
    ────────────────────────────────────────────────────────────────────────── */
 @theme {
-  /* Color — primary */
-  --color-accent: #4ECDC4;          /* the one accent */
-  --color-accent-strong: #3DB8AF;   /* teal text/hover on light (AA) */
+  /* Color — primary. The brand accent is the waveform's blue/indigo (NO teal).
+     Matches the logo gradient mid-stop (#5B6CF0). Color lives in the AI waveform;
+     this token is the quiet, on-brand highlight for AI-active states. */
+  --color-accent: #5B6CF0;          /* the one accent — waveform blue */
+  --color-accent-strong: #4338CA;   /* deep indigo for text/hover on light (AA) */
   --color-ink: #1A1F36;             /* primary text */
   --color-subtle: #5B6172;          /* DNA text-secondary */
   --color-muted: #8A90A2;           /* DNA text-muted */
@@ -88,8 +90,8 @@
 :root {
   --sidebar: #1a1f36;
   --sidebar-hover: #252b4a;
-  --teal: #4ecdc4;
-  --teal-dark: #3db8af;
+  --teal: #5B6CF0;
+  --teal-dark: #4338CA;
   --background: #f8f9fa;
   --card: #ffffff;
   --border: #e5e7eb;

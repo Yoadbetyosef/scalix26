@@ -38,7 +38,7 @@ export function NewEmployeeLauncher() {
   if (error) {
     return (
       <div className="p-6 max-w-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
+        <div className="bg-white rounded-2xl border border-hairline shadow-sm p-6 text-center">
           <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">{error}</p>
           <div className="mt-4 flex gap-2 justify-center">
             <Link href="/ai-employees"><Button variant="outline" size="sm">Back</Button></Link>
@@ -51,8 +51,8 @@ export function NewEmployeeLauncher() {
 
   return (
     <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <Loader2 className="w-8 h-8 text-[#4ecdc4] animate-spin" />
-      <p className="text-sm text-gray-600 mt-3">Setting up your new AI employee and its number…</p>
+      <Loader2 className="w-8 h-8 text-[#5B6CF0] animate-spin" />
+      <p className="text-sm text-subtle mt-3">Setting up your new AI employee and its number…</p>
     </div>
   )
 }

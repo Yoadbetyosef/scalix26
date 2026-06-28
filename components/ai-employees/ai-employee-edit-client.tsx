@@ -453,7 +453,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
     <div className={`space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'pb-24' : ''}`}>
       {/* Onboarding welcome banner */}
       {onboarding && (
-        <div className="rounded-2xl border border-[#4ecdc4]/30 bg-[#4ecdc4]/10 p-4 sm:p-5">
+        <div className="rounded-2xl border border-[#5B6CF0]/30 bg-[#5B6CF0]/10 p-4 sm:p-5">
           <h2 className="text-base font-light tracking-tight text-ink">Your AI employee is live — your number is already answering.</h2>
           <p className="text-sm text-subtle mt-1">Finish the quick setup — business details, voice, channels, and website — to start protecting your business from missed calls, messages, and lost customers.</p>
           <Button onClick={finishSetup} loading={finishing} className="mt-3">Finish setup →</Button>
@@ -756,7 +756,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Email — channel order: Phone → Facebook/Instagram → Email */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#4ecdc4]" /> Email</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="w-4 h-4 text-[#5B6CF0]" /> Email</CardTitle></CardHeader>
         <CardContent className="space-y-5">
           <p className="text-sm text-subtle">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
 
@@ -765,7 +765,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
             <div className="flex items-center justify-between gap-2">
               <span className="font-semibold text-ink flex items-center gap-2">
                 <Mail className="w-4 h-4" /> Connect your inbox
-                <span className="text-[11px] font-medium text-[#1a9d92] bg-[#e7f8f6] rounded px-1.5 py-0.5">Recommended</span>
+                <span className="text-[11px] font-medium text-[#4338CA] bg-[#eef1fd] rounded px-1.5 py-0.5">Recommended</span>
               </span>
               <span className="text-xs text-muted">{emailAccounts.length}/3 mailboxes</span>
             </div>
@@ -871,12 +871,12 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                       name="email_mode"
                       checked={selected === opt.value}
                       onChange={() => setMode(opt.value)}
-                      className="accent-[#4ecdc4] w-4 h-4 mt-0.5 flex-shrink-0"
+                      className="accent-[#5B6CF0] w-4 h-4 mt-0.5 flex-shrink-0"
                     />
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-ink">{opt.title}</span>
-                        {opt.recommended && <span className="text-[10px] font-semibold uppercase tracking-wide text-[#3db8af] bg-[#4ecdc4]/15 px-1.5 py-0.5 rounded">Recommended</span>}
+                        {opt.recommended && <span className="text-[10px] font-semibold uppercase tracking-wide text-[#4338CA] bg-[#5B6CF0]/15 px-1.5 py-0.5 rounded">Recommended</span>}
                       </div>
                       <p className="text-xs text-muted mt-0.5">{opt.help}</p>
                     </div>
@@ -948,7 +948,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Business Details */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-[#4ecdc4]" /> Business Details</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-[#5B6CF0]" /> Business Details</CardTitle></CardHeader>
         <CardContent>
           <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
         </CardContent>
@@ -956,7 +956,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Skills */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#4ecdc4]" /> Skills</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-[#5B6CF0]" /> Skills</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-subtle mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
           <SkillsEditor agentId={employee.id} initial={skills || []} />
@@ -966,7 +966,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* SECTION 2 — Appointment Availability (drives booking; backed by appointment_slots) */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#4ecdc4]" /> Appointment Availability</CardTitle>
+          <CardTitle className="flex items-center gap-2"><Clock className="w-4 h-4 text-[#5B6CF0]" /> Appointment Availability</CardTitle>
           <p className="text-sm text-subtle">When you&apos;ll take appointments. The AI only books inside these windows — separate from your open hours.</p>
         </CardHeader>
         <CardContent>
@@ -990,7 +990,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Knowledge Base */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-[#4ecdc4]" /> Knowledge Base</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BookOpen className="w-4 h-4 text-[#5B6CF0]" /> Knowledge Base</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-subtle mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
           <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />

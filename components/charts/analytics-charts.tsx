@@ -44,7 +44,7 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
     return acc
   }, {})
   const statusData = [
-    { name: 'AI Resolved', value: statusCounts['resolved'] || 0, color: '#4ecdc4' },
+    { name: 'AI Resolved', value: statusCounts['resolved'] || 0, color: '#5B6CF0' },
     { name: 'Open', value: statusCounts['open'] || 0, color: '#3b82f6' },
     { name: 'Closed', value: statusCounts['closed'] || 0, color: '#ef4444' },
   ]
@@ -64,7 +64,7 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
               <Line
                 type="monotone"
                 dataKey="count"
-                stroke="#4ecdc4"
+                stroke="#5B6CF0"
                 strokeWidth={2}
                 dot={false}
               />
@@ -109,7 +109,7 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
                 <Tooltip />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {channelData.map((entry) => (
-                    <Cell key={entry.channel} fill={CHANNEL_COLORS[entry.channel] || '#4ecdc4'} />
+                    <Cell key={entry.channel} fill={CHANNEL_COLORS[entry.channel] || '#5B6CF0'} />
                   ))}
                 </Bar>
               </BarChart>
