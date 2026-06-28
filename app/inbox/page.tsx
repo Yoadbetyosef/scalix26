@@ -2,7 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MessageCircle, Search, Phone, Mail } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { formatDateTime, formatDuration, truncate, looksLikeName, formatPhone } from '@/lib/utils'
 import { getBusinessTimezone } from '@/lib/timezone'
 
@@ -13,7 +13,34 @@ const CHANNEL_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
   email: 'Email',
+  web: 'Web Chat',
+  webchat: 'Web Chat',
 }
+
+// Soft channel palette — the website's color language. Color recognizes the channel
+// before you read a word. Kept soft (50/100 tints), never saturated.
+const CHANNEL_STYLE: Record<string, { tint: string; ring: string; badge: string; avatar: string; dot: string }> = {
+  sms: { tint: 'bg-amber-50', ring: 'ring-amber-100', badge: 'bg-amber-100 text-amber-700', avatar: 'bg-amber-100 text-amber-600', dot: 'bg-amber-400' },
+  email: { tint: 'bg-blue-50', ring: 'ring-blue-100', badge: 'bg-blue-100 text-blue-700', avatar: 'bg-blue-100 text-blue-600', dot: 'bg-blue-400' },
+  instagram: { tint: 'bg-pink-50', ring: 'ring-pink-100', badge: 'bg-pink-100 text-pink-700', avatar: 'bg-pink-100 text-pink-600', dot: 'bg-pink-400' },
+  facebook: { tint: 'bg-purple-50', ring: 'ring-purple-100', badge: 'bg-purple-100 text-purple-700', avatar: 'bg-purple-100 text-purple-600', dot: 'bg-purple-400' },
+  voice: { tint: 'bg-green-50', ring: 'ring-green-100', badge: 'bg-green-100 text-green-700', avatar: 'bg-green-100 text-green-600', dot: 'bg-green-400' },
+  whatsapp: { tint: 'bg-emerald-50', ring: 'ring-emerald-100', badge: 'bg-emerald-100 text-emerald-700', avatar: 'bg-emerald-100 text-emerald-600', dot: 'bg-emerald-400' },
+  web: { tint: 'bg-cyan-50', ring: 'ring-cyan-100', badge: 'bg-cyan-100 text-cyan-700', avatar: 'bg-cyan-100 text-cyan-600', dot: 'bg-cyan-400' },
+  webchat: { tint: 'bg-cyan-50', ring: 'ring-cyan-100', badge: 'bg-cyan-100 text-cyan-700', avatar: 'bg-cyan-100 text-cyan-600', dot: 'bg-cyan-400' },
+}
+const NEUTRAL = { tint: 'bg-white', ring: 'ring-hairline', badge: 'bg-sunken text-subtle', avatar: 'bg-sunken text-subtle', dot: 'bg-muted' }
+
+// Activity → energy. Open conversations wear their channel color; resolved fade to a
+// calm white card (channel still recognizable in the badge); closed go quiet gray.
+function rowStyle(channel: string, status: string | null) {
+  const c = CHANNEL_STYLE[channel] || NEUTRAL
+  if (status === 'open') return { card: `${c.tint} ring-1 ${c.ring}`, badge: c.badge, avatar: c.avatar, dot: c.dot, live: true }
+  if (status === 'resolved') return { card: 'bg-white ring-1 ring-hairline', badge: c.badge, avatar: c.avatar, dot: c.dot, live: false }
+  return { card: 'bg-white ring-1 ring-hairline', badge: 'bg-sunken text-muted', avatar: 'bg-sunken text-muted', dot: 'bg-muted', live: false }
+}
+
+const RECENT_MS = 24 * 60 * 60 * 1000
 
 export default async function InboxPage({
   searchParams,
@@ -57,33 +84,32 @@ export default async function InboxPage({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 sm:p-6 border-b border-gray-100 bg-white space-y-3">
-        <h1 className="text-xl font-bold text-gray-900">Shared Inbox</h1>
+      <div className="p-4 sm:p-6 border-b border-hairline bg-white space-y-3">
+        <h1 className="text-2xl font-light tracking-tight text-ink">Shared Inbox</h1>
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
           <form>
             <input
               name="q"
               defaultValue={q}
               placeholder="Search conversations..."
-              className="pl-9 h-11 w-full rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#4ecdc4]"
+              className="pl-10 h-11 w-full rounded-xl border border-hairline bg-white text-sm text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
             />
           </form>
         </div>
 
         {/* Status filters — scrollable row */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
           {['all', 'open', 'resolved', 'closed'].map(s => (
             <Link
               key={s}
               href={`/inbox?status=${s}&channel=${channel}&q=${q}`}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors capitalize min-h-[44px] flex items-center ${
-                status === s
-                  ? 'bg-[#1a1f36] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={cn(
+                'flex-shrink-0 px-3.5 rounded-full text-xs font-medium transition-colors capitalize min-h-[40px] flex items-center',
+                status === s ? 'bg-ink text-white' : 'bg-sunken text-subtle hover:bg-hairline-strong'
+              )}
             >
               {s}
             </Link>
@@ -91,17 +117,19 @@ export default async function InboxPage({
         </div>
 
         {/* Channel filters — scrollable row */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5">
           {['all', 'sms', 'voice', 'email', 'instagram', 'facebook'].map(c => (
             <Link
               key={c}
               href={`/inbox?status=${status}&channel=${c}&q=${q}`}
-              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-medium transition-colors min-h-[44px] flex items-center ${
-                channel === c
-                  ? 'bg-[#4ecdc4] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              className={cn(
+                'flex-shrink-0 px-3.5 rounded-full text-xs font-medium transition-colors min-h-[40px] flex items-center gap-1.5',
+                channel === c ? 'bg-ink text-white' : 'bg-sunken text-subtle hover:bg-hairline-strong'
+              )}
             >
+              {c !== 'all' && (
+                <span className={cn('h-1.5 w-1.5 rounded-full', channel === c ? 'bg-white/70' : (CHANNEL_STYLE[c]?.dot || 'bg-muted'))} />
+              )}
               {c === 'all' ? 'All Channels' : CHANNEL_LABELS[c]}
             </Link>
           ))}
@@ -111,26 +139,26 @@ export default async function InboxPage({
       {/* Conversation List */}
       <div className="flex-1 overflow-auto">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+          <div className="flex flex-col items-center justify-center h-64 text-muted">
             <MessageCircle className="w-10 h-10 mb-2" />
             <p className="text-sm">No conversations found</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+          <div className="space-y-2 p-3 sm:p-4">
             {filtered.map((conv) => {
               const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
               const channelLabel = CHANNEL_LABELS[conv.channel] || conv.channel
-              // Show the contact name only if it looks like a real name (not a garbled
-              // voice utterance); otherwise fall back to phone + channel, then email.
               const title = looksLikeName(contact?.name)
                 ? contact!.name
                 : contact?.phone
                   ? `${formatPhone(contact.phone)} · ${channelLabel}`
                   : contact?.email || 'Unknown'
+              const s = rowStyle(conv.channel, conv.status)
+              const recent = conv.updated_at ? Date.now() - new Date(conv.updated_at).getTime() < RECENT_MS : false
               return (
                 <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
-                  <div className="flex items-center gap-3 px-4 sm:px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-[#4ecdc4]/15 text-[#4ecdc4]' : conv.channel === 'email' ? 'bg-indigo-50 text-indigo-500' : 'bg-gray-100 text-gray-600'}`}>
+                  <div className={cn('flex items-center gap-3.5 rounded-2xl px-4 py-3.5 transition-all hover:shadow-e2 sm:px-5', s.card)}>
+                    <div className={cn('w-11 h-11 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0', s.avatar)}>
                       {conv.channel === 'voice'
                         ? <Phone className="w-4 h-4" />
                         : conv.channel === 'email'
@@ -139,27 +167,28 @@ export default async function InboxPage({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className="text-sm font-semibold text-gray-900">
-                          {title}
-                        </p>
-                        <Badge variant={conv.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                          {conv.channel === 'voice' ? '📞 ' : conv.channel === 'email' ? '📧 ' : ''}{CHANNEL_LABELS[conv.channel] || conv.channel}
-                        </Badge>
+                        <p className="text-[15px] font-medium text-ink truncate">{title}</p>
+                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium', s.badge)}>
+                          {channelLabel}
+                        </span>
+                        {s.live && (
+                          <span className={cn('h-1.5 w-1.5 rounded-full', s.dot, recent && 'animate-pulse')} aria-hidden="true" />
+                        )}
                         {conv.channel === 'voice' && conv.duration_seconds != null && (
-                          <span className="text-xs text-gray-400 whitespace-nowrap">{formatDuration(conv.duration_seconds)}</span>
+                          <span className="text-xs text-muted whitespace-nowrap">{formatDuration(conv.duration_seconds)}</span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="text-[13px] text-subtle truncate">
                         {conv.summary
-                          ? truncate(conv.summary, 60)
+                          ? truncate(conv.summary, 64)
                           : conv.channel === 'voice'
                             ? (conv.duration_seconds != null ? `Voice call · ${formatDuration(conv.duration_seconds)}` : 'Voice call')
                             : 'No summary yet'}
                       </p>
                     </div>
-                    <div className="text-right flex-shrink-0 space-y-1 ml-2">
-                      <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
-                      <p className="text-xs text-gray-400 whitespace-nowrap">{formatDateTime(conv.updated_at, tz)}</p>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{conv.status}</p>
+                      <p className="mt-1 text-xs text-muted whitespace-nowrap">{formatDateTime(conv.updated_at, tz)}</p>
                     </div>
                   </div>
                 </Link>

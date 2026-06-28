@@ -12,7 +12,6 @@ import {
   Settings,
   CreditCard,
   LogOut,
-  Zap,
   FlaskConical,
   TrendingUp,
   MoreHorizontal,
@@ -24,6 +23,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { TrialWidget } from '@/components/dashboard/trial-widget'
+import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 
 const navItems = [
@@ -94,16 +94,12 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-16 xl:w-56 bg-[#1a1f36] min-h-screen fixed left-0 top-0 bottom-0 z-40">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-white/10">
-          <div className="flex-shrink-0 w-8 h-8 bg-[#4ecdc4] rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">
-              {businessName ? businessName.charAt(0).toUpperCase() : <Zap className="w-4 h-4" />}
-            </span>
-          </div>
-          <span className="hidden xl:block text-white font-bold text-base tracking-tight leading-tight">
+      {/* Desktop Sidebar — calm, light, premium */}
+      <aside className="hidden md:flex flex-col w-16 xl:w-56 bg-white border-r border-hairline min-h-screen fixed left-0 top-0 bottom-0 z-40">
+        {/* Logo — the one place the brand color lives */}
+        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-hairline">
+          <ScalixLogo size={26} className="flex-shrink-0" />
+          <span className="hidden xl:block text-ink font-semibold text-[15px] tracking-tight leading-tight truncate">
             {businessName || brand.name}
           </span>
         </div>
@@ -117,13 +113,13 @@ export function Sidebar() {
                 key={href}
                 href={href}
                 className={cn(
-                  'tap-target flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                  'tap-target flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
                   active
-                    ? 'bg-[#252b4a] text-white'
-                    : 'text-gray-400 hover:bg-[#252b4a] hover:text-white'
+                    ? 'bg-sunken text-ink font-medium'
+                    : 'text-subtle hover:bg-sunken/70 hover:text-ink'
                 )}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" />
+                <Icon className="w-5 h-5 flex-shrink-0" strokeWidth={active ? 2.25 : 2} />
                 <span className="hidden xl:block">{label}</span>
               </Link>
             )
@@ -138,10 +134,10 @@ export function Sidebar() {
         )}
 
         {/* Sign out */}
-        <div className="px-2 py-4 border-t border-white/10">
+        <div className="px-2 py-4 border-t border-hairline">
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:bg-[#252b4a] hover:text-white transition-colors w-full"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-subtle hover:bg-sunken hover:text-ink transition-colors w-full"
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="hidden xl:block">Sign Out</span>
@@ -150,7 +146,7 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#1a1f36] border-t border-white/10 z-40 flex safe-area-inset-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-hairline z-40 flex safe-area-inset-bottom">
         {bottomPrimary.map(({ href, icon: Icon, label }) => {
           const active = itemActive(href, label)
           return (
@@ -159,7 +155,7 @@ export function Sidebar() {
               href={href}
               className={cn(
                 'tap-target flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium transition-colors min-h-[56px] justify-center',
-                active ? 'text-[#4ecdc4]' : 'text-gray-400'
+                active ? 'text-ink' : 'text-muted'
               )}
             >
               <Icon className="w-5 h-5 mb-1" />
@@ -172,7 +168,7 @@ export function Sidebar() {
           onClick={() => setMoreOpen(true)}
           className={cn(
             'flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium transition-colors min-h-[56px] justify-center',
-            moreActive ? 'text-[#4ecdc4]' : 'text-gray-400'
+            moreActive ? 'text-ink' : 'text-muted'
           )}
         >
           <MoreHorizontal className="w-5 h-5 mb-1" />
@@ -185,18 +181,18 @@ export function Sidebar() {
         <div className="md:hidden fixed inset-0 z-50">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/40"
             onClick={() => setMoreOpen(false)}
           />
           {/* Drawer */}
           <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <span className="font-semibold text-gray-900">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
+              <span className="font-semibold text-ink">
                 {businessName || brand.name}
               </span>
               <button
                 onClick={() => setMoreOpen(false)}
-                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-gray-100 text-gray-500"
+                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-sunken text-subtle"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -209,10 +205,10 @@ export function Sidebar() {
                     key={href}
                     href={href}
                     className={cn(
-                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium transition-colors',
+                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base transition-colors',
                       active
-                        ? 'bg-[#4ecdc4]/10 text-[#4ecdc4]'
-                        : 'text-gray-700 hover:bg-gray-50'
+                        ? 'bg-sunken text-ink font-medium'
+                        : 'text-subtle hover:bg-sunken'
                     )}
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
@@ -221,7 +217,7 @@ export function Sidebar() {
                 )
               })}
             </nav>
-            <div className="px-4 pb-6 border-t border-gray-100 pt-3">
+            <div className="px-4 pb-6 border-t border-hairline pt-3">
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 transition-colors w-full"

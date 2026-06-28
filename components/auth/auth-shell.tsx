@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { AiOrb } from './ai-orb'
+import { AiOrb } from '@/components/brand/ai-orb'
 
 export interface AuthShellProps {
   brandLogo: ReactNode

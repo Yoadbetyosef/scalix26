@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { LeadsTable } from '@/components/dashboard/leads-table'
 import { AppointmentsTable, type Appointment } from '@/components/dashboard/appointments-table'
 import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
+import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
+import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import { getImpactData } from '@/lib/dashboard/impact'
 import type { Lead } from '@/types'
 
@@ -129,50 +131,93 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   if (!tenant) redirect('/setup')
 
-  const { stats, leads_list, leadLinks, appointments_list } = await getDashboardData(tenant.id)
+  const { stats, aiEmployees, leads_list, leadLinks, appointments_list } = await getDashboardData(tenant.id)
   // Impact Dashboard (overview body) — computed only for the overview tab.
   const impactData = activeTab === 'overview' ? await getImpactData(tenant.id) : null
 
+  // ── Hero (overview only) — bound to real data already on the page ─────────────
+  // The compact header is preserved verbatim for the Leads/Appointments tabs.
+  let topSection = (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">Dashboard</h1>
+        <p className="text-muted text-sm mt-0.5 truncate">{tenant.business_name}</p>
+      </div>
+      <Link href="/ai-employees/new" className="flex-shrink-0">
+        <Button className="gap-2 text-sm">
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">New AI Employee</span>
+          <span className="sm:hidden">New</span>
+        </Button>
+      </Link>
+    </div>
+  )
+
+  if (activeTab === 'overview' && impactData) {
+    const employeeName =
+      (aiEmployees as { name?: string | null; status?: string | null }[]).find((e) => e.status === 'active')?.name ||
+      (aiEmployees as { name?: string | null }[])[0]?.name ||
+      'Your AI'
+
+    const handled = impactData.conversationsManaged.value
+    const booked = appointments_list.filter((a) => a.status === 'confirmed' || a.status === 'completed').length
+    const recovered = leads_list.filter((l) => Boolean((l as { responded_at?: string | null }).responded_at)).length
+    const answered = impactData.coveragePct.value
+    const attentionCount = impactData.attention.length
+
+    const presenceState: PresenceState = attentionCount > 0 ? 'attention' : handled > 0 ? 'working' : 'ready'
+
+    // The soul: the AI's spoken status (the name lives in the eyebrow, not here).
+    const stateSentence =
+      attentionCount > 0
+        ? `${attentionCount} ${attentionCount === 1 ? 'thing needs' : 'things need'} your attention.`
+        : handled > 0
+          ? 'On duty — watching every channel. Nothing needs you.'
+          : 'On duty, watching your channels. Nothing needs you yet.'
+
+    topSection = (
+      <DashboardHero
+        employeeName={employeeName}
+        presenceState={presenceState}
+        stateSentence={stateSentence}
+        businessName={tenant.business_name || ''}
+        figures={[
+          { value: String(handled), label: 'Handled' },
+          { value: String(booked), label: 'Booked' },
+          { value: String(recovered), label: 'Recovered' },
+          { value: answered != null ? `${answered}%` : '—', label: 'Answered' },
+        ]}
+      />
+    )
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5 truncate">{tenant.business_name}</p>
-        </div>
-        <Link href="/ai-employees/new" className="flex-shrink-0">
-          <Button className="gap-2 text-sm">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New AI Employee</span>
-            <span className="sm:hidden">New</span>
-          </Button>
-        </Link>
-      </div>
+      {topSection}
 
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-hairline">
         <Link
           href="/dashboard"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'overview' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'overview' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Overview
         </Link>
         <Link
           href="/dashboard?tab=leads"
-          className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Leads
           {stats.activeLeads > 0 && (
-            <span className="bg-teal-500 text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+            <span className="bg-ink text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
               {stats.activeLeads}
             </span>
           )}
         </Link>
         <Link
           href="/dashboard?tab=appointments"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'appointments' ? 'border-[#4ecdc4] text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'appointments' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Appointments
         </Link>
