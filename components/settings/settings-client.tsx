@@ -16,6 +16,12 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   facebook: Globe,
 }
 
+// Apple-style channel colors — the icon tile carries the channel identity.
+const CHANNEL_TONE: Record<string, string> = {
+  voice: 'bg-cyan-500', sms: 'bg-emerald-500', whatsapp: 'bg-green-500',
+  instagram: 'bg-pink-500', facebook: 'bg-blue-600', email: 'bg-violet-500',
+}
+
 interface Props {
   tenant: Tenant
   channels: Channel[]
@@ -65,7 +71,10 @@ export function SettingsClient({ tenant, channels }: Props) {
       {/* Connected Channels */}
       <Card>
         <CardHeader>
-          <CardTitle>Connected Channels</CardTitle>
+          <CardTitle className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-indigo-500 text-white shadow-e1"><MessageSquare className="h-[18px] w-[18px]" strokeWidth={2} /></span>
+            Connected Channels
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {channels.length === 0 ? (
@@ -76,8 +85,8 @@ export function SettingsClient({ tenant, channels }: Props) {
                 const Icon = CHANNEL_ICONS[ch.type] || MessageSquare
                 return (
                   <div key={ch.id} className="flex items-center gap-3 p-3 rounded-xl bg-sunken">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-hairline flex items-center justify-center">
-                      <Icon className="w-4 h-4 text-subtle" />
+                    <div className={`w-8 h-8 rounded-lg ${CHANNEL_TONE[ch.type] || 'bg-slate-500'} flex items-center justify-center text-white shadow-e1`}>
+                      <Icon className="w-4 h-4" strokeWidth={2} />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-ink capitalize">{ch.type}</p>
@@ -95,8 +104,8 @@ export function SettingsClient({ tenant, channels }: Props) {
       {/* Lead Sources */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Webhook className="w-5 h-5 text-accent-strong" />
+          <CardTitle className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-orange-500 text-white shadow-e1"><Webhook className="h-[18px] w-[18px]" strokeWidth={2} /></span>
             Lead Sources
           </CardTitle>
         </CardHeader>
@@ -141,8 +150,8 @@ export function SettingsClient({ tenant, channels }: Props) {
               <div className="space-y-2.5">
                 {/* Missed calls — already automatic */}
                 <div className="flex items-center gap-3 p-3 rounded-lg border border-hairline bg-sunken">
-                  <div className="w-9 h-9 rounded-lg bg-white border border-hairline flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-4 h-4 text-subtle" />
+                  <div className="w-9 h-9 rounded-lg bg-cyan-500 flex items-center justify-center text-white shadow-e1 flex-shrink-0">
+                    <Phone className="w-4 h-4" strokeWidth={2} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-ink">Missed Calls</p>
@@ -162,7 +171,10 @@ export function SettingsClient({ tenant, channels }: Props) {
       {/* Billing */}
       <Card id="billing" className="scroll-mt-6">
         <CardHeader>
-          <CardTitle>Billing & Subscription</CardTitle>
+          <CardTitle className="flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-emerald-600 text-white shadow-e1"><CreditCard className="h-[18px] w-[18px]" strokeWidth={2} /></span>
+            Billing & Subscription
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
 

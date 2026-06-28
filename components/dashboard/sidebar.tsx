@@ -26,18 +26,29 @@ import { TrialWidget } from '@/components/dashboard/trial-widget'
 import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 
+// Each destination wears its own color tile (macOS System Settings style) — the icons
+// give the workspace life while the surface stays calm white.
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard?tab=leads', icon: TrendingUp, label: 'Leads' },
-  { href: '/inbox', icon: Inbox, label: 'Inbox' },
-  { href: '/contacts', icon: Users, label: 'Contacts' },
-  { href: '/ai-employees', icon: Bot, label: 'AI Employees' },
-  { href: '/test-ai', icon: FlaskConical, label: 'Test AI' },
-  { href: '/analytics', icon: BarChart3, label: 'Analytics' },
-  { href: '/reports', icon: FileText, label: 'Reports' },
-  { href: '/settings#billing', icon: CreditCard, label: 'Billing & Subscription' },
-  { href: '/settings', icon: Settings, label: 'Settings' },
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tone: 'bg-blue-500' },
+  { href: '/dashboard?tab=leads', icon: TrendingUp, label: 'Leads', tone: 'bg-emerald-500' },
+  { href: '/inbox', icon: Inbox, label: 'Inbox', tone: 'bg-indigo-500' },
+  { href: '/contacts', icon: Users, label: 'Contacts', tone: 'bg-cyan-500' },
+  { href: '/ai-employees', icon: Bot, label: 'AI Employees', tone: 'bg-violet-500' },
+  { href: '/test-ai', icon: FlaskConical, label: 'Test AI', tone: 'bg-fuchsia-500' },
+  { href: '/analytics', icon: BarChart3, label: 'Analytics', tone: 'bg-orange-500' },
+  { href: '/reports', icon: FileText, label: 'Reports', tone: 'bg-amber-500' },
+  { href: '/settings#billing', icon: CreditCard, label: 'Billing & Subscription', tone: 'bg-emerald-600' },
+  { href: '/settings', icon: Settings, label: 'Settings', tone: 'bg-slate-500' },
 ]
+
+// Small colored icon tile shared by the desktop sidebar + mobile "More" drawer.
+function NavTile({ icon: Icon, tone }: { icon: typeof LayoutDashboard; tone: string }) {
+  return (
+    <span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg text-white shadow-e1 flex-shrink-0', tone)}>
+      <Icon className="h-4 w-4" strokeWidth={2} />
+    </span>
+  )
+}
 
 // First 4 items in bottom bar, rest in "More" drawer
 const bottomPrimary = navItems.slice(0, 4)
@@ -106,20 +117,20 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-1">
-          {navItems.map(({ href, icon: Icon, label }) => {
+          {navItems.map(({ href, icon: Icon, label, tone }) => {
             const active = itemActive(href, label)
             return (
               <Link
                 key={href}
                 href={href}
                 className={cn(
-                  'tap-target flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                  'tap-target flex items-center gap-2.5 px-2 py-2 rounded-xl text-sm transition-colors',
                   active
                     ? 'bg-sunken text-ink font-medium'
                     : 'text-subtle hover:bg-sunken/70 hover:text-ink'
                 )}
               >
-                <Icon className="w-5 h-5 flex-shrink-0" strokeWidth={active ? 2.25 : 2} />
+                <NavTile icon={Icon} tone={tone} />
                 <span className="hidden xl:block">{label}</span>
               </Link>
             )
@@ -198,20 +209,20 @@ export function Sidebar() {
               </button>
             </div>
             <nav className="px-4 py-3">
-              {bottomMore.map(({ href, icon: Icon, label }) => {
+              {bottomMore.map(({ href, icon: Icon, label, tone }) => {
                 const active = itemActive(href, label)
                 return (
                   <Link
                     key={href}
                     href={href}
                     className={cn(
-                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base transition-colors',
+                      'tap-target flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-base transition-colors',
                       active
                         ? 'bg-sunken text-ink font-medium'
                         : 'text-subtle hover:bg-sunken'
                     )}
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
+                    <NavTile icon={Icon} tone={tone} />
                     {label}
                   </Link>
                 )
