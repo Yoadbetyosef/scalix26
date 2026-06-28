@@ -55,8 +55,8 @@ export function SettingsClient({ tenant, channels }: Props) {
   return (
     <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Manage your business profile and integrations</p>
+        <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Settings</h1>
+        <p className="text-sm text-muted mt-1">Manage your business profile and integrations</p>
       </div>
 
       {/* Business identity AND availability & reviews are now edited on the AI
@@ -69,19 +69,19 @@ export function SettingsClient({ tenant, channels }: Props) {
         </CardHeader>
         <CardContent>
           {channels.length === 0 ? (
-            <p className="text-sm text-gray-500">No channels connected yet. Create an AI employee to add channels.</p>
+            <p className="text-sm text-subtle">No channels connected yet. Create an AI employee to add channels.</p>
           ) : (
             <div className="space-y-3">
               {channels.map(ch => {
                 const Icon = CHANNEL_ICONS[ch.type] || MessageSquare
                 return (
-                  <div key={ch.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-                    <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center">
-                      <Icon className="w-4 h-4 text-gray-600" />
+                  <div key={ch.id} className="flex items-center gap-3 p-3 rounded-xl bg-sunken">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-hairline flex items-center justify-center">
+                      <Icon className="w-4 h-4 text-subtle" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900 capitalize">{ch.type}</p>
-                      {ch.twilio_number && <p className="text-xs text-gray-500">{ch.twilio_number}</p>}
+                      <p className="text-sm font-medium text-ink capitalize">{ch.type}</p>
+                      {ch.twilio_number && <p className="text-xs text-subtle">{ch.twilio_number}</p>}
                     </div>
                     <Badge variant={ch.status as 'connected' | 'disconnected' | 'pending'}>{ch.status}</Badge>
                   </div>
@@ -96,7 +96,7 @@ export function SettingsClient({ tenant, channels }: Props) {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Webhook className="w-5 h-5 text-[#4ecdc4]" />
+            <Webhook className="w-5 h-5 text-accent-strong" />
             Lead Sources
           </CardTitle>
         </CardHeader>
@@ -116,13 +116,13 @@ export function SettingsClient({ tenant, channels }: Props) {
           ) : (
             <>
               {/* Personal booking link — the star */}
-              <div className="rounded-xl border-2 border-[#4ecdc4]/30 bg-[#4ecdc4]/5 p-4">
-                <p className="text-sm font-semibold text-gray-900">Your Personal Booking Link</p>
-                <p className="text-xs text-gray-500 mt-1 mb-3">
+              <div className="rounded-2xl border border-accent/25 bg-accent/[0.06] p-5">
+                <p className="text-sm font-medium text-ink">Your Personal Booking Link</p>
+                <p className="text-xs text-subtle mt-1 mb-3">
                   Share this link anywhere. When someone clicks it and fills in their info — they get a text from you within seconds. No website, no developer, no code needed.
                 </p>
                 <div className="flex gap-2">
-                  <code className="flex-1 min-w-0 truncate bg-white border border-gray-200 rounded-lg px-3 h-11 flex items-center text-xs sm:text-sm text-gray-700">
+                  <code className="flex-1 min-w-0 truncate bg-white border border-hairline rounded-lg px-3 h-11 flex items-center text-xs sm:text-sm text-ink">
                     {bookingUrl}
                   </code>
                   <Button className="h-11 px-4 flex-shrink-0" onClick={() => copy(bookingUrl, 'Link')}>
@@ -130,23 +130,23 @@ export function SettingsClient({ tenant, channels }: Props) {
                     <span className="hidden sm:inline">Copy Link</span>
                   </Button>
                 </div>
-                <div className="mt-3 space-y-1.5 text-xs text-gray-600">
-                  <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-gray-400" /> Paste it in your Google Business Profile</p>
-                  <p className="flex items-center gap-2"><Smartphone className="w-3.5 h-3.5 text-gray-400" /> Add it to your Instagram or Facebook bio</p>
-                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-gray-400" /> Include it in your email signature</p>
+                <div className="mt-3 space-y-1.5 text-xs text-subtle">
+                  <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-muted" /> Paste it in your Google Business Profile</p>
+                  <p className="flex items-center gap-2"><Smartphone className="w-3.5 h-3.5 text-muted" /> Add it to your Instagram or Facebook bio</p>
+                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-muted" /> Include it in your email signature</p>
                 </div>
               </div>
 
               {/* Other sources */}
               <div className="space-y-2.5">
                 {/* Missed calls — already automatic */}
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
-                  <div className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-4 h-4 text-gray-600" />
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-hairline bg-sunken">
+                  <div className="w-9 h-9 rounded-lg bg-white border border-hairline flex items-center justify-center flex-shrink-0">
+                    <Phone className="w-4 h-4 text-subtle" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">Missed Calls</p>
-                    <p className="text-xs text-gray-500">If a call ever slips through, we automatically text them back within seconds so you never lose the job.</p>
+                    <p className="text-sm font-medium text-ink">Missed Calls</p>
+                    <p className="text-xs text-subtle">If a call ever slips through, we automatically text them back within seconds so you never lose the job.</p>
                   </div>
                   <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium flex-shrink-0">Active</span>
                 </div>
@@ -180,10 +180,10 @@ export function SettingsClient({ tenant, channels }: Props) {
               <p className="text-sm text-yellow-700">Upgrade before your trial ends to keep your AI running 24/7.</p>
             </div>
           ) : (
-            <div className="bg-[#4ecdc4]/10 border border-[#4ecdc4]/30 rounded-xl p-4 flex items-center justify-between">
+            <div className="bg-accent/[0.08] border border-accent/20 rounded-2xl p-5 flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">Current plan</p>
-                <p className="text-lg font-bold text-gray-900 capitalize">{tenant.plan}</p>
+                <p className="text-xs text-subtle mb-0.5">Current plan</p>
+                <p className="text-lg font-semibold text-ink capitalize">{tenant.plan}</p>
               </div>
               <Button variant="outline" size="sm" onClick={openBillingPortal}>
                 <CreditCard className="w-4 h-4 mr-1.5" />
@@ -201,25 +201,25 @@ export function SettingsClient({ tenant, channels }: Props) {
             ].map(plan => {
               const isCurrent = tenant.plan === plan.key
               return (
-                <div key={plan.key} className={`relative rounded-xl border-2 p-4 ${isCurrent ? 'border-[#4ecdc4] bg-[#4ecdc4]/5' : 'border-gray-100 bg-white'}`}>
+                <div key={plan.key} className={`relative rounded-2xl border p-5 transition-all ${isCurrent ? 'border-accent/40 bg-accent/5 shadow-e1' : 'border-hairline bg-white hover:shadow-e2'}`}>
                   {plan.popular && !isCurrent && (
-                    <span className="absolute -top-2.5 left-4 text-xs font-semibold bg-[#1a1f36] text-white px-2.5 py-0.5 rounded-full">Most popular</span>
+                    <span className="absolute -top-2.5 left-4 text-xs font-medium bg-ink text-white px-2.5 py-0.5 rounded-full">Most popular</span>
                   )}
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-900">{plan.name}</p>
-                        {isCurrent && <span className="text-xs font-medium text-[#4ecdc4] bg-[#4ecdc4]/10 px-2 py-0.5 rounded-full">Your plan</span>}
+                        <p className="font-semibold text-ink">{plan.name}</p>
+                        {isCurrent && <span className="text-xs font-medium text-accent-strong bg-accent/10 px-2 py-0.5 rounded-full">Your plan</span>}
                       </div>
                       <p className="mt-0.5">
-                        <span className="text-xl font-bold text-gray-900">{plan.price}</span>
-                        <span className="text-sm text-gray-400">{plan.period}</span>
+                        <span className="text-xl font-semibold text-ink">{plan.price}</span>
+                        <span className="text-sm text-muted">{plan.period}</span>
                       </p>
                     </div>
                     {!isCurrent && (
                       <button
                         onClick={() => handleUpgrade(plan.priceId!)}
-                        className="h-11 px-5 text-sm font-semibold bg-[#1a1f36] text-white rounded-xl hover:bg-[#2a2f46] transition-colors flex-shrink-0"
+                        className="h-11 px-5 text-sm font-medium bg-ink text-white rounded-button shadow-e1 hover:bg-ink/90 hover:shadow-e2 transition-all flex-shrink-0"
                       >
                         Upgrade
                       </button>
@@ -227,7 +227,7 @@ export function SettingsClient({ tenant, channels }: Props) {
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
                     {plan.features.map(f => (
-                      <span key={f} className="text-xs text-gray-500 flex items-center gap-1"><Check className="w-3 h-3 text-green-500" /> {f}</span>
+                      <span key={f} className="text-xs text-subtle flex items-center gap-1"><Check className="w-3 h-3 text-green-500" /> {f}</span>
                     ))}
                   </div>
                 </div>
@@ -236,7 +236,7 @@ export function SettingsClient({ tenant, channels }: Props) {
           </div>
 
           {tenant.plan !== 'trial' && (
-            <button onClick={openBillingPortal} className="w-full text-xs text-gray-400 hover:text-gray-600 py-3.5 -my-2.5 flex items-center justify-center gap-1">
+            <button onClick={openBillingPortal} className="w-full text-xs text-muted hover:text-subtle py-3.5 -my-2.5 flex items-center justify-center gap-1">
               <CreditCard className="w-3.5 h-3.5" /> Manage billing & invoices
             </button>
           )}

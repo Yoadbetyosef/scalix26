@@ -57,7 +57,7 @@ export function AvailabilityClient({
           <Label>Google review link</Label>
           <Input className="mt-1.5" placeholder="https://g.page/r/..." value={reviewUrl} onChange={(e) => setReviewUrl(e.target.value)} />
         </div>
-        <label className="flex items-center gap-2 text-sm text-gray-700">
+        <label className="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" checked={autoReview} onChange={(e) => setAutoReview(e.target.checked)} className="accent-[#4ecdc4] w-4 h-4" />
           Auto-send a review request 3 hours after each appointment
         </label>
@@ -71,10 +71,10 @@ export function AvailabilityClient({
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-3xl">
       <div className="flex items-center gap-2">
-        <Link href="/settings" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="w-5 h-5" /></Link>
+        <Link href="/settings" className="text-muted hover:text-ink transition-colors"><ArrowLeft className="w-5 h-5" /></Link>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Reviews</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Automate Google review requests after appointments.</p>
+          <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Reviews</h1>
+          <p className="text-sm text-muted mt-1">Automate Google review requests after appointments.</p>
         </div>
       </div>
       {content}
