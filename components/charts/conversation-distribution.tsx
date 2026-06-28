@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { createClient } from '@/lib/supabase/client'
+import { AiThinking } from '@/components/brand/ai-thinking'
 
 const COLORS = ['#5B6CF0', '#1a1f36']
 
@@ -11,6 +12,7 @@ export function ConversationDistributionChart({ tenantId }: { tenantId: string }
     { name: 'AI Handled', value: 0 },
     { name: 'Transferred', value: 0 },
   ])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -28,11 +30,15 @@ export function ConversationDistributionChart({ tenantId }: { tenantId: string }
         { name: 'AI Handled', value: resolved || 0 },
         { name: 'Transferred', value: open || 0 },
       ])
+      setLoading(false)
     }
     load()
   }, [tenantId])
 
   const total = data.reduce((s, d) => s + d.value, 0)
+  if (loading) {
+    return <div className="h-48 flex items-center justify-center"><AiThinking label="Syncing conversations…" /></div>
+  }
   if (total === 0) {
     return (
       <div className="h-48 flex items-center justify-center text-muted text-sm">

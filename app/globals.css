@@ -182,6 +182,13 @@ body {
   /* Soft "listening" halo — idle/empty states quietly signal the AI is ready */
   @keyframes sx-halo { 0% { transform: scale(0.85); opacity: 0.45; } 70%, 100% { transform: scale(1.9); opacity: 0; } }
   .sx-halo { animation: sx-halo 2.8s ease-out infinite; }
+
+  /* Ambient atmosphere — the background glows drift very slowly, so even an idle
+     screen feels alive (never distracting; ~20s, barely perceptible). */
+  @keyframes sx-drift-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, 28px) scale(1.12); } }
+  @keyframes sx-drift-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-38px, -26px) scale(1.1); } }
+  .sx-drift-1 { animation: sx-drift-1 19s ease-in-out infinite; }
+  .sx-drift-2 { animation: sx-drift-2 23s ease-in-out infinite; }
 }
 
 /* Tap highlight off — we provide our own press feedback */

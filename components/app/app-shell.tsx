@@ -14,12 +14,12 @@ export function AppShell({ children, mainClassName }: { children: ReactNode; mai
       {/* Ambient atmosphere — fixed, barely there, behind everything */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed -left-40 -top-40 h-[520px] w-[520px] rounded-full"
+        className="sx-drift-1 pointer-events-none fixed -left-40 -top-40 h-[520px] w-[520px] rounded-full"
         style={{ background: 'radial-gradient(circle, color-mix(in oklab, #8e9bf0 8%, transparent), transparent 70%)' } as CSSProperties}
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed -bottom-48 -right-40 h-[560px] w-[560px] rounded-full"
+        className="sx-drift-2 pointer-events-none fixed -bottom-48 -right-40 h-[560px] w-[560px] rounded-full"
         style={{ background: 'radial-gradient(circle, color-mix(in oklab, #f0a9d6 7%, transparent), transparent 70%)' } as CSSProperties}
       />
 

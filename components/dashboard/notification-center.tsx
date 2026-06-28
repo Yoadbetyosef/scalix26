@@ -130,11 +130,17 @@ export function NotificationCenter() {
         className="fixed bottom-20 right-4 md:bottom-4 z-50 w-14 h-14 rounded-full bg-ink text-white shadow-e3 flex items-center justify-center transition-all duration-200 hover:bg-ink/90 hover:shadow-e4 hover:-translate-y-0.5 active:scale-95"
       >
         <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
-        {unread > 0 && (
+        {unread > 0 ? (
           <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 px-1 flex items-center justify-center bg-danger text-white text-[11px] font-semibold rounded-full ring-2 ring-white">
             {unread > 9 ? '9+' : unread}
           </span>
-        )}
+        ) : tenantId ? (
+          // Idle but live — a calm green pulse signals the AI is on duty and watching.
+          <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3" aria-hidden="true">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white" />
+          </span>
+        ) : null}
       </button>
 
       {open && (
@@ -172,7 +178,7 @@ export function NotificationCenter() {
                       tabIndex={0}
                       onClick={() => openNotif(n)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotif(n) } }}
-                      className="flex items-center gap-3 px-3 py-3 rounded-2xl cursor-pointer hover:bg-sunken transition-colors"
+                      className="sx-animate-in flex items-center gap-3 px-3 py-3 rounded-2xl cursor-pointer hover:bg-sunken transition-colors"
                     >
                       {/* Colored indicator tile — booked is a calm win, a new lead is energy */}
                       <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${booked ? 'bg-emerald-50 text-emerald-600' : 'bg-accent/10 text-accent-strong'}`}>
