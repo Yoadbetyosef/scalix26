@@ -77,27 +77,29 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
 
   if (!rows.length) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-muted bg-white rounded-xl border border-hairline shadow-sm">
-        <Calendar className="w-12 h-12 mb-3" />
-        <p className="text-sm">No appointments yet</p>
-        <p className="text-xs text-muted mt-1 text-center px-4">Appointments booked by the AI appear here. Set your times in Settings → Availability.</p>
+      <div className="flex flex-col items-center justify-center py-20 text-center sx-card">
+        <div className="w-14 h-14 rounded-2xl bg-sunken flex items-center justify-center text-subtle mb-4">
+          <Calendar className="w-7 h-7" strokeWidth={1.5} />
+        </div>
+        <p className="text-base font-light text-ink">No appointments yet</p>
+        <p className="text-sm text-muted mt-1 max-w-xs">Appointments booked by the AI appear here. Set your times in Settings → Availability.</p>
       </div>
     )
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 bg-white rounded-xl border border-hairline shadow-sm px-4 py-3 text-sm font-medium">
-        <span className="text-blue-600">📅 {counts.today} Today</span>
-        <span className="text-green-600">✅ {counts.completed} Completed</span>
-        <span className="text-subtle">⏳ {counts.upcoming} Upcoming</span>
+      <div className="flex flex-wrap items-center gap-x-7 gap-y-2 sx-card px-5 py-3.5 text-sm">
+        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-400" /><span className="sx-tabular font-medium text-ink">{counts.today}</span><span className="text-subtle">Today</span></span>
+        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" /><span className="sx-tabular font-medium text-ink">{counts.completed}</span><span className="text-subtle">Completed</span></span>
+        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" /><span className="sx-tabular font-medium text-ink">{counts.upcoming}</span><span className="text-subtle">Upcoming</span></span>
       </div>
 
       <div className="space-y-2">
         {rows.map((a) => {
           const cfg = STATUS_STYLES[a.status] || STATUS_STYLES.confirmed
           return (
-            <div key={a.id} className="rounded-xl border border-hairline bg-white shadow-sm p-4">
+            <div key={a.id} className="rounded-2xl border border-hairline bg-white shadow-e1 p-4 sm:p-5 transition-all hover:shadow-e2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

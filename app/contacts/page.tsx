@@ -5,6 +5,14 @@ import { Users, Phone, Mail, MessageCircle, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, isSocialChannel } from '@/lib/utils'
 
+// Soft channel tint for contact avatars — a quiet touch of life, the channel color
+// recognizable at a glance without shouting.
+const CHANNEL_TINT: Record<string, string> = {
+  voice: 'bg-cyan-100 text-cyan-700', sms: 'bg-emerald-100 text-emerald-700',
+  email: 'bg-violet-100 text-violet-700', whatsapp: 'bg-green-100 text-green-700',
+  facebook: 'bg-blue-100 text-blue-700', instagram: 'bg-pink-100 text-pink-700',
+}
+
 export default async function ContactsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -43,7 +51,7 @@ export default async function ContactsPage() {
             {contacts.map((contact) => (
               <Link key={contact.id} href={`/contacts/${contact.id}`} className="tap-target block bg-white rounded-2xl border border-hairline shadow-e1 p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-full bg-sunken ring-1 ring-hairline flex items-center justify-center text-subtle text-sm font-medium flex-shrink-0">
+                  <div className={`w-10 h-10 rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium flex-shrink-0`}>
                     {contact.name?.[0] || contact.phone?.[0] || '?'}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -101,7 +109,7 @@ export default async function ContactsPage() {
                   <tr key={contact.id} className="hover:bg-sunken transition-colors">
                     <td className="px-6 py-4">
                       <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3 group">
-                        <div className="w-8 h-8 rounded-full bg-sunken ring-1 ring-hairline flex items-center justify-center text-subtle text-sm font-medium">
+                        <div className={`w-8 h-8 rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium`}>
                           {contact.name?.[0] || contact.phone?.[0] || '?'}
                         </div>
                         <span className="text-sm font-medium text-ink group-hover:text-accent-strong transition-colors">

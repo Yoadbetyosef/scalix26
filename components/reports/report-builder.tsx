@@ -62,13 +62,16 @@ export function ReportBuilder({ tenantId }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Custom Report Builder</CardTitle>
+        <CardTitle className="flex items-center gap-2.5">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-indigo-500 text-white shadow-e1"><Download className="h-[18px] w-[18px]" strokeWidth={2} /></span>
+          Custom Report Builder
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700">Date Range</label>
+          <label className="text-sm font-medium text-ink">Date Range</label>
           <select
-            className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B6CF0]"
+            className="h-11 rounded-xl border border-hairline-strong bg-white px-3.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
             value={dateRange}
             onChange={e => setDateRange(e.target.value)}
           >
