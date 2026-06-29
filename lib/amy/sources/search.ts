@@ -9,7 +9,9 @@ export const searchSource: ContextSource = {
     type: 'object',
     properties: {
       query: { type: 'string', description: 'A single keyword/root term to find in customers’ messages.' },
-      time_range: { type: 'string', description: 'Optional window: this_week, this_month, etc.' },
+      time_range: { type: 'string', description: 'Optional preset window: today, yesterday, this_week, last_week, this_month, last_month, this_year, last_year, last_7_days, last_30_days, last_90_days, all.' },
+      from: { type: 'string', description: 'Optional ISO start date for an arbitrary historical window (e.g. "4 months ago", "March"). Use with `to`.' },
+      to: { type: 'string', description: 'Optional ISO end date for an arbitrary historical window. Use with `from`.' },
       limit: { type: 'integer', description: 'Max matching messages to scan (default 25).' },
     },
     required: ['query'],
@@ -18,8 +20,8 @@ export const searchSource: ContextSource = {
     const query = str(args.query)
     if (!query) return 'Give me a keyword to search for.'
     const limit = Math.min(num(args.limit, 25), 50)
-    const ranged = !!str(args.time_range)
-    const range = parseRange(str(args.time_range))
+    const ranged = !!(str(args.time_range) || str(args.from) || str(args.to))
+    const range = parseRange(str(args.time_range), str(args.from), str(args.to))
 
     let q = ctx.db
       .from('messages')
