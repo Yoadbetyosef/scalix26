@@ -14,7 +14,7 @@ const log = (...a: unknown[]) => { if (DEBUG) console.log('%c[amy-realtime]', 'c
 
 type Phase = 'connecting' | 'live' | 'thinking' | 'speaking' | 'error'
 
-export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefing; onClose: () => void; onType: () => void }) {
+export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing: AmyBriefing; audioCtx?: AudioContext | null; onClose: () => void; onType: () => void }) {
   const name = briefing.employeeName || 'Amy'
   const [phase, setPhase] = useState<Phase>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -23,6 +23,7 @@ export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefi
 
   const wsRef = useRef<WebSocket | null>(null)
   const ctxRef = useRef<AudioContext | null>(null)
+  const ownsCtxRef = useRef(false) // true only if WE created the context (vs. borrowed from parent)
   const streamRef = useRef<MediaStream | null>(null)
   const procRef = useRef<ScriptProcessorNode | null>(null)
   const sourcesRef = useRef<AudioBufferSourceNode[]>([])
@@ -52,9 +53,18 @@ export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefi
     let cancelled = false
     ;(async () => {
       try {
-        const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+        // Prefer the AudioContext already unlocked inside the user's tap (mobile autoplay
+        // policy); only create one here as a fallback (e.g. desktop deep-links). We close
+        // it on teardown ONLY if we created it — never the parent's borrowed context.
+        let ctx = audioCtx
+        if (!ctx || ctx.state === 'closed') {
+          ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+          ownsCtxRef.current = true
+        }
         ctxRef.current = ctx
-        try { await ctx.resume() } catch { /* noop */ }
+        // Best-effort resume; it's already unlocked in the tap, so never block mic/WS
+        // setup on it (a hung resume must not stall the whole conversation).
+        ctx.resume().catch(() => {})
         const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
         streamRef.current = stream
@@ -155,7 +165,12 @@ export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefi
     try { procRef.current?.disconnect() } catch { /* noop */ }
     try { wsRef.current?.close() } catch { /* noop */ }
     streamRef.current?.getTracks().forEach((t) => t.stop())
-    try { ctxRef.current?.close() } catch { /* noop */ }
+    // Only close a context we own; the parent's borrowed context must stay alive so a
+    // remount can keep using it (and audio playback isn't killed mid-session). close() is
+    // async — swallow its rejection (e.g. "already closed") so it never bubbles up.
+    if (ownsCtxRef.current && ctxRef.current && ctxRef.current.state !== 'closed') {
+      try { ctxRef.current.close().catch(() => {}) } catch { /* noop */ }
+    }
   }
 
   const statusLabel = phase === 'connecting' ? 'Connecting…' : phase === 'thinking' ? 'Thinking…' : phase === 'speaking' ? 'Speaking…' : phase === 'error' ? '' : 'Listening…'
@@ -173,8 +188,8 @@ export function AmyRealtime({ briefing, onClose, onType }: { briefing: AmyBriefi
           {/* Amy's living presence — the voice ring reflects her state */}
           <div className="flex flex-col items-center">
             <div className="relative inline-flex">
-              {phase === 'speaking' && <span aria-hidden="true" className="absolute -inset-2 rounded-full sx-ring-live" />}
-              {(phase === 'live' || phase === 'thinking') && <span aria-hidden="true" className="absolute -inset-2 rounded-full ring-2 ring-accent/40 animate-ping" />}
+              {phase === 'speaking' && <span aria-hidden="true" className="pointer-events-none absolute -inset-2 rounded-full sx-ring-live" />}
+              {(phase === 'live' || phase === 'thinking') && <span aria-hidden="true" className="pointer-events-none absolute -inset-2 rounded-full ring-2 ring-accent/40 animate-ping" />}
               <EmployeeAvatar name={name} voice={briefing.employeeVoice} status={phase === 'error' ? 'paused' : 'on_duty'} size="lg" showStatus={false} className={cn(alive && 'sx-breathe')} />
             </div>
 
