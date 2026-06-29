@@ -1,5 +1,8 @@
-# Render blueprint for the Ask Amy realtime voice proxy.
-# Deploy: Render Dashboard → New → Blueprint → connect this repo → it reads this file.
+# Render blueprint — MUST live at the repository ROOT (Render only auto-detects render.yaml
+# at the root, not in subdirectories). It deploys the Ask Amy realtime voice proxy, whose
+# code lives in amy-realtime-server/ (see rootDir below).
+#
+# Deploy: Render Dashboard → New → Blueprint → connect this repo → it reads THIS file.
 # Then set DEEPGRAM_API_KEY + ANTHROPIC_API_KEY (marked sync:false = enter in the dashboard).
 # Render gives you a public https/wss URL; put its wss:// form in Vercel as
 # NEXT_PUBLIC_AMY_REALTIME_URL (e.g. wss://amy-realtime-server.onrender.com).
@@ -7,8 +10,8 @@ services:
   - type: web
     name: amy-realtime-server
     runtime: node
-    rootDir: amy-realtime-server
-    plan: starter            # 'free' works but cold-starts (~50s) → first call may time out
+    rootDir: amy-realtime-server   # build/run from the proxy subfolder
+    plan: starter                  # keeps it warm — no cold starts
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /
