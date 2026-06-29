@@ -9,7 +9,10 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env.local') });
 const http = require('http');
 const WebSocket = require('ws');
 
-const PORT = process.env.AMY_REALTIME_PORT || 8081;
+// Hosting platforms (Render/Railway/Fly) inject the port to bind via $PORT — honour it so
+// the public deploy's health check + WebSocket upgrade actually reach us. Falls back to the
+// local dev port otherwise.
+const PORT = process.env.PORT || process.env.AMY_REALTIME_PORT || 8081;
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 

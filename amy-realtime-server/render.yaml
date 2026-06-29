@@ -1,0 +1,20 @@
+# Render blueprint for the Ask Amy realtime voice proxy.
+# Deploy: Render Dashboard → New → Blueprint → connect this repo → it reads this file.
+# Then set DEEPGRAM_API_KEY + ANTHROPIC_API_KEY (marked sync:false = enter in the dashboard).
+# Render gives you a public https/wss URL; put its wss:// form in Vercel as
+# NEXT_PUBLIC_AMY_REALTIME_URL (e.g. wss://amy-realtime-server.onrender.com).
+services:
+  - type: web
+    name: amy-realtime-server
+    runtime: node
+    rootDir: amy-realtime-server
+    plan: starter            # 'free' works but cold-starts (~50s) → first call may time out
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
