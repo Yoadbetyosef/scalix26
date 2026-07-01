@@ -40,6 +40,8 @@ export interface BookingToolCtx {
   channel: string // 'sms' | 'instagram' | 'facebook'
   customerPhoneFallback: string | null // the SMS sender's number; null for IG/FB
   appUrl: string
+  conversationId?: string | null // for attributing a payment to the conversation
+  contactId?: string | null
 }
 
 // Execute one tool call and return a short string for the model's tool_result.

@@ -109,6 +109,7 @@ export function AIEmployeeWizard({ tenant }: { tenant: Tenant }) {
         estimate_request: 'Estimate Request',
         appointment_reminders: 'Appointment Reminders',
         bilingual_autodetect: 'Bilingual Auto-detect',
+        payment_collection: 'Payment Collection',
       }
 
       await supabase.from('skills').insert(

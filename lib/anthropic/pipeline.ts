@@ -3,7 +3,10 @@ import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
+import { FINANCIAL_TOOLS, executeFinancialTool, isFinancialTool, isFinancialCapabilityAvailable, detectFinancialIntent, financialIntentPrompt } from './financial-intent'
 import { currentDateContext } from '@/lib/appointments'
+import { catalogPromptLine } from '@/lib/stripe/connect'
+import { normalizePaymentSettings } from '@/lib/stripe/payment-collection'
 import { getRecognitionContext, recognitionPromptBlock } from '@/lib/customer/recognition'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
@@ -228,7 +231,12 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   const skills = skillsRes.data || []
   const history = historyRes.data || []
-  const skillTriggered = detectSkillTrigger(input.messageContent, skills)
+
+  // Financial Intent — available ONLY when the Payment Collection skill is ON and Stripe
+  // Connect is active. Drives both the prompt injection and whether we enter the tool turn.
+  const financialAvailable = !isVoice && isFinancialCapabilityAvailable(skills, tenant)
+  const financialIntent = financialAvailable && detectFinancialIntent(input.messageContent)
+  const skillTriggered = (financialIntent ? 'payment_collection' : null) || detectSkillTrigger(input.messageContent, skills)
 
   // Voice: trim KB to the first 500 chars of one row; SMS/social use full KB
   const kbForPrompt = isVoice
@@ -253,6 +261,18 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   let systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
 
+  // Financial Intent prompt — injected ONLY when the capability is available (skill ON +
+  // Stripe connected). Includes the real product catalog so the AI can take a payment with
+  // an exact price_id (never invented). When unavailable, nothing is injected and no
+  // financial tool is exposed → the AI cannot offer payments at all. Fail-safe.
+  if (financialAvailable) {
+    try {
+      const catalogLine = await catalogPromptLine(input.tenantId)
+      const requireApproval = normalizePaymentSettings((employee as { payment_collection_settings?: unknown }).payment_collection_settings).require_approval
+      systemPrompt += `\n\n${financialIntentPrompt({ catalogLine, requireApproval })}`
+    } catch { /* ignore — financial prompt is best-effort */ }
+  }
+
   // Returning-customer recognition (Sprint 002) — TEXT CHANNELS ONLY, behind a
   // default-OFF flag. Injects a delimited, untrusted "background context" block only
   // for high-confidence returning customers. Fail-open: any error, low/medium
@@ -275,13 +295,15 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // actively booking get the booking tools, so the AI actually persists the booking
   // via /book — exactly the logic voice uses.
   let aiResponse = ''
-  if (!isVoice && inBooking) {
-    aiResponse = await runTextBookingTurn(systemPrompt, chatMessages, {
+  if (!isVoice && (inBooking || financialIntent)) {
+    aiResponse = await runTextToolTurn(systemPrompt, chatMessages, {
       leadToken: (tenant as { lead_intake_token?: string }).lead_intake_token || '',
       channel: input.channelType, // 'sms' | 'instagram' | 'facebook'
       customerPhoneFallback: input.channelType === 'sms' ? input.from : null,
       appUrl: process.env.NEXT_PUBLIC_APP_URL || '',
-    })
+      conversationId,
+      contactId: contact?.id ?? null,
+    }, { includeBooking: inBooking, includeFinancial: financialAvailable })
   } else {
     const response = await anthropic.messages.create({
       model: isVoice ? VOICE_MODEL : MODEL,
@@ -322,14 +344,18 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   }
 }
 
-// Text-channel booking turn (SMS / Instagram / Facebook): runs the model with the
-// booking tools and executes any tool calls against the SAME /book + /available
-// endpoints voice uses. Returns the final assistant text. Fully fail-safe — on any
-// error it falls back to a plain reply so the pipeline never crashes.
-async function runTextBookingTurn(
+// Text-channel tool turn (SMS / Instagram / Facebook): runs the model with the requested
+// tool sets — booking (check_availability / book_appointment) and/or the Financial Intent
+// capability (send_payment_link) — and executes any tool calls against the SAME backend
+// endpoints (voice uses the booking ones too). Booking tools hit /available + /book;
+// financial tools hit the payment-link route (skill + approval + Stripe enforced there).
+// Returns the final assistant text. Fully fail-safe — on any error it falls back to a plain
+// reply so the pipeline never crashes.
+async function runTextToolTurn(
   systemPrompt: string,
   chatMessages: { role: 'user' | 'assistant'; content: string }[],
   ctx: BookingToolCtx,
+  opts: { includeBooking: boolean; includeFinancial: boolean },
 ): Promise<string> {
   const plainReply = async (): Promise<string> => {
     try {
@@ -338,8 +364,9 @@ async function runTextBookingTurn(
     } catch { return '' }
   }
 
-  // Without our own API URL we can't reach /book — answer normally (no tools).
-  if (!ctx.appUrl) return plainReply()
+  const tools = [...(opts.includeBooking ? BOOKING_TOOLS : []), ...(opts.includeFinancial ? FINANCIAL_TOOLS : [])]
+  // Without our own API URL (can't reach the backend) or with no tools — answer normally.
+  if (!ctx.appUrl || tools.length === 0) return plainReply()
 
   try {
     const messages: Anthropic.MessageParam[] = chatMessages.map((m) => ({ role: m.role, content: m.content }))
@@ -350,7 +377,7 @@ async function runTextBookingTurn(
         max_tokens: 500,
         system: systemPrompt,
         messages,
-        tools: BOOKING_TOOLS,
+        tools,
       })
 
       const textBlocks = response.content.filter((c): c is Anthropic.TextBlock => c.type === 'text')
@@ -362,14 +389,17 @@ async function runTextBookingTurn(
       messages.push({ role: 'assistant', content: response.content })
       const results: Anthropic.ToolResultBlockParam[] = []
       for (const tu of toolUses) {
-        const out = await executeBookingTool(tu.name, tu.input as Record<string, unknown>, ctx)
+        // Route each call to the right capability's executor.
+        const out = isFinancialTool(tu.name)
+          ? await executeFinancialTool(tu.name, tu.input as Record<string, unknown>, ctx)
+          : await executeBookingTool(tu.name, tu.input as Record<string, unknown>, ctx)
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: out })
       }
       messages.push({ role: 'user', content: results })
     }
     return text || (await plainReply())
   } catch (err) {
-    console.error('[pipeline] booking turn failed — falling back to plain reply:', err instanceof Error ? err.message : err)
+    console.error('[pipeline] tool turn failed — falling back to plain reply:', err instanceof Error ? err.message : err)
     return plainReply()
   }
 }

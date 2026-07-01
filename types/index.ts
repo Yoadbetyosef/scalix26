@@ -19,6 +19,7 @@ export type SkillType =
   | 'estimate_request'
   | 'appointment_reminders'
   | 'bilingual_autodetect'
+  | 'payment_collection'
 
 export interface BusinessHours {
   mon: string
