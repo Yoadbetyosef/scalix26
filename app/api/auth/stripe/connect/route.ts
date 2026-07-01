@@ -15,9 +15,11 @@ export async function GET(req: NextRequest) {
 
   const agentId = req.nextUrl.searchParams.get('agentId') || ''
 
+  // Not configured → redirect back with a clear error param (never a raw JSON dead page).
   const secret = process.env.STRIPE_SECRET_KEY
   if (!process.env.STRIPE_CONNECT_CLIENT_ID || !secret) {
-    return NextResponse.json({ error: 'STRIPE_CONNECT_CLIENT_ID and STRIPE_SECRET_KEY must be set' }, { status: 500 })
+    const back = agentId ? `${baseUrl}/ai-employees/${agentId}` : `${baseUrl}/ai-employees`
+    return NextResponse.redirect(`${back}?stripe_error=not_configured`)
   }
 
   const nonce = randomBytes(16).toString('hex')

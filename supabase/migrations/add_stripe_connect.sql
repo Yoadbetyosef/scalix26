@@ -5,7 +5,10 @@
 
 ALTER TABLE tenants
   ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT,
-  ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT;
+  ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT,
+  ADD COLUMN IF NOT EXISTS stripe_connect_charges_enabled BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS stripe_connect_payouts_enabled BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS stripe_connect_onboarding_complete BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

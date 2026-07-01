@@ -32,12 +32,42 @@ export async function exchangeConnectCode(code: string): Promise<string> {
   return acct
 }
 
+// Onboarding/capability flags read off a Stripe Account (Standard). details_submitted =
+// the tenant finished Stripe's onboarding; charges/payouts_enabled = account is live.
+interface ConnectFlags { charges_enabled: boolean; payouts_enabled: boolean; onboarding_complete: boolean }
+function accountFlags(a: Stripe.Account): ConnectFlags {
+  return { charges_enabled: !!a.charges_enabled, payouts_enabled: !!a.payouts_enabled, onboarding_complete: !!a.details_submitted }
+}
+async function fetchFlags(accountId: string): Promise<ConnectFlags | null> {
+  try { return accountFlags(await stripe.accounts.retrieve(accountId)) } catch { return null }
+}
+
 export async function saveConnectedAccount(tenantId: string, accountId: string): Promise<void> {
   const supabase = createAdminClient()
-  const { error } = await supabase.from('tenants')
-    .update({ stripe_connect_account_id: accountId, stripe_connect_status: 'connected' })
-    .eq('id', tenantId)
+  const flags = await fetchFlags(accountId) // best-effort — never lose the connection if this fails
+  const update: Record<string, unknown> = {
+    stripe_connect_account_id: accountId,
+    stripe_connect_status: flags ? (flags.charges_enabled ? 'connected' : 'restricted') : 'connected',
+  }
+  if (flags) {
+    update.stripe_connect_charges_enabled = flags.charges_enabled
+    update.stripe_connect_payouts_enabled = flags.payouts_enabled
+    update.stripe_connect_onboarding_complete = flags.onboarding_complete
+  }
+  const { error } = await supabase.from('tenants').update(update).eq('id', tenantId)
   if (error) throw new Error('save connected account failed: ' + error.message)
+}
+
+// Keep the tenant's connect capability flags in sync from a webhook account.updated event.
+export async function syncConnectFromAccount(account: Stripe.Account): Promise<void> {
+  const supabase = createAdminClient()
+  const f = accountFlags(account)
+  await supabase.from('tenants').update({
+    stripe_connect_status: f.charges_enabled ? 'connected' : 'restricted',
+    stripe_connect_charges_enabled: f.charges_enabled,
+    stripe_connect_payouts_enabled: f.payouts_enabled,
+    stripe_connect_onboarding_complete: f.onboarding_complete,
+  }).eq('stripe_connect_account_id', account.id)
 }
 
 // Connected account id for a tenant (only when status='connected'), else null.
@@ -49,14 +79,11 @@ export async function getConnectedAccountId(tenantId: string): Promise<string | 
   return data.stripe_connect_account_id || null
 }
 
-export async function setConnectStatus(accountId: string, status: string): Promise<void> {
-  const supabase = createAdminClient()
-  await supabase.from('tenants').update({ stripe_connect_status: status }).eq('stripe_connect_account_id', accountId)
-}
-
 export async function disconnectAccount(tenantId: string): Promise<void> {
   const supabase = createAdminClient()
-  const acct = await getConnectedAccountId(tenantId)
+  // Read the account id directly (deauthorize even a 'restricted' account, not only 'connected').
+  const { data } = await supabase.from('tenants').select('stripe_connect_account_id').eq('id', tenantId).maybeSingle()
+  const acct = data?.stripe_connect_account_id as string | null
   if (acct) {
     try {
       await stripe.oauth.deauthorize({ client_id: connectClientId(), stripe_user_id: acct })
@@ -64,19 +91,31 @@ export async function disconnectAccount(tenantId: string): Promise<void> {
       console.warn('[stripe-connect] deauthorize failed (clearing anyway):', e instanceof Error ? e.message : e)
     }
   }
-  await supabase.from('tenants').update({ stripe_connect_account_id: null, stripe_connect_status: null }).eq('id', tenantId)
+  await supabase.from('tenants').update({
+    stripe_connect_account_id: null, stripe_connect_status: null,
+    stripe_connect_charges_enabled: false, stripe_connect_payouts_enabled: false, stripe_connect_onboarding_complete: false,
+  }).eq('id', tenantId)
 }
 
-export interface ConnectStatus { connected: boolean; accountId?: string; email?: string | null; chargesEnabled?: boolean }
+export interface ConnectStatus { connected: boolean; accountId?: string; email?: string | null; chargesEnabled?: boolean; payoutsEnabled?: boolean; onboardingComplete?: boolean }
 
+// Status for the UI. Connection is based on a stored account id (so a 'restricted' account
+// still reads as connected); capability flags come from the persisted columns. Email is a
+// best-effort live lookup only.
 export async function getConnectStatus(tenantId: string): Promise<ConnectStatus> {
-  const acct = await getConnectedAccountId(tenantId)
+  const supabase = createAdminClient()
+  const { data } = await supabase.from('tenants')
+    .select('stripe_connect_account_id, stripe_connect_charges_enabled, stripe_connect_payouts_enabled, stripe_connect_onboarding_complete')
+    .eq('id', tenantId).maybeSingle()
+  const acct = data?.stripe_connect_account_id as string | undefined
   if (!acct) return { connected: false }
-  try {
-    const a = await stripe.accounts.retrieve(acct)
-    return { connected: true, accountId: acct, email: a.email, chargesEnabled: !!a.charges_enabled }
-  } catch {
-    return { connected: true, accountId: acct }
+  let email: string | null | undefined
+  try { email = (await stripe.accounts.retrieve(acct)).email } catch { email = undefined }
+  return {
+    connected: true, accountId: acct, email,
+    chargesEnabled: !!data?.stripe_connect_charges_enabled,
+    payoutsEnabled: !!data?.stripe_connect_payouts_enabled,
+    onboardingComplete: !!data?.stripe_connect_onboarding_complete,
   }
 }
 

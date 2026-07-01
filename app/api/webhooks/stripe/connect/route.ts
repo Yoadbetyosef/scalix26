@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe/client'
 import { createServiceClient } from '@/lib/supabase/server'
-import { setConnectStatus } from '@/lib/stripe/connect'
+import { syncConnectFromAccount } from '@/lib/stripe/connect'
 
 // SEPARATE Connect webhook (its own STRIPE_CONNECT_WEBHOOK_SECRET) — the platform
 // billing webhook (/api/webhooks/stripe + STRIPE_WEBHOOK_SECRET) is untouched.
@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
     }
 
     case 'account.updated': {
-      const account = event.data.object
-      await setConnectStatus(account.id, account.charges_enabled ? 'connected' : 'restricted')
+      // Persist the tenant's live capability flags (charges/payouts/onboarding) + status.
+      await syncConnectFromAccount(event.data.object)
       break
     }
   }

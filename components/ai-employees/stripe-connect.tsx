@@ -5,26 +5,24 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { CreditCard, Check, Link2Off } from 'lucide-react'
 
-type Status = { connected: boolean; accountId?: string; email?: string | null; chargesEnabled?: boolean }
+type Status = { connected: boolean; accountId?: string; email?: string | null; chargesEnabled?: boolean; payoutsEnabled?: boolean; onboardingComplete?: boolean }
 
 export function StripeConnect({ agentId }: { agentId: string }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function load() {
-    try {
-      const res = await fetch('/api/stripe/connect/status')
-      setStatus(res.ok ? await res.json() : { connected: false })
-    } catch {
-      setStatus({ connected: false })
-    }
-  }
-
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     if (p.get('stripe_connected')) toast.success('Stripe connected!')
-    if (p.get('stripe_error')) toast.error('Could not connect Stripe. Please try again.')
-    load()
+    const err = p.get('stripe_error')
+    if (err === 'not_configured') toast.error('Stripe payments aren’t enabled on this account yet. Please contact support.')
+    else if (err) toast.error('Could not connect Stripe. Please try again.')
+    let on = true
+    fetch('/api/stripe/connect/status')
+      .then((r) => (r.ok ? r.json() : { connected: false }))
+      .then((d) => { if (on) setStatus(d) })
+      .catch(() => { if (on) setStatus({ connected: false }) })
+    return () => { on = false }
   }, [])
 
   async function disconnect() {
@@ -67,7 +65,9 @@ export function StripeConnect({ agentId }: { agentId: string }) {
         <div className="mt-2 space-y-3">
           <p className="text-xs text-gray-500">
             The AI can send payment links for your Stripe products{status.email ? <> · <span className="text-gray-700">{status.email}</span></> : null}.
-            {status.chargesEnabled === false && <span className="text-amber-600"> Your Stripe account can&apos;t accept charges yet — finish setup in Stripe.</span>}
+            {(status.chargesEnabled === false || status.onboardingComplete === false) && (
+              <span className="text-amber-600"> Your Stripe account can&apos;t accept charges yet — finish setup in Stripe to go live.</span>
+            )}
           </p>
           <Button type="button" variant="outline" size="sm" onClick={disconnect} disabled={busy}>
             <Link2Off className="w-3.5 h-3.5 mr-1.5" /> Disconnect
