@@ -194,6 +194,10 @@ body {
   @keyframes sx-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
   .sx-breathe { animation: sx-breathe 3.4s ease-in-out infinite; }
 
+  /* Intelligence bar — a moving sheen over the fill, so it reads as "actively pulling data". */
+  @keyframes bip-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
+  .bip-shimmer { background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.55) 50%, transparent 80%); animation: bip-shimmer 1.8s ease-in-out infinite; }
+
   /* Living voice ring — the SCALIX waveform identity, slowly rotating while Amy speaks. */
   @keyframes sx-spin { to { transform: rotate(360deg); } }
   .sx-ring-live {

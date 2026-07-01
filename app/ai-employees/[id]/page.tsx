@@ -1,8 +1,7 @@
 import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
-import { GraduationCap } from 'lucide-react'
 import { AIEmployeeEditClient } from '@/components/ai-employees/ai-employee-edit-client'
+import { BusinessIntelligenceProgress } from '@/components/ai-employees/business-intelligence-progress'
 
 export default async function AIEmployeeEditPage({
   params,
@@ -64,19 +63,10 @@ export default async function AIEmployeeEditPage({
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl">
-      <Link
-        href={`/ai-employees/${id}/playbook`}
-        className="mb-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-e1 ring-1 ring-hairline transition-all hover:-translate-y-px hover:shadow-e2"
-      >
-        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent-strong">
-          <GraduationCap className="h-5 w-5" />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-sm font-medium text-ink">AI Training & Playbook</span>
-          <span className="block text-xs text-muted">Teach this employee how you sell, schedule, and handle customers across every channel.</span>
-        </span>
-        <span className="ml-auto text-muted">›</span>
-      </Link>
+      {/* Real-data intelligence bar — shows the website scan + business data being pulled. */}
+      <div className="mb-4">
+        <BusinessIntelligenceProgress agentId={id} name={employee.name || 'Your AI employee'} />
+      </div>
       <AIEmployeeEditClient
         employee={employee}
         tenantId={tenant.id}

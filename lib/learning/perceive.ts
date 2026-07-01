@@ -1,6 +1,7 @@
 import type { BusinessSignal, InteractionUnit, SignalType } from './types'
 import type { Harvest } from './harvest'
 import { callModel, extractJsonArray } from './llm'
+import type { LearningBudget } from './budget'
 
 const PRICE_RE = /\b(price|pricing|cost|costs|how much|quote|estimate|charge|rate|fee|deposit|\$\s?\d)/i
 const RANGE_RE = /\$\s?\d[\d,]*\s?(?:-|–|to)\s?\$?\s?\d/i
@@ -111,7 +112,8 @@ function ruleSignals(harvest: Harvest, tenantId: string, agentId: string | null)
 }
 
 // ── LLM perception (one bounded call) — enriches with judgment-level signals ──────
-async function llmSignals(harvest: Harvest, tenantId: string, agentId: string | null): Promise<BusinessSignal[]> {
+// Classification/extraction → CHEAP model tier, gated by the shared budget.
+async function llmSignals(harvest: Harvest, tenantId: string, agentId: string | null, budget?: LearningBudget): Promise<BusinessSignal[]> {
   // Prefer the richest conversations: takeovers, negative, pricing, longer threads.
   const ranked = [...harvest.units]
     .filter((u) => u.messages.length >= 2)
@@ -143,7 +145,7 @@ Only include things actually present. Return [] if nothing clear.
 CONVERSATIONS:
 ${digest}`
 
-  const raw = await callModel(prompt, 1800)
+  const raw = await callModel(prompt, 1800, { budget, tier: 'cheap' })
   const items = extractJsonArray(raw)
   const valid = new Set(['objection_handling', 'refusal', 'pricing_response', 'booking_decision', 'faq_pattern', 'phrase_usage'])
   const byId = new Map(harvest.units.map((u) => [u.conversation_id, u]))
@@ -163,10 +165,10 @@ ${digest}`
     })
 }
 
-export async function perceive(harvest: Harvest, tenantId: string, agentId: string | null): Promise<BusinessSignal[]> {
-  const rules = ruleSignals(harvest, tenantId, agentId)
+export async function perceive(harvest: Harvest, tenantId: string, agentId: string | null, budget?: LearningBudget): Promise<BusinessSignal[]> {
+  const rules = ruleSignals(harvest, tenantId, agentId) // deterministic, free — always runs
   let llm: BusinessSignal[] = []
-  try { llm = await llmSignals(harvest, tenantId, agentId) } catch { /* perception still works on rules alone */ }
+  try { llm = await llmSignals(harvest, tenantId, agentId, budget) } catch { /* perception still works on rules alone */ }
   return [...rules, ...llm]
 }
 

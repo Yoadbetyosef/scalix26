@@ -1,6 +1,7 @@
 import type { BusinessSignal, BehaviorHypothesis, ConfidenceTier, SignalType } from './types'
 import { PLAYBOOK_SECTIONS } from '@/lib/playbook/types'
 import { callModel, extractJsonArray } from './llm'
+import type { LearningBudget } from './budget'
 
 const SECTION_KEYS = PLAYBOOK_SECTIONS.map((s) => s.key as string)
 
@@ -62,7 +63,7 @@ function facetSummary(facet: Facet, signals: BusinessSignal[]): string {
   return `${lines.join('\n')}${extra}`
 }
 
-async function distillFacet(facet: Facet, signals: BusinessSignal[]): Promise<BehaviorHypothesis[]> {
+async function distillFacet(facet: Facet, signals: BusinessSignal[], budget?: LearningBudget): Promise<BehaviorHypothesis[]> {
   const present = signals.filter((s) => facet.signalTypes.includes(s.type))
   if (present.length < facet.minEvidence) return []
 
@@ -92,7 +93,8 @@ Return [] only if the signals truly show no pattern.
 SIGNALS (${evidenceCount}) for "${facet.key}":
 ${facetSummary(facet, present)}`
 
-  const raw = await callModel(prompt, 900)
+  // Final hypotheses the owner will see → STRONG model tier, gated by the shared budget.
+  const raw = await callModel(prompt, 900, { budget, tier: 'strong' })
   const items = extractJsonArray(raw)
 
   return items
@@ -124,12 +126,16 @@ ${facetSummary(facet, present)}`
     })
 }
 
-// Run every facet that has enough signals — in parallel (async, off the hot path).
-export async function distill(signals: BusinessSignal[]): Promise<BehaviorHypothesis[]> {
+// Run facets SEQUENTIALLY (not in parallel) so the budget gate can enforce the per-run
+// call cap and stop early once it's hit. FACETS are ordered gold-first, so the highest-
+// value patterns (owner corrections, escalations) are learned before any budget runs out.
+export async function distill(signals: BusinessSignal[], budget?: LearningBudget): Promise<BehaviorHypothesis[]> {
   if (!signals.length) return []
-  const runs = await Promise.all(
-    FACETS.map((f) => distillFacet(f, signals).catch(() => [] as BehaviorHypothesis[])),
-  )
+  const out: BehaviorHypothesis[] = []
+  for (const f of FACETS) {
+    if (budget?.paused) break // budget exhausted → stop safely, keep what we have
+    try { out.push(...(await distillFacet(f, signals, budget))) } catch { /* skip this facet */ }
+  }
   // Highest-confidence / gold first.
-  return runs.flat().sort((a, b) => Number(b.gold) - Number(a.gold) || b.confidence - a.confidence)
+  return out.sort((a, b) => Number(b.gold) - Number(a.gold) || b.confidence - a.confidence)
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { runLearning } from '@/lib/learning/engine'
 import { formatReport } from '@/lib/learning/report'
+import { LEARNING } from '@/lib/learning/config'
 
 // Background learning pass. Cron-triggered for all tenants; supports a per-tenant dry run
 // for review (no writes). This route NEVER changes customer-facing behavior — it only
@@ -25,9 +26,18 @@ async function handle(req: NextRequest) {
   const admin = createAdminClient()
 
   // Single-tenant dry run → return the full report + formatted text (the review path).
+  // Always allowed: it's a manual, budget-gated review that writes nothing.
   if (tenantId && dry) {
     const report = await runLearning({ admin, tenantId, persist: false })
     return NextResponse.json({ report, text: formatReport(report) })
+  }
+
+  // Cron kill-switch (point 12): scheduled / cross-tenant persisted runs stay OFF until
+  // LEARNING_CRON_ENABLED=true is explicitly set. This is the fan-out that could cost the
+  // most, so it cannot run by accident. A manual single-tenant persist is still allowed.
+  const isCron = !!req.headers.get('x-vercel-cron') || (!tenantId)
+  if (isCron && !LEARNING.CRON_ENABLED) {
+    return NextResponse.json({ ok: true, ran: false, reason: 'learning_cron_disabled', message: 'Automatic learning cron is disabled until cost controls are approved (set LEARNING_CRON_ENABLED=true to enable).' })
   }
 
   // Otherwise run (persist) across tenants.

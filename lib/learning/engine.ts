@@ -3,6 +3,8 @@ import type { BusinessSignal, BehaviorHypothesis, LearningReport } from './types
 import { harvestTenant } from './harvest'
 import { perceive } from './perceive'
 import { distill } from './distill'
+import { LearningBudget, BUDGET_PAUSED_MESSAGE, initialImportDone } from './budget'
+import { LEARNING, historyFloorISO, jobCap } from './config'
 
 const FIRST_RUN_LOOKBACK_DAYS = 90
 
@@ -40,10 +42,29 @@ export async function runLearning({ admin, tenantId, agentId = null, persist = f
   } else {
     since = new Date(Date.now() - FIRST_RUN_LOOKBACK_DAYS * 864e5).toISOString()
   }
+  // Never import further back than the history cap, no matter the watermark (point 4).
+  const floor = historyFloorISO()
+  if (!since || since < floor) since = floor
 
-  const harvest = await harvestTenant(admin, tenantId, { agentId, since })
-  const signals = await perceive(harvest, tenantId, agentId)
-  const hypotheses = await distill(signals)
+  // Per-JOB cost gate for this run (no daily/monthly budget). First engine pass for the
+  // tenant is the one-time initial job (cap $5); after that it's incremental ($0.10).
+  const phase = (persist && await initialImportDone(admin, tenantId, 'engine')) ? 'incremental' : 'initial'
+  const budget = new LearningBudget(admin, tenantId, 'engine', { phase, maxCostUSD: jobCap(phase) })
+  await budget.begin()
+  if (budget.paused) { // hard-disabled → do no LLM work at all
+    await budget.end()
+    notes.push(BUDGET_PAUSED_MESSAGE)
+    return { tenantId, tenantName, agentId, window: { since, until }, sources: [], counts: { conversations: 0, messages: 0, leads: 0, appointments: 0, signals: 0, signalsByType: {} }, hypotheses: [], suggestions: [], persisted: false, notes }
+  }
+
+  const harvest = await harvestTenant(admin, tenantId, { agentId, since, limit: phase === 'initial' ? LEARNING.INITIAL_MAX_RECORDS : LEARNING.INCREMENTAL_BATCH })
+  budget.scanned(harvest.counts.conversations)
+  const signals = await perceive(harvest, tenantId, agentId, budget)
+  const hypotheses = await distill(signals, budget)
+  budget.samples(harvest.counts.conversations)
+  const metrics = await budget.end()
+  if (budget.paused) notes.push(BUDGET_PAUSED_MESSAGE)
+  notes.push(`Learning cost: ~$${metrics.actual_cost.toFixed(4)} · ${metrics.llm_calls} LLM calls · ${metrics.actual_tokens} tokens (${phase}, cap $${budget.maxCostUSD})`)
   const suggestions = hypotheses.filter((h) => h.show_to_owner)
 
   const signalsByType: Record<string, number> = {}

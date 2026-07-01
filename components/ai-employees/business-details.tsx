@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { DollarSign, MapPin, Ban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -10,10 +11,12 @@ import { createClient } from '@/lib/supabase/client'
 
 // Each field is stored as a knowledge_base entry (source 'template') scoped to
 // THIS agent, so it loads on the agent's calls/texts but not other agents'.
+// Brand icon tiles (no emoji) — colored to match meaning: pricing = green, areas =
+// accent/blue, don't-do = danger/red.
 const FIELDS = [
-  { title: 'Pricing', label: '💰 Pricing', placeholder: 'e.g. Standard lockout: $95, Car lockout: $125, Key duplication: $45' },
-  { title: 'Service Areas', label: '📍 Service Areas', placeholder: 'e.g. Bergen County, Passaic County, Hudson County NJ' },
-  { title: "What We Don't Do", label: "❌ What we DON'T do", placeholder: 'e.g. No BMW key programming, No safe cracking' },
+  { title: 'Pricing', label: 'Pricing', Icon: DollarSign, tile: 'bg-emerald-50 text-emerald-600', placeholder: 'e.g. Standard lockout: $95, Car lockout: $125, Key duplication: $45' },
+  { title: 'Service Areas', label: 'Service Areas', Icon: MapPin, tile: 'bg-accent/10 text-accent-strong', placeholder: 'e.g. Bergen County, Passaic County, Hudson County NJ' },
+  { title: "What We Don't Do", label: "What we don’t do", Icon: Ban, tile: 'bg-danger/10 text-danger', placeholder: 'e.g. No BMW key programming, No safe cracking' },
 ] as const
 
 export function BusinessDetails({
@@ -60,7 +63,10 @@ export function BusinessDetails({
     <div className="space-y-4">
       {FIELDS.map((f) => (
         <div key={f.title}>
-          <Label>{f.label}</Label>
+          <Label className="flex items-center gap-2 text-sm font-medium text-ink">
+            <span className={`flex h-6 w-6 items-center justify-center rounded-md ${f.tile}`}><f.Icon className="h-3.5 w-3.5" /></span>
+            {f.label}
+          </Label>
           <Textarea className="mt-1.5" rows={3} placeholder={f.placeholder}
             value={values[f.title]} onChange={(e) => setValues((v) => ({ ...v, [f.title]: e.target.value }))} />
         </div>
