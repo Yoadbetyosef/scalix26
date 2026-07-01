@@ -47,7 +47,8 @@ export function SkillsEditor({ agentId, initial }: { agentId: string; initial: {
 
   return (
     <div className="space-y-2.5">
-      {SKILL_CATALOG.map((s) => {
+      {/* payment_collection has its own dedicated card (locked/settings), rendered separately. */}
+      {SKILL_CATALOG.filter((s) => s.type !== 'payment_collection').map((s) => {
         const meta = SKILL_META[s.type] || { icon: Sparkles, tone: 'bg-slate-500' }
         const Icon = meta.icon
         return (

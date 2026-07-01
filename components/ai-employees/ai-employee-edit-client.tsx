@@ -20,6 +20,7 @@ import { employeeStatus } from '@/lib/employee'
 import { KnowledgeBaseEditor, type KBEntry } from '@/components/ai-employees/knowledge-base-editor'
 import { BusinessDetails } from '@/components/ai-employees/business-details'
 import { SkillsEditor } from '@/components/ai-employees/skills-editor'
+import { PaymentCollection } from '@/components/ai-employees/payment-collection'
 import { AvailabilityClient } from '@/components/settings/availability-client'
 import { CalendarConnect } from '@/components/ai-employees/calendar-connect'
 import { StripeConnect } from '@/components/ai-employees/stripe-connect'
@@ -984,6 +985,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         <CardContent>
           <p className="text-sm text-subtle mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
           <SkillsEditor agentId={employee.id} initial={skills || []} />
+          <PaymentCollection agentId={employee.id} />
         </CardContent>
       </Card>
 

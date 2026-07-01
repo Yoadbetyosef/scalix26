@@ -14,6 +14,7 @@ export const SKILL_CATALOG: SkillDef[] = [
   { type: 'emergency_routing', name: 'Emergency Routing', description: 'Detects emergency keywords and immediately escalates to your emergency line.' },
   { type: 'estimate_request', name: 'Estimate Request', description: 'Collects everything needed for a quote and notifies you instantly.' },
   { type: 'appointment_reminders', name: 'Appointment Reminders', description: 'Sends SMS reminders before scheduled appointments.' },
+  { type: 'payment_collection', name: 'Payment Collection', description: 'Creates and sends secure Stripe payment links to customers.' },
 ]
 
 // Default-on skills every new agent starts with (first agent AND additional agents).
