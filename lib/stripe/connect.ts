@@ -10,7 +10,9 @@ import { createAdminClient } from '@/lib/supabase/server'
 export const CONNECT_SCOPE = 'read_write'
 
 function connectClientId(): string {
-  const id = process.env.STRIPE_CONNECT_CLIENT_ID
+  // Trim defensively — a pasted newline/space in the env var would otherwise be sent to
+  // Stripe in the OAuth URL and trigger "No application matches the supplied client identifier".
+  const id = process.env.STRIPE_CONNECT_CLIENT_ID?.trim()
   if (!id) throw new Error('STRIPE_CONNECT_CLIENT_ID is not set')
   return id
 }
