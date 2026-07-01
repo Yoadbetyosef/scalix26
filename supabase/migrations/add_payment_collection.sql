@@ -5,9 +5,11 @@
 
 -- 1) Allow the new skill type (the skills.type column has a CHECK constraint).
 ALTER TABLE skills DROP CONSTRAINT IF EXISTS skills_type_check;
+-- Includes every type already in the DB (incl. legacy 'bilingual_autodetect') + the new one,
+-- so the constraint doesn't reject existing rows.
 ALTER TABLE skills ADD CONSTRAINT skills_type_check CHECK (type IN (
   'appointment_booking','lead_qualification','faq_answering','review_request',
-  'emergency_routing','estimate_request','appointment_reminders','payment_collection'
+  'emergency_routing','estimate_request','appointment_reminders','bilingual_autodetect','payment_collection'
 ));
 
 -- 2) Per-agent Payment Collection settings.
