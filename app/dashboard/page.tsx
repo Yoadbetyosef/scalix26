@@ -137,6 +137,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // ── Hero (overview only) — bound to real data already on the page ─────────────
   // The compact header is preserved verbatim for the Leads/Appointments tabs.
+  let brainAgentId: string | undefined
   let topSection = (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -154,10 +155,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   )
 
   if (activeTab === 'overview' && impactData) {
-    const employeesTyped = aiEmployees as { name?: string | null; status?: string | null; voice?: string | null }[]
+    const employeesTyped = aiEmployees as { id?: string; name?: string | null; status?: string | null; voice?: string | null }[]
     const primaryEmployee = employeesTyped.find((e) => e.status === 'active') || employeesTyped[0]
     const employeeName = primaryEmployee?.name || 'Your AI'
     const employeeVoice = primaryEmployee?.voice ?? null
+    brainAgentId = primaryEmployee?.id
 
     const handled = impactData.conversationsManaged.value
     const booked = appointments_list.filter((a) => a.status === 'confirmed' || a.status === 'completed').length
@@ -248,7 +250,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       ) : activeTab === 'appointments' ? (
         <AppointmentsTable appointments={appointments_list} />
       ) : (
-        <ImpactDashboard data={impactData!} businessName={tenant.business_name} />
+        <ImpactDashboard data={impactData!} businessName={tenant.business_name} brainAgentId={brainAgentId} />
       )}
     </div>
   )

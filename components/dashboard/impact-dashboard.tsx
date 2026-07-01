@@ -7,6 +7,7 @@ import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRi
 import type { ImpactData } from '@/lib/dashboard/impact'
 import { DrillDownDrawer, type DrawerConfig } from '@/components/dashboard/drill-down-drawer'
 import { CountUp } from '@/components/ui/count-up'
+import { BusinessBrainCard } from '@/components/dashboard/business-brain-card'
 
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   if (pct === null || pct === undefined) return null
@@ -52,7 +53,7 @@ function BigNumber({ children }: { children: React.ReactNode }) {
   return <p className="sx-tabular text-4xl sm:text-5xl font-light tracking-tight text-ink leading-none">{children}</p>
 }
 
-export function ImpactDashboard({ data, businessName }: { data: ImpactData; businessName: string }) {
+export function ImpactDashboard({ data, businessName, brainAgentId }: { data: ImpactData; businessName: string; brainAgentId?: string }) {
   const opp = data.opportunities.value
 
   // Channel recap sentence, e.g. "3 by text, 2 by phone, 13 by email" (count>0 only).
@@ -73,7 +74,8 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
       {/* Month label — quiet */}
       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{data.monthLabel}</p>
 
-      {/* ATTENTION NEEDED */}
+      {/* ATTENTION NEEDED + BUSINESS BRAIN — side by side, under the numbers */}
+      <div className="grid gap-4 md:grid-cols-2 md:items-start">
       <div>
         <h2 className="text-lg sm:text-xl font-normal text-ink mb-3">Attention Needed</h2>
         {data.attention.length === 0 ? (
@@ -108,6 +110,13 @@ export function ImpactDashboard({ data, businessName }: { data: ImpactData; busi
             })}
           </div>
         )}
+      </div>
+      {brainAgentId && (
+        <div>
+          <h2 className="text-lg sm:text-xl font-normal text-ink mb-3">Business Brain</h2>
+          <BusinessBrainCard agentId={brainAgentId} />
+        </div>
+      )}
       </div>
 
       {/* 3) WHAT WOULD HAVE HAPPENED WITHOUT SCALIX — only when there's something to say */}
