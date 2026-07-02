@@ -37,7 +37,9 @@ class PlaceholderSession implements AvatarSession {
   private nodes: HTMLElement[] = [] // only the DOM this session created — so destroy() never clobbers a sibling session (React StrictMode double-mounts)
 
   constructor(private container: HTMLElement, opts: AvatarConnectOptions) {
-    container.style.position = 'relative'
+    // Only establish a positioning context if the host hasn't already — never override an
+    // `absolute inset-0` (that would collapse the container to 0 height and hide the face).
+    if (getComputedStyle(container).position === 'static') container.style.position = 'relative'
     container.style.overflow = 'hidden'
     container.style.background = 'radial-gradient(120% 120% at 50% 20%, #16204a 0%, #0a0e24 60%, #05070f 100%)'
 
