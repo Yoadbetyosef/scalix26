@@ -1,22 +1,31 @@
-import type { BusinessBrainAvatarProvider } from './types'
+import type { AvatarConnectOptions, AvatarSession, BusinessBrainAvatarProvider } from './types'
 import { PlaceholderAvatarProvider } from './placeholder'
+import { RpmAvatarProvider } from './rpm'
 
 // ── The single wiring point ─────────────────────────────────────────────────────────
-// To connect a real-time avatar (HeyGen Live Avatar, Tavus CVI, …):
-//   1. Add `lib/brain/avatar/heygen.ts` (or `tavus.ts`) exporting a class that implements
-//      BusinessBrainAvatarProvider — its `connect()` attaches the vendor's WebRTC <video> to
-//      the given container and maps talking-start/stop events onto onSegment/onEnd.
-//   2. Return it from `getAvatarProvider()` below (optionally gated by an env flag).
-// Nothing in the UI (LiveCoo) changes — it only ever sees this interface.
+// getAvatarProvider() decides which avatar the whole app uses. To connect a live real-time
+// avatar (HeyGen Live Avatar, Tavus CVI, …): add `lib/brain/avatar/heygen.ts` implementing
+// BusinessBrainAvatarProvider (its connect() attaches the vendor's WebRTC <video> and maps
+// talking-start/stop onto onSegment/onEnd) and return it here. Nothing in the UI changes.
 
 let cached: BusinessBrainAvatarProvider | null = null
 
 export function getAvatarProvider(): BusinessBrainAvatarProvider {
   if (cached) return cached
-  // Swap this line to a live provider once one is implemented, e.g.:
-  //   cached = new HeyGenAvatarProvider()
-  cached = new PlaceholderAvatarProvider()
+  cached = new RpmAvatarProvider() // 3D avatar with client-side lip motion
   return cached
+}
+
+// Connect with a safety net: if the primary provider can't initialise (e.g. the GLB fails to
+// load, or a live provider errors), fall back to the always-available animated portrait so the
+// briefing never black-screens.
+export async function connectAvatar(container: HTMLElement, opts: AvatarConnectOptions): Promise<AvatarSession> {
+  try {
+    return await getAvatarProvider().connect(container, opts)
+  } catch (e) {
+    console.warn('[avatar] primary provider failed — falling back to portrait', e)
+    return new PlaceholderAvatarProvider().connect(container, opts)
+  }
 }
 
 export type {

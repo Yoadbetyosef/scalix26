@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Pause, Play, RotateCcw, PhoneOff, Volume2 } from 'lucide-react'
-import { getAvatarProvider, type AvatarSession, type SpeakHandle } from '@/lib/brain/avatar'
+import { connectAvatar, type AvatarSession, type SpeakHandle } from '@/lib/brain/avatar'
 
 const DNA_LABEL: Record<string, string> = { sales: 'Sales', pricing: 'Pricing', communication: 'Communication', customer: 'Customer', operations: 'Operations' }
 const STEP_LABEL: Record<string, string> = { hero: 'Opening', understand: 'What I understand', focus: 'Where to focus', surprised: 'What surprised me', dna: 'Business DNA', questions: 'Still investigating' }
@@ -44,8 +44,7 @@ export function LiveCoo({ open, portraitUrl, segments, audioUrl, insights, onClo
     let alive = true
     let session: AvatarSession | null = null
     setActive(0); setEnded(false); setBlocked(false); setPaused(false)
-    const provider = getAvatarProvider()
-    provider.connect(stage, { portraitUrl }).then((sess) => {
+    connectAvatar(stage, { portraitUrl }).then((sess) => {
       if (!alive) { sess.destroy(); return }
       session = sess; sessionRef.current = sess
       handleRef.current = sess.speak({
