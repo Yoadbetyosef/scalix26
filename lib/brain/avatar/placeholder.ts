@@ -29,6 +29,8 @@ class PlaceholderSession implements AvatarSession {
 
   // dom
   private faceWrap: HTMLDivElement
+  private mouthClip: HTMLDivElement
+  private mouthImg: HTMLImageElement
   private glow: HTMLDivElement
   private ring: HTMLDivElement
   private canvas: HTMLCanvasElement
@@ -51,6 +53,18 @@ class PlaceholderSession implements AvatarSession {
     img.draggable = false
     img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:50% 22%;user-select:none'
     this.faceWrap.appendChild(img)
+
+    // Mouth layer — a copy of the face clipped to the mouth region, stretched vertically with
+    // the voice to fake a jaw/lip "talking" motion. It sits inside faceWrap (so it breathes
+    // with the head) and is pixel-identical to the base at rest, so there is no visible seam.
+    this.mouthClip = document.createElement('div')
+    this.mouthClip.style.cssText = 'position:absolute;overflow:hidden;pointer-events:none;will-change:transform;-webkit-mask-image:radial-gradient(70% 78% at 50% 42%, #000 50%, transparent 100%);mask-image:radial-gradient(70% 78% at 50% 42%, #000 50%, transparent 100%)'
+    this.mouthImg = document.createElement('img')
+    this.mouthImg.src = opts.portraitUrl
+    this.mouthImg.draggable = false
+    this.mouthImg.style.cssText = 'position:absolute;object-fit:cover;object-position:50% 22%;transform-origin:50% 0%;user-select:none;will-change:transform'
+    this.mouthClip.appendChild(this.mouthImg)
+    this.faceWrap.appendChild(this.mouthClip)
 
     // soft framing vignette so the photo reads as a "camera feed"
     const vignette = document.createElement('div')
@@ -82,6 +96,14 @@ class PlaceholderSession implements AvatarSession {
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     this.canvas.width = Math.max(1, Math.round(r.width * dpr))
     this.canvas.height = Math.max(1, Math.round(r.height * 0.26 * dpr))
+    // mouth window over the lower-centre of the face; inner img is the full face, offset so
+    // its pixels line up exactly with the base beneath.
+    const W = r.width, H = r.height
+    const cl = 0.30 * W, ct = 0.56 * H, cw = 0.40 * W, ch = 0.30 * H
+    this.mouthClip.style.left = `${cl}px`; this.mouthClip.style.top = `${ct}px`
+    this.mouthClip.style.width = `${cw}px`; this.mouthClip.style.height = `${ch}px`
+    this.mouthImg.style.width = `${W}px`; this.mouthImg.style.height = `${H}px`
+    this.mouthImg.style.left = `${-cl}px`; this.mouthImg.style.top = `${-ct}px`
   }
 
   setState(state: AvatarState) {
@@ -213,6 +235,10 @@ class PlaceholderSession implements AvatarSession {
     this.faceWrap.style.transform =
       `translate(${driftX}%, ${driftY + nodY / 4}%) scale(${(breathe * 1.03).toFixed(4)}, ${(breathe * 1.03 * squashY).toFixed(4)}) rotate(${sway.toFixed(2)}deg)`
     this.faceWrap.style.filter = `brightness(${(1 - blinkK * 0.28).toFixed(3)})`
+
+    // mouth "talks" — the clipped mouth region drops/stretches with the voice
+    const jaw = this.state === 'speaking' ? this.level : 0
+    this.mouthImg.style.transform = `translateY(${(jaw * 2.6).toFixed(2)}px) scaleY(${(1 + jaw * 0.17).toFixed(3)})`
 
     // glow follows the voice
     this.glow.style.opacity = this.state === 'speaking' ? (0.12 + this.level * 0.7).toFixed(3) : '0'
