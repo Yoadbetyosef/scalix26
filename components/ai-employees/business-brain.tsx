@@ -43,6 +43,7 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const [paused, setPaused] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const usingSpeech = useRef(false)
+  const heroRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let on = true
@@ -79,6 +80,7 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
       if (!r.ok) throw new Error(j.error || 'failed')
       const list: Seg[] = j.segments || []
       setSegs(list); setHi(0); setBriefing(true)
+      requestAnimationFrame(() => heroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
       if (j.audio) {
         usingSpeech.current = false
         const a = new Audio(j.audio); audioRef.current = a
@@ -105,6 +107,7 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const execRecs = (s?.recommendations || []).map((r) => { const u = uById.get(r.understanding_id); const key = u?.understanding_key || ''; return { ...r, key, priority: priorityOf(r.business_confidence, r.category), narrative: cooStatement(key, u?.statement || r.why), impact: estimatedImpact(key, patternVal, r.business_confidence) } })
   const weakStrands = (s?.dna || []).filter((d) => d.strength < 30).map((d) => d.dna_strand)
   const questions = openQuestions(understandings.map((u) => u.understanding_key), weakStrands)
+  const topDna = [...(s?.dna || [])].sort((a, b) => b.strength - a.strength)[0]
   const study = studyLines(s?.sources || { total: 0, voice: 0, sms: 0, email: 0, facebook: 0, instagram: 0, whatsapp: 0 })
   const fv = s?.financialVisibility
   const activeSec = briefing ? (segs[hi]?.section || null) : null
@@ -115,7 +118,7 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   return (
     <div className={`space-y-7 rounded-3xl transition-colors duration-500 ${briefing ? 'bg-[#070b1c] p-3 sm:p-4' : ''}`}>
       {/* HERO / briefing stage */}
-      <div className={`overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1230] via-[#141b40] to-[#241a48] p-6 text-white shadow-e2 sm:p-8 ${sec('hero')}`}>
+      <div ref={heroRef} className={`overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1230] via-[#141b40] to-[#241a48] p-6 text-white shadow-e2 sm:p-8 ${sec('hero')}`}>
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <div className="relative mx-auto flex-shrink-0 sm:mx-0">
             {briefing && !paused && <span className="absolute inset-0 animate-ping rounded-full bg-white/20" />}
@@ -147,6 +150,47 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
             </div>
           )}
         </div>
+        {/* Spotlight — the active insight rises right under his face so you never have to scroll. */}
+        {briefing && (
+          <div key={hi} className="spotlight-in mx-auto mt-5 max-w-xl">
+            {(() => {
+              switch (activeSec) {
+                case 'understand': { const u = learned[0]; if (!u) return null; return (
+                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">What I understand</p>
+                    <p className="text-[15px] font-medium">{cooStatement(u.understanding_key, u.statement)}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]"><span className="rounded-md bg-accent/10 px-2 py-0.5 font-medium text-accent-strong">{DNA_LABEL[u.dna_strand]} DNA</span><span className={`rounded-md px-2 py-0.5 font-medium ${u.business_confidence >= 65 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>Business Confidence {u.business_confidence}%</span></div>
+                  </div>) }
+                case 'focus': { const r = execRecs[0]; if (!r) return null; return (
+                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{"Here's what I'd focus on"}</p>
+                    <p className="text-[15px] font-semibold">{r.title}</p>
+                    <p className="mt-1 text-sm text-muted">{r.narrative}</p>
+                    <div className="mt-2 rounded-lg bg-sunken p-2 text-xs"><span className="font-medium text-subtle">Estimated impact — </span>{r.impact}</div>
+                  </div>) }
+                case 'surprised': { const t = surprised[0]; if (!t) return null; return (
+                  <div className="rounded-2xl bg-amber-50/95 p-4 text-ink shadow-[0_0_45px_rgba(245,158,11,0.4)] ring-1 ring-amber-200">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">What surprised me</p>
+                    <p className="text-sm">{t}</p>
+                  </div>) }
+                case 'dna': { const d = topDna; if (!d || d.strength <= 0) return null; return (
+                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">Your Business DNA</p>
+                    <div className="flex items-center justify-between"><span className="text-sm font-medium">{DNA_LABEL[d.dna_strand]} DNA</span><span className="text-xs tabular-nums text-subtle">{d.strength}%</span></div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sunken"><div className="h-full rounded-full bg-gradient-to-r from-accent to-[#A855F7]" style={{ width: `${Math.max(3, d.strength)}%` }} /></div>
+                  </div>) }
+                case 'questions': { const q = questions[0]; if (!q) return null; return (
+                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{"I'm still investigating"}</p>
+                    <p className="text-sm">{q}</p>
+                  </div>) }
+                default: return study.length ? (
+                  <div className="flex flex-wrap justify-center gap-2">{study.map((x) => <span key={x.label} className="rounded-full bg-white/15 px-3 py-1 text-xs text-white/90">{x.count} {x.label}</span>)}</div>
+                ) : null
+              }
+            })()}
+          </div>
+        )}
         {briefing && (
           <div className="mt-5 flex items-center justify-center gap-2">
             <button onClick={togglePause} className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-medium hover:bg-white/25">{paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{paused ? 'Resume' : 'Pause'}</button>

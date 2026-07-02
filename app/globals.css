@@ -202,6 +202,10 @@ body {
   @keyframes brain-wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
   .brain-wave-bar { animation: brain-wave 0.9s ease-in-out infinite; transform-origin: bottom; }
 
+  /* Spotlight card — the active insight rises under the COO's face as he speaks it. */
+  @keyframes spotlight-in { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
+  .spotlight-in { animation: spotlight-in 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
   /* Living voice ring — the SCALIX waveform identity, slowly rotating while Amy speaks. */
   @keyframes sx-spin { to { transform: rotate(360deg); } }
   .sx-ring-live {
