@@ -34,6 +34,7 @@ class PlaceholderSession implements AvatarSession {
   private canvas: HTMLCanvasElement
   private cctx: CanvasRenderingContext2D | null
   private ro: ResizeObserver
+  private nodes: HTMLElement[] = [] // only the DOM this session created — so destroy() never clobbers a sibling session (React StrictMode double-mounts)
 
   constructor(private container: HTMLElement, opts: AvatarConnectOptions) {
     container.style.position = 'relative'
@@ -65,7 +66,8 @@ class PlaceholderSession implements AvatarSession {
     this.canvas.style.cssText = 'position:absolute;left:0;right:0;bottom:0;width:100%;height:26%;pointer-events:none'
     this.cctx = this.canvas.getContext('2d')
 
-    container.append(this.faceWrap, vignette, this.glow, this.ring, this.canvas)
+    this.nodes = [this.faceWrap, vignette, this.glow, this.ring, this.canvas]
+    container.append(...this.nodes)
 
     this.ro = new ResizeObserver(() => this.resize())
     this.ro.observe(container)
@@ -249,7 +251,9 @@ class PlaceholderSession implements AvatarSession {
     cancelAnimationFrame(this.raf)
     this.ro.disconnect()
     this.stopAudio()
-    this.container.replaceChildren()
+    // Remove only our own nodes — never wipe the container, which a concurrent session
+    // (StrictMode double-mount) may already own.
+    this.nodes.forEach((n) => n.remove())
   }
 }
 
