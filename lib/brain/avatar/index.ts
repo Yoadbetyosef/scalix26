@@ -1,6 +1,5 @@
 import type { AvatarConnectOptions, AvatarSession, BusinessBrainAvatarProvider } from './types'
 import { PlaceholderAvatarProvider } from './placeholder'
-import { RpmAvatarProvider } from './rpm'
 
 // ── The single wiring point ─────────────────────────────────────────────────────────
 // getAvatarProvider() decides which avatar the whole app uses. To connect a live real-time
@@ -11,14 +10,11 @@ import { RpmAvatarProvider } from './rpm'
 let cached: BusinessBrainAvatarProvider | null = null
 
 export function getAvatarProvider(): BusinessBrainAvatarProvider {
-  if (cached) return cached
-  cached = new RpmAvatarProvider() // 3D avatar with client-side lip motion
+  if (!cached) cached = new PlaceholderAvatarProvider() // static portrait + breathing/glow/waveform
   return cached
 }
 
-// Connect with a safety net: if the primary provider can't initialise (e.g. the GLB fails to
-// load, or a live provider errors), fall back to the always-available animated portrait so the
-// briefing never black-screens.
+// Connect with a safety net so the briefing never black-screens if a provider fails to init.
 export async function connectAvatar(container: HTMLElement, opts: AvatarConnectOptions): Promise<AvatarSession> {
   try {
     return await getAvatarProvider().connect(container, opts)
