@@ -7,6 +7,10 @@
     {
       "path": "/api/reviews/process",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/brain/cron",
+      "schedule": "0 8 * * *"
     }
   ]
 }

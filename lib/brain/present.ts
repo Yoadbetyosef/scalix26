@@ -69,6 +69,38 @@ export function dnaLine(strand: string, strength: number, tick: number): string 
 
 // Open questions — from understandings the Brain has (with a `question`) + strands it can't
 // speak to yet. Honest about what it doesn't know.
+// Real per-channel study list for the hero ("84 conversations, 16 calls, ...").
+export interface Sources { total: number; voice: number; sms: number; email: number; facebook: number; instagram: number; whatsapp: number }
+export function studyLines(s: Sources): { label: string; count: number }[] {
+  return [
+    { label: 'conversations', count: s.total },
+    { label: 'phone calls', count: s.voice },
+    { label: 'text messages', count: s.sms },
+    { label: 'emails', count: s.email },
+    { label: 'Facebook messages', count: s.facebook },
+    { label: 'Instagram messages', count: s.instagram },
+    { label: 'WhatsApp messages', count: s.whatsapp },
+  ].filter((x) => x.count > 0)
+}
+
+// The senses the Brain doesn't have yet — each future integration gives it another one.
+export const COMING_NEXT = ['Google Reviews', 'Stripe payments', 'Calendar', 'CRM', 'Call recordings']
+
+// Counter-intuitive findings — only surfaced when the REAL data supports them. Never faked.
+export function surprisedMe(v: (k: string) => number | null): string[] {
+  const out: string[] = []
+  const pricing = v('pricing_questions')       // % of conversations
+  const slow = v('response_time_avg')           // minutes
+  const unans = v('unanswered_conversations')
+  const missedPricing = v('missed_pricing_followup')
+  if ((pricing == null || pricing < 12) && ((slow != null && slow > 30) || (unans != null && unans > 0) || (missedPricing != null && missedPricing > 0)))
+    out.push("I expected price to be your biggest issue — it isn't. Customers slip away more from slow or missing follow-ups than from cost.")
+  const booking = v('missed_booking')
+  if (booking != null && booking > 0)
+    out.push(`More customers than I'd expect asked to book but were never scheduled — that's revenue sitting right in your conversations.`)
+  return out.slice(0, 2)
+}
+
 export function openQuestions(presentKeys: string[], weakStrands: string[]): string[] {
   const qs: string[] = []
   for (const k of presentKeys) { const q = COO[k]?.question; if (q) qs.push(q) }
