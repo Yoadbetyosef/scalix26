@@ -198,6 +198,10 @@ body {
   @keyframes bip-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
   .bip-shimmer { background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.55) 50%, transparent 80%); animation: bip-shimmer 1.8s ease-in-out infinite; }
 
+  /* AI COO speaking waveform (Morning Executive Meeting). */
+  @keyframes brain-wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+  .brain-wave-bar { animation: brain-wave 0.9s ease-in-out infinite; transform-origin: bottom; }
+
   /* Living voice ring — the SCALIX waveform identity, slowly rotating while Amy speaks. */
   @keyframes sx-spin { to { transform: rotate(360deg); } }
   .sx-ring-live {

@@ -4,6 +4,14 @@
 // estimated impact, living DNA lines, and honest open questions. It changes NOTHING about
 // the engine or Business Confidence — it only decides how the Brain SPEAKS.
 
+import type { BrainView } from './view'
+
+// The AI COO's voice (ElevenLabs). Set BUSINESS_BRAIN_COO_VOICE_ID to change it; the speak
+// route already maps the 'coo' key to this warm, conversational male voice (Eric).
+export const BUSINESS_BRAIN_COO_VOICE_ID = 'cjVigY5qzO86Huf0OWal'
+
+const DNA_LABEL: Record<string, string> = { sales: 'Sales', pricing: 'Pricing', communication: 'Communication', customer: 'Customer', operations: 'Operations' }
+
 export type Priority = 'critical' | 'high' | 'watching' | 'learning'
 export const PRIORITY_META: Record<Priority, { label: string; rank: number; tone: string; dot: string }> = {
   critical: { label: 'Critical', rank: 0, tone: 'text-rose-700 bg-rose-50', dot: 'bg-rose-500' },
@@ -99,6 +107,84 @@ export function surprisedMe(v: (k: string) => number | null): string[] {
   if (booking != null && booking > 0)
     out.push(`More customers than I'd expect asked to book but were never scheduled — that's revenue sitting right in your conversations.`)
   return out.slice(0, 2)
+}
+
+// ── Morning-briefing script, segmented for highlight-sync ─────────────────────────
+export interface BriefSeg { text: string; section: string }
+export function briefingSegments(v: BrainView): BriefSeg[] {
+  const pv = (k: string) => v.patterns.find((p) => p.pattern_key === k)?.metric_value ?? null
+  const study = studyLines(v.sources)
+  const segs: BriefSeg[] = [{ section: 'hero', text: `${new Date().getHours() < 12 ? 'Good morning' : 'Hey'}. I studied your business while you were away.` }]
+  if (study[0]) segs.push({ section: 'hero', text: `I went through ${study.slice(0, 3).map((x) => `${x.count} ${x.label}`).join(', ')}. Here's what I understand better today.` })
+  const learned = v.understandings.filter((u) => u.business_confidence >= 40)
+  if (learned[0]) segs.push({ section: 'understand', text: `First — ${cooStatement(learned[0].understanding_key, learned[0].statement)}` })
+  const top = v.recommendations[0]
+  if (top) {
+    const u = v.understandings.find((x) => x.id === top.understanding_id)
+    const impact = estimatedImpact(u?.understanding_key || '', pv, top.business_confidence)
+    segs.push({ section: 'focus', text: `The thing I'd focus on today is ${top.title.charAt(0).toLowerCase()}${top.title.slice(1)}.` + (/not enough/i.test(impact) ? ` I'm only ${top.business_confidence}% sure so far, so I'm still watching — but it may be recoverable.` : ` Honestly, ${impact.charAt(0).toLowerCase()}${impact.slice(1)}`) })
+  }
+  const surprised = surprisedMe(pv)
+  if (surprised[0]) segs.push({ section: 'surprised', text: surprised[0] })
+  const topDna = [...v.dna].sort((a, b) => b.strength - a.strength)[0]
+  if (topDna && topDna.strength > 0) segs.push({ section: 'dna', text: `Right now, ${DNA_LABEL[topDna.dna_strand].toLowerCase()} is where you're strongest — I'm still getting a feel for the rest.` })
+  const weak = v.dna.filter((d) => d.strength < 30).map((d) => d.dna_strand)
+  const qs = openQuestions(v.understandings.map((u) => u.understanding_key), weak)
+  if (qs[0]) segs.push({ section: 'questions', text: `The thing I keep chewing on is ${qs[0]}, so I'll keep watching before I make a call.` })
+  segs.push({ section: 'hero', text: "That's my read for now. I'll update you when I've got stronger evidence." })
+  return segs
+}
+export function briefingText(v: BrainView): string { return briefingSegments(v).map((s) => s.text).join(' ') }
+
+// ── Ask my COO — guided, answered ONLY from real data (never hallucinate) ─────────
+export const ASK_QUESTIONS = [
+  { key: 'learned', q: 'What did you learn today?' },
+  { key: 'worries', q: 'What worries you?' },
+  { key: 'losing', q: 'Where am I losing customers?' },
+  { key: 'improve', q: 'What should I improve first?' },
+  { key: 'figuring', q: "What are you still trying to figure out?" },
+  { key: 'automate', q: 'What should I automate next?' },
+] as const
+
+export function answerCooQuestion(key: string, v: BrainView): string {
+  const pv = (k: string) => v.patterns.find((p) => p.pattern_key === k)?.metric_value ?? null
+  const n = (k: string) => Math.round(pv(k) || 0)
+  const unknown = "I don't know yet. I need more data before I can answer that confidently."
+  switch (key) {
+    case 'learned': {
+      const l = v.understandings.filter((u) => u.business_confidence >= 40)
+      if (!l.length) return unknown
+      return l.slice(0, 2).map((u) => cooStatement(u.understanding_key, u.statement)).join('  Also, ')
+    }
+    case 'worries': {
+      const bits: string[] = []
+      if (pv('missed_booking')) bits.push(`${n('missed_booking')} booking-ready customers who were never scheduled`)
+      if (pv('missed_payment')) bits.push(`${n('missed_payment')} customers who mentioned paying but never got a link`)
+      return bits.length ? `What I'd keep an eye on: ${bits.join(', and ')}. These may be recoverable — I can't prove the dollar value yet.` : "Nothing alarming yet — I'm still watching."
+    }
+    case 'losing': {
+      const bits: string[] = []
+      if (pv('unanswered_conversations')) bits.push(`${n('unanswered_conversations')} conversations got no reply at all`)
+      const slow = pv('response_time_avg'); if (slow != null && slow > 30) bits.push(`first replies average about ${Math.round(slow)} minutes`)
+      if (pv('missed_pricing_followup')) bits.push(`${n('missed_pricing_followup')} price-curious customers stalled with no follow-up`)
+      return bits.length ? `Most likely here: ${bits.join('; ')}.` : "I don't have clear evidence of where you're losing customers yet — I need more data."
+    }
+    case 'improve': {
+      const top = v.recommendations[0]
+      return top ? `I'd start with: ${top.title}. ${top.why}` : "I don't have a strong recommendation yet — I need more evidence."
+    }
+    case 'figuring': {
+      const weak = v.dna.filter((d) => d.strength < 30).map((d) => d.dna_strand)
+      const qs = openQuestions(v.understandings.map((u) => u.understanding_key), weak)
+      return qs.length ? `I'm still figuring out ${qs.slice(0, 2).join(', and ')}.` : "Not much right now — I'm fairly settled on what I'm seeing."
+    }
+    case 'automate': {
+      if (pv('missed_payment')) return "Payment links. Some customers were ready to pay but never got one — turning on Payment Collection would let me send secure links automatically."
+      if (pv('missed_pricing_followup')) return "Follow-ups on price questions — I could flag price-curious leads for a fast follow-up automatically."
+      return "Nothing urgent to automate yet — let me gather more evidence first."
+    }
+  }
+  return unknown
 }
 
 export function openQuestions(presentKeys: string[], weakStrands: string[]): string[] {
