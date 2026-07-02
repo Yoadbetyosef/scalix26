@@ -44,7 +44,6 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const usingSpeech = useRef(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
-  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
     let on = true
@@ -52,8 +51,6 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
     return () => { on = false }
   }, [agentId])
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 2600); return () => clearInterval(id) }, [])
-  // The COO's face loops (lips moving) only while he's actually speaking; freezes on pause.
-  useEffect(() => { const v = videoRef.current; if (!v) return; if (briefing && !paused) v.play().catch(() => {}); else v.pause() }, [briefing, paused])
   useEffect(() => () => { audioRef.current?.pause(); if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel() }, [])
 
   async function run() {
@@ -125,12 +122,8 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <div className="relative mx-auto flex-shrink-0 sm:mx-0">
             {briefing && !paused && <span className="absolute inset-0 animate-ping rounded-full bg-white/20" />}
-            {briefing ? (
-              <video ref={videoRef} src="/avatars/coo-talking.mp4" poster="/avatars/coo.png" muted loop playsInline className="relative h-28 w-28 rounded-full object-cover ring-2 ring-white/70 transition-all duration-500" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/avatars/coo.png" alt="Your AI COO" className="relative h-20 w-20 rounded-full object-cover ring-2 ring-white/20 transition-all duration-500" />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/avatars/coo.png" alt="Your AI COO" className={`relative rounded-full object-cover ring-2 transition-all duration-500 ${briefing ? 'h-28 w-28 ring-white/70' : 'h-20 w-20 ring-white/20'}`} />
             {briefing && !paused && (
               <div className="absolute -bottom-1 left-1/2 flex -translate-x-1/2 items-end gap-0.5">
                 {[0, 1, 2, 3, 4].map((i) => <span key={i} className="brain-wave-bar h-3 w-1 rounded-full bg-white/80" style={{ animationDelay: `${i * 0.12}s` }} />)}
