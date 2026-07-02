@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Volume2, Play, Pause, RotateCcw, X, TrendingUp, Search, ArrowRight, Check, Lightbulb, Clock, HelpCircle, Wand2, DollarSign, MessageCircle } from 'lucide-react'
+import { Volume2, TrendingUp, Search, ArrowRight, Check, Lightbulb, Clock, HelpCircle, Wand2, DollarSign, MessageCircle } from 'lucide-react'
 import { priorityOf, PRIORITY_META, cooStatement, estimatedImpact, dnaLine, openQuestions, studyLines, surprisedMe, COMING_NEXT, ASK_QUESTIONS, answerCooQuestion, type Priority, type Sources } from '@/lib/brain/present'
 import type { BrainView } from '@/lib/brain/view'
+import { LiveCoo } from './live-coo'
 
 interface Dna { dna_strand: string; strength: number }
 interface Understanding { id: string; dna_strand: string; understanding_key: string; title: string; statement: string; business_confidence: number; evidence_strength: string; evidence_summary: string }
@@ -35,15 +36,12 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const [running, setRunning] = useState(false)
   const [tick, setTick] = useState(0)
   const [ask, setAsk] = useState<{ q: string; a: string } | null>(null)
-  // Morning Executive Meeting
-  const [briefing, setBriefing] = useState(false)
+  // Morning Executive Meeting — a live "FaceTime" briefing rendered by <LiveCoo>. This
+  // component only fetches the (cached) briefing text + audio and opens the overlay; all the
+  // avatar animation + playback lives behind the swappable avatar provider.
   const [briefingLoad, setBriefingLoad] = useState(false)
-  const [segs, setSegs] = useState<Seg[]>([])
-  const [hi, setHi] = useState(0)
-  const [paused, setPaused] = useState(false)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const usingSpeech = useRef(false)
-  const heroRef = useRef<HTMLDivElement | null>(null)
+  const [briefingOpen, setBriefingOpen] = useState(false)
+  const [briefingData, setBriefingData] = useState<{ segments: Seg[]; audioUrl: string | null }>({ segments: [], audioUrl: null })
 
   useEffect(() => {
     let on = true
@@ -51,7 +49,6 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
     return () => { on = false }
   }, [agentId])
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 2600); return () => clearInterval(id) }, [])
-  useEffect(() => () => { audioRef.current?.pause(); if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel() }, [])
 
   async function run() {
     setRunning(true)
@@ -62,40 +59,15 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
     } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not study your business') } finally { setRunning(false) }
   }
 
-  function speakSegments(list: Seg[]) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) { setPaused(true); return }
-    usingSpeech.current = true; window.speechSynthesis.cancel()
-    list.forEach((seg, i) => {
-      const u = new SpeechSynthesisUtterance(seg.text); u.rate = 1; u.pitch = 0.95
-      u.onstart = () => setHi(i); if (i === list.length - 1) u.onend = () => setPaused(true)
-      window.speechSynthesis.speak(u)
-    })
-    setPaused(false)
-  }
-
   async function startBriefing() {
     setBriefingLoad(true)
     try {
       const r = await fetch(`/api/brain/briefing/${agentId}`, { method: 'POST' }); const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'failed')
-      const list: Seg[] = j.segments || []
-      setSegs(list); setHi(0); setBriefing(true)
-      requestAnimationFrame(() => heroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-      if (j.audio) {
-        usingSpeech.current = false
-        const a = new Audio(j.audio); audioRef.current = a
-        a.ontimeupdate = () => { if (a.duration) setHi(Math.min(list.length - 1, Math.floor((a.currentTime / a.duration) * list.length))) }
-        a.onended = () => setPaused(true)
-        await a.play(); setPaused(false)
-      } else { speakSegments(list) }
-    } catch { toast.error("I couldn't start the briefing right now.") ; setBriefing(false) } finally { setBriefingLoad(false) }
+      setBriefingData({ segments: j.segments || [], audioUrl: j.audio || null })
+      setBriefingOpen(true)
+    } catch { toast.error("I couldn't start the briefing right now.") } finally { setBriefingLoad(false) }
   }
-  function togglePause() {
-    if (audioRef.current) { if (paused) audioRef.current.play(); else audioRef.current.pause(); setPaused(!paused) }
-    else if (window.speechSynthesis) { if (paused) window.speechSynthesis.resume(); else window.speechSynthesis.pause(); setPaused(!paused) }
-  }
-  function replay() { setHi(0); if (audioRef.current) { audioRef.current.currentTime = 0; audioRef.current.play(); setPaused(false) } else speakSegments(segs) }
-  function exitBriefing() { audioRef.current?.pause(); audioRef.current = null; if (window.speechSynthesis) window.speechSynthesis.cancel(); setBriefing(false); setPaused(false); setHi(0) }
 
   const understandings = s?.understandings || []
   const hasAnything = understandings.length > 0 || (s?.dna || []).some((d) => d.strength > 0)
@@ -110,95 +82,41 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const topDna = [...(s?.dna || [])].sort((a, b) => b.strength - a.strength)[0]
   const study = studyLines(s?.sources || { total: 0, voice: 0, sms: 0, email: 0, facebook: 0, instagram: 0, whatsapp: 0 })
   const fv = s?.financialVisibility
-  const activeSec = briefing ? (segs[hi]?.section || null) : null
-  const sec = (key: string) => briefing ? (activeSec === key ? 'rounded-2xl ring-2 ring-accent shadow-e2 transition-all duration-500' : 'opacity-25 transition-all duration-500') : ''
+  const sec = (_key: string) => '' // section highlighting now happens inside the LiveCoo overlay
 
   function askQ(key: string, q: string) { setAsk({ q, a: s ? answerCooQuestion(key, s as unknown as BrainView) : 'One moment…' }) }
 
   return (
-    <div className={`space-y-7 rounded-3xl transition-colors duration-500 ${briefing ? 'bg-[#070b1c] p-3 sm:p-4' : ''}`}>
-      {/* HERO / briefing stage — always full brightness; it IS the focus during a briefing. */}
-      <div ref={heroRef} className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1230] via-[#141b40] to-[#241a48] p-6 text-white shadow-e2 sm:p-8">
+    <div className="space-y-7">
+      {/* HERO — the always-mounted COO. Clicking "Hear my briefing" opens the live meeting. */}
+      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1230] via-[#141b40] to-[#241a48] p-6 text-white shadow-e2 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <div className="relative mx-auto flex-shrink-0 sm:mx-0">
-            {briefing && !paused && <span className="absolute inset-0 animate-ping rounded-full bg-white/20" />}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/avatars/coo.png" alt="Your AI COO" className={`relative rounded-full object-cover ring-2 transition-all duration-500 ${briefing ? 'h-28 w-28 ring-white/70' : 'h-20 w-20 ring-white/20'}`} />
-            {briefing && !paused && (
-              <div className="absolute -bottom-1 left-1/2 flex -translate-x-1/2 items-end gap-0.5">
-                {[0, 1, 2, 3, 4].map((i) => <span key={i} className="brain-wave-bar h-3 w-1 rounded-full bg-white/80" style={{ animationDelay: `${i * 0.12}s` }} />)}
-              </div>
-            )}
+            <img src="/avatars/coo.png" alt="Your AI COO" className="relative h-20 w-20 rounded-full object-cover ring-2 ring-white/20" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xl font-semibold sm:text-2xl">{greeting()}.</p>
-            {briefing ? (
-              <p className="mt-1 min-h-[3.5rem] text-[15px] leading-relaxed text-white/90">{segs[hi]?.text}</p>
-            ) : (
-              <>
-                <p className="mt-0.5 text-sm text-white/75">{running ? "I'm studying your business right now…" : hasAnything ? `I've been studying your business — last time ${timeAgo(s?.lastLearned || null)}. Here's what I understand better today.` : 'Let me study your business from the data you already have.'}</p>
-                {hasAnything && study.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">{study.map((x) => <span key={x.label} className="inline-flex items-center gap-1.5 text-xs text-white/80"><Check className="h-3.5 w-3.5 text-emerald-300" />{x.count} {x.label}</span>)}</div>
-                )}
-              </>
+            <p className="mt-0.5 text-sm text-white/75">{running ? "I'm studying your business right now…" : hasAnything ? `I've been studying your business — last time ${timeAgo(s?.lastLearned || null)}. Here's what I understand better today.` : 'Let me study your business from the data you already have.'}</p>
+            {hasAnything && study.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">{study.map((x) => <span key={x.label} className="inline-flex items-center gap-1.5 text-xs text-white/80"><Check className="h-3.5 w-3.5 text-emerald-300" />{x.count} {x.label}</span>)}</div>
             )}
           </div>
-          {!briefing && (
-            <div className="flex flex-shrink-0 flex-col gap-2 sm:items-end">
-              {hasAnything && <button onClick={startBriefing} disabled={briefingLoad} className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-3.5 text-xs font-medium text-white transition-colors hover:bg-white/25 disabled:opacity-60"><Volume2 className="h-4 w-4" />{briefingLoad ? 'Preparing…' : 'Hear my briefing'}</button>}
-              <Button onClick={run} loading={running} className="bg-white text-[#1b2450] hover:bg-white/90">{hasAnything ? 'Study again' : 'Study my business'}</Button>
-            </div>
-          )}
+          <div className="flex flex-shrink-0 flex-col gap-2 sm:items-end">
+            {hasAnything && <button onClick={startBriefing} disabled={briefingLoad} className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-3.5 text-xs font-medium text-white transition-colors hover:bg-white/25 disabled:opacity-60"><Volume2 className="h-4 w-4" />{briefingLoad ? 'Preparing…' : 'Hear my briefing'}</button>}
+            <Button onClick={run} loading={running} className="bg-white text-[#1b2450] hover:bg-white/90">{hasAnything ? 'Study again' : 'Study my business'}</Button>
+          </div>
         </div>
-        {/* Spotlight — the active insight rises right under his face so you never have to scroll. */}
-        {briefing && (
-          <div key={hi} className="spotlight-in mx-auto mt-5 max-w-xl">
-            {(() => {
-              switch (activeSec) {
-                case 'understand': { const u = learned[0]; if (!u) return null; return (
-                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">What I understand</p>
-                    <p className="text-[15px] font-medium">{cooStatement(u.understanding_key, u.statement)}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]"><span className="rounded-md bg-accent/10 px-2 py-0.5 font-medium text-accent-strong">{DNA_LABEL[u.dna_strand]} DNA</span><span className={`rounded-md px-2 py-0.5 font-medium ${u.business_confidence >= 65 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>Business Confidence {u.business_confidence}%</span></div>
-                  </div>) }
-                case 'focus': { const r = execRecs[0]; if (!r) return null; return (
-                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{"Here's what I'd focus on"}</p>
-                    <p className="text-[15px] font-semibold">{r.title}</p>
-                    <p className="mt-1 text-sm text-muted">{r.narrative}</p>
-                    <div className="mt-2 rounded-lg bg-sunken p-2 text-xs"><span className="font-medium text-subtle">Estimated impact — </span>{r.impact}</div>
-                  </div>) }
-                case 'surprised': { const t = surprised[0]; if (!t) return null; return (
-                  <div className="rounded-2xl bg-amber-50 p-4 text-ink shadow-[0_0_70px_rgba(245,158,11,0.5)] ring-1 ring-amber-300">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">What surprised me</p>
-                    <p className="text-sm">{t}</p>
-                  </div>) }
-                case 'dna': { const d = topDna; if (!d || d.strength <= 0) return null; return (
-                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">Your Business DNA</p>
-                    <div className="flex items-center justify-between"><span className="text-sm font-medium">{DNA_LABEL[d.dna_strand]} DNA</span><span className="text-xs tabular-nums text-subtle">{d.strength}%</span></div>
-                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sunken"><div className="h-full rounded-full bg-gradient-to-r from-accent to-[#A855F7]" style={{ width: `${Math.max(3, d.strength)}%` }} /></div>
-                  </div>) }
-                case 'questions': { const q = questions[0]; if (!q) return null; return (
-                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{"I'm still investigating"}</p>
-                    <p className="text-sm">{q}</p>
-                  </div>) }
-                default: return study.length ? (
-                  <div className="flex flex-wrap justify-center gap-2">{study.map((x) => <span key={x.label} className="rounded-full bg-white/15 px-3 py-1 text-xs text-white/90">{x.count} {x.label}</span>)}</div>
-                ) : null
-              }
-            })()}
-          </div>
-        )}
-        {briefing && (
-          <div className="mt-5 flex items-center justify-center gap-2">
-            <button onClick={togglePause} className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-medium hover:bg-white/25">{paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{paused ? 'Resume' : 'Pause'}</button>
-            <button onClick={replay} className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-medium hover:bg-white/25"><RotateCcw className="h-3.5 w-3.5" />Replay</button>
-            <button onClick={exitBriefing} className="flex h-9 items-center gap-1.5 rounded-full bg-white/15 px-4 text-xs font-medium hover:bg-white/25"><X className="h-3.5 w-3.5" />End meeting</button>
-          </div>
-        )}
       </div>
+
+      <LiveCoo
+        open={briefingOpen}
+        portraitUrl="/avatars/coo.png"
+        segments={briefingData.segments}
+        audioUrl={briefingData.audioUrl}
+        insights={{ greeting: `${greeting()}.`, study, learned, execRecs, surprised, topDna, questions, cooStatement }}
+        onClose={() => setBriefingOpen(false)}
+      />
 
       {loading && <p className="text-sm text-muted">Opening your Business Brain…</p>}
       {!loading && !hasAnything && (
