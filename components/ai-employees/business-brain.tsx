@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Brain, Sparkles, TrendingUp, Search, HelpCircle, ShieldCheck, ArrowRight } from 'lucide-react'
+import { Brain, Sparkles, TrendingUp, Search, HelpCircle, ShieldCheck, ArrowRight, Volume2, Square } from 'lucide-react'
 import { priorityOf, PRIORITY_META, cooStatement, estimatedImpact, dnaLine, openQuestions, type Priority } from '@/lib/brain/present'
 
 interface Dna { dna_strand: string; strength: number }
@@ -23,6 +23,8 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [tick, setTick] = useState(0)
+  const [speaking, setSpeaking] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     let on = true
@@ -35,6 +37,9 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
     const id = setInterval(() => setTick((t) => t + 1), 2600)
     return () => clearInterval(id)
   }, [])
+
+  // Stop any spoken briefing when leaving the page.
+  useEffect(() => () => { audioRef.current?.pause() }, [])
 
   async function run() {
     setRunning(true)
@@ -63,6 +68,29 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const weakStrands = (s?.dna || []).filter((d) => d.strength < 30).map((d) => d.dna_strand)
   const questions = openQuestions(understandings.map((u) => u.understanding_key), weakStrands)
 
+  // The COO's spoken briefing — natural language composed from the same real data.
+  function spokenBriefing(): string {
+    if (!hasAnything) return "I haven't studied your business yet. Give me a moment with your data and I'll tell you what I find."
+    const b: string[] = [`I've been studying your business. So far I've understood ${s?.learnedCount ?? 0} things about how you work, and I get sharper every day.`]
+    const top = execRecs[0]
+    if (top) { b.push(`Here's what I'd focus on first. ${top.title}. ${top.narrative}`); if (!/not enough/i.test(top.impact)) b.push(top.impact) }
+    if (execRecs[1]) b.push(`I'd also keep an eye on this: ${execRecs[1].title}.`)
+    const topDna = [...(s?.dna || [])].sort((a, z) => z.strength - a.strength)[0]
+    if (topDna && topDna.strength > 0) b.push(`Your strongest area is ${DNA_LABEL[topDna.dna_strand]} DNA, at ${topDna.strength} percent. I'm still building the others as more data comes in.`)
+    if (questions[0]) b.push(`I'm still figuring out ${questions[0]}. I'll keep watching before I make a call.`)
+    b.push("That's my read for now. I'll let you know the moment something changes.")
+    return b.join(' ')
+  }
+
+  function speak() {
+    if (speaking) { audioRef.current?.pause(); audioRef.current = null; setSpeaking(false); return }
+    const a = new Audio(`/api/tts?text=${encodeURIComponent(spokenBriefing())}&voice=aura-2-asteria-en`)
+    audioRef.current = a
+    a.onended = () => setSpeaking(false)
+    a.onerror = () => { setSpeaking(false); toast.error("I couldn't say that out loud right now.") }
+    a.play().then(() => setSpeaking(true)).catch(() => { setSpeaking(false); toast.error("I couldn't say that out loud right now.") })
+  }
+
   return (
     <div className="space-y-6">
       {/* Living header — the COO greets you */}
@@ -77,9 +105,17 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
                 : 'Let me study your business from the data you already have.'}
             </p>
           </div>
-          <Button onClick={run} loading={running} className="flex-shrink-0 bg-white text-[#1b2450] hover:bg-white/90">
-            {hasAnything ? 'Study again' : 'Study my business'}
-          </Button>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            {hasAnything && (
+              <button onClick={speak} className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-white transition-colors ${speaking ? 'bg-white/25' : 'bg-white/15 hover:bg-white/25'}`}>
+                {speaking ? <Square className="h-3.5 w-3.5" /> : <Volume2 className="h-4 w-4" />}
+                {speaking ? 'Stop' : 'Hear my briefing'}
+              </button>
+            )}
+            <Button onClick={run} loading={running} className="bg-white text-[#1b2450] hover:bg-white/90">
+              {hasAnything ? 'Study again' : 'Study my business'}
+            </Button>
+          </div>
         </div>
       </div>
 
