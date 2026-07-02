@@ -80,23 +80,26 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const study = studyLines(s?.sources || { total: 0, voice: 0, sms: 0, email: 0, facebook: 0, instagram: 0, whatsapp: 0 })
 
   function spokenBriefing(): string {
-    if (!hasAnything) return "Good morning. I haven't studied your business yet. Give me a moment with your data and I'll tell you what I find."
-    const b: string[] = [`${greeting()}. I've been studying your business.`]
-    if (study[0]) b.push(`I went through ${study.slice(0, 3).map((x) => `${x.count} ${x.label}`).join(', ')}.`)
+    if (!hasAnything) return "Hey — morning. I haven't really dug into your business yet. Give me a bit with your data and I'll tell you what I'm seeing."
+    const b: string[] = [`${new Date().getHours() < 12 ? 'Morning' : 'Hey'}.`]
+    if (study[0]) b.push(`So, I went back through your stuff — ${study.slice(0, 2).map((x) => `${x.count} ${x.label}`).join(' and ')} — and a couple things stood out.`)
     const top = execRecs[0]
-    if (top) { b.push(`Here's what I'd focus on first. ${top.title}. ${top.narrative}`); if (!/not enough/i.test(top.impact)) b.push(top.impact) }
+    if (top) {
+      b.push(`The big one — ${top.narrative.charAt(0).toLowerCase()}${top.narrative.slice(1)}`)
+      if (!/not enough/i.test(top.impact)) b.push(`Honestly, ${top.impact.charAt(0).toLowerCase()}${top.impact.slice(1)}`)
+    }
     if (surprised[0]) b.push(surprised[0])
     const topDna = [...(s?.dna || [])].sort((a, z) => z.strength - a.strength)[0]
-    if (topDna && topDna.strength > 0) b.push(`Your strongest area is ${DNA_LABEL[topDna.dna_strand]}, and I'm still building the rest.`)
-    if (questions[0]) b.push(`I'm still investigating ${questions[0]}.`)
-    b.push("That's my read for now. I'll keep studying and update you.")
+    if (topDna && topDna.strength > 0) b.push(`Right now, where you're strongest is ${DNA_LABEL[topDna.dna_strand].toLowerCase()} — and I'm still getting a feel for the rest.`)
+    if (questions[0]) b.push(`The thing I keep chewing on is ${questions[0]}.`)
+    b.push("Anyway — that's my read for now. I'll keep an eye on things and give you a shout when something shifts.")
     return b.join(' ')
   }
   async function speak() {
     if (speaking) { audioRef.current?.pause(); audioRef.current = null; setSpeaking(false); return }
     setSpeaking(true)
     try {
-      const r = await fetch('/api/ai/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spokenBriefing(), voice: 'professional_male' }) })
+      const r = await fetch('/api/ai/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: spokenBriefing(), voice: 'coo' }) })
       if (!r.ok) throw new Error()
       const a = new Audio(URL.createObjectURL(await r.blob()))
       audioRef.current = a; a.onended = () => setSpeaking(false)

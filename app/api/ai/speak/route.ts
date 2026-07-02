@@ -21,8 +21,11 @@ export async function POST(req: NextRequest) {
 
   let voiceId = 'onwK4e9ZLuTAKqWW03F9' // Daniel (default)
 
-  // Explicit voice override (e.g. the AI COO always speaks in a professional male voice).
-  if (voice && VOICE_MAP[voice]) {
+  // The AI COO: a warm, natural, conversational male voice — should NOT sound like an AI.
+  const isCoo = voice === 'coo'
+  if (isCoo) {
+    voiceId = 'cjVigY5qzO86Huf0OWal' // Eric — relaxed, human, conversational
+  } else if (voice && VOICE_MAP[voice]) {
     voiceId = VOICE_MAP[voice]
   } else {
     // Otherwise use the tenant's active AI employee voice.
@@ -46,9 +49,12 @@ export async function POST(req: NextRequest) {
       'Accept': 'audio/mpeg',
     },
     body: JSON.stringify({
-      text: text.slice(0, 900), // cap length (a COO briefing is a few sentences)
-      model_id: 'eleven_turbo_v2_5',
-      voice_settings: { stability: 0.65, similarity_boost: 0.75 },
+      text: text.slice(0, 900),
+      // COO → higher-quality model + expressive settings (lower stability = more human/varied).
+      model_id: isCoo ? 'eleven_multilingual_v2' : 'eleven_turbo_v2_5',
+      voice_settings: isCoo
+        ? { stability: 0.4, similarity_boost: 0.85, style: 0.45, use_speaker_boost: true }
+        : { stability: 0.65, similarity_boost: 0.75 },
     }),
   })
 
