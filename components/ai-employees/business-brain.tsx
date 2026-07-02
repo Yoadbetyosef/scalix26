@@ -44,6 +44,7 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const usingSpeech = useRef(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   useEffect(() => {
     let on = true
@@ -51,6 +52,8 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
     return () => { on = false }
   }, [agentId])
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 2600); return () => clearInterval(id) }, [])
+  // The COO's face loops (lips moving) only while he's actually speaking; freezes on pause.
+  useEffect(() => { const v = videoRef.current; if (!v) return; if (briefing && !paused) v.play().catch(() => {}); else v.pause() }, [briefing, paused])
   useEffect(() => () => { audioRef.current?.pause(); if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel() }, [])
 
   async function run() {
@@ -117,13 +120,17 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
 
   return (
     <div className={`space-y-7 rounded-3xl transition-colors duration-500 ${briefing ? 'bg-[#070b1c] p-3 sm:p-4' : ''}`}>
-      {/* HERO / briefing stage */}
-      <div ref={heroRef} className={`overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1230] via-[#141b40] to-[#241a48] p-6 text-white shadow-e2 sm:p-8 ${sec('hero')}`}>
+      {/* HERO / briefing stage — always full brightness; it IS the focus during a briefing. */}
+      <div ref={heroRef} className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d1230] via-[#141b40] to-[#241a48] p-6 text-white shadow-e2 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <div className="relative mx-auto flex-shrink-0 sm:mx-0">
             {briefing && !paused && <span className="absolute inset-0 animate-ping rounded-full bg-white/20" />}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/avatars/coo.png" alt="Your AI COO" className={`relative rounded-full object-cover ring-2 transition-all duration-500 ${briefing ? 'h-28 w-28 ring-white/70' : 'h-20 w-20 ring-white/20'}`} />
+            {briefing ? (
+              <video ref={videoRef} src="/avatars/coo-talking.mp4" poster="/avatars/coo.png" muted loop playsInline className="relative h-28 w-28 rounded-full object-cover ring-2 ring-white/70 transition-all duration-500" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/avatars/coo.png" alt="Your AI COO" className="relative h-20 w-20 rounded-full object-cover ring-2 ring-white/20 transition-all duration-500" />
+            )}
             {briefing && !paused && (
               <div className="absolute -bottom-1 left-1/2 flex -translate-x-1/2 items-end gap-0.5">
                 {[0, 1, 2, 3, 4].map((i) => <span key={i} className="brain-wave-bar h-3 w-1 rounded-full bg-white/80" style={{ animationDelay: `${i * 0.12}s` }} />)}
@@ -156,31 +163,31 @@ export function BusinessBrain({ agentId }: { agentId: string; agentName?: string
             {(() => {
               switch (activeSec) {
                 case 'understand': { const u = learned[0]; if (!u) return null; return (
-                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">What I understand</p>
                     <p className="text-[15px] font-medium">{cooStatement(u.understanding_key, u.statement)}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]"><span className="rounded-md bg-accent/10 px-2 py-0.5 font-medium text-accent-strong">{DNA_LABEL[u.dna_strand]} DNA</span><span className={`rounded-md px-2 py-0.5 font-medium ${u.business_confidence >= 65 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>Business Confidence {u.business_confidence}%</span></div>
                   </div>) }
                 case 'focus': { const r = execRecs[0]; if (!r) return null; return (
-                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{"Here's what I'd focus on"}</p>
                     <p className="text-[15px] font-semibold">{r.title}</p>
                     <p className="mt-1 text-sm text-muted">{r.narrative}</p>
                     <div className="mt-2 rounded-lg bg-sunken p-2 text-xs"><span className="font-medium text-subtle">Estimated impact — </span>{r.impact}</div>
                   </div>) }
                 case 'surprised': { const t = surprised[0]; if (!t) return null; return (
-                  <div className="rounded-2xl bg-amber-50/95 p-4 text-ink shadow-[0_0_45px_rgba(245,158,11,0.4)] ring-1 ring-amber-200">
+                  <div className="rounded-2xl bg-amber-50 p-4 text-ink shadow-[0_0_70px_rgba(245,158,11,0.5)] ring-1 ring-amber-300">
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">What surprised me</p>
                     <p className="text-sm">{t}</p>
                   </div>) }
                 case 'dna': { const d = topDna; if (!d || d.strength <= 0) return null; return (
-                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">Your Business DNA</p>
                     <div className="flex items-center justify-between"><span className="text-sm font-medium">{DNA_LABEL[d.dna_strand]} DNA</span><span className="text-xs tabular-nums text-subtle">{d.strength}%</span></div>
                     <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-sunken"><div className="h-full rounded-full bg-gradient-to-r from-accent to-[#A855F7]" style={{ width: `${Math.max(3, d.strength)}%` }} /></div>
                   </div>) }
                 case 'questions': { const q = questions[0]; if (!q) return null; return (
-                  <div className="rounded-2xl bg-white/95 p-4 text-ink shadow-[0_0_45px_rgba(91,108,240,0.45)] ring-1 ring-white/60">
+                  <div className="rounded-2xl bg-white p-4 text-ink shadow-[0_0_70px_rgba(91,108,240,0.6)] ring-1 ring-white">
                     <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{"I'm still investigating"}</p>
                     <p className="text-sm">{q}</p>
                   </div>) }
