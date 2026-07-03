@@ -4,22 +4,22 @@ import { isAdmin } from '@/lib/admin/auth'
 import { createHmac, randomBytes } from 'crypto'
 
 // Admin-only Meta connect for the App Review screencast. Mirrors the production
-// /api/auth/meta/connect flow (same HMAC state, same nonce cookie, same shared callback) but
-// requests the extended Instagram *business* permissions Meta is reviewing. Kept separate so the
-// production connect flow — and every real user's Facebook/Instagram integration — is untouched.
+// /api/auth/meta/connect flow (same HMAC state, same nonce cookie, same shared callback, and now
+// the SAME scopes) so the recording reflects the app's real Facebook-Login / Messenger-API-for-
+// Instagram implementation. Kept as a separate admin route only so the demo page can drive it;
+// the production connect flow — and every real user's integration — is untouched.
 //
-// NOTE: instagram_business_basic / instagram_business_manage_messages are only grantable if the
-// Meta app has the matching Instagram product configured; otherwise the dialog returns an error
-// (which affects only this demo route).
+// These are exactly the permissions the codebase uses (Facebook Page access token → me/accounts →
+// graph.facebook.com/me/messages). The Instagram messaging permission is instagram_manage_messages
+// — NOT instagram_business_manage_messages, which belongs to the Instagram-Login product this app
+// does not implement.
 const DEMO_SCOPES = [
   'pages_show_list',
+  'pages_read_engagement',
   'pages_manage_metadata',
   'pages_messaging',
-  'pages_read_engagement',
   'instagram_basic',
   'instagram_manage_messages',
-  'instagram_business_basic',
-  'instagram_business_manage_messages',
   'business_management',
 ]
 

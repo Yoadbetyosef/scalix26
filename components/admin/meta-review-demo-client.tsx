@@ -3,21 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // Scopes requested by the demo OAuth route (app/api/admin/meta-review-demo/connect) — shown
-// verbatim so the screencast reflects exactly what the app asks Meta to grant, including the
-// Instagram *business* permissions under review.
+// verbatim so the screencast reflects exactly what the app's real Facebook-Login implementation
+// requests. Matches the production connect flow.
 const REQUESTED_SCOPES = [
-  'pages_show_list', 'pages_manage_metadata', 'pages_messaging', 'pages_read_engagement',
-  'instagram_basic', 'instagram_manage_messages',
-  'instagram_business_basic', 'instagram_business_manage_messages', 'business_management',
+  'pages_show_list', 'pages_read_engagement', 'pages_manage_metadata', 'pages_messaging',
+  'instagram_basic', 'instagram_manage_messages', 'business_management',
 ]
 
 const PERMISSION_USE_CASES: { perm: string; use: string }[] = [
   { perm: 'pages_show_list', use: 'List the Facebook Pages the user manages so they can select one to connect.' },
-  { perm: 'pages_manage_metadata', use: 'Subscribe the connected Page to the app webhook so Messenger events are delivered.' },
+  { perm: 'pages_read_engagement', use: 'Read the selected Page and obtain its Page access token.' },
+  { perm: 'pages_manage_metadata', use: 'Subscribe the connected Page to the app webhook so Messenger/Instagram events are delivered.' },
   { perm: 'pages_messaging', use: 'Send and receive Facebook Page (Messenger) messages between Scalix and customers.' },
   { perm: 'instagram_basic', use: 'Read the connected Instagram Business account identity (id / username).' },
-  { perm: 'instagram_business_basic', use: 'Read the Instagram Business account identity for the messaging integration.' },
-  { perm: 'instagram_business_manage_messages', use: 'Send and receive Instagram Direct messages between Scalix and customers.' },
+  { perm: 'instagram_manage_messages', use: 'Send and receive Instagram Direct messages (via the linked Page) between Scalix and customers.' },
+  { perm: 'business_management', use: 'Access Business-owned Pages/assets during connection where applicable.' },
 ]
 
 interface Assets {
