@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Plus, AlertTriangle, ChevronRight } from 'lucide-react'
-import { AiOrb } from '@/components/brand/ai-orb'
+import { RudiPresenceProvider, LiveOrb } from './rudi-presence'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
@@ -16,6 +16,7 @@ export interface DashboardHeroProps {
   businessName: string
   figures: WorkFigure[]
   briefing: AmyBriefing
+  tenantId?: string
 }
 
 /**
@@ -32,11 +33,13 @@ export function DashboardHero({
   businessName,
   figures,
   briefing,
+  tenantId,
 }: DashboardHeroProps) {
   const status: EmployeeStatus = presenceState === 'attention' ? 'attention' : 'on_duty'
   const eyebrow = businessName ? `${employeeName} · AI Employee · ${businessName}` : `${employeeName} · AI Employee`
 
   return (
+    <RudiPresenceProvider tenantId={tenantId}>
     <section className="relative py-3 md:py-8 sx-animate-in">
       {/* The one preserved action — a quiet whisper in the corner */}
       <div className="absolute right-0 top-0 z-10">
@@ -57,7 +60,7 @@ export function DashboardHero({
         <div className="flex max-h-14 items-center gap-3 text-left md:hidden">
           {/* Orb container scaled to 56px — only the box shrinks, waveform intact. */}
           <div className="h-14 w-14 flex-shrink-0">
-            <AiOrb />
+            <LiveOrb />
           </div>
           <div className="flex min-w-0 items-center gap-2.5">
             <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="md" />
@@ -90,7 +93,7 @@ export function DashboardHero({
             (only `flex` → `hidden md:flex`; all sm: classes still resolve at md:+). */}
         <div className="hidden flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left md:flex">
           <div className="h-24 w-24 flex-shrink-0 sm:h-28 sm:w-28">
-            <AiOrb />
+            <LiveOrb />
           </div>
           <div className="min-w-0">
             <p className="inline-flex items-center gap-2.5 text-sm text-subtle">
@@ -115,5 +118,6 @@ export function DashboardHero({
         </div>
       </div>
     </section>
+    </RudiPresenceProvider>
   )
 }

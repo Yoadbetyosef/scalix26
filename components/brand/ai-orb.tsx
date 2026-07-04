@@ -16,15 +16,22 @@ const BARS = [
   { h: 24, c: '#6FD0D4' },
 ]
 
+export type OrbState = 'idle' | 'live' | 'celebration'
+
 /**
  * The Scalix AI object — a living voice waveform inside a glassy lens wrapped in the
- * brand gradient ring. The signature visual element of the product, shared between
- * the website and the app. Decorative (aria-hidden), zero client JS.
+ * brand gradient ring. Presentation only. Props are additive & optional so existing
+ * `<AiOrb />` usages are unchanged:
+ *  • state: idle (slow breathing) | live (waveform ~3x + green accent) | celebration.
+ *  • eventKey: bump it to fire a one-shot ripple ring (new lead/booked).
+ *  • paused: freeze all animation (tab hidden / battery) — W6 idle-CPU discipline.
+ * All animations are transform/opacity only and respect prefers-reduced-motion.
  */
-export function AiOrb() {
+export function AiOrb({ state = 'idle', eventKey = 0, paused = false }: { state?: OrbState; eventKey?: number; paused?: boolean }) {
   return (
-    <div className={styles.root} aria-hidden="true">
+    <div className={styles.root} data-state={state} data-paused={paused ? 'true' : undefined} aria-hidden="true">
       <div className={styles.glow} />
+      <div className={styles.liveGlow} />
       <div className={styles.lens} />
       <div className={styles.ring} />
       <div className={styles.bars}>
@@ -41,6 +48,8 @@ export function AiOrb() {
           />
         ))}
       </div>
+      {/* One-shot ripple — remounts on eventKey change so the animation replays. */}
+      {eventKey > 0 && <span key={eventKey} className={styles.ripple} />}
     </div>
   )
 }
