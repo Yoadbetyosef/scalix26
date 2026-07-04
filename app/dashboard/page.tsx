@@ -7,7 +7,6 @@ import { LeadsTable } from '@/components/dashboard/leads-table'
 import { AppointmentsTable, type Appointment } from '@/components/dashboard/appointments-table'
 import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
-import { WeeklyWin } from '@/components/dashboard/weekly-win'
 import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import { getImpactData } from '@/lib/dashboard/impact'
 import type { Lead } from '@/types'
@@ -213,7 +212,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           { value: answered, suffix: '%', label: 'Answered' },
         ]}
       />
-      <WeeklyWin count={recovered} name={employeeName} voice={employeeVoice} />
       </>
     )
   }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Mic } from 'lucide-react'
+import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { AmyRealtime } from './amy-realtime'
 import { AskAmyText } from './ask-amy-text'
 import { type AmyBriefing, dataGreeting } from './ask-amy-shared'
@@ -57,22 +58,34 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
     <div className="mx-auto w-full max-w-md text-center">
       <p className="mb-5 text-[15px] font-light text-subtle max-md:hidden">{dataGreeting(briefing)} Tap to talk to {name}.</p>
 
-      {/* Mobile: an input-like pill. Tapping the text area opens typing (same handler as
-          "Type instead"); the round mic launches the live call (same goLive handler). */}
-      <div className="flex items-center gap-2 rounded-full border border-hairline-strong bg-white p-1.5 pl-4 shadow-e1 md:hidden">
+      {/* Mobile (B6): the bottom action row — Rudi's avatar with concentric pulse rings on
+          the left, and a dark "Talk to {name}" pill filling the rest. Both fire goLive (the
+          live call). "Type instead" stays reachable as a quiet link below. */}
+      <div className="md:hidden">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={goLive}
+            aria-label={`Talk to ${name}`}
+            className="relative inline-flex flex-shrink-0 items-center justify-center transition-transform active:scale-95"
+          >
+            <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
+            <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
+            <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
+            <EmployeeAvatar name={name} status="on_duty" size="md" />
+          </button>
+          <button
+            onClick={goLive}
+            className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-full bg-ink text-[15px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
+          >
+            <Mic className="h-5 w-5" />
+            Talk to {name}
+          </button>
+        </div>
         <button
           onClick={() => setMode('text')}
-          className="min-h-[44px] flex-1 truncate text-left text-[15px] text-muted"
+          className="mt-2.5 block w-full text-center text-[13px] font-medium text-muted transition-colors active:text-ink"
         >
-          Ask {name} anything…
-        </button>
-        <button
-          onClick={goLive}
-          aria-label={`Talk to ${name}`}
-          className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-ink text-white shadow-e2 transition-all active:scale-95"
-        >
-          <span aria-hidden="true" className="pointer-events-none absolute -inset-1 rounded-full bg-accent/25 sx-halo" />
-          <Mic className="pointer-events-none relative h-5 w-5" />
+          Type instead
         </button>
       </div>
 

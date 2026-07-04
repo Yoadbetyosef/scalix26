@@ -41,8 +41,9 @@ export function DashboardHero({
   return (
     <RudiPresenceProvider tenantId={tenantId}>
     <section className="relative py-3 md:py-8 sx-animate-in">
-      {/* The one preserved action — a quiet whisper in the corner */}
-      <div className="absolute right-0 top-0 z-10">
+      {/* The one preserved action — a quiet whisper in the corner. Desktop only:
+          on mobile the app header (below) owns the top, matching the design. */}
+      <div className="absolute right-0 top-0 z-10 hidden md:block">
         <Link
           href="/ai-employees/new"
           className="inline-flex items-center gap-1.5 rounded-button px-2 py-1 text-sm text-subtle transition-colors hover:text-ink"
@@ -54,6 +55,24 @@ export function DashboardHero({
       </div>
 
       <div className="mx-auto max-w-5xl">
+        {/* Mobile app header — "Dashboard" + business name, and the on-duty pill.
+            The bell is the fixed notification icon at the top-right corner (pr-12 leaves
+            room for it). Desktop keeps its own identity row below. */}
+        <div className="mb-4 flex items-start justify-between pr-12 md:hidden">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-ink">Dashboard</h1>
+            {businessName && <p className="mt-0.5 truncate text-sm text-muted">{businessName}</p>}
+          </div>
+          <span
+            className={`ml-3 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium ${
+              status === 'attention' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+            }`}
+          >
+            <span className={`h-2 w-2 rounded-full ${status === 'attention' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+            {employeeName} {status === 'attention' ? 'needs you' : 'on duty'}
+          </span>
+        </div>
+
         {/* B5 — attention pill, between the header and the orb (mobile only). */}
         {presenceState === 'attention' && (
           <a
@@ -66,29 +85,13 @@ export function DashboardHero({
           </a>
         )}
 
-        {/* B3 orb centerpiece (~112px) + B6 avatar with concentric pulse rings + identity.
-            Only the orb container is sized — the waveform animation itself is untouched. */}
-        <div className="flex flex-col items-center md:hidden">
+        {/* B3 orb centerpiece (~112px), standalone and centered. The avatar + pulse rings
+            live in the bottom action row (Talk to Rudi), per the design. Only the orb
+            container is sized — the waveform animation itself is untouched. */}
+        <div className="flex justify-center md:hidden">
           <div className="h-28 w-28 flex-shrink-0">
             <LiveOrb />
           </div>
-          <div className="mt-2 flex items-center gap-2.5">
-            <span className="relative inline-flex flex-shrink-0">
-              <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
-              <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
-              <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
-              <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="md" />
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-medium text-ink">{employeeName}</span>
-              <span className={`block text-xs ${status === 'attention' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                {status === 'attention' ? 'Needs you' : 'On duty'}
-              </span>
-            </span>
-          </div>
-          {presenceState !== 'attention' && (
-            <p className="mt-2 text-center text-[13px] font-light leading-snug text-muted">{stateSentence}</p>
-          )}
         </div>
 
         {/* Identity — the AI presence + who's on duty (compact). Desktop only; mobile
