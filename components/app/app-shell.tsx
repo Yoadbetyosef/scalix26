@@ -28,7 +28,10 @@ export function AppShell({ children, mainClassName }: { children: ReactNode; mai
 
       <Sidebar />
 
-      <main className={cn('relative flex-1 pb-[72px] md:ml-16 md:pb-0 xl:ml-56', mainClassName)}>
+      {/* min-w-0: a flex child defaults to min-width:auto and would expand to its content's
+          min-content width (wider than the phone). This lets <main> shrink to the viewport so
+          nothing gets pushed past the screen edge. */}
+      <main className={cn('relative min-w-0 flex-1 pb-[72px] md:ml-16 md:pb-0 xl:ml-56', mainClassName)}>
         {children}
       </main>
     </div>
