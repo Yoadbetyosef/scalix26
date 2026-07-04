@@ -49,7 +49,11 @@ wss.on('connection', (browser) => {
         listen: { provider: { type: 'deepgram', model: 'flux-general-multi', version: 'v2', eot_threshold: eot } },
         think,
         speak: { provider: { type: 'deepgram', model: voice } },
-        greeting: String(config.greeting || 'Hi.'),
+        // Only greet if the client explicitly sends a non-empty greeting. An empty string ''
+        // means NO greeting — the agent stays silent (Listening) and answers only after the
+        // user speaks first, so it never talks over them. (Previously `|| 'Hi.'` forced a
+        // greeting on the empty string, which is why she still said "Hi".)
+        ...(config.greeting ? { greeting: String(config.greeting) } : {}),
       },
     };
     dg.send(JSON.stringify(settings));
