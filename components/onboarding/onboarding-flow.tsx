@@ -571,7 +571,7 @@ export function OnboardingFlow({ tenant, channels }: Props) {
               <div>
                 <Label className="text-base font-semibold text-ink">Tone of voice</Label>
                 <p className="text-sm text-muted mb-3">How should your AI sound?</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {([
                     { id: 'friendly', label: 'Friendly', desc: 'Warm and approachable' },
                     { id: 'professional', label: 'Professional', desc: 'Formal and precise' },

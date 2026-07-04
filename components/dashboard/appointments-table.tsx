@@ -105,8 +105,8 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
                     {a.skip_review && <span className="text-[11px] text-muted">review skipped</span>}
                   </div>
                   <p className="text-sm text-ink mt-1">{friendlyDate(a.slot_date)} · {formatTime12(a.slot_time)}</p>
-                  <p className="text-xs text-muted mt-0.5">
-                    {a.service_type || 'Service'} · {a.customer_phone}
+                  <p className="text-xs text-muted mt-0.5 break-words">
+                    {a.service_type || 'Service'} · <span className="break-all">{a.customer_phone}</span>
                     {a.channel && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-sunken text-subtle capitalize">{a.channel}</span>}
                   </p>
                 </div>

@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { headers } from 'next/headers'
 import './globals.css'
 import { Toaster } from '@/components/ui/toaster'
+import { OverflowDiagnostic } from '@/components/dev/overflow-diagnostic'
 import { resolveBrand } from '@/lib/brands'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -11,6 +12,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  userScalable: false, // lock pinch-zoom so the app feels native (best-effort on iOS Safari)
 }
 
 // Host-based title so the browser tab shows the right brand everywhere
@@ -30,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} h-full antialiased`}>
         {children}
         <Toaster />
+        <OverflowDiagnostic />
       </body>
     </html>
   )
