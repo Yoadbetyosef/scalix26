@@ -69,24 +69,29 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
         streamRef.current = stream
 
-        // Ground the voice agent in THIS business's real data (tenant-scoped snapshot).
-        let snapshot = ''
-        try { const r = await fetch('/api/ai/amy/snapshot'); if (r.ok) snapshot = (await r.json()).snapshot || '' } catch { /* greeting still works without it */ }
-        if (cancelled) return
+        // Ground the voice agent in THIS business's real data — fetched in PARALLEL with the
+        // socket connect so it never delays listening.
+        const snapshotPromise = (async () => {
+          try { const r = await fetch('/api/ai/amy/snapshot'); if (r.ok) return ((await r.json()).snapshot || '') as string } catch { /* fine without it */ }
+          return ''
+        })()
 
         const ws = new WebSocket(PROXY_URL)
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws
         const t0 = performance.now()
 
-        ws.onopen = () => {
+        ws.onopen = async () => {
           connectedRef.current = true
           log('proxy open', Math.round(performance.now() - t0), 'ms — REALTIME PATH active')
+          const snapshot = await snapshotPromise
+          if (cancelled || ws.readyState !== WebSocket.OPEN) return
           ws.send(JSON.stringify({
             type: 'config',
             voice: TTS_VOICE(briefing.employeeVoice),
             prompt: buildRealtimePrompt(briefing) + (snapshot ? `\n\nCURRENT BUSINESS DATA (real, this business only — answer from it, never say you lack access):\n${snapshot}` : ''),
-            greeting: `Hi, I'm on duty. Ask me what changed while you were away.`,
+            // No spoken greeting — open straight into Listening so the user can talk immediately.
+            greeting: '',
             inputSampleRate: ctx.sampleRate,
             eot: 0.7,
           }))
@@ -173,7 +178,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
     }
   }
 
-  const statusLabel = phase === 'connecting' ? 'Connecting…' : phase === 'thinking' ? 'Thinking…' : phase === 'speaking' ? 'Speaking…' : phase === 'error' ? '' : 'Listening…'
+  // Open straight into "Listening…" — no "Connecting…" flash (tap → listening → speak).
+  const statusLabel = phase === 'thinking' ? 'Thinking…' : phase === 'speaking' ? 'Speaking…' : phase === 'error' ? '' : 'Listening…'
   const alive = phase === 'live' || phase === 'thinking' || phase === 'speaking'
 
   return (
@@ -208,11 +214,12 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
                   )}
                   {statusLabel}
                 </p>
-                <div className="mt-3 min-h-[2.5rem]">
-                  {userText && <p className="text-xs text-muted">“{userText}”</p>}
-                  {amyText && <p className="mt-1 text-[15px] font-light leading-relaxed text-ink">{amyText}</p>}
-                  {!userText && !amyText && <p className="text-sm text-muted">Just start talking.</p>}
-                </div>
+                {(userText || amyText) && (
+                  <div className="mt-3">
+                    {userText && <p className="text-xs text-muted">“{userText}”</p>}
+                    {amyText && <p className="mt-1 text-[15px] font-light leading-relaxed text-ink">{amyText}</p>}
+                  </div>
+                )}
               </>
             )}
           </div>
