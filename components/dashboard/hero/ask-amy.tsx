@@ -58,11 +58,12 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
     <div className="mx-auto w-full max-w-md text-center">
       <p className="mb-5 text-[15px] font-light text-subtle max-md:hidden">{dataGreeting(briefing)} Tap to talk to {name}.</p>
 
-      {/* Mobile (B6): the bottom action row — Rudi's avatar with concentric pulse rings on
-          the left, and a dark "Talk to {name}" pill filling the rest. Both fire goLive (the
-          live call). "Type instead" stays reachable as a quiet link below. */}
-      <div className="md:hidden">
-        <div className="flex items-center gap-3">
+      {/* Mobile (B6): the bottom action row — Rudi's avatar (real headshot) with concentric
+          pulse rings on the left, and a large dark "Talk to {name}" pill filling the rest.
+          Both fire goLive (the live call). Pushed lower (mt-6) so it sits close to the tab
+          bar. "Type instead" stays reachable as a quiet link below. */}
+      <div className="mt-6 md:hidden">
+        <div className="flex items-center gap-3.5">
           <button
             onClick={goLive}
             aria-label={`Talk to ${name}`}
@@ -71,19 +72,19 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
             <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
             <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
             <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
-            <EmployeeAvatar name={name} status="on_duty" size="md" />
+            <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" />
           </button>
           <button
             onClick={goLive}
-            className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-full bg-ink text-[15px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
+            className="flex h-[60px] flex-1 items-center justify-center gap-2.5 rounded-full bg-ink text-[17px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
           >
-            <Mic className="h-5 w-5" />
+            <Mic className="h-[22px] w-[22px]" />
             Talk to {name}
           </button>
         </div>
         <button
           onClick={() => setMode('text')}
-          className="mt-2.5 block w-full text-center text-[13px] font-medium text-muted transition-colors active:text-ink"
+          className="mt-3 block w-full text-center text-sm font-medium text-muted transition-colors active:text-ink"
         >
           Type instead
         </button>
