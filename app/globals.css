@@ -314,12 +314,3 @@ a[role="button"]:not([aria-disabled="true"]):active,
 @media (max-width: 640px) and (prefers-reduced-motion: reduce) {
   .agent-edit-root > * { animation: none; }
 }
-
-/* Global mobile guard: never allow horizontal drag. The authenticated shell paints
-   fixed ambient background blobs (sx-drift-*) that overflow the right edge; clipping
-   the root on mobile removes any horizontal scroll without changing layout. Desktop
-   (>640px) is untouched, and `clip` (not `hidden`) avoids creating a scroll container
-   so sticky/fixed positioning keeps working. */
-@media (max-width: 640px) {
-  html { overflow-x: clip; }
-}

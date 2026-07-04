@@ -11,17 +11,20 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 export function AppShell({ children, mainClassName }: { children: ReactNode; mainClassName?: string }) {
   return (
     <div className="relative flex min-h-screen bg-white">
-      {/* Ambient atmosphere — fixed, barely there, behind everything */}
-      <div
-        aria-hidden="true"
-        className="sx-drift-1 pointer-events-none fixed -left-40 -top-40 h-[520px] w-[520px] rounded-full"
-        style={{ background: 'radial-gradient(circle, color-mix(in oklab, #8e9bf0 8%, transparent), transparent 70%)' } as CSSProperties}
-      />
-      <div
-        aria-hidden="true"
-        className="sx-drift-2 pointer-events-none fixed -bottom-48 -right-40 h-[560px] w-[560px] rounded-full"
-        style={{ background: 'radial-gradient(circle, color-mix(in oklab, #f0a9d6 7%, transparent), transparent 70%)' } as CSSProperties}
-      />
+      {/* Ambient atmosphere — barely there, behind everything. Wrapped in a fixed, viewport-sized,
+          non-interactive layer that CLIPS the blobs on mobile so their off-screen overflow can
+          never create horizontal document scroll. On desktop (sm+) the layer lets them overflow
+          exactly as before, so the desktop look is unchanged. */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden sm:overflow-visible">
+        <div
+          className="sx-drift-1 absolute -left-40 -top-40 h-[360px] w-[360px] rounded-full sm:h-[520px] sm:w-[520px]"
+          style={{ background: 'radial-gradient(circle, color-mix(in oklab, #8e9bf0 8%, transparent), transparent 70%)' } as CSSProperties}
+        />
+        <div
+          className="sx-drift-2 absolute -bottom-48 -right-40 h-[360px] w-[360px] rounded-full sm:h-[560px] sm:w-[560px]"
+          style={{ background: 'radial-gradient(circle, color-mix(in oklab, #f0a9d6 7%, transparent), transparent 70%)' } as CSSProperties}
+        />
+      </div>
 
       <Sidebar />
 
