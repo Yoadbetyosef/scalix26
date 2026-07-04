@@ -154,7 +154,7 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'tap-target flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium transition-colors min-h-[56px] justify-center',
+                'tap-target flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium min-h-[56px] justify-center rounded-xl transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.9] active:bg-accent/10 active:text-accent-strong',
                 active ? 'text-ink' : 'text-muted'
               )}
             >
@@ -167,7 +167,7 @@ export function Sidebar() {
         <button
           onClick={() => setMoreOpen(true)}
           className={cn(
-            'flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium transition-colors min-h-[56px] justify-center',
+            'flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium min-h-[56px] justify-center rounded-xl transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.9] active:bg-accent/10 active:text-accent-strong',
             moreActive ? 'text-ink' : 'text-muted'
           )}
         >
@@ -205,7 +205,7 @@ export function Sidebar() {
                     key={href}
                     href={href}
                     className={cn(
-                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base transition-colors',
+                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98] active:bg-accent/10 active:text-accent-strong',
                       active
                         ? 'bg-sunken text-ink font-medium'
                         : 'text-subtle hover:bg-sunken'
@@ -220,7 +220,7 @@ export function Sidebar() {
             <div className="px-4 pb-6 border-t border-hairline pt-3">
               <button
                 onClick={handleSignOut}
-                className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 transition-colors w-full"
+                className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98] active:bg-red-100"
               >
                 <LogOut className="w-5 h-5 flex-shrink-0" />
                 Sign Out
