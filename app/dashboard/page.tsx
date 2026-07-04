@@ -250,7 +250,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       ) : activeTab === 'appointments' ? (
         <AppointmentsTable appointments={appointments_list} />
       ) : (
-        <ImpactDashboard data={impactData!} businessName={tenant.business_name} brainAgentId={brainAgentId} />
+        <ImpactDashboard data={impactData!} businessName={tenant.business_name} brainAgentId={brainAgentId} tenantId={tenant.id} />
       )}
     </div>
   )

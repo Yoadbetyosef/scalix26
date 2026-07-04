@@ -1,13 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react'
+import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { ImpactData } from '@/lib/dashboard/impact'
 import { DrillDownDrawer, type DrawerConfig } from '@/components/dashboard/drill-down-drawer'
 import { CountUp } from '@/components/ui/count-up'
 import { BusinessBrainCard } from '@/components/dashboard/business-brain-card'
+import { AttentionNeeded } from '@/components/dashboard/attention-needed'
+import type { AttentionItem } from '@/lib/dashboard/impact'
 
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   if (pct === null || pct === undefined) return null
@@ -53,7 +54,7 @@ function BigNumber({ children }: { children: React.ReactNode }) {
   return <p className="sx-tabular text-4xl sm:text-5xl font-light tracking-tight text-ink leading-none">{children}</p>
 }
 
-export function ImpactDashboard({ data, businessName, brainAgentId }: { data: ImpactData; businessName: string; brainAgentId?: string }) {
+export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: { data: ImpactData; businessName: string; brainAgentId?: string; tenantId: string }) {
   const opp = data.opportunities.value
 
   // Channel recap sentence, e.g. "3 by text, 2 by phone, 13 by email" (count>0 only).
@@ -78,38 +79,17 @@ export function ImpactDashboard({ data, businessName, brainAgentId }: { data: Im
       <div className="grid gap-4 md:grid-cols-2 md:items-start">
       <div>
         <h2 className="text-lg sm:text-xl font-normal text-ink mb-3">Attention Needed</h2>
-        {data.attention.length === 0 ? (
-          <Card>
-            <CardContent className="p-5 sm:p-6 flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-              <span className="text-sm text-ink">You&apos;re all caught up — Scalix has everything handled.</span>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {data.attention.map((item, i) => {
-              const inner = (
-                <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100/70 transition-colors">
-                  <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                  <span className="text-sm font-medium text-amber-900 flex-1">{item.label}</span>
-                  <ArrowUpRight className="w-4 h-4 text-amber-400" />
-                </div>
-              )
-              if (item.metric) {
-                const n = parseInt(item.label, 10) || 0
-                const meta = item.metric === 'attention_takeover'
-                  ? { title: "Conversations You're Handling", subtitle: "Open conversations you've stepped into." }
-                  : { title: 'Leads Awaiting Follow-up', subtitle: "Leads that haven't been contacted yet." }
-                return (
-                  <button key={i} onClick={() => setDrawer({ metric: item.metric!, title: meta.title, subtitle: meta.subtitle, headerCount: `${n}` })} className="block w-full text-left">
-                    {inner}
-                  </button>
-                )
-              }
-              return <Link key={i} href={item.href} className="block">{inner}</Link>
-            })}
-          </div>
-        )}
+        <AttentionNeeded
+          items={data.attention}
+          tenantId={tenantId}
+          onOpenMetric={(item: AttentionItem) => {
+            const n = parseInt(item.label, 10) || 0
+            const meta = item.metric === 'attention_takeover'
+              ? { title: "Conversations You're Handling", subtitle: "Open conversations you've stepped into." }
+              : { title: 'Leads Awaiting Follow-up', subtitle: "Leads that haven't been contacted yet." }
+            setDrawer({ metric: item.metric!, title: meta.title, subtitle: meta.subtitle, headerCount: `${n}` })
+          }}
+        />
       </div>
       {brainAgentId && (
         <div>
