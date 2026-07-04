@@ -1,4 +1,5 @@
 import { CountUp } from '@/components/ui/count-up'
+import { KineticNumber } from './kinetic-number'
 
 export interface WorkFigure {
   value: number | null
@@ -19,15 +20,15 @@ export function TodayWork({ figures }: { figures: WorkFigure[] }) {
 
   return (
     <>
-      {/* Mobile: one hero metric + a muted supporting line. All four values still render. */}
-      <div className="md:hidden">
-        <div className="flex flex-col items-center">
-          <span className="sx-tabular text-4xl font-semibold leading-none tracking-tight text-ink">
-            {hero.value === null ? '—' : <CountUp value={hero.value} suffix={hero.suffix} />}
-          </span>
-          <span className="mt-1.5 text-xs tracking-wide text-subtle">{hero.label}</span>
-        </div>
-        <p className="mt-3 text-center text-[13px] text-muted">
+      {/* Mobile (B4): the giant kinetic hero number — label above in muted caps, number in
+          dark navy at ~64px, counting up; the other three metrics on one muted line below.
+          All four values still render from the same data. */}
+      <div className="text-center md:hidden">
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{hero.label} this week</span>
+        <span className="sx-tabular mt-1.5 block text-[64px] font-semibold leading-none tracking-tight text-ink">
+          {hero.value === null ? '—' : <KineticNumber value={hero.value} suffix={hero.suffix} />}
+        </span>
+        <p className="mt-3 text-[13px] text-muted">
           {rest.map((f, i) => (
             <span key={f.label}>
               {i > 0 && <span className="mx-1.5 text-hairline-strong">·</span>}

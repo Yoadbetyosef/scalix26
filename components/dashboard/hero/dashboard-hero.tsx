@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Plus, AlertTriangle, ChevronRight } from 'lucide-react'
-import { RudiPresenceProvider, LiveOrb } from './rudi-presence'
+import { RudiPresenceProvider, LiveOrb, GlassToasts } from './rudi-presence'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
@@ -54,16 +54,31 @@ export function DashboardHero({
       </div>
 
       <div className="mx-auto max-w-5xl">
-        {/* Mobile identity row — compact: shrunk orb (~56px) + 44px avatar + name +
-            green "On duty" status. Kept under ~56px tall. Desktop version is hidden here
-            (md:hidden) and rendered by the full-size block below. */}
-        <div className="flex max-h-14 items-center gap-3 text-left md:hidden">
-          {/* Orb container scaled to 56px — only the box shrinks, waveform intact. */}
-          <div className="h-14 w-14 flex-shrink-0">
+        {/* B5 — attention pill, between the header and the orb (mobile only). */}
+        {presenceState === 'attention' && (
+          <a
+            href="#attention-needed"
+            className="mb-4 flex min-h-[48px] items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-left text-amber-900 transition-colors active:bg-amber-100 md:hidden"
+          >
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-500" strokeWidth={2} />
+            <span className="min-w-0 flex-1 text-[15px] font-medium leading-snug">{stateSentence}</span>
+            <ChevronRight className="h-5 w-5 flex-shrink-0 text-amber-500" />
+          </a>
+        )}
+
+        {/* B3 orb centerpiece (~112px) + B6 avatar with concentric pulse rings + identity.
+            Only the orb container is sized — the waveform animation itself is untouched. */}
+        <div className="flex flex-col items-center md:hidden">
+          <div className="h-28 w-28 flex-shrink-0">
             <LiveOrb />
           </div>
-          <div className="flex min-w-0 items-center gap-2.5">
-            <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="md" />
+          <div className="mt-2 flex items-center gap-2.5">
+            <span className="relative inline-flex flex-shrink-0">
+              <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
+              <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
+              <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
+              <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="md" />
+            </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium text-ink">{employeeName}</span>
               <span className={`block text-xs ${status === 'attention' ? 'text-amber-600' : 'text-emerald-600'}`}>
@@ -71,22 +86,10 @@ export function DashboardHero({
               </span>
             </span>
           </div>
+          {presenceState !== 'attention' && (
+            <p className="mt-2 text-center text-[13px] font-light leading-snug text-muted">{stateSentence}</p>
+          )}
         </div>
-
-        {/* Mobile (attention): a tappable amber banner that scrolls to the items.
-            Non-attention on mobile keeps the plain status line. Both hidden on desktop. */}
-        {presenceState === 'attention' ? (
-          <a
-            href="#attention-needed"
-            className="mt-3 flex min-h-[48px] items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-left text-amber-900 transition-colors active:bg-amber-100 md:hidden"
-          >
-            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-500" strokeWidth={2} />
-            <span className="min-w-0 flex-1 text-[15px] font-medium leading-snug">{stateSentence}</span>
-            <ChevronRight className="h-5 w-5 flex-shrink-0 text-amber-500" />
-          </a>
-        ) : (
-          <p className="mt-3 text-[15px] font-light leading-snug text-ink md:hidden">{stateSentence}</p>
-        )}
 
         {/* Identity — the AI presence + who's on duty (compact). Desktop only; mobile
             uses the compact row above. Pixel-identical to the original at md:+
@@ -109,7 +112,9 @@ export function DashboardHero({
         {/* Band — Talk to Amy + the day's numbers, both above the fold.
             Mobile: numbers first, then talk. Desktop: talk left, numbers right. */}
         <div className="mt-4 grid gap-x-10 gap-y-4 sm:mt-8 sm:gap-y-7 lg:grid-cols-2 lg:items-center">
-          <div className="order-2 lg:order-1">
+          <div className="relative order-2 lg:order-1">
+            {/* B7 — ambient glass event toasts float up above the talk area (mobile). */}
+            <GlassToasts />
             <AskAmy briefing={briefing} />
           </div>
           <div className="order-1 lg:order-2 lg:border-l lg:border-hairline lg:pl-10">
