@@ -65,7 +65,7 @@ function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (
       aria-label={ariaLabel}
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="h-11 min-w-0 flex-1 rounded-xl border border-hairline-strong bg-white px-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)] sm:h-10 sm:flex-none"
+      className="h-11 min-w-[110px] flex-1 rounded-xl border border-hairline-strong bg-white px-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)] sm:h-10 sm:min-w-0 sm:flex-none"
     >
       {TIME_SLOTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
     </select>
@@ -81,7 +81,7 @@ function WeeklyHoursGrid({ hours, onUpdate }: {
       {DAYS.map(day => {
         const { isOpen, open, close } = hours[day]
         return (
-          <div key={day} className="flex items-center gap-3 px-3 sm:px-4 py-3">
+          <div key={day} className="flex flex-col gap-2 px-3 sm:px-4 py-3 min-h-[52px] sm:flex-row sm:items-center sm:gap-3 sm:min-h-0">
             <div className="flex items-center gap-2.5 w-28 sm:w-36 shrink-0">
               <Switch checked={isOpen} onCheckedChange={v => onUpdate(day, { isOpen: v })} aria-label={`${DAY_LABELS[day]} open`} />
               <span className="text-sm font-medium text-ink">{DAY_LABELS[day]}</span>
@@ -464,7 +464,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   }
 
   return (
-    <div className={`agent-edit-root w-full max-w-full overflow-x-clip space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'pb-40 sm:pb-24' : ''}`}>
+    <div className={`agent-edit-root max-md:order-1 w-full max-w-full overflow-x-clip space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'sm:pb-24' : ''} ${!onboarding ? 'max-md:pb-40' : ''}`}>
       {/* Onboarding welcome banner */}
       {onboarding && (
         <div className="rounded-2xl border border-[#5B6CF0]/30 bg-[#5B6CF0]/10 p-4 sm:p-5">
@@ -503,7 +503,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
               {form.status === 'active' ? 'Pause' : 'Go Live'}
             </Button>
           )}
-          <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className="flex-1 sm:flex-none">Save Changes</Button>
+          <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className={`flex-1 sm:flex-none ${onboarding ? '' : 'max-md:hidden'}`}>Save Changes</Button>
           {onboarding && (
             <Button onClick={finishSetup} loading={finishing} className="flex-1 sm:flex-none">Finish setup</Button>
           )}
@@ -1053,7 +1053,20 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
         </CardContent>
       </Card>
 
-      {/* Sticky save bar — appears only when there are unsaved changes. Same
+      {/* A1 — MOBILE-ONLY always-on Save bar. On mobile the top-header Save is hidden
+          (max-md:hidden), so Save must always be reachable here. Hidden when the dirty
+          bar below is showing (to avoid stacking two bars) and on desktop (md:hidden).
+          Same handleSave/payload/loading state. */}
+      {!onboarding && !isDirty && (
+        <div className="md:hidden fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-3 pointer-events-none">
+          <div className="pointer-events-auto flex w-full items-center justify-end gap-3 rounded-full border border-hairline bg-white shadow-e3 px-5 py-2.5">
+            <Button onClick={handleSave} loading={saving} size="sm" className="flex-shrink-0 min-h-[44px]">Save Changes</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky save bar — appears only when there are unsaved changes. On mobile it also
+          serves as the Save bar (replacing the always-on bar above). Same
           handleSave/payload/loading state as the header + bottom buttons. */}
       {isDirty && !onboarding && (
         <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-3 pointer-events-none sm:bottom-4 sm:px-4">

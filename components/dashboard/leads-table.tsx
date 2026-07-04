@@ -84,6 +84,29 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
     )
   }
 
+  // L1 — no active leads (dismissed ones may still exist). Mirror the Appointments-tab
+  // empty state: icon tile + title + one-line body. The "Show dismissed (N)" control
+  // stays, rendered as a text button below.
+  if (!visibleRows.length) {
+    return (
+      <div>
+        <EmptyState icon={TrendingUp} title="No leads yet">
+          When Rudi captures a lead from a call or message, it lands here automatically.
+        </EmptyState>
+        {dismissedCount > 0 && (
+          <div className="flex justify-center -mt-8 pb-2">
+            <button
+              onClick={() => setShowDismissed((s) => !s)}
+              className="text-xs font-medium text-muted hover:text-ink px-1"
+            >
+              {showDismissed ? 'Hide dismissed' : `Show dismissed (${dismissedCount})`}
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       {/* Summary header — quiet, tabular, colored dots instead of emoji */}

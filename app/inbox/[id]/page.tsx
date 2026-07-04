@@ -3,7 +3,8 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { formatDateTime, formatDate, formatDuration, contactIdentifier, looksLikeName, formatPhone } from '@/lib/utils'
+import { formatDateTime, formatDate, formatDuration, contactIdentifier, looksLikeName, isSocialChannel } from '@/lib/utils'
+import { formatPhone } from '@/lib/format'
 import { getBusinessTimezone } from '@/lib/timezone'
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -13,6 +14,7 @@ import { ConversationActions } from '@/components/inbox/conversation-actions'
 import { ConversationContactPanel, CustomerProfileBlock } from '@/components/inbox/conversation-contact-panel'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
 import { MessageComposer } from '@/components/inbox/message-composer'
+import { AiSummaryCard } from '@/components/inbox/ai-summary-card'
 import { getCustomerProfile } from '@/lib/customer/profile'
 
 export default async function ConversationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
@@ -66,13 +68,19 @@ export default async function ConversationPage({ params, searchParams }: { param
   const ident = contactIdentifier(conv.channel, contact?.phone)
   const IdentIcon = ident && !ident.isPhone ? MessageCircle : Phone
 
-  // Same fallback as the inbox list (render-only): show the stored name only if it
-  // looks real, otherwise phone + channel — so existing junk-name rows stay consistent.
+  // Header title (C3 — I3/G4 naming, display-only). Never show a raw platform id:
+  //  • real-looking stored name → use it
+  //  • social channel (Instagram/Facebook) with no name → "Instagram lead" / "Facebook lead"
+  //  • voice/sms/whatsapp → formatPhone(number) (G4)
+  //  • email → email address
+  //  • else → "Unknown"
   const headerTitle = looksLikeName(contact?.name)
     ? contact!.name
-    : contact?.phone
-      ? `${formatPhone(contact.phone)} · ${CHANNEL_LABELS[conv.channel] || conv.channel}`
-      : contact?.email || 'Unknown'
+    : isSocialChannel(conv.channel)
+      ? `${CHANNEL_LABELS[conv.channel] || conv.channel} lead`
+      : contact?.phone
+        ? formatPhone(contact.phone)
+        : contact?.email || 'Unknown'
 
   return (
     <div className="flex flex-col h-screen max-h-screen">
@@ -90,8 +98,10 @@ export default async function ConversationPage({ params, searchParams }: { param
           </h2>
           <div className="flex items-center gap-1.5 text-xs text-subtle flex-wrap">
             <span>{conv.channel === 'voice' ? 'Voice' : conv.channel}</span>
-            <span>·</span>
-            <span>{formatDate(conv.created_at, tz)}</span>
+            {/* C3: date moved out of the header on mobile (dates live in the messages);
+                desktop keeps it via max-md:hidden so md+ stays pixel-identical. */}
+            <span className="max-md:hidden">·</span>
+            <span className="max-md:hidden">{formatDate(conv.created_at, tz)}</span>
             {conv.channel === 'voice' && conv.duration_seconds != null && (
               <><span>·</span><span>{formatDuration(conv.duration_seconds)}</span></>
             )}
@@ -100,10 +110,14 @@ export default async function ConversationPage({ params, searchParams }: { param
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
           <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
-          <HumanTakeover conversationId={id} active={conv.human_takeover === true} />
-          <ConversationActions conversationId={id} currentStatus={conv.status} />
-          {/* Mobile contact info trigger */}
-          <ConversationContactPanel contact={contactInfo} profile={profile} />
+          {/* C1: top action buttons — desktop only. On mobile they move to the sticky
+              bottom bar below; SAME components/handlers, just relocated (max-md:hidden). */}
+          <div className="hidden md:flex items-center gap-1.5">
+            <HumanTakeover conversationId={id} active={conv.human_takeover === true} />
+            <ConversationActions conversationId={id} currentStatus={conv.status} />
+          </div>
+          {/* Mobile contact info trigger — also hosts "Close" in its menu on mobile (C1). */}
+          <ConversationContactPanel contact={contactInfo} profile={profile} conversationId={id} currentStatus={conv.status} />
         </div>
       </div>
 
@@ -118,20 +132,9 @@ export default async function ConversationPage({ params, searchParams }: { param
             </div>
           )}
 
-          {/* AI Summary */}
-          {conv.summary && (
-            <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-accent/[0.06] rounded-2xl border border-accent/15 flex-shrink-0 sx-animate-in">
-              <p className="text-xs font-semibold text-accent-strong mb-1 inline-flex items-center gap-1.5">
-                <span className="flex items-end gap-[2px] h-3" aria-hidden="true">
-                  {[0, 1, 2].map((i) => (
-                    <span key={i} className="sx-wavebar w-[2px] h-full rounded-full bg-accent" style={{ animationDelay: `${i * 0.15}s` }} />
-                  ))}
-                </span>
-                AI Summary
-              </p>
-              <p className="text-sm text-ink">{conv.summary}</p>
-            </div>
-          )}
+          {/* AI Summary — C2: mobile clamps to 2 lines with a More toggle (client
+              component holds pure UI state); desktop shows full text as before. */}
+          {conv.summary && <AiSummaryCard summary={conv.summary} />}
 
           {/* Transcript */}
           <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-4">
@@ -236,6 +239,16 @@ export default async function ConversationPage({ params, searchParams }: { param
           </div>
 
           <CustomerProfileBlock profile={profile} className="mt-6 pt-4" />
+        </div>
+      </div>
+
+      {/* C1: mobile sticky bottom action bar. md:hidden so desktop is untouched; the
+          buttons here reuse the SAME HumanTakeover / ConversationActions handlers as
+          the (now desktop-only) top bar. Safe-area aware via .safe-area-inset-bottom. */}
+      <div className="md:hidden flex-shrink-0 bg-white border-t border-hairline px-4 pt-3 pb-3 safe-area-inset-bottom">
+        <div className="flex items-center gap-2">
+          <HumanTakeover conversationId={id} active={conv.human_takeover === true} mobileBar />
+          <ConversationActions conversationId={id} currentStatus={conv.status} place="bar" />
         </div>
       </div>
     </div>

@@ -9,9 +9,12 @@ import { UserCog, Bot } from 'lucide-react'
 interface Props {
   conversationId: string
   active: boolean
+  // Mobile bottom-bar rendering: primary dark filled button, taller, flex-grow.
+  // Same handler (`toggle`) as the desktop button — styling only.
+  mobileBar?: boolean
 }
 
-export function HumanTakeover({ conversationId, active }: Props) {
+export function HumanTakeover({ conversationId, active, mobileBar = false }: Props) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -31,6 +34,21 @@ export function HumanTakeover({ conversationId, active }: Props) {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (mobileBar) {
+    // Primary dark filled, ~60% width (flex-[3] beside Resolve's flex-[2]), 48px tall.
+    return (
+      <Button
+        variant={active ? 'outline' : 'default'}
+        loading={loading}
+        onClick={() => toggle(!active)}
+        className="flex-[3] h-12"
+      >
+        {!loading && (active ? <Bot className="w-4 h-4 mr-1.5" /> : <UserCog className="w-4 h-4 mr-1.5" />)}
+        {active ? 'Return to AI' : 'Take Over'}
+      </Button>
+    )
   }
 
   if (active) {

@@ -71,12 +71,12 @@ export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: 
   const [drawer, setDrawer] = useState<DrawerConfig | null>(null)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 md:space-y-8">
       {/* Month label — quiet */}
       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{data.monthLabel}</p>
 
       {/* ATTENTION NEEDED + BUSINESS BRAIN — side by side, under the numbers */}
-      <div className="grid gap-4 md:grid-cols-2 md:items-start">
+      <div id="attention-needed" className="grid gap-4 md:grid-cols-2 md:items-start scroll-mt-20">
       <div>
         <h2 className="text-lg sm:text-xl font-normal text-ink mb-3">Attention Needed</h2>
         <AttentionNeeded

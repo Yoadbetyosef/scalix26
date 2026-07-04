@@ -133,20 +133,24 @@ export default async function AIEmployeesPage() {
                     </div>
                   </div>
 
-                  {/* Connected channels — neutral chips, the channel icon does the talking */}
-                  {channels.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-6">
-                      {channels.slice(0, 4).map((ch) => (
-                        <span key={ch.id} className="inline-flex items-center gap-1.5 rounded-full bg-sunken py-1 pl-1 pr-2.5 text-xs font-medium text-ink">
-                          <span className={`inline-flex h-5 w-5 items-center justify-center rounded-md ${CHANNEL_TONE[ch.type] || 'bg-muted'} text-white`}>{channelIcon(ch.type)}</span>
-                          {CHANNEL_LABELS[ch.type] || ch.type}
-                        </span>
-                      ))}
-                      {channels.length > 4 && (
-                        <span className="inline-flex items-center rounded-full bg-sunken px-2.5 py-1 text-xs font-medium text-muted">+{channels.length - 4}</span>
-                      )}
-                    </div>
-                  )}
+                  {/* Connected channels — neutral chips, the channel icon does the talking.
+                      Display-level dedupe: one chip per unique channel type (data unchanged). */}
+                  {(() => {
+                    const uniqueChannels = [...new Map(channels.map((ch) => [ch.type, ch])).values()]
+                    return uniqueChannels.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mb-6">
+                        {uniqueChannels.slice(0, 4).map((ch) => (
+                          <span key={ch.id} className="inline-flex items-center gap-1.5 rounded-full bg-sunken py-1 pl-1 pr-2.5 text-xs font-medium text-ink">
+                            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-md ${CHANNEL_TONE[ch.type] || 'bg-muted'} text-white`}>{channelIcon(ch.type)}</span>
+                            {CHANNEL_LABELS[ch.type] || ch.type}
+                          </span>
+                        ))}
+                        {uniqueChannels.length > 4 && (
+                          <span className="inline-flex items-center rounded-full bg-sunken px-2.5 py-1 text-xs font-medium text-muted">+{uniqueChannels.length - 4}</span>
+                        )}
+                      </div>
+                    ) : null
+                  })()}
 
                   <div className="flex gap-2">
                     <Link href={`/ai-employees/${emp.id}`} className="flex-1">

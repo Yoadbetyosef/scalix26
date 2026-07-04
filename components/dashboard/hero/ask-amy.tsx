@@ -55,8 +55,29 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
 
   return (
     <div className="mx-auto w-full max-w-md text-center">
-      <p className="mb-5 text-[15px] font-light text-subtle">{dataGreeting(briefing)} Tap to talk to {name}.</p>
-      <div className="flex flex-col items-center gap-4">
+      <p className="mb-5 text-[15px] font-light text-subtle max-md:hidden">{dataGreeting(briefing)} Tap to talk to {name}.</p>
+
+      {/* Mobile: an input-like pill. Tapping the text area opens typing (same handler as
+          "Type instead"); the round mic launches the live call (same goLive handler). */}
+      <div className="flex items-center gap-2 rounded-full border border-hairline-strong bg-white p-1.5 pl-4 shadow-e1 md:hidden">
+        <button
+          onClick={() => setMode('text')}
+          className="min-h-[44px] flex-1 truncate text-left text-[15px] text-muted"
+        >
+          Ask {name} anything…
+        </button>
+        <button
+          onClick={goLive}
+          aria-label={`Talk to ${name}`}
+          className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-ink text-white shadow-e2 transition-all active:scale-95"
+        >
+          <span aria-hidden="true" className="pointer-events-none absolute -inset-1 rounded-full bg-accent/25 sx-halo" />
+          <Mic className="pointer-events-none relative h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Desktop: the original large mic button — unchanged. */}
+      <div className="hidden flex-col items-center gap-4 md:flex">
         <button
           onClick={goLive}
           aria-label={`Talk to ${name}`}

@@ -180,17 +180,27 @@ export function SettingsClient({ tenant, channels }: Props) {
 
           {/* Current plan banner */}
           {tenant.plan === 'trial' ? (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-bold text-yellow-800">Free Trial</span>
-                <span className="text-xs font-semibold bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">
-                  {tenant.trial_ends_at
-                    ? `${Math.max(0, Math.ceil((new Date(tenant.trial_ends_at).getTime() - Date.now()) / 86400000))} days left`
-                    : 'Active'}
-                </span>
-              </div>
-              <p className="text-sm text-yellow-700">Upgrade before your trial ends to keep your AI running 24/7.</p>
-            </div>
+            (() => {
+              const trialDaysLeft = tenant.trial_ends_at
+                ? Math.max(0, Math.ceil((new Date(tenant.trial_ends_at).getTime() - Date.now()) / 86400000))
+                : null
+              const ended = trialDaysLeft === 0
+              return (
+                <div className={`border rounded-xl p-4 ${ended ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-sm font-bold ${ended ? 'text-red-800' : 'text-yellow-800'}`}>Free Trial</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ended ? 'bg-red-200 text-red-800' : 'bg-yellow-200 text-yellow-800'}`}>
+                      {trialDaysLeft !== null ? `${trialDaysLeft} days left` : 'Active'}
+                    </span>
+                  </div>
+                  <p className={`text-sm ${ended ? 'text-red-700' : 'text-yellow-700'}`}>
+                    {ended
+                      ? 'Trial ended — upgrade to keep your AI running 24/7'
+                      : 'Upgrade before your trial ends to keep your AI running 24/7.'}
+                  </p>
+                </div>
+              )
+            })()
           ) : (
             <div className="bg-accent/[0.08] border border-accent/20 rounded-2xl p-5 flex items-center justify-between">
               <div>

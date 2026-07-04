@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { contactIdentifier } from '@/lib/utils'
 import Link from 'next/link'
 import type { CustomerProfile } from '@/lib/customer/profile'
+import { ConversationActions } from '@/components/inbox/conversation-actions'
 
 interface ContactInfo {
   id?: string
@@ -177,7 +178,7 @@ export function CustomerProfileBlock({
   )
 }
 
-export function ConversationContactPanel({ contact, profile }: { contact: ContactInfo; profile?: CustomerProfile | null }) {
+export function ConversationContactPanel({ contact, profile, conversationId, currentStatus }: { contact: ContactInfo; profile?: CustomerProfile | null; conversationId?: string; currentStatus?: string }) {
   const [open, setOpen] = useState(false)
 
   const ident = contactIdentifier(contact.channel, contact.phone)
@@ -258,6 +259,19 @@ export function ConversationContactPanel({ contact, profile }: { contact: Contac
             </div>
 
             <CustomerProfileBlock profile={profile} className="px-5 py-4" />
+
+            {/* Status actions — mobile only. Close moves here from the top bar (C1),
+                using the SAME ConversationActions handler. md:hidden keeps desktop untouched. */}
+            {conversationId && currentStatus && (
+              <div className="md:hidden px-5 py-4 border-t border-hairline">
+                <ConversationActions
+                  conversationId={conversationId}
+                  currentStatus={currentStatus}
+                  place="menu"
+                  onAction={() => setOpen(false)}
+                />
+              </div>
+            )}
 
             {contact.id && (
               <div className="px-5 pb-8">

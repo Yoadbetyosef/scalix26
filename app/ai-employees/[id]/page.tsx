@@ -64,12 +64,15 @@ export default async function AIEmployeeEditPage({
   }
 
   return (
-    <div className="p-4 sm:p-6 w-full max-w-3xl overflow-x-clip">
-      {/* Real-data intelligence bar — shows the website scan + business data being pulled. */}
-      <div className="mb-4">
+    <div className="flex flex-col p-4 sm:p-6 w-full max-w-3xl overflow-x-clip">
+      {/* Real-data intelligence bar — shows the website scan + business data being pulled.
+          A3: on mobile these two cards render BELOW the identity header (which lives inside
+          the client). CSS order pushes them after the client on mobile only; desktop keeps
+          the original top-of-page order (md:order-none). */}
+      <div className="mb-4 max-md:order-2">
         <BusinessIntelligenceProgress agentId={id} name={employee.name || 'Your AI employee'} />
       </div>
-      <Link href={`/ai-employees/${id}/brain`} className="mb-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-e1 ring-1 ring-hairline transition-all hover:-translate-y-px hover:shadow-e2">
+      <Link href={`/ai-employees/${id}/brain`} className="mb-4 flex items-center gap-3 rounded-2xl bg-white p-4 shadow-e1 ring-1 ring-hairline transition-all hover:-translate-y-px hover:shadow-e2 max-md:order-3">
         <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent-strong"><Brain className="h-5 w-5" /></span>
         <span className="min-w-0">
           <span className="block text-sm font-medium text-ink">Business Brain</span>

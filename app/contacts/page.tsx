@@ -45,49 +45,36 @@ export default async function ContactsPage() {
         </EmptyState>
       ) : (
         <>
-          {/* Mobile card list */}
-          <div className="md:hidden space-y-2">
-            {contacts.map((contact) => (
-              <Link key={contact.id} href={`/contacts/${contact.id}`} className="tap-target block bg-white rounded-2xl border border-hairline shadow-e1 p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-10 h-10 rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium flex-shrink-0`}>
-                    {contact.name?.[0] || contact.phone?.[0] || '?'}
+          {/* Mobile compact list rows */}
+          <div className="md:hidden -mx-4 border-t border-hairline">
+            {contacts.map((contact) => {
+              // CT2: email becomes the title when name is Unknown (display-only, no data change).
+              const hasName = Boolean(contact.name)
+              const emailPrefix = contact.email ? contact.email.split('@')[0] : ''
+              const title = hasName ? contact.name : (contact.email || contact.phone || 'Unknown')
+              // Initials: name → first letter; else email prefix; else phone; else '?'.
+              const initial = (hasName ? contact.name?.[0] : (emailPrefix?.[0] || contact.phone?.[0])) || '?'
+              return (
+                <Link
+                  key={contact.id}
+                  href={`/contacts/${contact.id}`}
+                  className="tap-target flex items-center gap-3 min-h-[64px] px-4 border-b border-hairline"
+                >
+                  <div className={`w-[38px] h-[38px] rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium flex-shrink-0 uppercase`}>
+                    {initial}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-ink truncate">{contact.name || 'Unknown'}</p>
-                    {contact.channel && (
-                      <Badge variant={contact.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'} className="mt-0.5">
-                        {contact.channel}
-                      </Badge>
+                    <p className="text-sm font-semibold text-ink truncate">{title}</p>
+                    {contact.total_conversations > 0 && (
+                      <p className="text-xs text-muted truncate mt-0.5">
+                        {contact.total_conversations} conversation{contact.total_conversations !== 1 ? 's' : ''}
+                      </p>
                     )}
                   </div>
-                  {contact.last_interaction && (
-                    <p className="text-xs text-muted flex-shrink-0">{formatDate(contact.last_interaction)}</p>
-                  )}
                   <ChevronRight className="w-4 h-4 text-muted flex-shrink-0" />
-                </div>
-                <div className="space-y-1.5 text-sm text-subtle">
-                  {contact.phone && (
-                    <div className="flex items-center gap-2">
-                      {isSocialChannel(contact.channel)
-                        ? <MessageCircle className="w-3.5 h-3.5 text-muted flex-shrink-0" />
-                        : <Phone className="w-3.5 h-3.5 text-muted flex-shrink-0" />}
-                      <span className="break-all">{contact.phone}</span>
-                    </div>
-                  )}
-                  {contact.email && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 text-muted flex-shrink-0" />
-                      <span className="truncate">{contact.email}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="w-3.5 h-3.5 text-muted flex-shrink-0" />
-                    <span>{contact.total_conversations} conversation{contact.total_conversations !== 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              )
+            })}
           </div>
 
           {/* Desktop table */}

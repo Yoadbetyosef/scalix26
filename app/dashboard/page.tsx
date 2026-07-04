@@ -228,7 +228,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Link>
         <Link
           href="/dashboard?tab=leads"
-          className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          className={`tap-target max-md:hidden md:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Leads
           {stats.activeLeads > 0 && (

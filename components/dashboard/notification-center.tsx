@@ -123,11 +123,15 @@ export function NotificationCenter() {
 
   return (
     <>
-      {/* Bell — sits above the mobile bottom nav, bottom-right on desktop */}
+      {/* Bell — G1: a header-style icon button top-right on mobile (no more bottom FAB
+          overlapping content); the original bottom-right dark FAB is restored at md+.
+          Same onClick + same unread/live indicator. */}
       <button
         onClick={toggle}
         aria-label="Notifications"
-        className="fixed bottom-20 right-4 md:bottom-4 z-50 w-14 h-14 rounded-full bg-ink text-white shadow-e3 flex items-center justify-center transition-all duration-200 hover:bg-ink/90 hover:shadow-e4 hover:-translate-y-0.5 active:scale-95"
+        className="fixed z-50 flex items-center justify-center transition-all duration-200 active:scale-95
+                   right-3 top-[calc(0.5rem+env(safe-area-inset-top))] h-11 w-11 rounded-full bg-white/90 text-ink shadow-e2 ring-1 ring-hairline backdrop-blur hover:bg-white
+                   md:right-4 md:top-auto md:bottom-4 md:h-14 md:w-14 md:rounded-full md:bg-ink md:text-white md:shadow-e3 md:ring-0 md:backdrop-blur-none md:hover:bg-ink/90 md:hover:shadow-e4 md:hover:-translate-y-0.5"
       >
         <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
         {unread > 0 ? (
