@@ -65,7 +65,7 @@ function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (
       aria-label={ariaLabel}
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="h-10 rounded-xl border border-hairline-strong bg-white px-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
+      className="h-11 min-w-0 flex-1 rounded-xl border border-hairline-strong bg-white px-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)] sm:h-10 sm:flex-none"
     >
       {TIME_SLOTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
     </select>
@@ -464,7 +464,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   }
 
   return (
-    <div className={`space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'pb-24' : ''}`}>
+    <div className={`agent-edit-root w-full max-w-full overflow-x-clip space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'pb-40 sm:pb-24' : ''}`}>
       {/* Onboarding welcome banner */}
       {onboarding && (
         <div className="rounded-2xl border border-[#5B6CF0]/30 bg-[#5B6CF0]/10 p-4 sm:p-5">
@@ -476,28 +476,28 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {onboarding ? (
             <>
               <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
-              <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
+              <h1 className="min-w-0 truncate text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
             </>
           ) : (
             <>
-              <Link href="/ai-employees">
+              <Link href="/ai-employees" className="flex-shrink-0">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="w-4 h-4 mr-1" /> Back
                 </Button>
               </Link>
               <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
-              <div>
-                <h1 className="text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
+              <div className="min-w-0">
+                <h1 className="truncate text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
                 <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>
               </div>
             </>
           )}
         </div>
-        <div className="flex gap-2 sm:flex-shrink-0">
+        <div className="flex w-full gap-2 sm:w-auto sm:flex-shrink-0">
           {!onboarding && (
             <Button variant="outline" onClick={toggleStatus} className="flex-1 sm:flex-none">
               {form.status === 'active' ? 'Pause' : 'Go Live'}
@@ -551,9 +551,9 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
                 <Label>Website</Label>
                 {websiteConnected && <Badge variant="connected">Connected</Badge>}
               </div>
-              <div className="flex items-center gap-2 mt-1.5">
-                <Input type="url" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
-                <Button type="button" variant="outline" size="sm" disabled={scanningWebsite || !websiteVal} onClick={scanWebsite}>
+              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input type="url" className="min-w-0" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
+                <Button type="button" variant="outline" size="sm" disabled={scanningWebsite || !websiteVal} onClick={scanWebsite} className="w-full sm:w-auto sm:flex-shrink-0">
                   {scanningWebsite ? 'Scanning…' : websiteConnected ? 'Re-scan' : 'Scan website'}
                 </Button>
               </div>
@@ -1056,13 +1056,13 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
       {/* Sticky save bar — appears only when there are unsaved changes. Same
           handleSave/payload/loading state as the header + bottom buttons. */}
       {isDirty && !onboarding && (
-        <div className="fixed bottom-4 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-hairline bg-white shadow-e3 px-5 py-2.5">
+        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-3 pointer-events-none sm:bottom-4 sm:px-4">
+          <div className="pointer-events-auto flex w-full items-center justify-between gap-3 rounded-full border border-hairline bg-white shadow-e3 px-5 py-2.5 sm:w-auto sm:justify-start">
             <span className="inline-flex items-center gap-2 text-sm text-subtle">
               <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
               Unsaved changes
             </span>
-            <Button onClick={handleSave} loading={saving} size="sm">Save Changes</Button>
+            <Button onClick={handleSave} loading={saving} size="sm" className="flex-shrink-0">Save Changes</Button>
           </div>
         </div>
       )}

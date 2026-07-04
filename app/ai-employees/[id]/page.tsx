@@ -64,7 +64,7 @@ export default async function AIEmployeeEditPage({
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-3xl">
+    <div className="p-4 sm:p-6 w-full max-w-3xl overflow-x-clip">
       {/* Real-data intelligence bar — shows the website scan + business data being pulled. */}
       <div className="mb-4">
         <BusinessIntelligenceProgress agentId={id} name={employee.name || 'Your AI employee'} />

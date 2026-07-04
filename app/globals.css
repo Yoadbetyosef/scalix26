@@ -296,3 +296,30 @@ a[role="button"]:not([aria-disabled="true"]):active,
   }
 }
 
+
+/* ──────────────────────────────────────────────────────────────────────────
+   AI Employee / Agent settings — mobile-only polish (<= 640px). Desktop is
+   untouched. Prevents any horizontal drag, removes the grey tap flash, and
+   gives the sections a soft app-like entrance.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .agent-edit-root { -webkit-tap-highlight-color: transparent; }
+  .agent-edit-root * { -webkit-tap-highlight-color: transparent; }
+  /* Belt-and-suspenders: nothing on this page can push past the viewport. */
+  .agent-edit-root, .agent-edit-root :where(section, .card, [class*="rounded-2xl"]) { max-width: 100%; }
+  /* Soft rise-in for each top-level section (runs once on mount). */
+  .agent-edit-root > * { animation: agent-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  @keyframes agent-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) {
+  .agent-edit-root > * { animation: none; }
+}
+
+/* Global mobile guard: never allow horizontal drag. The authenticated shell paints
+   fixed ambient background blobs (sx-drift-*) that overflow the right edge; clipping
+   the root on mobile removes any horizontal scroll without changing layout. Desktop
+   (>640px) is untouched, and `clip` (not `hidden`) avoids creating a scroll container
+   so sticky/fixed positioning keeps working. */
+@media (max-width: 640px) {
+  html { overflow-x: clip; }
+}
