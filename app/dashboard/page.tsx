@@ -222,13 +222,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <div className="flex gap-1 border-b border-hairline">
         <Link
           href="/dashboard"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'overview' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'overview' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Overview
         </Link>
         <Link
           href="/dashboard?tab=leads"
-          className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          className={`tap-target inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Leads
           {stats.activeLeads > 0 && (
@@ -239,7 +239,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Link>
         <Link
           href="/dashboard?tab=appointments"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === 'appointments' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'appointments' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Appointments
         </Link>
