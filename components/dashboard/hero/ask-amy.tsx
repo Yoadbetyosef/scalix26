@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Mic } from 'lucide-react'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { AmyRealtime } from './amy-realtime'
@@ -19,6 +20,12 @@ type Mode = 'idle' | 'live' | 'text'
 export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
   const name = briefing.employeeName || 'Amy'
   const [mode, setMode] = useState<Mode>('idle')
+  // The mobile action bar is fixed to the bottom of the viewport (above the tab nav). It
+  // must render via a portal to <body>: the dashboard hero has a persistent transform
+  // (sx-animate-in fill:both), which would otherwise make `position:fixed` resolve against
+  // the hero instead of the viewport. Portal only after mount (SSR has no document.body).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   // The parent OWNS a single, reused AudioContext for the whole Ask-Amy lifetime. It's
   // unlocked inside the user's tap (mobile autoplay policy) and shared across live
   // sessions. The realtime client only borrows it — it must never close it. We do NOT
@@ -58,37 +65,45 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
     <div className="mx-auto w-full max-w-md text-center">
       <p className="mb-5 text-[15px] font-light text-subtle max-md:hidden">{dataGreeting(briefing)} Tap to talk to {name}.</p>
 
-      {/* Mobile (B6): the bottom action row — Rudi's avatar (real headshot) with concentric
-          pulse rings on the left, and a large dark "Talk to {name}" pill filling the rest.
-          Both fire goLive (the live call). Pushed lower (mt-6) so it sits close to the tab
-          bar. "Type instead" stays reachable as a quiet link below. */}
-      <div className="mt-6 md:hidden">
-        <div className="flex items-center gap-3.5">
-          <button
-            onClick={goLive}
-            aria-label={`Talk to ${name}`}
-            className="relative inline-flex flex-shrink-0 items-center justify-center transition-transform active:scale-95"
+      {/* Mobile (B6): a large action bar FIXED to the bottom, sitting flush above the tab nav
+          (Dashboard/Leads/…). Rudi's real headshot with concentric pulse rings on the left,
+          and a big dark "Talk to {name}" pill filling the rest — both fire goLive. Rendered
+          through a portal to <body> so `fixed` resolves to the viewport (the hero carries a
+          persistent transform). Only in idle mode; the live call replaces it. */}
+      {mounted &&
+        createPortal(
+          <div
+            className="fixed inset-x-0 z-30 border-t border-hairline/70 bg-white/85 px-4 pb-2 pt-3 backdrop-blur-md md:hidden"
+            style={{ bottom: 'calc(56px + env(safe-area-inset-bottom))' }}
           >
-            <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
-            <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
-            <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
-            <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" />
-          </button>
-          <button
-            onClick={goLive}
-            className="flex h-[60px] flex-1 items-center justify-center gap-2.5 rounded-full bg-ink text-[17px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
-          >
-            <Mic className="h-[22px] w-[22px]" />
-            Talk to {name}
-          </button>
-        </div>
-        <button
-          onClick={() => setMode('text')}
-          className="mt-3 block w-full text-center text-sm font-medium text-muted transition-colors active:text-ink"
-        >
-          Type instead
-        </button>
-      </div>
+            <div className="mx-auto flex max-w-md items-center gap-4">
+              <button
+                onClick={goLive}
+                aria-label={`Talk to ${name}`}
+                className="relative inline-flex flex-shrink-0 items-center justify-center transition-transform active:scale-95"
+              >
+                <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
+                <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
+                <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
+                <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" className="scale-110" />
+              </button>
+              <button
+                onClick={goLive}
+                className="flex h-[68px] flex-1 items-center justify-center gap-2.5 rounded-full bg-ink text-[19px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
+              >
+                <Mic className="h-6 w-6" />
+                Talk to {name}
+              </button>
+            </div>
+            <button
+              onClick={() => setMode('text')}
+              className="mt-2 block w-full text-center text-sm font-medium text-muted transition-colors active:text-ink"
+            >
+              Type instead
+            </button>
+          </div>,
+          document.body,
+        )}
 
       {/* Desktop: the original large mic button — unchanged. */}
       <div className="hidden flex-col items-center gap-4 md:flex">

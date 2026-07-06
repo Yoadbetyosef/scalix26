@@ -24,11 +24,11 @@ export function TodayWork({ figures }: { figures: WorkFigure[] }) {
           dark navy at ~64px, counting up; the other three metrics on one muted line below.
           All four values still render from the same data. */}
       <div className="text-center md:hidden">
-        <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{hero.label} this week</span>
-        <span className="sx-tabular mt-1.5 block text-[64px] font-semibold leading-none tracking-tight text-ink">
+        <span className="block text-[13px] font-semibold uppercase tracking-[0.18em] text-muted">{hero.label} this week</span>
+        <span className="sx-tabular mt-2 block text-[80px] font-semibold leading-none tracking-tight text-ink">
           {hero.value === null ? '—' : <KineticNumber value={hero.value} suffix={hero.suffix} />}
         </span>
-        <p className="mt-3 text-[13px] text-muted">
+        <p className="mt-4 text-[15px] text-muted">
           {rest.map((f, i) => (
             <span key={f.label}>
               {i > 0 && <span className="mx-1.5 text-hairline-strong">·</span>}

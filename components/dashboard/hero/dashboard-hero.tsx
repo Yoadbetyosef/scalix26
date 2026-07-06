@@ -89,7 +89,7 @@ export function DashboardHero({
             live in the bottom action row (Talk to Rudi), per the design. Only the orb
             container is sized — the waveform animation itself is untouched. */}
         <div className="flex justify-center md:hidden">
-          <div className="h-28 w-28 flex-shrink-0">
+          <div className="h-36 w-36 flex-shrink-0">
             <LiveOrb />
           </div>
         </div>
