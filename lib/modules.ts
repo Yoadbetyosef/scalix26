@@ -20,6 +20,11 @@ export type ModuleKey = (typeof MODULES)[number]['key']
 
 export const ALL_MODULES: ModuleKey[] = MODULES.map((m) => m.key)
 
+// New businesses start with the core modules ON; everything else is opt-in per business,
+// toggled by a platform admin. Keep this in sync with the DB column default (migration).
+export const DEFAULT_ENABLED_MODULES: ModuleKey[] = ['ai_voice', 'inbox', 'contacts']
+export const OPTIONAL_MODULES: ModuleKey[] = ALL_MODULES.filter((m) => !DEFAULT_ENABLED_MODULES.includes(m))
+
 const MODULE_SET = new Set<string>(ALL_MODULES)
 export const isModuleKey = (v: unknown): v is ModuleKey => typeof v === 'string' && MODULE_SET.has(v)
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { insertTenantWithUniqueSlug } from '@/lib/tenants'
+import { DEFAULT_ENABLED_MODULES } from '@/lib/modules'
 
 const FRIENDLY_ERROR = "Couldn't create your account — please try again."
 
@@ -36,6 +37,8 @@ export async function POST(req: NextRequest) {
       industry,
       email,
       plan: 'trial',
+      // New businesses start with the core modules on; the rest are opt-in per business.
+      enabled_modules: DEFAULT_ENABLED_MODULES,
     })
     if (error) return NextResponse.json({ error: FRIENDLY_ERROR }, { status: 400 })
   }

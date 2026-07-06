@@ -1,32 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/admin/auth'
 import { ALL_MODULES, enabledModulesOf, isModuleKey } from '@/lib/modules'
 
-// GET /api/admin/modules — list every business with its enabled modules.
+// GET /api/admin/modules — every business with its modules, owner email, plan, status, date.
 export async function GET(req: NextRequest) {
   if (!(await isAdmin(req))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const supabase = await createServiceClient()
   const { data, error } = await supabase
     .from('tenants')
-    .select('id, business_name, plan, enabled_modules')
-    .order('business_name', { ascending: true })
+    .select('id, user_id, business_name, email, plan, created_at, enabled_modules')
+    .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Owner emails from auth (fallback to the tenant email column).
+  const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+  const emailById = Object.fromEntries((authData?.users || []).map((u) => [u.id, u.email]))
 
   const tenants = (data || []).map((t) => ({
     id: t.id,
     business_name: t.business_name,
+    owner_email: emailById[t.user_id] || t.email || null,
     plan: t.plan,
+    status: t.plan === 'trial' ? 'trialing' : 'active',
+    created_at: t.created_at,
     enabled_modules: enabledModulesOf(t),
   }))
   return NextResponse.json({ tenants, allModules: ALL_MODULES })
 }
 
-// PATCH /api/admin/modules — set a single tenant's enabled modules.
+// PATCH /api/admin/modules — set a single tenant's enabled modules + write an audit entry.
 // Body: { tenantId: string, enabled_modules: string[] }
 export async function PATCH(req: NextRequest) {
   if (!(await isAdmin(req))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // Who is making the change (validated as admin above).
+  const userClient = await createClient()
+  const { data: { user } } = await userClient.auth.getUser()
+  const changedBy = user?.email || 'unknown'
 
   let body: { tenantId?: string; enabled_modules?: unknown }
   try {
@@ -38,13 +50,30 @@ export async function PATCH(req: NextRequest) {
   if (!tenantId || !Array.isArray(enabled_modules)) {
     return NextResponse.json({ error: 'tenantId and enabled_modules[] required' }, { status: 400 })
   }
-  // Only accept known module keys, de-duplicated.
-  const clean = Array.from(new Set(enabled_modules.filter(isModuleKey)))
+  const after = Array.from(new Set(enabled_modules.filter(isModuleKey)))
 
-  // Admin client bypasses RLS for this server-only write to an RLS-locked table.
   const admin = createAdminClient()
-  const { error } = await admin.from('tenants').update({ enabled_modules: clean }).eq('id', tenantId)
+
+  // Snapshot the current value for the audit diff.
+  const { data: current } = await admin.from('tenants').select('enabled_modules').eq('id', tenantId).maybeSingle()
+  const before = enabledModulesOf(current)
+
+  const { error } = await admin.from('tenants').update({ enabled_modules: after }).eq('id', tenantId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ ok: true, enabled_modules: clean })
+  const added = after.filter((m) => !before.includes(m))
+  const removed = before.filter((m) => !after.includes(m))
+  // Only log actual changes.
+  if (added.length || removed.length) {
+    await admin.from('module_audit_log').insert({
+      tenant_id: tenantId,
+      changed_by: changedBy,
+      before_modules: before,
+      after_modules: after,
+      added,
+      removed,
+    })
+  }
+
+  return NextResponse.json({ ok: true, enabled_modules: after })
 }

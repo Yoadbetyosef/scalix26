@@ -1,13 +1,22 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { MODULES, type ModuleKey } from '@/lib/modules'
+import Link from 'next/link'
+import { MODULES, DEFAULT_ENABLED_MODULES, ALL_MODULES, type ModuleKey } from '@/lib/modules'
+import { useToast } from '@/components/admin/toast'
 
 interface TenantRow {
   id: string
   business_name: string
+  owner_email: string | null
   plan: string | null
+  status: string
+  created_at: string
   enabled_modules: ModuleKey[]
+}
+
+function fmtDate(iso: string) {
+  try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '—' }
 }
 
 export default function AdminModulesPage() {
@@ -15,7 +24,7 @@ export default function AdminModulesPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const { show, node: toast } = useToast()
 
   async function load() {
     setLoading(true)
@@ -25,20 +34,16 @@ export default function AdminModulesPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to load')
       setTenants(data.tenants || [])
     } catch (e) {
-      setError((e as Error).message)
+      show((e as Error).message, 'err')
     } finally {
       setLoading(false)
     }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function toggle(tenant: TenantRow, key: ModuleKey) {
-    const has = tenant.enabled_modules.includes(key)
-    const next = has ? tenant.enabled_modules.filter((m) => m !== key) : [...tenant.enabled_modules, key]
-    // Optimistic update
+  async function save(tenant: TenantRow, next: ModuleKey[], label: string) {
     setTenants((prev) => prev.map((t) => (t.id === tenant.id ? { ...t, enabled_modules: next } : t)))
     setSaving(tenant.id)
-    setError(null)
     try {
       const res = await fetch('/api/admin/modules', {
         method: 'PATCH',
@@ -47,33 +52,39 @@ export default function AdminModulesPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Save failed')
-      // Reconcile with the server's sanitised value
       setTenants((prev) => prev.map((t) => (t.id === tenant.id ? { ...t, enabled_modules: data.enabled_modules } : t)))
+      show(`${tenant.business_name || 'Business'}: ${label}`)
     } catch (e) {
-      setError((e as Error).message)
-      await load() // revert to server truth
+      show((e as Error).message, 'err')
+      await load()
     } finally {
       setSaving(null)
     }
   }
 
+  const toggle = (t: TenantRow, key: ModuleKey) => {
+    const has = t.enabled_modules.includes(key)
+    save(t, has ? t.enabled_modules.filter((m) => m !== key) : [...t.enabled_modules, key], has ? `disabled ${key}` : `enabled ${key}`)
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return tenants
-    return tenants.filter((t) => (t.business_name || '').toLowerCase().includes(q))
+    return tenants.filter(
+      (t) => (t.business_name || '').toLowerCase().includes(q) || (t.owner_email || '').toLowerCase().includes(q),
+    )
   }, [tenants, search])
 
   return (
     <div>
+      {toast}
       <h1 className="text-2xl font-bold text-ink mb-1">Modules</h1>
-      <p className="text-sm text-subtle mb-6">Turn product modules on or off per business. Changes apply immediately.</p>
-
-      {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{error}</div>}
+      <p className="text-sm text-subtle mb-6">Turn product modules on or off per business. Changes save immediately and are logged.</p>
 
       <div className="bg-white rounded-xl border border-hairline-strong p-4 mb-4">
         <input
           className="border border-hairline-strong rounded-lg px-3 h-11 text-sm w-full outline-none focus:border-accent"
-          placeholder="Search by business name…"
+          placeholder="Search by business name or owner email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -87,25 +98,31 @@ export default function AdminModulesPage() {
             <thead>
               <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-subtle">
                 <th className="px-4 py-3 font-medium">Business</th>
+                <th className="px-3 py-3 font-medium">Plan</th>
+                <th className="px-3 py-3 font-medium">Created</th>
                 {MODULES.map((m) => (
-                  <th key={m.key} className="px-3 py-3 font-medium text-center whitespace-nowrap" title={m.description}>{m.label}</th>
+                  <th key={m.key} className="px-2 py-3 font-medium text-center whitespace-nowrap" title={m.description}>{m.label}</th>
                 ))}
+                <th className="px-3 py-3 font-medium text-right">Details</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.id} className="border-b border-hairline last:border-0">
+                <tr key={t.id} className="border-b border-hairline last:border-0 align-top">
                   <td className="px-4 py-3">
                     <div className="font-medium text-ink">{t.business_name || 'Untitled'}</div>
-                    <div className="text-xs text-subtle flex items-center gap-2">
-                      <span>{t.plan || '—'}</span>
-                      {saving === t.id && <span className="text-accent-strong">saving…</span>}
-                    </div>
+                    <div className="text-xs text-subtle">{t.owner_email || '—'}</div>
+                    {saving === t.id && <div className="text-xs text-accent-strong">saving…</div>}
                   </td>
+                  <td className="px-3 py-3">
+                    <span className="capitalize text-ink">{t.plan || '—'}</span>
+                    <div className="text-xs text-subtle capitalize">{t.status}</div>
+                  </td>
+                  <td className="px-3 py-3 text-muted whitespace-nowrap">{fmtDate(t.created_at)}</td>
                   {MODULES.map((m) => {
                     const on = t.enabled_modules.includes(m.key)
                     return (
-                      <td key={m.key} className="px-3 py-3 text-center">
+                      <td key={m.key} className="px-2 py-3 text-center">
                         <button
                           onClick={() => toggle(t, m.key)}
                           role="switch"
@@ -118,10 +135,17 @@ export default function AdminModulesPage() {
                       </td>
                     )
                   })}
+                  <td className="px-3 py-3 text-right whitespace-nowrap">
+                    <div className="flex flex-col items-end gap-1">
+                      <Link href={`/admin/modules/${t.id}`} className="text-accent-strong hover:underline text-xs font-medium">Open</Link>
+                      <button onClick={() => save(t, [...ALL_MODULES], 'all modules enabled')} className="text-xs text-subtle hover:text-ink">Enable all</button>
+                      <button onClick={() => save(t, [...DEFAULT_ENABLED_MODULES], 'optional modules disabled')} className="text-xs text-subtle hover:text-ink">Only core</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={MODULES.length + 1} className="px-4 py-8 text-center text-sm text-muted">No businesses found.</td></tr>
+                <tr><td colSpan={MODULES.length + 4} className="px-4 py-8 text-center text-sm text-muted">No businesses found.</td></tr>
               )}
             </tbody>
           </table>
