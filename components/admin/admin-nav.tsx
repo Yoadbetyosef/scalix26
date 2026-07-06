@@ -1,14 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, ToggleRight, Flag, ScrollText } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { LayoutDashboard, Building2, ToggleRight, Flag, ScrollText, Users, Search } from 'lucide-react'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { href: '/admin/businesses', label: 'Businesses', icon: Building2 },
   { href: '/admin/modules', label: 'Modules', icon: ToggleRight },
   { href: '/admin/feature-flags', label: 'Feature Flags', icon: Flag },
+  { href: '/admin/team', label: 'Team', icon: Users },
   { href: '/admin/audit', label: 'Audit Log', icon: ScrollText },
 ]
 
@@ -18,7 +20,10 @@ const roleLabel: Record<string, string> = {
 
 export function AdminNav({ email, role }: { email: string; role: string }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [q, setQ] = useState('')
   const active = (href: string, exact?: boolean) => (exact ? pathname === href : pathname === href || pathname.startsWith(href + '/'))
+  const search = () => { if (q.trim()) router.push(`/admin/businesses?search=${encodeURIComponent(q.trim())}`) }
 
   return (
     <nav className="sticky top-0 z-30 bg-gray-900 text-white">
@@ -36,8 +41,18 @@ export function AdminNav({ email, role }: { email: string; role: string }) {
             <span>{label}</span>
           </Link>
         ))}
-        <div className="ml-auto flex items-center gap-3 pl-2 text-xs text-gray-400">
-          <span className="hidden sm:inline">
+        <div className="ml-auto flex items-center gap-2 pl-2 text-xs text-gray-400">
+          <div className="relative hidden md:block">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && search()}
+              placeholder="Search businesses…"
+              className="h-8 w-48 rounded-lg bg-white/10 pl-8 pr-2 text-xs text-white placeholder-gray-400 outline-none focus:bg-white/15"
+            />
+          </div>
+          <span className="hidden lg:inline">
             {email} · <span className="text-gray-200">{roleLabel[role] || role}</span>
           </span>
           <Link href="/dashboard" className="rounded-lg px-2 py-1.5 hover:bg-white/10 hover:text-white">← App</Link>

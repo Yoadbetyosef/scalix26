@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 interface Row {
   id: string
@@ -36,7 +37,8 @@ export default function AdminBusinessesPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
   const [pageSize] = useState(25)
-  const [search, setSearch] = useState('')
+  const initialSearch = useSearchParams().get('search') || ''
+  const [search, setSearch] = useState(initialSearch)
   const [status, setStatus] = useState('')
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)

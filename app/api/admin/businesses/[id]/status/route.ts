@@ -21,9 +21,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const admin = createAdminClient()
   const suspended_at = action === 'suspend' ? new Date().toISOString() : null
-  const { data: before } = await admin.from('tenants').select('suspended_at, business_name').eq('id', id).maybeSingle()
+  const { data: before } = await admin.from('tenants').select('suspended_at, business_name, user_id').eq('id', id).maybeSingle()
   const { error } = await admin.from('tenants').update({ suspended_at }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Flag the owner's auth account so the middleware blocks (or restores) app access on their
+  // next request. getUser() returns fresh app_metadata, so this takes effect immediately.
+  if (before?.user_id) {
+    try {
+      await admin.auth.admin.updateUserById(before.user_id, { app_metadata: { suspended: action === 'suspend' } })
+    } catch { /* best-effort — the tenant flag is the source of truth for the admin view */ }
+  }
 
   await logAdminAction(ctx.email, {
     action: `business.${action}`,

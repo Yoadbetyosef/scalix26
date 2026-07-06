@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { isAdminEmail } from '@/lib/admin/emails'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -58,17 +57,26 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    if (user && !isAdminEmail(user.email)) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
-    }
+    // Admin/role gating is enforced by the /admin layout (getAdminContext) and each
+    // /api/admin route — both consult the admin_users table (which the edge middleware
+    // can't read). This lets team members with a role reach the panel; non-admins are
+    // bounced by the layout.
   }
   const isPublic = publicRoutes.some(r => pathname.startsWith(r))
 
   if (!user && !isPublic && pathname !== '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Suspended businesses: the owner's auth app_metadata carries `suspended` (getUser returns
+  // fresh metadata). Block the app UI — only auth pages, the suspended page, the admin panel,
+  // APIs, and public routes stay reachable.
+  const suspended = !!(user?.app_metadata as { suspended?: boolean } | undefined)?.suspended
+  if (suspended && user && !isPublic && !isAdminRoute && pathname !== '/suspended' && !pathname.startsWith('/auth') && !pathname.startsWith('/api')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/suspended'
     return NextResponse.redirect(url)
   }
 
