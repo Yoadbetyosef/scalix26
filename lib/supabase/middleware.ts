@@ -35,8 +35,12 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
 
   if (isAdminRoute) {
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
-    if (ADMIN_PASSWORD) {
+    // Optional HTTP Basic gate in FRONT of the email allow-list. Off unless explicitly
+    // opted in with ADMIN_BASIC_AUTH=1 (plus a non-empty ADMIN_PASSWORD). This avoids a
+    // stale/empty env value ever locking admins out behind a phantom password prompt — the
+    // email allow-list below is the real access control.
+    const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || '').trim()
+    if (process.env.ADMIN_BASIC_AUTH === '1' && ADMIN_PASSWORD) {
       const authHeader = request.headers.get('authorization') || ''
       let validPassword = false
       if (authHeader.startsWith('Basic ')) {
