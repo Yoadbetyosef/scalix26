@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/admin/auth'
+import { getAdminContext } from '@/lib/admin/rbac'
 import { enabledModulesOf } from '@/lib/modules'
 
 // GET /api/admin/modules/[id] — one business's detail + its module change history.
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isAdmin(req))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const ctx = await getAdminContext()
+  if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 
   const supabase = await createServiceClient()

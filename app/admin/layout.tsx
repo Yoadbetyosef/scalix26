@@ -1,19 +1,15 @@
 import { redirect } from 'next/navigation'
-import { isAdmin } from '@/lib/admin/auth'
+import { getAdminContext } from '@/lib/admin/rbac'
+import { AdminNav } from '@/components/admin/admin-nav'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const admin = await isAdmin()
-  if (!admin) redirect('/dashboard')
+  const ctx = await getAdminContext()
+  if (!ctx) redirect('/dashboard')
 
   return (
     <div className="min-h-screen bg-sunken">
-      <nav className="bg-gray-900 text-white px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-6 gap-y-1">
-        <span className="font-bold text-lg">Scalix Admin</span>
-        <a href="/admin" className="tap-target inline-block py-3 -my-3 text-muted hover:text-white text-sm">Dashboard</a>
-        <a href="/admin/modules" className="tap-target inline-block py-3 -my-3 text-muted hover:text-white text-sm">Modules</a>
-        <a href="/dashboard" className="tap-target inline-block py-3 -my-3 ml-auto text-muted hover:text-white text-sm">← Back to app</a>
-      </nav>
-      <main className="p-4 sm:p-6">{children}</main>
+      <AdminNav email={ctx.email} role={ctx.role} />
+      <main className="mx-auto max-w-[1400px] p-4 sm:p-6">{children}</main>
     </div>
   )
 }

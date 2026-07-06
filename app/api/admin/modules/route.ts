@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
-import { isAdmin } from '@/lib/admin/auth'
+import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { getAdminContext, canManageModules } from '@/lib/admin/rbac'
+import { logAdminAction } from '@/lib/admin/audit'
 import { ALL_MODULES, enabledModulesOf, isModuleKey } from '@/lib/modules'
 
 // GET /api/admin/modules — every business with its modules, owner email, plan, status, date.
-export async function GET(req: NextRequest) {
-  if (!(await isAdmin(req))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+export async function GET() {
+  const ctx = await getAdminContext()
+  if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const supabase = await createServiceClient()
   const { data, error } = await supabase
@@ -33,12 +35,10 @@ export async function GET(req: NextRequest) {
 // PATCH /api/admin/modules — set a single tenant's enabled modules + write an audit entry.
 // Body: { tenantId: string, enabled_modules: string[] }
 export async function PATCH(req: NextRequest) {
-  if (!(await isAdmin(req))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
-  // Who is making the change (validated as admin above).
-  const userClient = await createClient()
-  const { data: { user } } = await userClient.auth.getUser()
-  const changedBy = user?.email || 'unknown'
+  const ctx = await getAdminContext()
+  if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!canManageModules(ctx.role)) return NextResponse.json({ error: 'Not permitted for your role' }, { status: 403 })
+  const changedBy = ctx.email
 
   let body: { tenantId?: string; enabled_modules?: unknown }
   try {
@@ -72,6 +72,13 @@ export async function PATCH(req: NextRequest) {
       after_modules: after,
       added,
       removed,
+    })
+    await logAdminAction(changedBy, {
+      action: 'module.update',
+      targetType: 'tenant',
+      targetId: tenantId,
+      before: { modules: before },
+      after: { modules: after, added, removed },
     })
   }
 
