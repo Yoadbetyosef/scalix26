@@ -30,6 +30,22 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
   const playHeadRef = useRef(0)
   const connectedRef = useRef(false)
 
+  // ── Barge-in noise gate (client, LAYER 4) ─────────────────────────────────────────
+  // False barge-in happens when low-energy noise (AC hum, traffic) OR Rudi's own TTS echo
+  // reaches Flux and gets transcribed as user speech, firing StartOfTurn → interruption.
+  // While Rudi is speaking we forward mic audio to the agent ONLY when it clears an
+  // adaptive noise floor for a sustained ~280ms — so noise/echo never reaches Flux and can
+  // never trigger a false interrupt. When Rudi is silent, we stream normally (zero added
+  // latency to ordinary turn-taking). A short pre-roll preserves the word onset so real
+  // barge-in still lands within ~0.5s.
+  const agentSpeakingRef = useRef(false)      // Rudi's turn is producing/scheduled audio
+  const floorRef = useRef(0.003)              // adaptive ambient/echo RMS floor
+  const gateOpenRef = useRef(false)           // a real barge-in is in progress
+  const sustainRef = useRef(0)                // ms of continuous above-floor energy
+  const hangoverRef = useRef(0)               // ms to keep the gate open after energy dips
+  const prerollRef = useRef<Int16Array[]>([]) // recent frames, flushed on open (word onset)
+  const resetGate = () => { gateOpenRef.current = false; sustainRef.current = 0; hangoverRef.current = 0; prerollRef.current = [] }
+
   // Latency timeline (dev console only): speech end → first audible word.
   const tRef = useRef<Record<string, number>>({})
   const reportedRef = useRef(false)
@@ -102,9 +118,53 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
             if (ws.readyState !== WebSocket.OPEN) return
             const f32 = e.inputBuffer.getChannelData(0)
             const i16 = new Int16Array(f32.length)
-            for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff }
-            ws.send(i16.buffer)
-            if (tRef.current.micFirstSent === undefined) { mk('micFirstSent'); log('mic streaming → agent') }
+            let sum = 0
+            for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff; sum += s * s }
+            const rms = Math.sqrt(sum / f32.length)
+            const frameMs = (1000 * f32.length) / ctx.sampleRate
+            const emit = (buf: ArrayBufferLike) => { ws.send(buf); if (tRef.current.micFirstSent === undefined) { mk('micFirstSent'); log('mic streaming → agent') } }
+
+            // Rudi is audibly speaking while her turn is active OR buffered audio is still
+            // scheduled (AgentAudioDone can arrive before the tail finishes playing).
+            const speaking = agentSpeakingRef.current || playHeadRef.current > ctx.currentTime + 0.05
+
+            if (!speaking) {
+              // Normal turn-taking: stream everything (zero added latency), keep the ambient
+              // noise floor fresh from these quiet frames.
+              floorRef.current = Math.max(0.0012, floorRef.current * 0.95 + rms * 0.05)
+              if (gateOpenRef.current || sustainRef.current || prerollRef.current.length) resetGate()
+              emit(i16.buffer)
+              return
+            }
+
+            // Rudi IS speaking → gate the outbound mic (LAYER 4). Only sustained, above-floor
+            // energy (a deliberate interruption) is forwarded; low-energy noise + Rudi's own
+            // TTS echo are dropped and never reach Flux, so they can't fire a false StartOfTurn.
+            const floor = Math.max(0.0015, floorRef.current)
+            const openThresh = floor * 3.5  // ~+11 dB over ambient/echo
+            const quietThresh = floor * 2.0
+            if (gateOpenRef.current) {
+              if (rms < quietThresh) { hangoverRef.current -= frameMs; if (hangoverRef.current <= 0) resetGate() }
+              else hangoverRef.current = 500
+              emit(i16.buffer)
+              return
+            }
+            // Buffer a short pre-roll so the word onset survives when we open.
+            prerollRef.current.push(i16)
+            while (prerollRef.current.length * frameMs > 200) prerollRef.current.shift()
+            if (rms > openThresh) {
+              sustainRef.current += frameMs
+              if (sustainRef.current >= 280) {
+                gateOpenRef.current = true; hangoverRef.current = 500
+                log('barge-in gate OPEN — rms', rms.toFixed(4), '> floor', floor.toFixed(4), '(LAYER 4 client gate)')
+                for (const p of prerollRef.current) emit(p.buffer)
+                prerollRef.current = []
+              }
+            } else {
+              // Below threshold: the echo/noise we suppress — decay sustain, adapt floor up.
+              sustainRef.current = Math.max(0, sustainRef.current - frameMs)
+              floorRef.current = Math.max(0.0012, floorRef.current * 0.97 + rms * 0.03)
+            }
           }
           const mute = ctx.createGain(); mute.gain.value = 0
           source.connect(proc); proc.connect(mute); mute.connect(ctx.destination)
@@ -119,13 +179,14 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
             case 'UserStartedSpeaking':
               tRef.current = { micFirstSent: tRef.current.micFirstSent ?? performance.now(), userStartedSpeaking: performance.now() }
               reportedRef.current = false
+              agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
               stopPlayback(); setPhase('thinking'); break
             case 'ConversationText':
               if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking') }
               else if (msg.role === 'assistant') { mk('agentFirstTranscript'); setAmyText(msg.content || '') }
               break
-            case 'AgentStartedSpeaking': setPhase('speaking'); break
-            case 'AgentAudioDone': setPhase('live'); break
+            case 'AgentStartedSpeaking': agentSpeakingRef.current = true; resetGate(); setPhase('speaking'); break
+            case 'AgentAudioDone': agentSpeakingRef.current = false; setPhase('live'); break
             case 'Error': case 'Warning':
               log(msg.type, msg.description)
               if (msg.type === 'Error') { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') }
