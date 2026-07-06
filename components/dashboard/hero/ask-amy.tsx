@@ -73,10 +73,10 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
       {mounted &&
         createPortal(
           <div
-            className="fixed inset-x-0 z-30 border-t border-hairline/70 bg-white/85 px-4 pb-2 pt-3 backdrop-blur-md md:hidden"
+            className="fixed inset-x-0 z-30 border-t border-hairline/70 bg-white/85 px-4 pb-3 pt-4 backdrop-blur-md md:hidden"
             style={{ bottom: 'calc(56px + env(safe-area-inset-bottom))' }}
           >
-            <div className="mx-auto flex max-w-md items-center gap-4">
+            <div className="mx-auto flex max-w-md items-center gap-3.5">
               <button
                 onClick={goLive}
                 aria-label={`Talk to ${name}`}
@@ -85,13 +85,13 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
                 <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
                 <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
                 <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
-                <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" className="scale-110" />
+                <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" />
               </button>
               <button
                 onClick={goLive}
-                className="flex h-[68px] flex-1 items-center justify-center gap-2.5 rounded-full bg-ink text-[19px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
+                className="flex h-[60px] flex-1 items-center justify-center gap-2 rounded-full bg-ink text-[17px] font-semibold text-white shadow-e2 transition-all active:scale-[0.98]"
               >
-                <Mic className="h-6 w-6" />
+                <Mic className="h-5 w-5" />
                 Talk to {name}
               </button>
             </div>
