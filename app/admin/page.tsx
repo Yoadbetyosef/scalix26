@@ -83,7 +83,7 @@ export default function AdminDashboard() {
                 <div className="text-2xl font-bold text-ink">{t.value}</div>
               </div>
             ))}
-            <div className="rounded-xl border border-hairline-strong bg-white p-4">
+            <Link href="/admin/health" className="rounded-xl border border-hairline-strong bg-white p-4 transition-colors hover:border-accent/50">
               <div className="mb-2 flex items-center gap-2 text-subtle">
                 <Activity className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">System Health</span>
@@ -92,7 +92,8 @@ export default function AdminDashboard() {
                 <span className={`h-2.5 w-2.5 rounded-full ${health.dot}`} />
                 {health.text}
               </div>
-            </div>
+              <div className="mt-1 text-xs text-subtle">View live status →</div>
+            </Link>
           </div>
           <p className="mt-4 text-xs text-subtle">
             External API health (OpenAI, Deepgram, Twilio, Stripe, Meta, Google, Microsoft) and churn/billing metrics are wired in a later phase — shown as “Not tracked yet” until then.
