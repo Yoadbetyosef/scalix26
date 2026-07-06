@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { enabledModulesOf } from '@/lib/modules'
 
@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient() // service-role: read any business (bypass RLS)
   const { data: t, error } = await supabase
     .from('tenants')
     .select('id, user_id, business_name, email, phone, plan, created_at, enabled_modules')

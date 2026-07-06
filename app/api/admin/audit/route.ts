@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 
 // GET /api/admin/audit — the global audit trail, paginated + searchable.
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const pageSize = Math.min(200, Math.max(1, parseInt(sp.get('pageSize') || '50', 10)))
   const search = (sp.get('search') || '').trim()
 
-  const db = await createServiceClient()
+  const db = createAdminClient() // service-role: audit table is RLS-locked
   let query = db
     .from('admin_audit_log')
     .select('id, admin_email, action, target_type, target_id, target_label, before, after, created_at', { count: 'exact' })

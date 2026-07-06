@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { planPrice } from '@/lib/admin/pricing'
 
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const search = (sp.get('search') || '').trim()
   const status = sp.get('status') || '' // active | trial | suspended | enterprise
 
-  const db = await createServiceClient()
+  const db = createAdminClient() // service-role: bypass RLS to list all businesses
   let query = db
     .from('tenants')
     .select('id, user_id, business_name, email, phone, industry, plan, created_at, suspended_at, tags, ai_employees(count), channels(count)', { count: 'exact' })

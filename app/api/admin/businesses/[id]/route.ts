@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { planPrice } from '@/lib/admin/pricing'
 import { enabledModulesOf } from '@/lib/modules'
@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 
-  const db = await createServiceClient()
+  const db = createAdminClient() // service-role: bypass RLS to read any business
   const { data: t, error } = await db.from('tenants').select('*').eq('id', id).maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!t) return NextResponse.json({ error: 'Not found' }, { status: 404 })

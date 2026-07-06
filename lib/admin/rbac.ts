@@ -1,4 +1,4 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { isAdminEmail } from './emails'
 
 // Team roles for the internal admin platform. Stored in the admin_users table; the platform
@@ -23,7 +23,7 @@ export async function getAdminContext(): Promise<AdminContext | null> {
   const email = user?.email?.toLowerCase()
   if (!email) return null
 
-  const svc = await createServiceClient()
+  const svc = createAdminClient() // service-role: admin_users is RLS-locked
   const { data } = await svc.from('admin_users').select('role').eq('email', email).maybeSingle()
   if (data?.role) return { email, role: data.role as AdminRole }
 

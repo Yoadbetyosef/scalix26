@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { PLAN_PRICE } from '@/lib/admin/pricing'
 
@@ -9,7 +9,7 @@ export async function GET() {
   const ctx = await getAdminContext()
   if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const db = await createServiceClient()
+  const db = createAdminClient() // service-role: bypass RLS so we see ALL tenants, not just the admin's
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const todayISO = startOfToday.toISOString()
 
