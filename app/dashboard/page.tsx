@@ -9,7 +9,8 @@ import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
 import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import { getImpactData } from '@/lib/dashboard/impact'
-import { enabledModulesOf } from '@/lib/modules'
+import { enabledModulesOf, effectiveModules } from '@/lib/modules'
+import { getModuleFlags } from '@/lib/admin/module-flags'
 import type { Lead } from '@/types'
 
 async function getDashboardData(tenantId: string) {
@@ -134,7 +135,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // Module gating: the Leads tab needs `pipeline`, Appointments needs `scheduling`. Direct
   // access to a disabled tab (e.g. ?tab=leads) falls back to Overview.
-  const modules = enabledModulesOf(tenant)
+  const moduleFlags = await getModuleFlags()
+  const isEnterprise = Array.isArray((tenant as { tags?: string[] }).tags) && (tenant as { tags?: string[] }).tags!.includes('Enterprise')
+  const modules = effectiveModules(enabledModulesOf(tenant), moduleFlags, isEnterprise)
   const pipelineOn = modules.includes('pipeline')
   const schedulingOn = modules.includes('scheduling')
   const effectiveTab =

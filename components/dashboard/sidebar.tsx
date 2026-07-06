@@ -25,7 +25,7 @@ import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { TrialWidget } from '@/components/dashboard/trial-widget'
 import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
-import { ALL_MODULES, enabledModulesOf, moduleForNav, type ModuleKey } from '@/lib/modules'
+import { ALL_MODULES, enabledModulesOf, effectiveModules, moduleForNav, type ModuleKey, type ModuleState } from '@/lib/modules'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -69,15 +69,17 @@ export function Sidebar() {
     async function loadBusinessName() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: tenant } = await supabase
-        .from('tenants')
-        .select('business_name, plan, trial_ends_at, enabled_modules')
-        .eq('user_id', user.id)
-        .single()
+      const [{ data: tenant }, { data: flagRows }] = await Promise.all([
+        supabase.from('tenants').select('business_name, plan, trial_ends_at, enabled_modules, tags').eq('user_id', user.id).single(),
+        supabase.from('module_flags').select('module, state'),
+      ])
       if (tenant?.business_name) setBusinessName(tenant.business_name)
       setPlan(tenant?.plan ?? null)
       setTrialEndsAt(tenant?.trial_ends_at ?? null)
-      setEnabledModules(enabledModulesOf(tenant))
+      // Effective modules = the business's own set filtered by the global feature-flag state.
+      const flags = Object.fromEntries((flagRows || []).map((f) => [f.module, f.state as ModuleState]))
+      const isEnterprise = Array.isArray(tenant?.tags) && tenant.tags.includes('Enterprise')
+      setEnabledModules(effectiveModules(enabledModulesOf(tenant), flags, isEnterprise))
     }
     loadBusinessName()
   }, [])

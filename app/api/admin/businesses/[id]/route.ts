@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { planPrice } from '@/lib/admin/pricing'
 import { enabledModulesOf } from '@/lib/modules'
+import { getModuleFlags } from '@/lib/admin/module-flags'
 
 // GET /api/admin/businesses/[id] — full management view for one business, all real data.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -88,6 +89,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         microsoft: null,  // Not tracked yet
       },
       modules: enabledModulesOf(t),
+      module_flags: await getModuleFlags(),
       tags: t.tags || [],
       suspended: !!t.suspended_at,
       suspended_at: t.suspended_at || null,

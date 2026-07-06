@@ -11,12 +11,29 @@ export const MODULES = [
   { key: 'inbox', label: 'Inbox', description: 'Unified conversations' },
   { key: 'contacts', label: 'Contacts', description: 'Customer directory' },
   { key: 'inventory', label: 'Inventory', description: 'Stock & parts' },
-  { key: 'pipeline', label: 'Pipeline', description: 'Leads & deal stages' },
+  { key: 'pipeline', label: 'CRM Pipeline', description: 'Leads & deal stages' },
   { key: 'scheduling', label: 'Scheduling', description: 'Appointments & availability' },
   { key: 'estimates', label: 'Estimates', description: 'Quotes & estimate requests' },
+  { key: 'invoices', label: 'Invoices', description: 'Invoicing & billing docs' },
+  { key: 'payments', label: 'Payments', description: 'Payment collection (Stripe)' },
+  { key: 'analytics', label: 'Analytics', description: 'Reports & analytics' },
+  { key: 'business_brain', label: 'Business Brain', description: 'AI business understanding' },
+  { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]['key']
+
+// ── Feature-flag lifecycle (global, per module) ──────────────────────────────────────
+// Set by admins in /admin/feature-flags. Governs a module platform-wide, on TOP of each
+// business's own enable/disable toggle.
+export type ModuleState = 'disabled' | 'enabled' | 'beta' | 'enterprise'
+export const MODULE_STATES: { key: ModuleState; label: string; hint: string }[] = [
+  { key: 'enabled', label: 'Enabled', hint: 'Available to every business that has it on' },
+  { key: 'beta', label: 'Beta', hint: 'Available, flagged as beta' },
+  { key: 'enterprise', label: 'Enterprise Only', hint: 'Only businesses tagged Enterprise' },
+  { key: 'disabled', label: 'Disabled', hint: 'Hidden for everyone, platform-wide' },
+]
+export const DEFAULT_MODULE_STATE: ModuleState = 'enabled'
 
 export const ALL_MODULES: ModuleKey[] = MODULES.map((m) => m.key)
 
@@ -59,7 +76,30 @@ const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/inventory', module: 'inventory' },
   { prefix: '/pipeline', module: 'pipeline' },
   { prefix: '/estimates', module: 'estimates' },
+  { prefix: '/analytics', module: 'analytics' },
+  { prefix: '/invoices', module: 'invoices' },
+  { prefix: '/payments', module: 'payments' },
 ]
+
+/**
+ * The modules a business can actually see, applying the global feature-flag state on top of
+ * its own per-business toggles:
+ *   - disabled   → hidden for everyone
+ *   - enterprise → only for Enterprise-tagged businesses
+ *   - enabled/beta → available if the business has it on
+ */
+export function effectiveModules(
+  enabled: ModuleKey[],
+  flags: Partial<Record<ModuleKey, ModuleState>> | null | undefined,
+  isEnterprise: boolean,
+): ModuleKey[] {
+  return enabled.filter((m) => {
+    const s = flags?.[m] ?? DEFAULT_MODULE_STATE
+    if (s === 'disabled') return false
+    if (s === 'enterprise' && !isEnterprise) return false
+    return true
+  })
+}
 
 /** The module a pathname belongs to, or null for always-available routes (dashboard, settings…). */
 export function moduleForPath(pathname: string): ModuleKey | null {

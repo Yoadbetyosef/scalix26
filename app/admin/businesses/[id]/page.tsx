@@ -16,6 +16,7 @@ interface Detail {
   ai: { agents: { id: string; name: string; voice: string | null; status: string; prompt_excerpt: string | null }[]; knowledge_base_items: number; memory_pct: number | null }
   connected: { twilio: boolean; facebook: boolean; instagram: boolean; stripe: boolean; google: boolean | null; microsoft: boolean | null }
   modules: ModuleKey[]
+  module_flags: Record<string, string>
   tags: string[]
   suspended: boolean
   notes: { id: string; admin_email: string; body: string; created_at: string }[]
@@ -206,9 +207,18 @@ export default function AdminBusinessDetail() {
           <div className="divide-y divide-hairline">
             {MODULES.map((m) => {
               const on = d.modules.includes(m.key)
+              const gstate = d.module_flags?.[m.key] || 'enabled'
               return (
                 <div key={m.key} className="flex items-center justify-between py-2.5">
-                  <div><div className="text-sm font-medium text-ink">{m.label}</div><div className="text-xs text-subtle">{m.description}</div></div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-ink">{m.label}</span>
+                      {gstate !== 'enabled' && (
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${gstate === 'disabled' ? 'bg-red-50 text-red-700' : gstate === 'beta' ? 'bg-amber-50 text-amber-700' : 'bg-violet-50 text-violet-700'}`}>{gstate === 'enterprise' ? 'Enterprise' : gstate}</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-subtle">{m.description}</div>
+                  </div>
                   <button onClick={() => toggleModule(m.key)} role="switch" aria-checked={on} className={`relative inline-flex h-6 w-11 items-center rounded-full ${on ? 'bg-accent' : 'bg-hairline-strong'}`}>
                     <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
                   </button>
