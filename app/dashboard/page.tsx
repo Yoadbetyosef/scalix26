@@ -9,6 +9,7 @@ import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
 import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import { getImpactData } from '@/lib/dashboard/impact'
+import { enabledModulesOf } from '@/lib/modules'
 import type { Lead } from '@/types'
 
 async function getDashboardData(tenantId: string) {
@@ -131,9 +132,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   if (!tenant) redirect('/setup')
 
+  // Module gating: the Leads tab needs `pipeline`, Appointments needs `scheduling`. Direct
+  // access to a disabled tab (e.g. ?tab=leads) falls back to Overview.
+  const modules = enabledModulesOf(tenant)
+  const pipelineOn = modules.includes('pipeline')
+  const schedulingOn = modules.includes('scheduling')
+  const effectiveTab =
+    (activeTab === 'leads' && !pipelineOn) || (activeTab === 'appointments' && !schedulingOn) ? 'overview' : activeTab
+
   const { stats, aiEmployees, leads_list, leadLinks, appointments_list } = await getDashboardData(tenant.id)
   // Impact Dashboard (overview body) — computed only for the overview tab.
-  const impactData = activeTab === 'overview' ? await getImpactData(tenant.id) : null
+  const impactData = effectiveTab === 'overview' ? await getImpactData(tenant.id) : null
 
   // ── Hero (overview only) — bound to real data already on the page ─────────────
   // The compact header is preserved verbatim for the Leads/Appointments tabs.
@@ -154,7 +163,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     </div>
   )
 
-  if (activeTab === 'overview' && impactData) {
+  if (effectiveTab === 'overview' && impactData) {
     const employeesTyped = aiEmployees as { id?: string; name?: string | null; status?: string | null; voice?: string | null }[]
     const primaryEmployee = employeesTyped.find((e) => e.status === 'active') || employeesTyped[0]
     const employeeName = primaryEmployee?.name || 'Your AI'
@@ -223,36 +232,40 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {topSection}
 
 
-      {/* Tabs */}
+      {/* Tabs — Leads/Appointments only appear when their module is enabled. */}
       <div className="flex gap-1 border-b border-hairline">
         <Link
           href="/dashboard"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'overview' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${effectiveTab === 'overview' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
         >
           Overview
         </Link>
-        <Link
-          href="/dashboard?tab=leads"
-          className={`tap-target max-md:hidden md:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
-        >
-          Leads
-          {stats.activeLeads > 0 && (
-            <span className="bg-ink text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-              {stats.activeLeads}
-            </span>
-          )}
-        </Link>
-        <Link
-          href="/dashboard?tab=appointments"
-          className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${activeTab === 'appointments' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
-        >
-          Appointments
-        </Link>
+        {pipelineOn && (
+          <Link
+            href="/dashboard?tab=leads"
+            className={`tap-target max-md:hidden md:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${effectiveTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          >
+            Leads
+            {stats.activeLeads > 0 && (
+              <span className="bg-ink text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+                {stats.activeLeads}
+              </span>
+            )}
+          </Link>
+        )}
+        {schedulingOn && (
+          <Link
+            href="/dashboard?tab=appointments"
+            className={`tap-target inline-block px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${effectiveTab === 'appointments' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+          >
+            Appointments
+          </Link>
+        )}
       </div>
 
-      {activeTab === 'leads' ? (
+      {effectiveTab === 'leads' ? (
         <LeadsTable leads={leads_list} links={leadLinks} />
-      ) : activeTab === 'appointments' ? (
+      ) : effectiveTab === 'appointments' ? (
         <AppointmentsTable appointments={appointments_list} />
       ) : (
         <ImpactDashboard data={impactData!} businessName={tenant.business_name} brainAgentId={brainAgentId} tenantId={tenant.id} />

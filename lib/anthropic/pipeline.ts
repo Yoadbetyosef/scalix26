@@ -8,6 +8,7 @@ import { currentDateContext } from '@/lib/appointments'
 import { catalogPromptLine } from '@/lib/stripe/connect'
 import { normalizePaymentSettings } from '@/lib/stripe/payment-collection'
 import { getRecognitionContext, recognitionPromptBlock } from '@/lib/customer/recognition'
+import { enabledModulesOf } from '@/lib/modules'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -146,6 +147,9 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   const tenant = tenantRes.data
   if (!tenant) throw new Error('Tenant not found')
+  // Per-tenant module entitlements gate the AI's tools: booking tools require `scheduling`,
+  // estimate handling requires `estimates`. Disabled modules → the tool/skill is never offered.
+  const enabledModules = enabledModulesOf(tenant)
 
   const employee = employeeRes.data
   if (!employee) throw new Error('No active AI employee found')
@@ -236,7 +240,9 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // Connect is active. Drives both the prompt injection and whether we enter the tool turn.
   const financialAvailable = !isVoice && isFinancialCapabilityAvailable(skills, tenant)
   const financialIntent = financialAvailable && detectFinancialIntent(input.messageContent)
-  const skillTriggered = (financialIntent ? 'payment_collection' : null) || detectSkillTrigger(input.messageContent, skills)
+  let skillTriggered = (financialIntent ? 'payment_collection' : null) || detectSkillTrigger(input.messageContent, skills)
+  // Estimate handling is gated by the `estimates` module.
+  if (skillTriggered === 'estimate_request' && !enabledModules.includes('estimates')) skillTriggered = null
 
   // Voice: trim KB to the first 500 chars of one row; SMS/social use full KB
   const kbForPrompt = isVoice
@@ -253,7 +259,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // Booking flow: derive which fields are already collected from the whole
   // conversation (customer messages + the AI's own confirmations) and inject a
   // "collected so far" summary so the AI never re-asks for details it has.
-  const inBooking = bookingInProgress(chatMessages)
+  const inBooking = enabledModules.includes('scheduling') && bookingInProgress(chatMessages)
   let bookingStatus = ''
   if (inBooking) {
     bookingStatus = buildBookingStatus(await extractBookingFields(chatMessages))

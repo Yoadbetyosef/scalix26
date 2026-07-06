@@ -1,11 +1,16 @@
 import { AppShell } from '@/components/app/app-shell'
+import { ModuleDisabled } from '@/components/app/module-disabled'
 import { createClient } from '@/lib/supabase/server'
+import { getTenantEnabledModules } from '@/lib/tenant'
 import { redirect } from 'next/navigation'
 
 export default async function ContactsLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
+
+  const modules = await getTenantEnabledModules()
+  if (!modules.includes('contacts')) return <AppShell><ModuleDisabled name="Contacts" /></AppShell>
 
   return <AppShell>{children}</AppShell>
 }

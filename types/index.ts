@@ -53,6 +53,7 @@ export interface Tenant {
   lead_intake_token: string | null
   slug: string | null
   onboarding_checklist: Record<string, boolean> | null
+  enabled_modules: string[] | null
   created_at: string
 }
 

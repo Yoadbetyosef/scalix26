@@ -25,6 +25,7 @@ import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { TrialWidget } from '@/components/dashboard/trial-widget'
 import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
+import { ALL_MODULES, enabledModulesOf, moduleForNav, type ModuleKey } from '@/lib/modules'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -39,9 +40,8 @@ const navItems = [
   { href: '/settings', icon: Settings, label: 'Settings' },
 ]
 
-// First 4 items in bottom bar, rest in "More" drawer
-const bottomPrimary = navItems.slice(0, 4)
-const bottomMore = navItems.slice(4)
+// First 4 (visible) items go in the mobile bottom bar, the rest in the "More" drawer.
+// The split happens per-render after module filtering (see visibleNav below).
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -53,6 +53,8 @@ export function Sidebar() {
   const [plan, setPlan] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
+  // Default to ALL so nothing flickers/hides before the tenant's modules load.
+  const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(ALL_MODULES)
 
   // Dashboard and Leads both live at /dashboard (Leads is ?tab=leads), so the
   // active highlight has to look at the tab, not just the pathname.
@@ -69,12 +71,13 @@ export function Sidebar() {
       if (!user) return
       const { data: tenant } = await supabase
         .from('tenants')
-        .select('business_name, plan, trial_ends_at')
+        .select('business_name, plan, trial_ends_at, enabled_modules')
         .eq('user_id', user.id)
         .single()
       if (tenant?.business_name) setBusinessName(tenant.business_name)
       setPlan(tenant?.plan ?? null)
       setTrialEndsAt(tenant?.trial_ends_at ?? null)
+      setEnabledModules(enabledModulesOf(tenant))
     }
     loadBusinessName()
   }, [])
@@ -90,7 +93,16 @@ export function Sidebar() {
     router.push('/auth/login')
   }
 
-  const moreActive = bottomMore.some(item => pathname.startsWith(item.href))
+  // Hide nav items whose module is disabled for this business. Items with no module
+  // (Dashboard, Analytics, Reports, Billing, Settings) always show. Filtering before the
+  // primary/more split keeps up to 4 items in the mobile bottom bar.
+  const visibleNav = navItems.filter((i) => {
+    const m = moduleForNav(i.href)
+    return !m || enabledModules.includes(m)
+  })
+  const bottomPrimaryVisible = visibleNav.slice(0, 4)
+  const bottomMoreVisible = visibleNav.slice(4)
+  const moreActive = bottomMoreVisible.some(item => pathname.startsWith(item.href))
 
   return (
     <>
@@ -106,7 +118,7 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-1">
-          {navItems.map(({ href, icon: Icon, label }) => {
+          {visibleNav.map(({ href, icon: Icon, label }) => {
             const active = itemActive(href, label)
             return (
               <Link
@@ -147,7 +159,7 @@ export function Sidebar() {
 
       {/* Mobile Bottom Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-hairline z-40 flex safe-area-inset-bottom">
-        {bottomPrimary.map(({ href, icon: Icon, label }) => {
+        {bottomPrimaryVisible.map(({ href, icon: Icon, label }) => {
           const active = itemActive(href, label)
           return (
             <Link
@@ -198,7 +210,7 @@ export function Sidebar() {
               </button>
             </div>
             <nav className="px-4 py-3">
-              {bottomMore.map(({ href, icon: Icon, label }) => {
+              {bottomMoreVisible.map(({ href, icon: Icon, label }) => {
                 const active = itemActive(href, label)
                 return (
                   <Link
