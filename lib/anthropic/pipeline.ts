@@ -9,6 +9,7 @@ import { catalogPromptLine } from '@/lib/stripe/connect'
 import { normalizePaymentSettings } from '@/lib/stripe/payment-collection'
 import { getRecognitionContext, recognitionPromptBlock } from '@/lib/customer/recognition'
 import { enabledModulesOf } from '@/lib/modules'
+import { trackLlm } from '@/lib/cost/track'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -302,7 +303,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // via /book — exactly the logic voice uses.
   let aiResponse = ''
   if (!isVoice && (inBooking || financialIntent)) {
-    aiResponse = await runTextToolTurn(systemPrompt, chatMessages, {
+    aiResponse = await runTextToolTurn(input.tenantId, systemPrompt, chatMessages, {
       leadToken: (tenant as { lead_intake_token?: string }).lead_intake_token || '',
       channel: input.channelType, // 'sms' | 'instagram' | 'facebook'
       customerPhoneFallback: input.channelType === 'sms' ? input.from : null,
@@ -311,13 +312,15 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       contactId: contact?.id ?? null,
     }, { includeBooking: inBooking, includeFinancial: financialAvailable })
   } else {
+    const model = isVoice ? VOICE_MODEL : MODEL
     const response = await anthropic.messages.create({
-      model: isVoice ? VOICE_MODEL : MODEL,
+      model,
       max_tokens: isVoice ? 120 : 500,
       system: systemPrompt,
       messages: chatMessages,
     })
     aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
+    trackLlm(input.tenantId, model, response.usage) // COGS: exact tokens → cost
   }
 
   const now = new Date().toISOString()
@@ -358,6 +361,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 // Returns the final assistant text. Fully fail-safe — on any error it falls back to a plain
 // reply so the pipeline never crashes.
 async function runTextToolTurn(
+  tenantId: string,
   systemPrompt: string,
   chatMessages: { role: 'user' | 'assistant'; content: string }[],
   ctx: BookingToolCtx,
@@ -366,6 +370,7 @@ async function runTextToolTurn(
   const plainReply = async (): Promise<string> => {
     try {
       const r = await anthropic.messages.create({ model: MODEL, max_tokens: 500, system: systemPrompt, messages: chatMessages })
+      trackLlm(tenantId, MODEL, r.usage) // COGS
       return r.content[0]?.type === 'text' ? r.content[0].text : ''
     } catch { return '' }
   }
@@ -385,6 +390,7 @@ async function runTextToolTurn(
         messages,
         tools,
       })
+      trackLlm(tenantId, MODEL, response.usage) // COGS
 
       const textBlocks = response.content.filter((c): c is Anthropic.TextBlock => c.type === 'text')
       if (textBlocks.length) text = textBlocks.map((b) => b.text).join(' ').trim()
@@ -433,6 +439,7 @@ async function generateConversationSummary(conversationId: string, tenantId: str
     }],
   })
 
+  trackLlm(tenantId, MODEL, summary.usage) // COGS
   const summaryText = summary.content[0].type === 'text' ? summary.content[0].text : ''
 
   await supabase
