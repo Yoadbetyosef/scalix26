@@ -69,6 +69,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
     let cancelled = false
     ;(async () => {
       try {
+        const tapT0 = performance.now()
         // Prefer the AudioContext already unlocked inside the user's tap (mobile autoplay
         // policy); only create one here as a fallback (e.g. desktop deep-links). We close
         // it on teardown ONLY if we created it — never the parent's borrowed context.
@@ -78,15 +79,17 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
           ownsCtxRef.current = true
         }
         ctxRef.current = ctx
-        // Best-effort resume; it's already unlocked in the tap, so never block mic/WS
-        // setup on it (a hung resume must not stall the whole conversation).
+        // Best-effort resume; it's already unlocked in the tap, so never block mic/WS setup.
         ctx.resume().catch(() => {})
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
-        streamRef.current = stream
 
-        // Ground the voice agent in THIS business's real data — fetched in PARALLEL with the
-        // socket connect so it never delays listening.
+        // LAYER 1 — from the instant the mic opens, every frame is buffered here until the
+        // agent is ready, then flushed in order. Nothing said during setup is lost (~10s cap).
+        const buffered: ArrayBufferLike[] = []
+        let agentReady = false
+        let vibrated = false
+
+        // LAYER 2 — mic, socket, and the data snapshot all start in PARALLEL from the tap.
+        // The socket needs no stream, so it connects immediately (not after getUserMedia).
         const snapshotPromise = (async () => {
           try { const r = await fetch('/api/ai/amy/snapshot'); if (r.ok) return ((await r.json()).snapshot || '') as string } catch { /* fine without it */ }
           return ''
@@ -95,34 +98,31 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
         const ws = new WebSocket(PROXY_URL)
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws
-        const t0 = performance.now()
 
-        ws.onopen = async () => {
-          connectedRef.current = true
-          log('proxy open', Math.round(performance.now() - t0), 'ms — REALTIME PATH active')
-          const snapshot = await snapshotPromise
-          if (cancelled || ws.readyState !== WebSocket.OPEN) return
-          ws.send(JSON.stringify({
-            type: 'config',
-            voice: TTS_VOICE(briefing.employeeVoice),
-            prompt: buildRealtimePrompt(briefing) + (snapshot ? `\n\nCURRENT BUSINESS DATA (real, this business only — answer from it, never say you lack access):\n${snapshot}` : ''),
-            // No spoken greeting — open straight into Listening so the user can talk immediately.
-            greeting: '',
-            inputSampleRate: ctx.sampleRate,
-            eot: 0.7,
-          }))
+        // Mic capture + buffering begins the moment the stream resolves — independent of the
+        // socket (getUserMedia runs in parallel with the connect above).
+        void (async () => {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+          if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
+          streamRef.current = stream
           const source = ctx.createMediaStreamSource(stream)
           const proc = ctx.createScriptProcessor(2048, 1, 1)
           procRef.current = proc
+          const maxChunks = Math.max(1, Math.ceil(10000 / ((1000 * 2048) / ctx.sampleRate))) // ~10s buffer cap
           proc.onaudioprocess = (e) => {
-            if (ws.readyState !== WebSocket.OPEN) return
+            if (cancelled) return
             const f32 = e.inputBuffer.getChannelData(0)
             const i16 = new Int16Array(f32.length)
             let sum = 0
             for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff; sum += s * s }
             const rms = Math.sqrt(sum / f32.length)
             const frameMs = (1000 * f32.length) / ctx.sampleRate
-            const emit = (buf: ArrayBufferLike) => { ws.send(buf); if (tRef.current.micFirstSent === undefined) { mk('micFirstSent'); log('mic streaming → agent') } }
+            // Forward live once the agent is ready; until then buffer (LAYER 1).
+            const emit = (buf: ArrayBufferLike) => {
+              if (agentReady && ws.readyState === WebSocket.OPEN) ws.send(buf)
+              else { buffered.push(buf); if (buffered.length > maxChunks) buffered.shift() }
+              if (tRef.current.micFirstSent === undefined) mk('micFirstSent')
+            }
 
             // Rudi is audibly speaking while her turn is active OR buffered audio is still
             // scheduled (AgentAudioDone can arrive before the tail finishes playing).
@@ -168,6 +168,33 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
           }
           const mute = ctx.createGain(); mute.gain.value = 0
           source.connect(proc); proc.connect(mute); mute.connect(ctx.destination)
+        })().catch((err: DOMException) => {
+          // Mic acquisition failed (denied / unavailable) — existing error handling.
+          if (err?.name === 'NotAllowedError') setErrorMsg(`Microphone access is off — allow the mic to talk to ${name}.`)
+          else setErrorMsg('Could not start the live conversation.')
+          setPhase('error')
+        })
+
+        // When the socket opens, send config (snapshot already fetched in parallel), then
+        // FLUSH everything the mic captured during setup and continue live (LAYER 1/2).
+        ws.onopen = async () => {
+          connectedRef.current = true
+          log('proxy open', Math.round(performance.now() - tapT0), 'ms')
+          const snapshot = await snapshotPromise
+          if (cancelled || ws.readyState !== WebSocket.OPEN) return
+          ws.send(JSON.stringify({
+            type: 'config',
+            voice: TTS_VOICE(briefing.employeeVoice),
+            prompt: buildRealtimePrompt(briefing) + (snapshot ? `\n\nCURRENT BUSINESS DATA (real, this business only — answer from it, never say you lack access):\n${snapshot}` : ''),
+            // No spoken greeting — open straight into Listening so the user can talk immediately.
+            greeting: '',
+            inputSampleRate: ctx.sampleRate,
+            eot: 0.7,
+          }))
+          agentReady = true
+          for (const b of buffered) ws.send(b)
+          log('agent ready', Math.round(performance.now() - tapT0), 'ms — flushed', buffered.length, 'buffered chunks')
+          buffered.length = 0
         }
 
         ws.onmessage = (ev) => {
@@ -175,7 +202,11 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
           let msg: { type?: string; role?: string; content?: string; description?: string }
           try { msg = JSON.parse(ev.data) } catch { return }
           switch (msg.type) {
-            case 'Welcome': case 'SettingsApplied': setPhase('live'); break
+            case 'Welcome': case 'SettingsApplied':
+              setPhase('live')
+              // LAYER 3 — honest transition: only now flip to "Listening" + buzz the user.
+              if (!vibrated) { vibrated = true; try { navigator.vibrate?.(30) } catch { /* unsupported */ }; log('tap → agent-ready', Math.round(performance.now() - tapT0), 'ms') }
+              break
             case 'UserStartedSpeaking':
               tRef.current = { micFirstSent: tRef.current.micFirstSent ?? performance.now(), userStartedSpeaking: performance.now() }
               reportedRef.current = false
@@ -240,7 +271,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
   }
 
   // Open straight into "Listening…" — no "Connecting…" flash (tap → listening → speak).
-  const statusLabel = phase === 'thinking' ? 'Thinking…' : phase === 'speaking' ? 'Speaking…' : phase === 'error' ? '' : 'Listening…'
+  const statusLabel = phase === 'connecting' ? 'Connecting…' : phase === 'thinking' ? 'Thinking…' : phase === 'speaking' ? 'Speaking…' : phase === 'error' ? '' : 'Listening…'
   const alive = phase === 'live' || phase === 'thinking' || phase === 'speaking'
 
   return (
