@@ -1,14 +1,12 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { isAdminEmail } from './emails'
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'yoadbetyosef@gmail.com').split(',').map(e => e.trim())
+// Re-export so existing imports of `isAdminEmail` from '@/lib/admin/auth' keep working.
+export { isAdminEmail } from './emails'
 
-export async function isAdmin(req?: NextRequest): Promise<boolean> {
+export async function isAdmin(_req?: NextRequest): Promise<boolean> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  return !!user && ADMIN_EMAILS.includes(user.email || '')
-}
-
-export function isAdminEmail(email: string): boolean {
-  return ADMIN_EMAILS.includes(email)
+  return isAdminEmail(user?.email)
 }

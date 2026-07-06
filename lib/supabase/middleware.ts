@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isAdminEmail } from '@/lib/admin/emails'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -30,7 +31,6 @@ export async function updateSession(request: NextRequest) {
   // Public routes that don't need auth
   const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms']
   const adminRoutes = ['/admin', '/api/admin']
-  const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'yoadbetyosef@gmail.com').split(',').map(e => e.trim())
 
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
 
@@ -54,7 +54,7 @@ export async function updateSession(request: NextRequest) {
       }
     }
 
-    if (user && !ADMIN_EMAILS.includes(user.email || '')) {
+    if (user && !isAdminEmail(user.email)) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)
