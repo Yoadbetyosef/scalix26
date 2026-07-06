@@ -63,13 +63,11 @@ export function DashboardHero({
             <h1 className="text-2xl font-bold tracking-tight text-ink">Dashboard</h1>
             {businessName && <p className="mt-0.5 truncate text-sm text-muted">{businessName}</p>}
           </div>
-          <span
-            className={`ml-3 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium ${
-              status === 'attention' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
-            }`}
-          >
-            <span className={`h-2 w-2 rounded-full ${status === 'attention' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-            {employeeName} {status === 'attention' ? 'needs you' : 'on duty'}
+          {/* Always the green status pill — the amber banner below is the single attention
+              entry point, so we don't duplicate the alert here. */}
+          <span className="ml-3 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[13px] font-medium text-emerald-700">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            {employeeName} on duty
           </span>
         </div>
 

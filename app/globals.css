@@ -344,6 +344,10 @@ a[role="button"]:not([aria-disabled="true"]):active,
 @keyframes sx-ring-pulse { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(1.9); opacity: 0; } }
 .sx-ring { position: absolute; inset: 0; border-radius: 9999px; border-width: 2px; border-style: solid; pointer-events: none; animation: sx-ring-pulse 2.4s ease-out infinite; will-change: transform, opacity; }
 .sx-ring-live { animation-duration: 1.1s; } /* live call: rings speed up */
+/* Pinned action bar: a tighter pulse (scale 1.4 vs 1.9) so the rings stay fully inside the
+   16px row inset and never clip at the screen edge. */
+@keyframes sx-ring-pulse-sm { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.4); opacity: 0; } }
+.sx-ring-sm { animation-name: sx-ring-pulse-sm; }
 
 /* B4 kinetic hero number: quick scale pop on a live increase. */
 @keyframes sx-pop { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.12); } }

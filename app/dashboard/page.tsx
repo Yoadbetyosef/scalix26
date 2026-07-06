@@ -216,8 +216,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     )
   }
 
+  // max-md bottom padding clears the pinned Talk-to-Rudi bar (~92px) which sits above the
+  // fixed tab nav — on top of <main>'s pb-[72px] and the device safe-area inset.
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-md:pb-[150px]">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-md:pb-[calc(100px_+_env(safe-area-inset-bottom))]">
       {topSection}
 
 

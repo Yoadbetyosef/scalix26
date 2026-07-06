@@ -73,7 +73,7 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
       {mounted &&
         createPortal(
           <div
-            className="fixed inset-x-0 z-30 border-t border-hairline/70 bg-white/85 px-4 pb-3 pt-4 backdrop-blur-md md:hidden"
+            className="fixed inset-x-0 z-30 border-t border-hairline/70 bg-white/90 px-4 pb-3 pt-4 backdrop-blur-md md:hidden"
             style={{ bottom: 'calc(56px + env(safe-area-inset-bottom))' }}
           >
             <div className="mx-auto flex max-w-md items-center gap-3.5">
@@ -82,9 +82,9 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
                 aria-label={`Talk to ${name}`}
                 className="relative inline-flex flex-shrink-0 items-center justify-center transition-transform active:scale-95"
               >
-                <span className="sx-ring" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
-                <span className="sx-ring" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
-                <span className="sx-ring" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
+                <span className="sx-ring sx-ring-sm" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
+                <span className="sx-ring sx-ring-sm" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
+                <span className="sx-ring sx-ring-sm" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
                 <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" />
               </button>
               <button
@@ -95,12 +95,6 @@ export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
                 Talk to {name}
               </button>
             </div>
-            <button
-              onClick={() => setMode('text')}
-              className="mt-2 block w-full text-center text-sm font-medium text-muted transition-colors active:text-ink"
-            >
-              Type instead
-            </button>
           </div>,
           document.body,
         )}
