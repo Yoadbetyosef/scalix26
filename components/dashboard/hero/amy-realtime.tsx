@@ -20,6 +20,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [userText, setUserText] = useState('')
   const [amyText, setAmyText] = useState('')
+  // A real action the voice agent drafted / is executing (with verbal confirmation).
+  const [voiceAction, setVoiceAction] = useState<{ id?: string; label: string; body: string; status: 'draft' | 'sending' | 'sent' | 'failed'; error?: string } | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const ctxRef = useRef<AudioContext | null>(null)
@@ -199,7 +201,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
 
         ws.onmessage = (ev) => {
           if (typeof ev.data !== 'string') { mk('firstAudioPacket'); enqueuePcm(new Int16Array(ev.data as ArrayBuffer)); return }
-          let msg: { type?: string; role?: string; content?: string; description?: string }
+          let msg: { type?: string; role?: string; content?: string; description?: string; functions?: { id: string; name: string; arguments?: string }[] }
           try { msg = JSON.parse(ev.data) } catch { return }
           switch (msg.type) {
             case 'Welcome': case 'SettingsApplied':
@@ -218,6 +220,40 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
               break
             case 'AgentStartedSpeaking': agentSpeakingRef.current = true; resetGate(); setPhase('speaking'); break
             case 'AgentAudioDone': agentSpeakingRef.current = false; setPhase('live'); break
+            case 'FunctionCallRequest': {
+              // The agent wants to perform a real action. We (authenticated browser) execute it
+              // via the app API, show a status card, and return the TRUE result to the agent —
+              // so it can only claim success after a real 'executed' result.
+              const fns = msg.functions || []
+              ;(async () => {
+                for (const fn of fns) {
+                  let args: Record<string, string> = {}
+                  try { args = JSON.parse(fn.arguments || '{}') } catch { /* not JSON */ }
+                  let content = 'Unknown function.'
+                  try {
+                    if (fn.name === 'request_action') {
+                      const r = await fetch('/api/assistant/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action_type: args.action_type, target: args.target, body: args.body }) })
+                      const d = await r.json()
+                      if (d.status === 'drafted') {
+                        setVoiceAction({ id: d.id, label: d.label || 'Action', body: d.body || args.body || '', status: 'draft' })
+                        content = `Drafted (action_id=${d.id}). Read the owner your draft and ask if you should send it. Do NOT say it was sent yet. Draft: "${d.body || args.body || ''}"`
+                      } else {
+                        setVoiceAction(null)
+                        content = `ACTION_BLOCKED: ${d.reason} — tell the owner this exactly; do not claim it was done.`
+                      }
+                    } else if (fn.name === 'execute_action') {
+                      setVoiceAction((p) => (p ? { ...p, status: 'sending' } : p))
+                      const r = await fetch(`/api/assistant/actions/${args.action_id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm' }) })
+                      const d = await r.json()
+                      if (r.ok && d.ok) { setVoiceAction((p) => (p ? { ...p, status: 'sent' } : p)); content = 'Sent successfully.' }
+                      else { const err = d.error || 'The action failed. Please try again.'; setVoiceAction((p) => (p ? { ...p, status: 'failed', error: err } : p)); content = `Failed: ${err}` }
+                    }
+                  } catch (e) { content = `Failed: ${(e as Error).message}` }
+                  try { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content })) } catch { /* noop */ }
+                }
+              })()
+              break
+            }
             case 'Error': case 'Warning':
               log(msg.type, msg.description)
               if (msg.type === 'Error') { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') }
@@ -310,6 +346,19 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
                   <div className="mt-3">
                     {userText && <p className="text-xs text-muted">“{userText}”</p>}
                     {amyText && <p className="mt-1 text-[15px] font-light leading-relaxed text-ink">{amyText}</p>}
+                  </div>
+                )}
+                {voiceAction && (
+                  <div className="mt-3 w-full rounded-xl border border-accent/30 bg-sunken px-4 py-3 text-left">
+                    <div className="mb-1 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{voiceAction.label}</span>
+                      <span className="text-[11px] font-medium text-subtle">
+                        {voiceAction.status === 'draft' ? 'Say “yes” to send' : voiceAction.status === 'sending' ? 'Sending…' : voiceAction.status === 'sent' ? 'Sent ✓' : 'Failed'}
+                      </span>
+                    </div>
+                    <p className="text-[13px] leading-snug text-ink">{voiceAction.body || '(no content)'}</p>
+                    {voiceAction.status === 'failed' && <p className="mt-1 text-[12px] text-red-600">{voiceAction.error}</p>}
+                    {voiceAction.status === 'sent' && <p className="mt-1 text-[12px] text-emerald-600">Sent successfully.</p>}
                   </div>
                 )}
               </>

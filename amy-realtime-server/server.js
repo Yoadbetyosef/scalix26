@@ -16,6 +16,30 @@ const PORT = process.env.PORT || process.env.AMY_REALTIME_PORT || 8081;
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 const DEEPGRAM_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 
+// Client-side functions (no endpoint) — Deepgram sends FunctionCallRequest to us, we forward
+// it to the authenticated browser, which executes via the app's API and returns the result.
+// This is how the owner's voice assistant performs REAL actions (with verbal confirmation).
+const AGENT_FUNCTIONS = [
+  {
+    name: 'request_action',
+    description: "Use this WHENEVER the owner asks you to send or do something external — reply on Instagram/Facebook, send an email/SMS/WhatsApp, send an invoice or payment link, create a task, update a lead, book an appointment, or update the catalog. It checks whether the action is possible and DRAFTS it. It does NOT send. Never claim you sent anything from this.",
+    parameters: {
+      type: 'object',
+      properties: {
+        action_type: { type: 'string', description: 'e.g. reply_instagram, reply_facebook, send_sms, send_email, send_payment_link, update_lead, book_appointment' },
+        target: { type: 'string', description: 'recipient — phone, handle, or email if known' },
+        body: { type: 'string', description: 'the exact message/content to send — your draft' },
+      },
+      required: ['action_type'],
+    },
+  },
+  {
+    name: 'execute_action',
+    description: 'Send a drafted action FOR REAL. Call this ONLY after the owner has clearly confirmed (said yes) that they want it sent. Use the action_id from the request_action result.',
+    parameters: { type: 'object', properties: { action_id: { type: 'string' } }, required: ['action_id'] },
+  },
+];
+
 const server = http.createServer((req, res) => { res.writeHead(200); res.end('amy-realtime-server ok'); });
 const wss = new WebSocket.Server({ server });
 
@@ -39,6 +63,7 @@ wss.on('connection', (browser) => {
     if (process.env.ANTHROPIC_API_KEY) {
       think.endpoint = { url: 'https://api.anthropic.com/v1/messages', headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY } };
     }
+    think.functions = AGENT_FUNCTIONS; // real action execution (handled in the browser)
     const settings = {
       type: 'Settings',
       audio: {
@@ -76,6 +101,8 @@ wss.on('connection', (browser) => {
     if (isBinary) { if (dg.readyState === WebSocket.OPEN) dg.send(data); return } // mic audio → agent
     let msg; try { msg = JSON.parse(data.toString()); } catch { return }
     if (msg.type === 'config') { config = msg; trySendSettings(); }
+    // The browser executed a function (real action) — relay its result to the agent.
+    else if (msg.type === 'FunctionCallResponse') { if (dg.readyState === WebSocket.OPEN) dg.send(data.toString()); }
   });
   browser.on('close', () => { console.log('[amy] browser disconnected'); try { dg.close(); } catch {} });
   browser.on('error', () => { try { dg.close(); } catch {} });
