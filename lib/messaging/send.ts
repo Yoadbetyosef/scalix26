@@ -45,7 +45,9 @@ export async function deliverToConversation(tenantId: string, conversationId: st
       if (!contactPhone || !token) return { delivered: false, error: `${channel} is not fully connected (missing recipient or access token).` }
       const res = await fetch('https://graph.facebook.com/v21.0/me/messages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipient: { id: contactPhone }, message: { text }, access_token: token }),
+        // HUMAN_AGENT tag: a human (the owner) is replying — extends the standard 24h window to
+        // 7 days. Requires the Meta app's "Human Agent" feature; harmless otherwise (same error).
+        body: JSON.stringify({ recipient: { id: contactPhone }, message: { text }, messaging_type: 'MESSAGE_TAG', tag: 'HUMAN_AGENT', access_token: token }),
       })
       if (!res.ok) return { delivered: false, error: `${channel} send failed: ${res.status} ${(await res.text()).slice(0, 160)}` }
       externalId = ((await res.json()) as { message_id?: string })?.message_id
