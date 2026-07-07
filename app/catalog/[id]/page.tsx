@@ -51,7 +51,7 @@ export default function ProductDetailPage() {
     if (!move) return
     setBusy(true)
     try {
-      const res = await fetch(`/api/catalog/products/${id}/movement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...move, quantity: Number(move.quantity) || 0 }) })
+      const res = await fetch(`/api/catalog/products/${id}/movement`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ movement_type: move.type, quantity: Number(move.quantity) || 0, from_location: move.from_location, to_location: move.to_location, note: move.note }) })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Failed')
       setMove(null); show('Stock updated'); load()
