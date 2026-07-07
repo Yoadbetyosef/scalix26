@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
 import { FINANCIAL_TOOLS, executeFinancialTool, isFinancialTool, isFinancialCapabilityAvailable, detectFinancialIntent, financialIntentPrompt } from './financial-intent'
+import { CATALOG_TOOLS, executeCatalogTool, isCatalogTool, detectCatalogIntent, catalogPromptGuidance } from './catalog-tools'
 import { currentDateContext } from '@/lib/appointments'
 import { catalogPromptLine } from '@/lib/stripe/connect'
 import { normalizePaymentSettings } from '@/lib/stripe/payment-collection'
@@ -261,12 +262,19 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // conversation (customer messages + the AI's own confirmations) and inject a
   // "collected so far" summary so the AI never re-asks for details it has.
   const inBooking = enabledModules.includes('scheduling') && bookingInProgress(chatMessages)
+  // Business Catalog (inventory module): let the AI look up real availability on demand.
+  const catalogEnabled = enabledModules.includes('inventory')
+  const catalogIntent = catalogEnabled && !isVoice && detectCatalogIntent(input.messageContent)
   let bookingStatus = ''
   if (inBooking) {
     bookingStatus = buildBookingStatus(await extractBookingFields(chatMessages))
   }
 
   let systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
+
+  // Catalog awareness (text channels, inventory module on) — tells the AI it can look up real
+  // stock and must never invent inventory.
+  if (catalogEnabled && !isVoice) systemPrompt += `\n\n${catalogPromptGuidance()}`
 
   // Financial Intent prompt — injected ONLY when the capability is available (skill ON +
   // Stripe connected). Includes the real product catalog so the AI can take a payment with
@@ -302,7 +310,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // actively booking get the booking tools, so the AI actually persists the booking
   // via /book — exactly the logic voice uses.
   let aiResponse = ''
-  if (!isVoice && (inBooking || financialIntent)) {
+  if (!isVoice && (inBooking || financialIntent || catalogIntent)) {
     aiResponse = await runTextToolTurn(input.tenantId, systemPrompt, chatMessages, {
       leadToken: (tenant as { lead_intake_token?: string }).lead_intake_token || '',
       channel: input.channelType, // 'sms' | 'instagram' | 'facebook'
@@ -310,7 +318,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       appUrl: process.env.NEXT_PUBLIC_APP_URL || '',
       conversationId,
       contactId: contact?.id ?? null,
-    }, { includeBooking: inBooking, includeFinancial: financialAvailable })
+    }, { includeBooking: inBooking, includeFinancial: financialAvailable, includeCatalog: catalogIntent })
   } else {
     const model = isVoice ? VOICE_MODEL : MODEL
     const response = await anthropic.messages.create({
@@ -365,7 +373,7 @@ async function runTextToolTurn(
   systemPrompt: string,
   chatMessages: { role: 'user' | 'assistant'; content: string }[],
   ctx: BookingToolCtx,
-  opts: { includeBooking: boolean; includeFinancial: boolean },
+  opts: { includeBooking: boolean; includeFinancial: boolean; includeCatalog?: boolean },
 ): Promise<string> {
   const plainReply = async (): Promise<string> => {
     try {
@@ -375,9 +383,14 @@ async function runTextToolTurn(
     } catch { return '' }
   }
 
-  const tools = [...(opts.includeBooking ? BOOKING_TOOLS : []), ...(opts.includeFinancial ? FINANCIAL_TOOLS : [])]
-  // Without our own API URL (can't reach the backend) or with no tools — answer normally.
-  if (!ctx.appUrl || tools.length === 0) return plainReply()
+  const tools = [
+    ...(opts.includeBooking ? BOOKING_TOOLS : []),
+    ...(opts.includeFinancial ? FINANCIAL_TOOLS : []),
+    ...(opts.includeCatalog ? CATALOG_TOOLS : []),
+  ]
+  // Booking/financial tools hit our backend (need appUrl); catalog reads the DB directly.
+  const needsBackend = opts.includeBooking || opts.includeFinancial
+  if (tools.length === 0 || (needsBackend && !ctx.appUrl && !opts.includeCatalog)) return plainReply()
 
   try {
     const messages: Anthropic.MessageParam[] = chatMessages.map((m) => ({ role: m.role, content: m.content }))
@@ -402,7 +415,9 @@ async function runTextToolTurn(
       const results: Anthropic.ToolResultBlockParam[] = []
       for (const tu of toolUses) {
         // Route each call to the right capability's executor.
-        const out = isFinancialTool(tu.name)
+        const out = isCatalogTool(tu.name)
+          ? await executeCatalogTool(tu.name, tu.input as Record<string, unknown>, tenantId)
+          : isFinancialTool(tu.name)
           ? await executeFinancialTool(tu.name, tu.input as Record<string, unknown>, ctx)
           : await executeBookingTool(tu.name, tu.input as Record<string, unknown>, ctx)
         results.push({ type: 'tool_result', tool_use_id: tu.id, content: out })

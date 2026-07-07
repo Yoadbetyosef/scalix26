@@ -74,6 +74,7 @@ const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/ai-employees', module: 'ai_voice' },
   { prefix: '/test-ai', module: 'ai_voice' },
   { prefix: '/inventory', module: 'inventory' },
+  { prefix: '/catalog', module: 'inventory' },
   { prefix: '/pipeline', module: 'pipeline' },
   { prefix: '/estimates', module: 'estimates' },
   { prefix: '/analytics', module: 'analytics' },
