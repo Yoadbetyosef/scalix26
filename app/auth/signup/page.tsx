@@ -26,10 +26,12 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [smsConsent, setSmsConsent] = useState(false)
   const supabase = createClient()
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
+    if (!smsConsent) { setError('Please agree to receive SMS messages to continue.'); return }
     setLoading(true)
     setError('')
     // Industry is no longer collected at signup — default from the brand (e.g. the
@@ -144,10 +146,31 @@ export default function SignupPage() {
           </div>
         )}
 
+        {/* SMS consent + legal — compact, subtle legal text directly above Continue. */}
+        <div className="space-y-1.5">
+          <label className="flex items-start gap-2 text-[11px] leading-snug text-muted">
+            <input
+              type="checkbox"
+              required
+              checked={smsConsent}
+              onChange={(e) => setSmsConsent(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 rounded border-hairline-strong accent-black"
+            />
+            <span>I agree to receive SMS messages from Scalix26 regarding my account and service updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Reply HELP for assistance.</span>
+          </label>
+          <p className="text-[10px] leading-snug text-muted/70">
+            By creating an account, you agree to our{' '}
+            <a href="https://scalix26.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Terms of Service</a>{' '}
+            and{' '}
+            <a href="https://scalix26.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Privacy Policy</a>.
+          </p>
+        </div>
+
         <Button
           type="submit"
           loading={loading}
-          className="mt-1 h-12 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-sm transition-all hover:bg-black/90 hover:shadow-md"
+          disabled={!smsConsent}
+          className="mt-1 h-12 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-sm transition-all hover:bg-black/90 hover:shadow-md disabled:opacity-50 disabled:hover:shadow-sm"
         >
           Continue
         </Button>
