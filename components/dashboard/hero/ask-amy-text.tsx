@@ -14,6 +14,10 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
   const [question, setQuestion] = useState<string | null>(null)
   const [answer, setAnswer] = useState('')
   const [busy, setBusy] = useState(false)
+  // Pending action awaiting the owner's confirmation (drafted by the assistant).
+  const [pending, setPending] = useState<{ id: string; type: string; body: string; target: string | null } | null>(null)
+  const [actState, setActState] = useState<'draft' | 'sending' | 'sent' | 'failed'>('draft')
+  const [actErr, setActErr] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const unlockedRef = useRef(false)
 
@@ -27,7 +31,7 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
     const q = text.trim()
     if (!q || busy) return
     unlock()
-    setInput(''); setQuestion(q); setAnswer(''); setBusy(true)
+    setInput(''); setQuestion(q); setAnswer(''); setBusy(true); setPending(null); setActErr(null); setActState('draft')
     try {
       // Chief-of-Staff path: Amy retrieves THIS business's real data before answering.
       const res = await fetch('/api/ai/amy', {
@@ -42,10 +46,33 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
         a.src = `/api/tts?voice=${encodeURIComponent(TTS_VOICE(briefing.employeeVoice))}&text=${encodeURIComponent(acc.trim())}`
         a.play().catch(() => {})
       }
+      // Surface any action the assistant just drafted so the owner can confirm it.
+      try {
+        const pr = await fetch('/api/assistant/actions?status=pending&limit=1').then((r) => r.json())
+        const a = pr?.actions?.[0]
+        if (a && Date.now() - new Date(a.created_at).getTime() < 45000) setPending({ id: a.id, type: a.action_type, body: a.payload?.body || '', target: a.target_id })
+      } catch { /* no action */ }
     } catch {
       setAnswer(`I couldn't reach my notes just now — give me a moment and ask again.`)
     } finally { setBusy(false) }
   }
+
+  async function confirmAction() {
+    if (!pending) return
+    setActState('sending'); setActErr(null)
+    try {
+      const res = await fetch(`/api/assistant/actions/${pending.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm' }) })
+      const d = await res.json()
+      if (res.ok && d.ok) setActState('sent')
+      else { setActState('failed'); setActErr(d.error || 'The action failed. Please try again.') }
+    } catch { setActState('failed'); setActErr('The action failed. Please try again.') }
+  }
+  async function cancelAction() {
+    if (!pending) return
+    try { await fetch(`/api/assistant/actions/${pending.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel' }) }) } catch { /* noop */ }
+    setPending(null)
+  }
+  const humanType = (t: string) => t.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
   return (
     <div className="mx-auto w-full max-w-md text-left">
@@ -59,6 +86,25 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
             </div>
             <p className="text-[15px] font-light leading-relaxed text-ink">{answer || '…'}</p>
           </div>
+        </div>
+      )}
+
+      {pending && (
+        <div className="mb-3 rounded-2xl border border-accent/30 bg-white px-5 py-4 text-left shadow-e1">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-accent-strong">{humanType(pending.type)}{pending.target ? ` → ${pending.target}` : ''}</span>
+            <span className="text-xs font-medium text-subtle">{actState === 'draft' ? 'Waiting for confirmation' : actState === 'sending' ? 'Sending…' : actState === 'sent' ? 'Sent' : 'Failed'}</span>
+          </div>
+          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{pending.body || '(no content drafted)'}</p>
+          {actState === 'draft' && (
+            <div className="mt-3 flex gap-2">
+              <button onClick={confirmAction} className="rounded-full bg-ink px-5 py-2 text-sm font-semibold text-white active:scale-95">Send</button>
+              <button onClick={cancelAction} className="rounded-full border border-hairline-strong px-4 py-2 text-sm text-subtle">Cancel</button>
+            </div>
+          )}
+          {actState === 'sending' && <p className="mt-2 text-sm text-subtle">Sending…</p>}
+          {actState === 'sent' && <p className="mt-2 text-sm font-medium text-emerald-600">Sent successfully ✓</p>}
+          {actState === 'failed' && <p className="mt-2 text-sm font-medium text-red-600">Couldn’t send — {actErr}</p>}
         </div>
       )}
 

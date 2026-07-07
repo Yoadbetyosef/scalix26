@@ -8,6 +8,7 @@ import { metricsSource } from './sources/metrics'
 import { knowledgeSource } from './sources/knowledge'
 import { analyzeSource } from './sources/analyze'
 import { searchSource } from './sources/search'
+import { actionSource } from './sources/action'
 
 // ── The registry ────────────────────────────────────────────────────────────────
 // Add a new data source here (one line) and Amy can use it immediately. Her core
@@ -22,6 +23,7 @@ const SOURCES: ContextSource[] = [
   appointmentsSource,
   leadsSource,
   knowledgeSource,
+  actionSource,
 ]
 
 export function amyTools() {
