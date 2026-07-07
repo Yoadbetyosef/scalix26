@@ -27,7 +27,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       db.from('ai_employees').select('id, name, voice, status, system_prompt').eq('tenant_id', id),
       db.from('channels').select('type, status, twilio_number, meta_page_id').eq('tenant_id', id),
       db.from('knowledge_base').select('*', { count: 'exact', head: true }).eq('tenant_id', id),
-      db.from('conversations').select('channel, duration_seconds').eq('tenant_id', id).gte('created_at', monthISO),
+      // Voice calls + minutes come from analytics_events (channel='voice', data.duration_seconds).
+      db.from('analytics_events').select('data').eq('tenant_id', id).eq('event_type', 'message_handled').gte('created_at', monthISO),
       db.from('messages').select('*', { count: 'exact', head: true }).eq('tenant_id', id).gte('timestamp', monthISO),
       mcount('sms'), mcount('whatsapp'), mcount('instagram'), mcount('facebook'), mcount('email'),
       db.from('admin_notes').select('id, admin_email, body, created_at').eq('tenant_id', id).order('created_at', { ascending: false }),
@@ -36,9 +37,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const authUser = authRes.data?.user
   const channels = channelsRes.data || []
-  const convos = convosRes.data || []
-  const calls = convos.filter((c) => c.channel === 'voice').length
-  const minutes = Math.round(convos.reduce((s, c) => s + (c.duration_seconds || 0), 0) / 60)
+  const voiceEvents = (convosRes.data || [])
+    .map((e) => e.data as { channel?: string; duration_seconds?: number } | null)
+    .filter((d): d is { channel?: string; duration_seconds?: number } => !!d && d.channel === 'voice')
+  const calls = voiceEvents.length
+  const minutes = Math.round(voiceEvents.reduce((s, d) => s + (d.duration_seconds || 0), 0) / 60)
 
   const hasChannel = (types: string[], needMeta?: boolean) =>
     channels.some((c) => types.includes(c.type) && c.status === 'connected' && (!needMeta || c.meta_page_id))

@@ -23,7 +23,9 @@ export async function GET() {
     q('tenants').eq('plan', 'pro'),
     q('tenants').eq('plan', 'business'),
     q('tenants').neq('plan', 'trial').is('suspended_at', null),
-    q('conversations').eq('channel', 'voice').gte('created_at', todayISO),
+    // Handled voice calls are logged to analytics_events (message_handled, data.channel='voice')
+    // by /api/analytics/call — the real per-call marker (conversations.duration is not set).
+    q('analytics_events').eq('event_type', 'message_handled').eq('data->>channel', 'voice').gte('created_at', todayISO),
     q('messages').gte('timestamp', todayISO),
     q('leads').gte('created_at', todayISO),
     q('appointments').gte('created_at', todayISO),
