@@ -75,9 +75,10 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
             <div>
               <label className={`inline-block cursor-pointer rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken ${uploading ? 'opacity-50' : ''}`}>
                 {uploading ? 'Uploading…' : 'Upload photo'}
-                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }} />
+                <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }} />
               </label>
               {f.image_url && <button type="button" onClick={() => set('image_url', '')} className="ml-2 text-sm text-subtle hover:text-ink">Remove</button>}
+              {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
             </div>
           </div>
           <input className={`${input} mt-2`} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="…or paste an image URL" />

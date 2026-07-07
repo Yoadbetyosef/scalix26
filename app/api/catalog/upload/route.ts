@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const file = form?.get('file')
   if (!(file instanceof File)) return NextResponse.json({ error: 'No file provided.' }, { status: 400 })
   const ext = EXT[file.type]
-  if (!ext) return NextResponse.json({ error: 'Only PNG, JPG, WEBP or GIF images are allowed.' }, { status: 400 })
+  if (!ext) return NextResponse.json({ error: `Unsupported image type (${file.type || 'unknown'}). Use JPG, PNG, WEBP or GIF${/heic|heif/i.test(file.type) ? ' — iPhone HEIC photos aren’t supported; change the format to JPG first' : ''}.` }, { status: 400 })
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Image is too large (max 10MB).' }, { status: 400 })
 
   const buf = Buffer.from(await file.arrayBuffer())
