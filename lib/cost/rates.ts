@@ -27,8 +27,8 @@ export const RATE_TWILIO_SMS_PER_SEGMENT = 0.0083 // Twilio US SMS, per segment
 export const RATE_TWILIO_VOICE_PER_MIN = 0.0085 // Twilio US local inbound voice (AI receives calls)
 
 // Voice LLM (Anthropic BYO inside the Deepgram Voice Agent). Deepgram bills by TIME and does
-// NOT report these tokens, and routing live calls through a logging proxy risks the phone
-// pipeline — so we ESTIMATE it from real voice minutes. Grounded on Claude Haiku 4.5 at a few
-// short turns/min with accumulating context (~6k in + ~200 out tokens/min ≈ $0.006/min).
-// Tune this to your measured Anthropic voice spend if you have it.
-export const RATE_VOICE_LLM_PER_MIN = 0.006
+// NOT report these tokens. This rate is DERIVED FROM REAL DATA: measuring token usage across
+// 2,152 stored voice-transcript messages (98 conversations) at Claude Haiku 4.5 rates gave
+// ~$1.38 of LLM cost over ~116–146 real voice minutes → ≈ $0.011/min. Re-derive if your call
+// mix changes, or replace with exact per-token logging (voice-LLM proxy) if you add it.
+export const RATE_VOICE_LLM_PER_MIN = 0.011

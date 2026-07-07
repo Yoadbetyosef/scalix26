@@ -25,7 +25,9 @@ export async function GET() {
   const [tenantsRes, llmRes, convRes, smsRes, learnRes] = await Promise.all([
     db.from('tenants').select('id, business_name, plan'),
     db.from('usage_events').select('tenant_id, cost_usd').eq('kind', 'llm').gte('created_at', iso).limit(100000),
-    db.from('conversations').select('tenant_id, duration_seconds').eq('channel', 'voice').gte('created_at', iso).limit(100000),
+    // Voice minutes live on analytics_events (channel='voice', data.duration_seconds) — set by
+    // /api/analytics/call. conversations.duration_seconds is not populated.
+    db.from('analytics_events').select('tenant_id, data').eq('event_type', 'message_handled').gte('created_at', iso).limit(200000),
     db.from('messages').select('tenant_id').eq('channel', 'sms').gte('timestamp', iso).limit(200000),
     // learning_jobs may not exist / lack created_at → resolves with {error}, handled as empty.
     db.from('learning_jobs').select('tenant_id, actual_cost').gte('created_at', iso).limit(100000),
@@ -36,7 +38,10 @@ export async function GET() {
   const b = (id: string) => { let x = perTenant.get(id); if (!x) { x = { llm: 0, voiceMin: 0, sms: 0, learning: 0 }; perTenant.set(id, x) } return x }
 
   for (const r of llmRes.data || []) if (r.tenant_id) b(r.tenant_id).llm += Number(r.cost_usd) || 0
-  for (const r of convRes.data || []) if (r.tenant_id) b(r.tenant_id).voiceMin += (Number(r.duration_seconds) || 0) / 60
+  for (const r of convRes.data || []) {
+    const dv = r.data as { channel?: string; duration_seconds?: number } | null
+    if (r.tenant_id && dv?.channel === 'voice' && typeof dv.duration_seconds === 'number') b(r.tenant_id).voiceMin += dv.duration_seconds / 60
+  }
   for (const r of smsRes.data || []) if (r.tenant_id) b(r.tenant_id).sms += 1
   const learnRows = (learnRes.data || []) as { tenant_id: string; actual_cost: number }[]
   for (const r of learnRows) if (r.tenant_id) b(r.tenant_id).learning += Number(r.actual_cost) || 0
