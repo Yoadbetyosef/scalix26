@@ -72,13 +72,19 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
               // eslint-disable-next-line @next/next/no-img-element
               ? <img src={f.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg border border-hairline object-cover" />
               : <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-xs text-muted">No photo</span>}
-            <div>
-              <label className={`inline-block cursor-pointer rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken ${uploading ? 'opacity-50' : ''}`}>
-                {uploading ? 'Uploading…' : 'Upload photo'}
-                <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }} />
-              </label>
-              {f.image_url && <button type="button" onClick={() => set('image_url', '')} className="ml-2 text-sm text-subtle hover:text-ink">Remove</button>}
-              {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+            <div className="min-w-0">
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploading}
+                onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }}
+                className="block w-full cursor-pointer text-sm text-subtle file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-hairline-strong file:bg-white file:px-3 file:py-2 file:text-sm file:font-medium file:text-ink hover:file:bg-sunken"
+              />
+              <div className="mt-1 flex items-center gap-3">
+                {uploading && <span className="text-xs text-subtle">Uploading…</span>}
+                {f.image_url && <button type="button" onClick={() => set('image_url', '')} className="text-sm text-subtle hover:text-ink">Remove photo</button>}
+              </div>
+              {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
             </div>
           </div>
           <input className={`${input} mt-2`} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="…or paste an image URL" />
