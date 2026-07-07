@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AVAILABILITY_STATUSES, AVAILABILITY_LABELS, PRODUCT_STATUSES, type CatalogProduct } from '@/lib/catalog/types'
 
 export type ProductInput = Partial<CatalogProduct> & { tagsText?: string }
@@ -20,7 +20,20 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const set = (k: keyof ProductInput, v: unknown) => setF((p) => ({ ...p, [k]: v }))
+
+  async function uploadImage(file: File) {
+    setUploading(true); setErr(null)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const res = await fetch('/api/catalog/upload', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Upload failed')
+      set('image_url', d.url)
+    } catch (e) { setErr((e as Error).message) } finally { setUploading(false) }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -53,7 +66,21 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
           <Field label="Price"><input className={input} type="number" step="0.01" value={f.price ?? ''} onChange={(e) => set('price', e.target.value)} /></Field>
         </div>
         <Field label="Description"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={f.description || ''} onChange={(e) => set('description', e.target.value)} /></Field>
-        <Field label="Image URL"><input className={input} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="https://…" /></Field>
+        <div>
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Photo</span>
+          <div className="flex items-center gap-3">
+            {f.image_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={f.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg border border-hairline object-cover" />
+              : <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-xs text-muted">No photo</span>}
+            <div>
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }} />
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken disabled:opacity-50">{uploading ? 'Uploading…' : 'Upload photo'}</button>
+              {f.image_url && <button type="button" onClick={() => set('image_url', '')} className="ml-2 text-sm text-subtle hover:text-ink">Remove</button>}
+            </div>
+          </div>
+          <input className={`${input} mt-2`} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="…or paste an image URL" />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status"><select className={input} value={f.status} onChange={(e) => set('status', e.target.value)}>{PRODUCT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
           <Field label="Availability"><select className={input} value={f.availability_status} onChange={(e) => set('availability_status', e.target.value)}>{AVAILABILITY_STATUSES.map((s) => <option key={s} value={s}>{AVAILABILITY_LABELS[s]}</option>)}</select></Field>
