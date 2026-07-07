@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
+import { transcribeAudioUrl } from '@/lib/deepgram/transcribe'
+
+// The inbound customer text — from a normal text message, or (voice notes) transcribed from
+// an audio attachment via Deepgram. Returns '' when there's nothing we can act on.
+async function inboundText(messaging: { message?: { text?: string; attachments?: { type?: string; payload?: { url?: string } }[] } }): Promise<string> {
+  const msg = messaging.message
+  if (msg?.text) return msg.text
+  const audio = (msg?.attachments || []).find((a) => a?.type === 'audio' && a?.payload?.url)
+  if (audio?.payload?.url) return await transcribeAudioUrl(audio.payload.url)
+  return ''
+}
 
 // Meta webhook verification (used for both Instagram and Facebook)
 export async function GET(req: NextRequest) {
@@ -64,11 +75,11 @@ export async function POST(req: NextRequest) {
         .map((c: { value: unknown }) => c.value)
 
       for (const messaging of messagingEvents) {
-        if (!messaging.message?.text) continue
+        const text = await inboundText(messaging)
+        if (!text) continue
 
         const senderId = messaging.sender.id
         const recipientId = messaging.recipient.id
-        const text = messaging.message.text
 
         const { data: channels } = await supabase
           .from('channels')
@@ -108,11 +119,11 @@ export async function POST(req: NextRequest) {
     for (const entry of body.entry || []) {
       const pageId = entry.id
       for (const messaging of entry.messaging || []) {
-        if (!messaging.message?.text) continue
         if (messaging.sender.id === pageId) continue
+        const text = await inboundText(messaging)
+        if (!text) continue
 
         const senderId = messaging.sender.id
-        const text = messaging.message.text
 
         const { data: channels } = await supabase
           .from('channels')
