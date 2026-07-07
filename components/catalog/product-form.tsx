@@ -20,19 +20,7 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
   })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
   const set = (k: keyof ProductInput, v: unknown) => setF((p) => ({ ...p, [k]: v }))
-
-  async function uploadImage(file: File) {
-    setUploading(true); setErr(null)
-    try {
-      const fd = new FormData(); fd.append('file', file)
-      const res = await fetch('/api/catalog/upload', { method: 'POST', body: fd })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error || 'Upload failed')
-      set('image_url', d.url)
-    } catch (e) { setErr((e as Error).message) } finally { setUploading(false) }
-  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -66,28 +54,14 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
         </div>
         <Field label="Description"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={f.description || ''} onChange={(e) => set('description', e.target.value)} /></Field>
         <div>
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Photo</span>
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Photo (image URL)</span>
           <div className="flex items-center gap-3">
             {f.image_url
               // eslint-disable-next-line @next/next/no-img-element
               ? <img src={f.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg border border-hairline object-cover" />
               : <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-xs text-muted">No photo</span>}
-            <div className="min-w-0">
-              <input
-                type="file"
-                accept="image/*"
-                disabled={uploading}
-                onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }}
-                className="block w-full cursor-pointer text-sm text-subtle file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-hairline-strong file:bg-white file:px-3 file:py-2 file:text-sm file:font-medium file:text-ink hover:file:bg-sunken"
-              />
-              <div className="mt-1 flex items-center gap-3">
-                {uploading && <span className="text-xs text-subtle">Uploading…</span>}
-                {f.image_url && <button type="button" onClick={() => set('image_url', '')} className="text-sm text-subtle hover:text-ink">Remove photo</button>}
-              </div>
-              {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
-            </div>
+            <input className={input} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="Paste a direct image URL (…jpg / …png)" />
           </div>
-          <input className={`${input} mt-2`} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="…or paste an image URL" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status"><select className={input} value={f.status} onChange={(e) => set('status', e.target.value)}>{PRODUCT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
