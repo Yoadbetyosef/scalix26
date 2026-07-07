@@ -4,6 +4,7 @@ import { getIntegrations, type IntegrationKey } from './integrations'
 import { hasPermission } from './permissions'
 import { enabledModulesOf } from '@/lib/modules'
 import { sendSMS } from '@/lib/twilio/client'
+import { deliverToConversation, resolveConversation } from '@/lib/messaging/send'
 
 type DB = ReturnType<typeof createAdminClient>
 
@@ -68,14 +69,23 @@ export async function executeAction(actionId: string, tenantId: string, userId?:
 
   try {
     let externalId: string | undefined
+    const target = String(action.target_id || '')
+    const body = String((action.payload as { body?: string })?.body || '')
+    if (!body) throw new Error('No message content to send.')
+
     if (type === 'send_sms') {
-      const to = String(action.target_id || '')
-      const body = String((action.payload as { body?: string })?.body || '')
-      if (!to) throw new Error('No recipient phone number.')
-      if (!body) throw new Error('No message body.')
+      if (!target) throw new Error('No recipient phone number.')
       const { data: ch } = await db.from('channels').select('twilio_number').eq('tenant_id', tenantId).not('twilio_number', 'is', null).limit(1).maybeSingle()
-      const res = await sendSMS(to, body, ch?.twilio_number || undefined)
+      const res = await sendSMS(target, body, ch?.twilio_number || undefined)
       externalId = (res as { sid?: string })?.sid
+    } else if (type === 'reply_instagram' || type === 'reply_facebook' || type === 'reply_email' || type === 'send_email' || type === 'send_whatsapp') {
+      // Reply on the customer's own channel via their conversation (explicit id or most-recent).
+      const channel = type === 'reply_instagram' ? 'instagram' : type === 'reply_facebook' ? 'facebook' : type === 'send_whatsapp' ? 'whatsapp' : 'email'
+      const convId = await resolveConversation(tenantId, channel, target)
+      if (!convId) throw new Error(`I couldn’t find a ${channel} conversation to reply to.`)
+      const r = await deliverToConversation(tenantId, convId, body)
+      if (!r.delivered) throw new Error(r.error || 'Send failed.')
+      externalId = r.externalId
     } else {
       throw new Error('No executor is connected for this action yet.')
     }

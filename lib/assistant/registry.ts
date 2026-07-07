@@ -18,12 +18,12 @@ export interface ActionDef {
 }
 
 export const ACTIONS: Record<ActionType, ActionDef> = {
-  send_email: { label: 'Send email', channel: 'email', integration: 'email', permission: 'can_send_email', supported: false, risky: true },
-  reply_email: { label: 'Reply to email', channel: 'email', integration: 'email', permission: 'can_send_email', supported: false, risky: true },
-  reply_instagram: { label: 'Reply on Instagram', channel: 'instagram', integration: 'instagram', permission: 'can_reply_social', supported: false, risky: true },
-  reply_facebook: { label: 'Reply on Facebook', channel: 'facebook', integration: 'facebook', permission: 'can_reply_social', supported: false, risky: true },
+  send_email: { label: 'Send email', channel: 'email', integration: 'email', permission: 'can_send_email', supported: true, risky: true },
+  reply_email: { label: 'Reply to email', channel: 'email', integration: 'email', permission: 'can_send_email', supported: true, risky: true },
+  reply_instagram: { label: 'Reply on Instagram', channel: 'instagram', integration: 'instagram', permission: 'can_reply_social', supported: true, risky: true },
+  reply_facebook: { label: 'Reply on Facebook', channel: 'facebook', integration: 'facebook', permission: 'can_reply_social', supported: true, risky: true },
   send_sms: { label: 'Send SMS', channel: 'sms', integration: 'twilio', permission: 'can_send_sms', supported: true, risky: true },
-  send_whatsapp: { label: 'Send WhatsApp', channel: 'whatsapp', integration: 'twilio', permission: 'can_send_whatsapp', supported: false, risky: true },
+  send_whatsapp: { label: 'Send WhatsApp', channel: 'whatsapp', integration: 'twilio', permission: 'can_send_whatsapp', supported: true, risky: true },
   create_estimate: { label: 'Create estimate', channel: 'estimate', module: 'estimates', permission: 'can_create_estimates', supported: false, risky: true },
   send_invoice: { label: 'Send invoice', channel: 'invoice', module: 'invoices', permission: 'can_send_invoices', supported: false, risky: true },
   send_payment_link: { label: 'Send payment link', channel: 'stripe', integration: 'stripe', permission: 'can_send_payment_links', supported: false, risky: true },
