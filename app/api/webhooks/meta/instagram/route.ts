@@ -66,6 +66,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const supabase = await createServiceClient()
 
+  // TEMP DEBUG (voice-message diagnosis): capture the raw Meta payload so we can see exactly
+  // what an Instagram/Facebook voice note looks like. Remove once fixed.
+  try {
+    if (body.object === 'instagram' || body.object === 'page') {
+      await supabase.from('analytics_events').insert({ tenant_id: null, event_type: 'meta_webhook_debug', data: body })
+    }
+  } catch { /* debug best-effort */ }
+
   // Instagram DMs
   if (body.object === 'instagram') {
     for (const entry of body.entry || []) {
