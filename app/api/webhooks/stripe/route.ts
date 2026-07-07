@@ -5,6 +5,7 @@ import { provisionTenantPhoneNumber } from '@/lib/twilio/provision'
 import { releaseTenantNumbers } from '@/lib/twilio/release'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
+import { recordCommissionForInvoice, recordChurn } from '@/lib/partner/commission'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mylocksmithai.com'
 
@@ -54,6 +55,9 @@ export async function POST(req: NextRequest) {
       const tenant = await getTenantByCustomer(supabase, sub.customer as string)
       await supabase.from('tenants').update({ plan: 'trial' }).eq('stripe_customer_id', sub.customer)
       if (tenant) {
+        // Partner OS: mark the referral churned + clawback if inside the window.
+        await recordChurn(sub, { id: tenant.id })
+
         const tmpl = emailTemplates.subscriptionCancelled(tenant.business_name)
         await sendEmail(tenant.email, tmpl.subject, tmpl.html)
 
@@ -101,6 +105,10 @@ export async function POST(req: NextRequest) {
       const date = new Date(invoice.created * 1000).toLocaleDateString()
       const tmpl = emailTemplates.paymentSuccess(tenant.business_name, amount, date)
       await sendEmail(tenant.email, tmpl.subject, tmpl.html)
+
+      // Partner OS: record commission (first payment / recurring cycle / expansion). Idempotent
+      // per invoice id, so Stripe retries can't double-pay.
+      await recordCommissionForInvoice(invoice, { id: tenant.id })
       break
     }
 

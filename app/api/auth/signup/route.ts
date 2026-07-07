@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { insertTenantWithUniqueSlug } from '@/lib/tenants'
+import { readAttributionCookies, resolveAttribution } from '@/lib/partner/attribution'
 
 export async function POST(req: NextRequest) {
   const { email, password, businessName, industry } = await req.json()
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
   // 2. Create tenant using service role (bypasses RLS — safe here since we just created
   // the user). The DB trigger assigns a unique slug; the helper retries on a slug
   // collision and never surfaces raw DB errors.
-  const { error: tenantError } = await insertTenantWithUniqueSlug(serviceSupabase, {
+  const { data: tenant, error: tenantError } = await insertTenantWithUniqueSlug(serviceSupabase, {
     user_id: data.user.id,
     business_name: businessName,
     industry,
@@ -26,6 +28,18 @@ export async function POST(req: NextRequest) {
   })
 
   if (tenantError) return NextResponse.json({ error: "Couldn't create your account — please try again." }, { status: 400 })
+
+  // 3. Partner attribution: if this signup arrived through a referral link, record the referral.
+  // Best-effort — never blocks or fails account creation.
+  if (tenant?.id) {
+    try {
+      const store = await cookies()
+      await resolveAttribution({
+        tenantId: tenant.id, userId: data.user.id, email,
+        cookies: readAttributionCookies(store),
+      })
+    } catch { /* attribution is best-effort */ }
+  }
 
   return NextResponse.json({ success: true, user: data.user })
 }
