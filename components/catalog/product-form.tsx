@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { AVAILABILITY_STATUSES, AVAILABILITY_LABELS, PRODUCT_STATUSES, type CatalogProduct } from '@/lib/catalog/types'
 
 export type ProductInput = Partial<CatalogProduct> & { tagsText?: string }
@@ -21,7 +21,6 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
   const set = (k: keyof ProductInput, v: unknown) => setF((p) => ({ ...p, [k]: v }))
 
   async function uploadImage(file: File) {
@@ -74,8 +73,10 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
               ? <img src={f.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg border border-hairline object-cover" />
               : <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-xs text-muted">No photo</span>}
             <div>
-              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }} />
-              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken disabled:opacity-50">{uploading ? 'Uploading…' : 'Upload photo'}</button>
+              <label className={`inline-block cursor-pointer rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken ${uploading ? 'opacity-50' : ''}`}>
+                {uploading ? 'Uploading…' : 'Upload photo'}
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={uploading} onChange={(e) => { const fl = e.target.files?.[0]; if (fl) uploadImage(fl); e.target.value = '' }} />
+              </label>
               {f.image_url && <button type="button" onClick={() => set('image_url', '')} className="ml-2 text-sm text-subtle hover:text-ink">Remove</button>}
             </div>
           </div>
