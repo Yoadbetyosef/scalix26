@@ -11,6 +11,13 @@ interface CostData {
   margin: { mrr: number; projectedCost: number; grossMargin: number; grossMarginPct: number | null }
   customers: Customer[]
   rates: { note: string }
+  anthropic: null | {
+    total: number
+    byModel: Record<string, number>
+    voiceLlmApprox: number
+    suggestedVoicePerMin: number | null
+    currentVoiceLlmPerMin: number
+  }
 }
 
 const money = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -64,6 +71,30 @@ export default function AdminCostPage() {
             <Tile label="Learning" value={money(d.totals.learning)} />
             <Tile label="Total" value={money(d.totals.total)} />
           </div>
+
+          <h2 className="mb-2 text-sm font-semibold text-ink">Anthropic — actual spend (this month)</h2>
+          {d.anthropic ? (
+            <div className="mb-6 rounded-xl border border-hairline-strong bg-white p-4">
+              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+                <div><span className="text-2xl font-bold text-ink">{money(d.anthropic.total)}</span> <span className="text-xs text-subtle">total, from Anthropic (ground truth)</span></div>
+                <div className="text-sm text-subtle">
+                  Suggested voice-LLM: <span className="font-medium text-ink">{d.anthropic.suggestedVoicePerMin === null ? '—' : `$${d.anthropic.suggestedVoicePerMin}/min`}</span> · current: ${d.anthropic.currentVoiceLlmPerMin}/min
+                </div>
+              </div>
+              {Object.keys(d.anthropic.byModel).length > 0 && (
+                <div className="mt-3 grid grid-cols-1 gap-1 text-xs text-subtle sm:grid-cols-2">
+                  {Object.entries(d.anthropic.byModel).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([m, v]) => (
+                    <div key={m} className="flex justify-between border-b border-hairline py-1"><span className="truncate pr-2">{m}</span><span className="tabular-nums text-ink">{money(v)}</span></div>
+                  ))}
+                </div>
+              )}
+              <p className="mt-2 text-xs text-subtle">Suggested voice-LLM = Anthropic total − logged text-LLM − learning (upper bound: also includes other unlogged AI features). Use it to calibrate RATE_VOICE_LLM_PER_MIN.</p>
+            </div>
+          ) : (
+            <div className="mb-6 rounded-xl border border-hairline-strong bg-white p-4 text-sm text-subtle">
+              Add an Anthropic <span className="font-medium text-ink">Admin API key</span> as <code>ANTHROPIC_ADMIN_KEY</code> to show real Anthropic spend here. (The standard API key can’t read the cost report.)
+            </div>
+          )}
 
           <h2 className="mb-2 text-sm font-semibold text-ink">Per customer</h2>
           <div className="overflow-x-auto rounded-xl border border-hairline-strong bg-white">

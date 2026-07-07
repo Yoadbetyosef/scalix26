@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { planPrice, PLAN_PRICE } from '@/lib/admin/pricing'
 import { RATE_DEEPGRAM_VOICE_PER_MIN, RATE_TWILIO_VOICE_PER_MIN, RATE_TWILIO_SMS_PER_SEGMENT, RATE_VOICE_LLM_PER_MIN } from '@/lib/cost/rates'
+import { getAnthropicSpend } from '@/lib/cost/anthropic-usage'
 
 // Per voice minute = Deepgram Voice Agent + Twilio telephony + an estimated Anthropic BYO LLM
 // component (Deepgram bills by time and doesn't report LLM tokens; see rates.ts).
@@ -67,9 +68,11 @@ export async function GET() {
   const totals = {
     llm: 0, voice: 0, sms: 0, learning: 0, total: 0,
   }
+  let totalVoiceMin = 0
   for (const x of perTenant.values()) {
     totals.llm += x.llm; totals.voice += x.voiceMin * VOICE_PER_MIN
     totals.sms += x.sms * RATE_TWILIO_SMS_PER_SEGMENT; totals.learning += x.learning
+    totalVoiceMin += x.voiceMin
   }
   totals.total = totals.llm + totals.voice + totals.sms + totals.learning
   const round = (n: number) => Math.round(n * 100) / 100
@@ -84,9 +87,24 @@ export async function GET() {
   const projectedCost = projectedMonth
   const grossMargin = mrr - projectedCost
 
+  // Ground truth: real Anthropic spend this month (Admin API). Derive a voice-LLM suggestion:
+  // total Anthropic − our logged text-LLM − learning ≈ voice + other unlogged AI features
+  // (upper bound). Over real voice minutes → a suggested $/min to calibrate the rate.
+  const anthropic = await getAnthropicSpend(iso)
+  const anthropicPanel = anthropic
+    ? {
+        total: anthropic.total,
+        byModel: anthropic.byModel,
+        voiceLlmApprox: round(Math.max(0, anthropic.total - totals.llm - totals.learning)),
+        suggestedVoicePerMin: totalVoiceMin > 0 ? Math.round((Math.max(0, anthropic.total - totals.llm - totals.learning) / totalVoiceMin) * 1000) / 1000 : null,
+        currentVoiceLlmPerMin: RATE_VOICE_LLM_PER_MIN,
+      }
+    : null
+
   return NextResponse.json({
     period: { monthStart: iso, daysElapsed, daysInMonth },
     totals,
+    anthropic: anthropicPanel,
     runRate: { mtd: totals.total, dailyAvg: round(dailyAvg), projectedMonth: round(projectedMonth) },
     margin: { mrr, projectedCost: round(projectedCost), grossMargin: round(grossMargin), grossMarginPct: mrr > 0 ? Math.round((grossMargin / mrr) * 100) : null },
     customers,
