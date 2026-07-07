@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getAdminContext } from '@/lib/admin/rbac'
 import { planPrice, PLAN_PRICE } from '@/lib/admin/pricing'
-import { RATE_DEEPGRAM_VOICE_PER_MIN, RATE_TWILIO_VOICE_PER_MIN, RATE_TWILIO_SMS_PER_SEGMENT } from '@/lib/cost/rates'
+import { RATE_DEEPGRAM_VOICE_PER_MIN, RATE_TWILIO_VOICE_PER_MIN, RATE_TWILIO_SMS_PER_SEGMENT, RATE_VOICE_LLM_PER_MIN } from '@/lib/cost/rates'
 
-const VOICE_PER_MIN = RATE_DEEPGRAM_VOICE_PER_MIN + RATE_TWILIO_VOICE_PER_MIN
+// Per voice minute = Deepgram Voice Agent + Twilio telephony + an estimated Anthropic BYO LLM
+// component (Deepgram bills by time and doesn't report LLM tokens; see rates.ts).
+const VOICE_PER_MIN = RATE_DEEPGRAM_VOICE_PER_MIN + RATE_TWILIO_VOICE_PER_MIN + RATE_VOICE_LLM_PER_MIN
 
 // GET /api/admin/cost — COGS: cost per customer + platform run-rate + gross margin (this month).
 // LLM cost is exact (usage_events, logged per call). Voice/SMS are real usage × configured
@@ -83,6 +85,10 @@ export async function GET() {
     runRate: { mtd: totals.total, dailyAvg: round(dailyAvg), projectedMonth: round(projectedMonth) },
     margin: { mrr, projectedCost: round(projectedCost), grossMargin: round(grossMargin), grossMarginPct: mrr > 0 ? Math.round((grossMargin / mrr) * 100) : null },
     customers,
-    rates: { voicePerMin: VOICE_PER_MIN, smsPerSegment: RATE_TWILIO_SMS_PER_SEGMENT, note: 'LLM cost is exact (logged tokens). Voice/SMS use configured unit rates.' },
+    rates: {
+      voicePerMin: VOICE_PER_MIN,
+      smsPerSegment: RATE_TWILIO_SMS_PER_SEGMENT,
+      note: 'Text LLM cost is exact (logged tokens). Voice = Deepgram + Twilio (from real minutes) + an ESTIMATED Anthropic BYO LLM component (Deepgram doesn’t report voice tokens). SMS = real segments × rate.',
+    },
   })
 }

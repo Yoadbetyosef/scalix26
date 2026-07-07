@@ -96,7 +96,7 @@ export default function AdminCostPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-subtle">{d.rates.note} Tokens started logging when this shipped, so LLM cost fills in going forward; voice/SMS/learning are computed from existing data.</p>
+          <p className="mt-3 text-xs text-subtle">{d.rates.note} Text-LLM tokens started logging when this shipped (fills in going forward); voice/SMS/learning are computed from existing data.</p>
         </>
       )}
     </div>

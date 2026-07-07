@@ -25,3 +25,10 @@ export function llmCost(model: string, inputTokens: number, outputTokens: number
 export const RATE_DEEPGRAM_VOICE_PER_MIN = 0.075 // Deepgram Voice Agent (Standard, PAYG), blended STT+TTS
 export const RATE_TWILIO_SMS_PER_SEGMENT = 0.0083 // Twilio US SMS, per segment
 export const RATE_TWILIO_VOICE_PER_MIN = 0.0085 // Twilio US local inbound voice (AI receives calls)
+
+// Voice LLM (Anthropic BYO inside the Deepgram Voice Agent). Deepgram bills by TIME and does
+// NOT report these tokens, and routing live calls through a logging proxy risks the phone
+// pipeline — so we ESTIMATE it from real voice minutes. Grounded on Claude Haiku 4.5 at a few
+// short turns/min with accumulating context (~6k in + ~200 out tokens/min ≈ $0.006/min).
+// Tune this to your measured Anthropic voice spend if you have it.
+export const RATE_VOICE_LLM_PER_MIN = 0.006
