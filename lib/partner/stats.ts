@@ -18,6 +18,12 @@ export interface PartnerStats {
   paid_commission_cents: number
   lifetime_earnings_cents: number
   health_score: number
+  // Economics (Sprint 2) — derived from the commission ledger / referrals.
+  monthly_commission_cents: number   // recurring commission run-rate (last ~35d of recurring entries)
+  expansion_cents: number            // lifetime expansion commission
+  churn_cents: number                // MRR lost to churned customers
+  portfolio_value_cents: number      // estimated recurring portfolio value (≈ 2× ARR)
+  projected_annual_cents: number     // monthly_commission × 12
 }
 
 function planMrrCents(plan: string | null | undefined): number {
@@ -30,9 +36,10 @@ export async function computePartnerStats(partnerId: string): Promise<PartnerSta
   const db = createAdminClient()
   const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
+  const since35 = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString()
   const [{ data: refs }, { data: entries }] = await Promise.all([
     db.from('referrals').select('status, created_at, tenant_id, tenants(plan)').eq('partner_id', partnerId).neq('status', 'rejected'),
-    db.from('commission_entries').select('amount_cents, status').eq('partner_id', partnerId),
+    db.from('commission_entries').select('amount_cents, status, entry_type, created_at').eq('partner_id', partnerId),
   ])
 
   const all = refs || []
@@ -49,9 +56,17 @@ export async function computePartnerStats(partnerId: string): Promise<PartnerSta
   const total = all.length
   const conversion = total > 0 ? Math.round((paid.length / total) * 10000) / 100 : 0
 
-  const sum = (pred: (e: { status: string }) => boolean) => (entries || []).filter(pred).reduce((s, e) => s + e.amount_cents, 0)
+  const ents = (entries || []) as { amount_cents: number; status: string; entry_type: string; created_at: string }[]
+  const sum = (pred: (e: { status: string }) => boolean) => ents.filter(pred).reduce((s, e) => s + e.amount_cents, 0)
   const pending = sum((e) => e.status === 'pending')
   const paidComm = sum((e) => e.status === 'paid')
+
+  // Economics: recurring run-rate (last 35d of recurring commission), lifetime expansion, churn MRR.
+  const monthlyCommission = ents.filter((e) => e.entry_type === 'recurring' && e.created_at >= since35 && e.status !== 'void').reduce((s, e) => s + e.amount_cents, 0)
+  const expansion = ents.filter((e) => e.entry_type === 'expansion' && e.status !== 'void').reduce((s, e) => s + e.amount_cents, 0)
+  const churnMrr = churned.reduce((s, r) => s + planMrrCents((r.tenants as unknown as { plan?: string } | null)?.plan), 0)
+  const projectedAnnual = monthlyCommission * 12
+  const portfolioValue = projectedAnnual * 2   // rough estimate: ~2× ARR of recurring commission
 
   // Health score (0–100): conversion (40) + retention (30) + activity/recency (30).
   const retentionBase = paid.length + churned.length
@@ -71,6 +86,11 @@ export async function computePartnerStats(partnerId: string): Promise<PartnerSta
     paid_commission_cents: paidComm,
     lifetime_earnings_cents: paidComm,
     health_score: health,
+    monthly_commission_cents: monthlyCommission,
+    expansion_cents: expansion,
+    churn_cents: churnMrr,
+    portfolio_value_cents: portfolioValue,
+    projected_annual_cents: projectedAnnual,
   }
 }
 
@@ -140,6 +160,9 @@ export async function getPartnerStatsCached(partnerId: string, maxAgeMs = 5 * 60
     new_customers_30d: data.new_customers_30d, trial_customers: data.trial_customers, churned_customers: data.churned_customers,
     conversion_rate: data.conversion_rate, pending_commission_cents: data.pending_commission_cents, paid_commission_cents: data.paid_commission_cents,
     lifetime_earnings_cents: data.lifetime_earnings_cents, health_score: data.health_score,
+    monthly_commission_cents: data.monthly_commission_cents ?? 0, expansion_cents: data.expansion_cents ?? 0,
+    churn_cents: data.churn_cents ?? 0, portfolio_value_cents: data.portfolio_value_cents ?? 0,
+    projected_annual_cents: data.projected_annual_cents ?? 0,
     xp: data.xp, level: data.level, global_rank: data.global_rank, streak_days: data.streak_days,
   }
 }

@@ -39,7 +39,7 @@ function PayoutSetup() {
 
 interface Entry { id: string; entry_type: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; created_at: string }
 interface Payout { id: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; statement_url: string | null; paid_at: string | null; created_at: string }
-interface Summary { pending_cents: number; approved_cents: number; paid_cents: number; lifetime_cents: number; estimated_next_payout_cents: number; projected_monthly_cents: number; projected_annual_cents: number; average_commission_cents: number; mrr_created_cents: number }
+interface Summary { pending_cents: number; approved_cents: number; paid_cents: number; lifetime_cents: number; estimated_next_payout_cents: number; monthly_recurring_income_cents: number; projected_monthly_cents: number; projected_annual_cents: number; portfolio_value_cents: number; expansion_cents: number; churn_cents: number; active_customers: number; average_commission_cents: number; mrr_created_cents: number }
 interface Data { summary: Summary; entries: Entry[]; payouts: Payout[] }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -73,9 +73,16 @@ export function CommissionsView() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Monthly Recurring Income" value={money(s.monthly_recurring_income_cents)} hint="Your commission run-rate" accent />
+        <StatCard label="Projected Annual Income" value={money(s.projected_annual_cents)} hint="Run-rate × 12" />
+        <StatCard label="Est. Portfolio Value" value={money(s.portfolio_value_cents)} hint="≈ 2× annual recurring" />
         <StatCard label="Est. Next Payout" value={money(s.estimated_next_payout_cents)} hint="Pending + approved" />
-        <StatCard label="Projected / mo" value={money(s.projected_monthly_cents)} hint="Recurring you generate" />
-        <StatCard label="Projected / yr" value={money(s.projected_annual_cents)} hint="At current MRR" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Active Customers" value={s.active_customers} />
+        <StatCard label="Expansion Revenue" value={money(s.expansion_cents)} hint="From upgrades" />
+        <StatCard label="Churn (MRR)" value={money(s.churn_cents)} hint="Lost to cancellations" />
         <StatCard label="Avg. Commission" value={money(s.average_commission_cents)} hint="Per paid entry" />
       </div>
 

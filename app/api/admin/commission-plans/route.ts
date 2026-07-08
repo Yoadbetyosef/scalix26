@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     partner_id: b.partner_id || null, name: b.name, model: b.model,
     recurring_pct: b.recurring_pct ?? null, one_time_cents: b.one_time_cents ?? null,
     duration_months: b.duration_months ?? null, tiers: b.tiers ?? null,
+    wholesale_discount_pct: b.wholesale_discount_pct ?? null, platform_fee_cents: b.platform_fee_cents ?? null, setup_fee_cents: b.setup_fee_cents ?? null,
     clawback_window_days: b.clawback_window_days ?? 60, currency: b.currency || 'usd', active: b.active ?? true,
   }).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

@@ -18,18 +18,22 @@ export async function GET(req: NextRequest) {
 
   const paidEntries = (entries || []).filter((e) => e.status === 'paid' && e.amount_cents > 0)
   const stats = await computePartnerStats(ctx.partnerId)
-  const projMonthly = stats.mrr_generated_cents // recurring commission you generate per month
   const summary = {
     pending_cents: sum((e) => e.status === 'pending'),
     approved_cents: sum((e) => e.status === 'approved'),
     paid_cents: sum((e) => e.status === 'paid'),
     lifetime_cents: sum((e) => e.status === 'paid'),
-    // Projections
+    // Economics dashboard
     estimated_next_payout_cents: sum((e) => e.status === 'pending' || e.status === 'approved'),
-    projected_monthly_cents: projMonthly,
-    projected_annual_cents: projMonthly * 12,
+    monthly_recurring_income_cents: stats.monthly_commission_cents,
+    projected_monthly_cents: stats.monthly_commission_cents,
+    projected_annual_cents: stats.projected_annual_cents,
+    portfolio_value_cents: stats.portfolio_value_cents,
+    expansion_cents: stats.expansion_cents,
+    churn_cents: stats.churn_cents,
+    active_customers: stats.active_customers,
     average_commission_cents: paidEntries.length ? Math.round(paidEntries.reduce((s, e) => s + e.amount_cents, 0) / paidEntries.length) : 0,
-    mrr_created_cents: projMonthly,
+    mrr_created_cents: stats.mrr_generated_cents,
   }
 
   const { data: payouts } = await db.from('payouts')

@@ -5,7 +5,7 @@ import { provisionTenantPhoneNumber } from '@/lib/twilio/provision'
 import { releaseTenantNumbers } from '@/lib/twilio/release'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
-import { recordCommissionForInvoice, recordChurn } from '@/lib/partner/commission'
+import { recordBillingEvent } from '@/lib/partner/economics'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mylocksmithai.com'
 
@@ -55,8 +55,8 @@ export async function POST(req: NextRequest) {
       const tenant = await getTenantByCustomer(supabase, sub.customer as string)
       await supabase.from('tenants').update({ plan: 'trial' }).eq('stripe_customer_id', sub.customer)
       if (tenant) {
-        // Partner OS: mark the referral churned + clawback if inside the window.
-        await recordChurn(sub, { id: tenant.id })
+        // Economics: emit a 'cancelled' billing event (→ churn + clawback via the processor).
+        await recordBillingEvent({ tenantId: tenant.id, type: 'cancelled', source: 'stripe', sourceRef: sub.id, idempotencyKey: `be:cancel:${sub.id}` })
 
         const tmpl = emailTemplates.subscriptionCancelled(tenant.business_name)
         await sendEmail(tenant.email, tmpl.subject, tmpl.html)
@@ -106,9 +106,11 @@ export async function POST(req: NextRequest) {
       const tmpl = emailTemplates.paymentSuccess(tenant.business_name, amount, date)
       await sendEmail(tenant.email, tmpl.subject, tmpl.html)
 
-      // Partner OS: record commission (first payment / recurring cycle / expansion). Idempotent
-      // per invoice id, so Stripe retries can't double-pay.
-      await recordCommissionForInvoice(invoice, { id: tenant.id })
+      // Economics: emit a billing event (conversion / renewal / upgrade) → the processor turns it
+      // into commission entries stamped with source_event_id. Idempotent per invoice id.
+      const reason = invoice.billing_reason || ''
+      const evType = reason === 'subscription_create' ? 'converted_paid' : reason === 'subscription_update' ? 'plan_upgraded' : 'renewed'
+      await recordBillingEvent({ tenantId: tenant.id, type: evType, amountCents: invoice.amount_paid || 0, currency: invoice.currency || 'usd', source: 'stripe', sourceRef: invoice.id, idempotencyKey: `be:${evType}:${invoice.id}`, props: { billing_reason: reason } })
       break
     }
 
@@ -154,6 +156,33 @@ export async function POST(req: NextRequest) {
       if (!tenant) break
       const tmpl = emailTemplates.cardUpdated(tenant.business_name)
       await sendEmail(tenant.email, tmpl.subject, tmpl.html)
+      break
+    }
+
+    case 'charge.refunded': {
+      // Economics: refund → clawback (negative commission) via the processor.
+      const charge = event.data.object
+      if (!charge.customer) break
+      const tenant = await getTenantByCustomer(supabase, charge.customer as string)
+      if (!tenant) break
+      await recordBillingEvent({ tenantId: tenant.id, type: 'refunded', amountCents: charge.amount_refunded || 0, currency: charge.currency || 'usd', source: 'stripe', sourceRef: charge.id, idempotencyKey: `be:refund:${charge.id}` })
+      break
+    }
+
+    case 'charge.dispute.created': {
+      // Economics: chargeback → clawback. Resolve the customer via the disputed charge.
+      const dispute = event.data.object
+      try {
+        const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id
+        if (!chargeId) break
+        const charge = await stripe.charges.retrieve(chargeId)
+        if (!charge.customer) break
+        const tenant = await getTenantByCustomer(supabase, charge.customer as string)
+        if (!tenant) break
+        await recordBillingEvent({ tenantId: tenant.id, type: 'chargeback', amountCents: dispute.amount || 0, currency: dispute.currency || 'usd', source: 'stripe', sourceRef: dispute.id, idempotencyKey: `be:chargeback:${dispute.id}` })
+      } catch (e) {
+        console.error('[stripe] chargeback handling failed:', e instanceof Error ? e.message : e)
+      }
       break
     }
   }

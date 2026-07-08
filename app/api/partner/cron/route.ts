@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { recomputeAllPartnerStats } from '@/lib/partner/stats'
 import { autoApproveCommissions } from '@/lib/partner/commission'
 import { autoPayoutRun } from '@/lib/partner/payout'
+import { evaluateUpgrades } from '@/lib/partner/upgrades'
 
 export const maxDuration = 300
 
@@ -19,6 +20,8 @@ async function handle(req: NextRequest) {
   // Auto-pay connect-enabled partners above the minimum threshold (hands-off once Stripe is on).
   const paidOut = await autoPayoutRun()
   const partners = await recomputeAllPartnerStats()
+  // Nudge partners who crossed an upgrade threshold (after stats are fresh).
+  const upgrades = await evaluateUpgrades()
 
   // Roll the click partition forward (best-effort; the DEFAULT partition is the safety net).
   try {
@@ -26,7 +29,7 @@ async function handle(req: NextRequest) {
     await db.rpc('ensure_referral_clicks_partition').then(() => {}, () => {})
   } catch { /* best-effort */ }
 
-  return NextResponse.json({ ok: true, partners, approved, paidOut })
+  return NextResponse.json({ ok: true, partners, approved, paidOut, upgrades })
 }
 
 export const GET = handle
