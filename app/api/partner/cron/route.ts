@@ -4,6 +4,7 @@ import { recomputeAllPartnerStats } from '@/lib/partner/stats'
 import { autoApproveCommissions } from '@/lib/partner/commission'
 import { autoPayoutRun } from '@/lib/partner/payout'
 import { evaluateUpgrades } from '@/lib/partner/upgrades'
+import { recomputeMarketingStats } from '@/lib/partner/marketing-stats'
 
 export const maxDuration = 300
 
@@ -22,6 +23,8 @@ async function handle(req: NextRequest) {
   const partners = await recomputeAllPartnerStats()
   // Nudge partners who crossed an upgrade threshold (after stats are fresh).
   const upgrades = await evaluateUpgrades()
+  // Roll up Marketing OS performance (campaign/creative CAC/ROI caches).
+  const marketing = await recomputeMarketingStats()
 
   // Roll the click partition forward (best-effort; the DEFAULT partition is the safety net).
   try {
@@ -29,7 +32,7 @@ async function handle(req: NextRequest) {
     await db.rpc('ensure_referral_clicks_partition').then(() => {}, () => {})
   } catch { /* best-effort */ }
 
-  return NextResponse.json({ ok: true, partners, approved, paidOut, upgrades })
+  return NextResponse.json({ ok: true, partners, approved, paidOut, upgrades, marketing })
 }
 
 export const GET = handle

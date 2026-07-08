@@ -55,7 +55,7 @@ export async function resolveAttribution(params: {
   try {
     const db = createAdminClient()
     const linkIds = [cookies.lastLinkId, cookies.firstLinkId].filter(Boolean) as string[]
-    const { data: links } = linkIds.length ? await db.from('referral_links').select('id, partner_id, campaign_id').in('id', linkIds) : { data: [] }
+    const { data: links } = linkIds.length ? await db.from('referral_links').select('id, partner_id, campaign_id, creative_id').in('id', linkIds) : { data: [] }
     const byId = Object.fromEntries((links || []).map((l) => [l.id, l]))
     const lastLink = cookies.lastLinkId ? byId[cookies.lastLinkId] : undefined
     const firstLink = cookies.firstLinkId ? byId[cookies.firstLinkId] : undefined
@@ -70,6 +70,16 @@ export async function resolveAttribution(params: {
     if (!partner) return
     const isSelf = !!selfMember || (partner.contact_email && partner.contact_email.toLowerCase() === email.toLowerCase())
 
+    // Marketing OS: carry campaign + creative from the owning link (or the demo) so the customer
+    // traces back to the exact creative/campaign that acquired them.
+    let campaignId = (lastLink as { campaign_id?: string } | undefined)?.campaign_id || (firstLink as { campaign_id?: string } | undefined)?.campaign_id || null
+    let creativeId = (lastLink as { creative_id?: string } | undefined)?.creative_id || (firstLink as { creative_id?: string } | undefined)?.creative_id || null
+    if (cookies.demoId && (!campaignId || !creativeId)) {
+      const { data: demo } = await db.from('demos').select('campaign_id, creative_id').eq('id', cookies.demoId).maybeSingle()
+      campaignId = campaignId || demo?.campaign_id || null
+      creativeId = creativeId || demo?.creative_id || null
+    }
+
     const now = new Date().toISOString()
     await db.from('referrals').upsert({
       partner_id: owningPartnerId,
@@ -83,6 +93,8 @@ export async function resolveAttribution(params: {
       status: isSelf ? 'rejected' : 'signup',
       commission_plan_id: partner.default_commission_plan_id || null,
       demo_id: cookies.demoId || null,
+      campaign_id: campaignId,
+      creative_id: creativeId,
     }, { onConflict: 'tenant_id' })
 
     if (!isSelf) {

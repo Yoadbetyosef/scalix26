@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
   const db = createAdminClient()
 
   const { data: link } = await db.from('referral_links')
-    .select('id, partner_id, destination_path, utm').eq('code', code).maybeSingle()
+    .select('id, partner_id, destination_path, utm, campaign_id, creative_id').eq('code', code).maybeSingle()
 
   // Unknown code → send to the marketing home rather than erroring.
   if (!link) return NextResponse.redirect(new URL('/', origin))
@@ -53,6 +53,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
       await db.from('referral_clicks').insert({
         link_id: link.id, partner_id: link.partner_id, visitor_id: visitorId,
         ip_hash: ipHash, user_agent: userAgent, referer, utm,
+        campaign_id: link.campaign_id, creative_id: link.creative_id,
       })
       // Denormalized counter (best-effort; exact counts come from the click table).
       await db.rpc('increment_referral_click', { p_link_id: link.id }).then(

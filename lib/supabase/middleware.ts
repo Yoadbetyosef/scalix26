@@ -31,7 +31,7 @@ export async function updateSession(request: NextRequest) {
   const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
     // Partner OS public surface: referral redirect + click tracking, partner signup/login,
     // public demo pages + their data, and the public partner marketplace directory.
-    '/r/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login']
+    '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login']
   const adminRoutes = ['/admin', '/api/admin']
 
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))

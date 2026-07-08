@@ -61,6 +61,8 @@ export async function POST(req: NextRequest) {
   const { data: demo, error } = await db.from('demos').insert({
     partner_id: ctx.partnerId,
     lead_id: body.leadId || null,
+    campaign_id: body.campaignId || null,
+    creative_id: body.creativeId || null,
     public_slug: slugify(body.prospectName),
     prospect_name: body.prospectName,
     website: body.website || null,

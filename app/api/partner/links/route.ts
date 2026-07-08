@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     label: body.label || null,
     destination_path: body.destination_path || '/auth/signup',
     campaign_id: body.campaign_id || null,
+    creative_id: body.creative_id || null,
     utm,
   }).select('id, code, label, destination_path, click_count, created_at').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
