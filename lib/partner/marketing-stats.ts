@@ -5,8 +5,8 @@ import { createAdminClient } from '@/lib/supabase/server'
 // creative_stats for O(1) reads. Clicks come from referral_links.click_count (not a click scan).
 
 export interface CampaignPerf {
-  campaign_id: string; name: string; channel: string | null; status: string
-  clicks: number; signups: number; trials: number; paid: number
+  campaign_id: string; name: string; channel: string | null; status: string; budget_cents: number | null; created_at: string
+  clicks: number; signups: number; trials: number; paid: number; demos: number; creatives: number; landing_pages: number
   commission_cents: number; spend_cents: number
   cac_cents: number | null; ltv_cents: number | null; roi_pct: number | null; payback_months: number | null
 }
@@ -17,15 +17,17 @@ export interface CreativePerf {
 
 async function loadBase(partnerId: string) {
   const db = createAdminClient()
-  const [{ data: campaigns }, { data: creatives }, { data: links }, { data: refs }, { data: entries }, { data: spend }] = await Promise.all([
-    db.from('campaigns').select('id, name, channel, status').eq('partner_id', partnerId),
-    db.from('creatives').select('id, title, type, status').eq('partner_id', partnerId),
+  const [{ data: campaigns }, { data: creatives }, { data: links }, { data: refs }, { data: entries }, { data: spend }, { data: demos }, { data: lps }] = await Promise.all([
+    db.from('campaigns').select('id, name, channel, status, budget_cents, created_at').eq('partner_id', partnerId),
+    db.from('creatives').select('id, title, type, status, campaign_id').eq('partner_id', partnerId),
     db.from('referral_links').select('campaign_id, creative_id, click_count').eq('partner_id', partnerId),
     db.from('referrals').select('id, campaign_id, creative_id, status').eq('partner_id', partnerId).neq('status', 'rejected'),
     db.from('commission_entries').select('referral_id, amount_cents, status').eq('partner_id', partnerId),
     db.from('partner_spend').select('campaign_id, amount_cents').eq('partner_id', partnerId),
+    db.from('demos').select('campaign_id').eq('partner_id', partnerId),
+    db.from('landing_pages').select('campaign_id').eq('partner_id', partnerId),
   ])
-  return { campaigns: campaigns || [], creatives: creatives || [], links: links || [], refs: refs || [], entries: entries || [], spend: spend || [] }
+  return { campaigns: campaigns || [], creatives: creatives || [], links: links || [], refs: refs || [], entries: entries || [], spend: spend || [], demos: demos || [], lps: lps || [] }
 }
 
 // commission (approved+paid) per referral id.
@@ -36,7 +38,7 @@ function commissionByReferral(entries: { referral_id: string | null; amount_cent
 }
 
 export async function computeCampaignPerformance(partnerId: string): Promise<CampaignPerf[]> {
-  const { campaigns, links, refs, entries, spend } = await loadBase(partnerId)
+  const { campaigns, creatives, links, refs, entries, spend, demos, lps } = await loadBase(partnerId)
   const commByRef = commissionByReferral(entries)
   return campaigns.map((c) => {
     const clicks = links.filter((l) => l.campaign_id === c.id).reduce((s, l) => s + (l.click_count || 0), 0)
@@ -48,11 +50,14 @@ export async function computeCampaignPerformance(partnerId: string): Promise<Cam
     const cac = paid > 0 ? Math.round(spendC / paid) : null
     const ltv = paid > 0 ? Math.round(commission / paid) : null           // lifetime commission per customer
     const roi = spendC > 0 ? Math.round(((commission - spendC) / spendC) * 100) : null
-    const monthly = commission / Math.max(1, /* rough active months */ 1)
-    const payback = spendC > 0 && commission > 0 ? Math.round((spendC / (commission)) * 12 * 10) / 10 : null
+    const payback = spendC > 0 && commission > 0 ? Math.round((spendC / commission) * 12 * 10) / 10 : null
     return {
-      campaign_id: c.id, name: c.name, channel: c.channel, status: c.status,
-      clicks, signups: crefs.length, trials, paid, commission_cents: commission, spend_cents: spendC,
+      campaign_id: c.id, name: c.name, channel: c.channel, status: c.status, budget_cents: c.budget_cents, created_at: c.created_at,
+      clicks, signups: crefs.length, trials, paid,
+      demos: demos.filter((d) => d.campaign_id === c.id).length,
+      creatives: creatives.filter((cr) => cr.campaign_id === c.id).length,
+      landing_pages: lps.filter((l) => l.campaign_id === c.id).length,
+      commission_cents: commission, spend_cents: spendC,
       cac_cents: cac, ltv_cents: ltv, roi_pct: roi, payback_months: payback,
     }
   }).sort((a, b) => b.commission_cents - a.commission_cents)
