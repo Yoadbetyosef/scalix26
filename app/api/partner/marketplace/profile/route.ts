@@ -18,8 +18,9 @@ export async function PATCH(req: NextRequest) {
   if (!canEditMarketplace(ctx)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
   const row: Record<string, unknown> = { partner_id: ctx.partnerId, updated_at: new Date().toISOString() }
-  for (const f of ['headline', 'bio', 'logo_url', 'website']) if (f in b) row[f] = b[f]
-  for (const f of ['specialties', 'regions', 'languages']) if (f in b) row[f] = Array.isArray(b[f]) ? b[f] : String(b[f] || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  for (const f of ['headline', 'bio', 'logo_url', 'website', 'response_time']) if (f in b) row[f] = b[f]
+  for (const f of ['specialties', 'regions', 'languages', 'countries']) if (f in b) row[f] = Array.isArray(b[f]) ? b[f] : String(b[f] || '').split(',').map((s: string) => s.trim()).filter(Boolean)
+  if ('projects_completed' in b) row.projects_completed = Math.max(0, Number(b.projects_completed) || 0)
   if ('listed' in b) row.listed = !!b.listed
   const db = createAdminClient()
   const { data, error } = await db.from('marketplace_profiles').upsert(row, { onConflict: 'partner_id' }).select('*').single()

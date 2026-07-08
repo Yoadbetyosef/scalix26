@@ -8,10 +8,11 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const db = createAdminClient()
 
-  const [{ data: refs }, { data: entries }, { data: links }] = await Promise.all([
-    db.from('referrals').select('status, created_at, last_touch_link_id').eq('partner_id', ctx.partnerId).neq('status', 'rejected'),
+  const [{ data: refs }, { data: entries }, { data: links }, { data: demos }] = await Promise.all([
+    db.from('referrals').select('status, created_at, last_touch_link_id, tenant_id, tenants(industry)').eq('partner_id', ctx.partnerId).neq('status', 'rejected'),
     db.from('commission_entries').select('amount_cents, status, created_at').eq('partner_id', ctx.partnerId),
     db.from('referral_links').select('id, label, code, click_count').eq('partner_id', ctx.partnerId),
+    db.from('demos').select('view_count, unique_visitors, total_dwell_ms').eq('partner_id', ctx.partnerId),
   ])
 
   // Funnel counts.
@@ -52,5 +53,30 @@ export async function GET(req: NextRequest) {
     signups: signupByLink[l.id] || 0, paid: paidByLink[l.id] || 0,
   })).sort((a, b) => b.paid - a.paid || b.signups - a.signups).slice(0, 10)
 
-  return NextResponse.json({ funnel, months, topLinks })
+  // Demo performance.
+  const demoRows = demos || []
+  const demoPerf = {
+    demos: demoRows.length,
+    views: demoRows.reduce((s, d) => s + (d.view_count || 0), 0),
+    unique: demoRows.reduce((s, d) => s + (d.unique_visitors || 0), 0),
+    avgSeconds: (() => {
+      const totalMs = demoRows.reduce((s, d) => s + (d.total_dwell_ms || 0), 0)
+      const totalViews = demoRows.reduce((s, d) => s + (d.view_count || 0), 0)
+      return totalViews ? Math.round(totalMs / totalViews / 1000) : 0
+    })(),
+  }
+
+  // Top industries by paid conversions (from referred tenants).
+  const byIndustry: Record<string, { signups: number; paid: number }> = {}
+  for (const r of all) {
+    const ind = ((r.tenants as unknown as { industry?: string } | null)?.industry || 'Other').trim() || 'Other'
+    byIndustry[ind] ||= { signups: 0, paid: 0 }
+    byIndustry[ind].signups++
+    if (r.status === 'paid') byIndustry[ind].paid++
+  }
+  const topIndustries = Object.entries(byIndustry)
+    .map(([industry, v]) => ({ industry, ...v, rate: v.signups ? Math.round((v.paid / v.signups) * 100) : 0 }))
+    .sort((a, b) => b.paid - a.paid || b.signups - a.signups).slice(0, 8)
+
+  return NextResponse.json({ funnel, months, topLinks, demoPerf, topIndustries })
 }

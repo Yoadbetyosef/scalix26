@@ -9,11 +9,18 @@ export const dynamic = 'force-dynamic'
 export default async function PartnerProfile({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const db = createAdminClient()
-  const { data: partner } = await db.from('partners').select('id, company_name, partner_type').eq('slug', slug).maybeSingle()
+  const { data: partner } = await db.from('partners').select('id, company_name, partner_type, created_at').eq('slug', slug).maybeSingle()
   if (!partner) notFound()
   const { data: profile } = await db.from('marketplace_profiles').select('*').eq('partner_id', partner.id).eq('listed', true).maybeSingle()
   if (!profile) notFound()
-  const { data: reviews } = await db.from('marketplace_reviews').select('rating, body, created_at').eq('partner_id', partner.id).eq('status', 'published').order('created_at', { ascending: false }).limit(20)
+  const [{ data: reviews }, { count: customerCount }, { data: certs }, { data: badges }] = await Promise.all([
+    db.from('marketplace_reviews').select('rating, body, created_at').eq('partner_id', partner.id).eq('status', 'published').order('created_at', { ascending: false }).limit(20),
+    db.from('referrals').select('id', { count: 'exact', head: true }).eq('partner_id', partner.id).eq('status', 'paid'),
+    db.from('certifications').select('badge').eq('partner_id', partner.id),
+    db.from('partner_xp_events').select('label').eq('partner_id', partner.id).like('kind', 'ach:%').not('label', 'is', null),
+  ])
+  const yearsWith = Math.max(0, Math.floor((Date.now() - new Date(partner.created_at).getTime()) / (365 * 86400000)))
+  const badgeLabels = Array.from(new Set([...(certs || []).map((c) => c.badge).filter(Boolean), ...(badges || []).map((b) => b.label).filter(Boolean)])) as string[]
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -41,6 +48,26 @@ export default async function PartnerProfile({ params }: { params: Promise<{ slu
             {profile.regions?.length ? <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" /> {profile.regions.join(', ')}</span> : null}
             {profile.website ? <a href={profile.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent-strong hover:underline"><Globe className="h-4 w-4" /> Website</a> : null}
           </div>
+
+          {/* Stat strip */}
+          <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-sunken/50 p-3 text-center sm:grid-cols-4">
+            <div><div className="text-lg font-semibold text-ink">{customerCount ?? 0}</div><div className="text-xs text-muted">Customers</div></div>
+            <div><div className="text-lg font-semibold text-ink">{profile.projects_completed || 0}</div><div className="text-xs text-muted">Projects</div></div>
+            <div><div className="text-lg font-semibold text-ink">{profile.rating_avg ? `${profile.rating_avg}★` : '—'}</div><div className="text-xs text-muted">{profile.review_count || 0} reviews</div></div>
+            <div><div className="text-lg font-semibold text-ink">{profile.response_time || (yearsWith >= 1 ? `${yearsWith}y` : 'New')}</div><div className="text-xs text-muted">{profile.response_time ? 'Response' : 'With Scalix'}</div></div>
+          </div>
+
+          {badgeLabels.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {badgeLabels.map((b) => <span key={b} className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent-strong"><Award className="h-3 w-3" /> {b}</span>)}
+            </div>
+          )}
+          {(profile.languages?.length || profile.countries?.length) ? (
+            <div className="mt-3 text-sm text-subtle">
+              {profile.languages?.length ? <span>Languages: {profile.languages.join(', ')}. </span> : null}
+              {profile.countries?.length ? <span>Serves: {profile.countries.join(', ')}.</span> : null}
+            </div>
+          ) : null}
 
           {profile.specialties?.length ? (
             <div className="mt-4 flex flex-wrap gap-1.5">

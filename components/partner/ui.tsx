@@ -25,7 +25,7 @@ export function StatCard({ label, value, hint, accent }: { label: string; value:
   )
 }
 
-export function Panel({ title, action, children, className }: { title?: string; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ title, action, children, className }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={cn('rounded-2xl border border-hairline bg-surface shadow-e1', className)}>
       {(title || action) && (

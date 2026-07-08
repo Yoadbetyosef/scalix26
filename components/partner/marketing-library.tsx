@@ -11,6 +11,7 @@ const ICON: Record<string, typeof FileText> = { one_pager: FileText, script: Mes
 export function MarketingLibrary() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [q, setQ] = useState('')
+  const [cat, setCat] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async (query = '') => {
@@ -25,16 +26,28 @@ export function MarketingLibrary() {
     window.open(a.file_url, '_blank')
   }
 
+  const categories = Array.from(new Set(assets.map((a) => a.category)))
+  const shown = cat ? assets.filter((a) => a.category === cat) : assets
+  const catLabel = (c: string) => c.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())
+
   return (
     <div>
-      <div className="relative mb-4 max-w-md">
+      <div className="relative mb-3 max-w-md">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
         <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && load(q)} placeholder="Search assets…"
           className="h-10 w-full rounded-lg border border-hairline-strong pl-9 pr-3 text-sm outline-none focus:border-accent" />
       </div>
-      {loading ? <EmptyRow>Loading…</EmptyRow> : assets.length === 0 ? <EmptyRow>No assets found.</EmptyRow> : (
+      {categories.length > 1 && (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          <button onClick={() => setCat(null)} className={`rounded-full px-3 py-1 text-xs font-medium ${!cat ? 'bg-ink text-white' : 'bg-sunken text-subtle hover:text-ink'}`}>All</button>
+          {categories.map((c) => (
+            <button key={c} onClick={() => setCat(c)} className={`rounded-full px-3 py-1 text-xs font-medium ${cat === c ? 'bg-ink text-white' : 'bg-sunken text-subtle hover:text-ink'}`}>{catLabel(c)}</button>
+          ))}
+        </div>
+      )}
+      {loading ? <EmptyRow>Loading…</EmptyRow> : shown.length === 0 ? <EmptyRow>No assets found.</EmptyRow> : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.map((a) => {
+          {shown.map((a) => {
             const Icon = ICON[a.category] || File
             return (
               <div key={a.id} className="flex flex-col rounded-2xl border border-hairline bg-surface p-4 shadow-e1">

@@ -6,7 +6,7 @@ import { Panel } from '@/components/partner/ui'
 import { ExternalLink } from 'lucide-react'
 
 export function MarketplaceEditor({ canEdit, slug }: { canEdit: boolean; slug: string }) {
-  const [f, setF] = useState({ headline: '', bio: '', website: '', logo_url: '', specialties: '', regions: '', languages: '', listed: false })
+  const [f, setF] = useState({ headline: '', bio: '', website: '', logo_url: '', specialties: '', regions: '', languages: '', countries: '', response_time: '', projects_completed: '', listed: false })
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [origin, setOrigin] = useState('')
@@ -17,7 +17,8 @@ export function MarketplaceEditor({ canEdit, slug }: { canEdit: boolean; slug: s
       const p = j.profile
       if (p) setF({
         headline: p.headline || '', bio: p.bio || '', website: p.website || '', logo_url: p.logo_url || '',
-        specialties: (p.specialties || []).join(', '), regions: (p.regions || []).join(', '), languages: (p.languages || []).join(', '), listed: !!p.listed,
+        specialties: (p.specialties || []).join(', '), regions: (p.regions || []).join(', '), languages: (p.languages || []).join(', '),
+        countries: (p.countries || []).join(', '), response_time: p.response_time || '', projects_completed: p.projects_completed ? String(p.projects_completed) : '', listed: !!p.listed,
       })
       setLoading(false)
     })
@@ -46,6 +47,9 @@ export function MarketplaceEditor({ canEdit, slug }: { canEdit: boolean; slug: s
             <div><label className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Specialties (comma-sep)</label><input disabled={!canEdit} className={input} value={f.specialties} onChange={(e) => setF({ ...f, specialties: e.target.value })} placeholder="HVAC, Locksmith, Salons" /></div>
             <div><label className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Regions</label><input disabled={!canEdit} className={input} value={f.regions} onChange={(e) => setF({ ...f, regions: e.target.value })} placeholder="US, Canada" /></div>
             <div><label className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Languages</label><input disabled={!canEdit} className={input} value={f.languages} onChange={(e) => setF({ ...f, languages: e.target.value })} placeholder="English, Spanish" /></div>
+            <div><label className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Countries</label><input disabled={!canEdit} className={input} value={f.countries} onChange={(e) => setF({ ...f, countries: e.target.value })} placeholder="US, Canada, UK" /></div>
+            <div><label className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Response time</label><input disabled={!canEdit} className={input} value={f.response_time} onChange={(e) => setF({ ...f, response_time: e.target.value })} placeholder="Within an hour" /></div>
+            <div><label className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Projects completed</label><input type="number" disabled={!canEdit} className={input} value={f.projects_completed} onChange={(e) => setF({ ...f, projects_completed: e.target.value })} placeholder="0" /></div>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" disabled={!canEdit} checked={f.listed} onChange={(e) => setF({ ...f, listed: e.target.checked })} className="h-4 w-4" />

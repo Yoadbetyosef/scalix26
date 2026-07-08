@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Panel, EmptyRow, money } from '@/components/partner/ui'
+import { Panel, EmptyRow, StatCard, money } from '@/components/partner/ui'
 
 interface Data {
   funnel: { clicks: number; signups: number; trials: number; paid: number }
   months: { month: string; cents: number }[]
   topLinks: { label: string; clicks: number; signups: number; paid: number }[]
+  demoPerf: { demos: number; views: number; unique: number; avgSeconds: number }
+  topIndustries: { industry: string; signups: number; paid: number; rate: number }[]
 }
 
 export function AnalyticsView() {
@@ -24,8 +26,17 @@ export function AnalyticsView() {
   const maxStage = Math.max(...stages.map((s) => s.value), 1)
   const maxMonth = Math.max(...data.months.map((m) => m.cents), 1)
 
+  const secs = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`)
+
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Demos" value={data.demoPerf.demos} />
+        <StatCard label="Demo Views" value={data.demoPerf.views} hint={`${data.demoPerf.unique} unique`} />
+        <StatCard label="Avg. Time on Demo" value={secs(data.demoPerf.avgSeconds)} accent />
+        <StatCard label="Demo → Paid" value={data.funnel.paid} hint="Closed from demos" />
+      </div>
+
       <Panel title="Conversion funnel">
         <div className="space-y-2">
           {stages.map((s, i) => (
@@ -50,6 +61,29 @@ export function AnalyticsView() {
             </div>
           ))}
         </div>
+      </Panel>
+
+      <Panel title="Top industries">
+        {data.topIndustries.length === 0 ? <EmptyRow>No industry data yet.</EmptyRow> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-3 font-medium">Industry</th><th className="py-2 pr-3 font-medium text-right">Signups</th>
+                <th className="py-2 pr-3 font-medium text-right">Paid</th><th className="py-2 font-medium text-right">Conv.</th>
+              </tr></thead>
+              <tbody>
+                {data.topIndustries.map((r) => (
+                  <tr key={r.industry} className="border-b border-hairline/60">
+                    <td className="py-2 pr-3 text-ink">{r.industry}</td>
+                    <td className="py-2 pr-3 text-right text-subtle">{r.signups}</td>
+                    <td className="py-2 pr-3 text-right font-medium text-ink">{r.paid}</td>
+                    <td className="py-2 text-right text-subtle">{r.rate}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Panel>
 
       <Panel title="Top links">
