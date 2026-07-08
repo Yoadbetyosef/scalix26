@@ -1,6 +1,7 @@
 import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { awardXp, XP } from '@/lib/partner/xp'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 
 const PARTNER_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'
@@ -150,6 +151,8 @@ export async function recordCommissionForInvoice(invoice: Stripe.Invoice, tenant
         body: 'One of your referrals just started a paid subscription.', link: '/partner/commissions',
       })
       await logPartnerAction(ref.partner_id, 'system', { action: 'referral.paid', targetType: 'tenant', targetId: tenant.id })
+      // XP: one grant per converted customer (idempotent on the referral).
+      await awardXp(ref.partner_id, 'customer_paid', XP.customer_paid, { uniqueKey: `customer_paid:${ref.id}` })
       // Conversion email to the partner (best-effort).
       try {
         const { data: partner } = await db.from('partners').select('contact_email, company_name').eq('id', ref.partner_id).maybeSingle()

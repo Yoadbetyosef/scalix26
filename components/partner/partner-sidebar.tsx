@@ -6,7 +6,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Share2, Building2, KanbanSquare, MonitorPlay, Coins,
   Megaphone, GraduationCap, Store, Users, BarChart3, Settings, LogOut,
-  MoreHorizontal, X, ArrowLeftRight, Trophy,
+  MoreHorizontal, X, ArrowLeftRight, Trophy, Brain,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +33,7 @@ export function PartnerSidebar({ companyName, partnerType, hasTenant }: PartnerN
 
   const items = [
     { href: '/partner', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+    { href: '/partner/coach', icon: Brain, label: 'AI Coach' },
     { href: '/partner/referrals', icon: Share2, label: 'Referrals' },
     { href: '/partner/customers', icon: Building2, label: 'Customers' },
     { href: '/partner/pipeline', icon: KanbanSquare, label: 'Pipeline' },

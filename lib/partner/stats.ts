@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { PLANS } from '@/lib/stripe/client'
+import { awardXp, totalXp, computeStreak, levelForXp, ACHIEVEMENTS } from '@/lib/partner/xp'
 
 // Computes a partner's dashboard KPIs from the referrals + commission ledger. Written to the
 // partner_stats cache so the dashboard reads one row instead of live-aggregating. Compute-on-read
@@ -73,14 +74,56 @@ export async function computePartnerStats(partnerId: string): Promise<PartnerSta
   }
 }
 
-/** Compute + persist to the partner_stats cache. Returns the fresh stats. */
-export async function refreshPartnerStats(partnerId: string): Promise<PartnerStats> {
+export interface PartnerStatsFull extends PartnerStats {
+  xp: number; level: string; global_rank: number | null; streak_days: number
+}
+
+/** Compute + persist to the partner_stats cache (incl. XP/level/rank/streak). Grants milestone
+ * achievements idempotently. Returns the fresh stats. */
+export async function refreshPartnerStats(partnerId: string): Promise<PartnerStatsFull> {
   const stats = await computePartnerStats(partnerId)
   const db = createAdminClient()
-  await db.from('partner_stats').upsert({ partner_id: partnerId, ...stats, computed_at: new Date().toISOString() }, { onConflict: 'partner_id' })
-  // Keep the denormalized health score on the partner row in sync (used by admin/marketplace).
+
+  // Grant milestone achievements (idempotent) from the aggregates.
+  await grantMilestones(db, partnerId, stats)
+
+  const xp = await totalXp(db, partnerId)
+  const lvl = levelForXp(xp)
+  const streak = await computeStreak(db, partnerId)
+
+  // Global rank by cached XP (approximate at scale, exact enough here).
+  const { data: others } = await db.from('partner_stats').select('partner_id, xp')
+  const higher = (others || []).filter((o) => o.partner_id !== partnerId && (o.xp || 0) > xp).length
+  const globalRank = higher + 1
+
+  await db.from('partner_stats').upsert({
+    partner_id: partnerId, ...stats, xp, level: lvl.level, global_rank: globalRank, streak_days: streak,
+    computed_at: new Date().toISOString(),
+  }, { onConflict: 'partner_id' })
   await db.from('partners').update({ health_score: stats.health_score }).eq('id', partnerId)
-  return stats
+  return { ...stats, xp, level: lvl.level, global_rank: globalRank, streak_days: streak }
+}
+
+async function grantMilestones(db: ReturnType<typeof createAdminClient>, partnerId: string, s: PartnerStats): Promise<void> {
+  const { count: demoCount } = await db.from('demos').select('id', { count: 'exact', head: true }).eq('partner_id', partnerId)
+  const { data: partner } = await db.from('partners').select('created_at').eq('id', partnerId).maybeSingle()
+  const ageDays = partner?.created_at ? (Date.now() - new Date(partner.created_at).getTime()) / 86400000 : 0
+
+  const checks: { cond: boolean; a: keyof typeof ACHIEVEMENTS }[] = [
+    { cond: s.total_customers >= 1, a: 'first_referral' },
+    { cond: (demoCount || 0) >= 1, a: 'first_demo' },
+    { cond: s.active_customers >= 1, a: 'first_customer' },
+    { cond: s.active_customers >= 10, a: 'ten_customers' },
+    { cond: s.active_customers >= 100, a: 'hundred_customers' },
+    { cond: s.lifetime_earnings_cents >= 100000, a: 'commission_1k' },
+    { cond: s.lifetime_earnings_cents >= 1000000, a: 'commission_10k' },
+    { cond: ageDays >= 365, a: 'one_year' },
+  ]
+  for (const { cond, a } of checks) {
+    if (!cond) continue
+    const ach = ACHIEVEMENTS[a]
+    await awardXp(partnerId, `ach:${ach.key}`, ach.xp, { uniqueKey: `ach:${ach.key}:${partnerId}`, label: ach.label, meta: { icon: ach.icon } })
+  }
 }
 
 /** Recompute every partner (nightly cron / admin trigger). */

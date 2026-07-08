@@ -4,6 +4,7 @@ import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { canCreateDemos } from '@/lib/partner/roles'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { sendSMS } from '@/lib/twilio/client'
+import { awardXp, XP } from '@/lib/partner/xp'
 
 const PARTNER_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'
 
@@ -29,5 +30,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     try { await sendSMS(phone, `See your AI employee for ${demo.prospect_name} in action: ${url}`); sent.push('sms') } catch { /* best-effort */ }
   }
   if (!sent.length) return NextResponse.json({ error: 'Could not send — check the address/number.' }, { status: 400 })
+  await awardXp(ctx.partnerId, 'demo_shared', XP.demo_shared, { userId: ctx.userId })
   return NextResponse.json({ success: true, sent })
 }

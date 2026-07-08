@@ -5,6 +5,7 @@ import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { canCreateDemos, canWriteVia } from '@/lib/partner/rbac'
 import { scrapeBranding, buildBriefing } from '@/lib/partner/demo'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { awardXp, XP } from '@/lib/partner/xp'
 
 function slugify(name: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'demo'
@@ -58,5 +59,8 @@ export async function POST(req: NextRequest) {
   }
 
   await logPartnerAction(ctx.partnerId, ctx.userId, { action: 'demo.created', targetType: 'demo', targetId: demo.id, after: { prospect: body.prospectName } })
+  // XP: per-demo + a one-time bonus for the very first demo.
+  await awardXp(ctx.partnerId, 'demo_created', XP.demo_created, { userId: ctx.userId })
+  await awardXp(ctx.partnerId, 'first_demo_bonus', XP.first_demo_bonus, { uniqueKey: `first_demo_bonus:${ctx.partnerId}`, userId: ctx.userId })
   return NextResponse.json({ success: true, demo })
 }

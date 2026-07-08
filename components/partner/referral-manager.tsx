@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
 import { Panel, EmptyRow } from '@/components/partner/ui'
-import { Copy, QrCode, Plus, Download, ExternalLink } from 'lucide-react'
+import { Copy, QrCode, Plus, Download, ExternalLink, Share2 } from 'lucide-react'
 
 interface Link { id: string; code: string; label: string | null; destination_path: string; click_count: number; conversions: { signups: number; paid: number } }
 
@@ -35,6 +35,21 @@ export function ReferralManager() {
   }
 
   function copy(code: string) { navigator.clipboard.writeText(shareUrl(code)); toast.success('Link copied') }
+
+  const PITCH = 'Give your business a 24/7 AI employee that answers every call & text and books the job. Try it free:'
+  function share(net: string, code: string) {
+    const url = encodeURIComponent(shareUrl(code))
+    const text = encodeURIComponent(PITCH)
+    const map: Record<string, string> = {
+      facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${url}`,
+      x: `https://twitter.com/intent/tweet?url=${url}&text=${text}`,
+      whatsapp: `https://wa.me/?text=${text}%20${url}`,
+      email: `mailto:?subject=${encodeURIComponent('A 24/7 AI employee for your business')}&body=${text}%20${url}`,
+    }
+    if (net === 'instagram') { navigator.clipboard.writeText(shareUrl(code)); return toast.success('Link copied — paste it in your IG bio or story') }
+    window.open(map[net], '_blank', 'noopener,width=640,height=560')
+  }
 
   async function showQr(code: string) {
     const url = shareUrl(code)
@@ -76,9 +91,14 @@ export function ReferralManager() {
                   </div>
                   <div className="mt-0.5 text-xs text-muted">{l.click_count} clicks · {l.conversions.signups} signups · {l.conversions.paid} paid</div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                   <button onClick={() => copy(l.code)} title="Copy link" className="rounded-lg border border-hairline-strong p-2 text-subtle hover:text-ink"><Copy className="h-4 w-4" /></button>
                   <button onClick={() => showQr(l.code)} title="QR code" className="rounded-lg border border-hairline-strong p-2 text-subtle hover:text-ink"><QrCode className="h-4 w-4" /></button>
+                  <span className="mx-1 hidden h-5 w-px bg-hairline sm:block" />
+                  <Share2 className="hidden h-3.5 w-3.5 text-muted sm:block" />
+                  {([['facebook', 'Facebook'], ['linkedin', 'LinkedIn'], ['whatsapp', 'WhatsApp'], ['x', 'X'], ['instagram', 'Instagram'], ['email', 'Email']] as const).map(([net, label]) => (
+                    <button key={net} onClick={() => share(net, l.code)} className="rounded-md border border-hairline px-2 py-1 text-[11px] font-medium text-subtle transition-colors hover:border-accent hover:text-accent-strong">{label}</button>
+                  ))}
                 </div>
               </div>
             ))}

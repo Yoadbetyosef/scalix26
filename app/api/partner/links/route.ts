@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { canWriteVia } from '@/lib/partner/rbac'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { awardXp, XP } from '@/lib/partner/xp'
 
 function newCode(): string {
   // Short, URL-safe, unambiguous.
@@ -63,5 +64,6 @@ export async function POST(req: NextRequest) {
   }).select('id, code, label, destination_path, click_count, created_at').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   await logPartnerAction(ctx.partnerId, ctx.userId, { action: 'link.created', targetType: 'referral_link', targetId: link.id, after: { code, label: body.label } })
+  await awardXp(ctx.partnerId, 'first_link', XP.first_link, { uniqueKey: `first_link:${ctx.partnerId}`, userId: ctx.userId })
   return NextResponse.json({ success: true, link: { ...link, conversions: { signups: 0, paid: 0 } } })
 }

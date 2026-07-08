@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { awardXp, XP } from '@/lib/partner/xp'
 
 // First-party attribution cookies. Kept first-party + SameSite=Lax so they survive the redirect
 // from /api/r/[code] into the signup page (and OAuth round-trips). The server reads them
@@ -86,6 +87,8 @@ export async function resolveAttribution(params: {
         partner_id: owning.partner_id, kind: 'new_customer',
         title: 'New referred signup', body: `${email} signed up through your link.`, link: '/partner/customers',
       })
+      // XP: one grant per referred signup (idempotent on the tenant).
+      await awardXp(owning.partner_id, 'referral_signup', XP.referral_signup, { uniqueKey: `referral_signup:${tenantId}` })
     }
   } catch (e) {
     console.error('[attribution] resolve failed:', (e as Error).message)
