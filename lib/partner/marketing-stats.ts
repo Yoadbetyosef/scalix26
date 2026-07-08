@@ -6,9 +6,12 @@ import { createAdminClient } from '@/lib/supabase/server'
 
 export interface CampaignPerf {
   campaign_id: string; name: string; channel: string | null; status: string; budget_cents: number | null; created_at: string
-  clicks: number; signups: number; trials: number; paid: number; demos: number; creatives: number; landing_pages: number
+  clicks: number; signups: number; trials: number; paid: number; demos: number; creatives: number; landing_pages: number; links: number
   commission_cents: number; spend_cents: number
   cac_cents: number | null; ltv_cents: number | null; roi_pct: number | null; payback_months: number | null
+}
+export interface Funnel {
+  spend_cents: number; clicks: number; lp_views: number; demo_starts: number; trials: number; paid: number; commission_cents: number
 }
 export interface CreativePerf {
   creative_id: string; title: string; type: string; status: string
@@ -25,7 +28,7 @@ async function loadBase(partnerId: string) {
     db.from('commission_entries').select('referral_id, amount_cents, status').eq('partner_id', partnerId),
     db.from('partner_spend').select('campaign_id, amount_cents').eq('partner_id', partnerId),
     db.from('demos').select('campaign_id').eq('partner_id', partnerId),
-    db.from('landing_pages').select('campaign_id').eq('partner_id', partnerId),
+    db.from('landing_pages').select('campaign_id, view_count').eq('partner_id', partnerId),
   ])
   return { campaigns: campaigns || [], creatives: creatives || [], links: links || [], refs: refs || [], entries: entries || [], spend: spend || [], demos: demos || [], lps: lps || [] }
 }
@@ -57,10 +60,23 @@ export async function computeCampaignPerformance(partnerId: string): Promise<Cam
       demos: demos.filter((d) => d.campaign_id === c.id).length,
       creatives: creatives.filter((cr) => cr.campaign_id === c.id).length,
       landing_pages: lps.filter((l) => l.campaign_id === c.id).length,
+      links: links.filter((l) => l.campaign_id === c.id).length,
       commission_cents: commission, spend_cents: spendC,
       cac_cents: cac, ltv_cents: ltv, roi_pct: roi, payback_months: payback,
     }
   }).sort((a, b) => b.commission_cents - a.commission_cents)
+}
+
+// Full-funnel totals across the partner (Spend → Clicks → LP views → Demos → Trials → Paid → Commission).
+export async function computeFunnel(partnerId: string): Promise<Funnel> {
+  const { links, refs, entries, spend, demos, lps } = await loadBase(partnerId)
+  const spendC = spend.reduce((s, x) => s + x.amount_cents, 0)
+  const clicks = links.reduce((s, l) => s + (l.click_count || 0), 0)
+  const lpViews = lps.reduce((s, l: { view_count?: number }) => s + (l.view_count || 0), 0)
+  const trials = refs.filter((r) => r.status === 'trial' || r.status === 'paid' || r.status === 'churned').length
+  const paid = refs.filter((r) => r.status === 'paid').length
+  const commission = entries.filter((e) => e.status !== 'void').reduce((s, e) => s + e.amount_cents, 0)
+  return { spend_cents: spendC, clicks, lp_views: lpViews, demo_starts: demos.length, trials, paid, commission_cents: commission }
 }
 
 export async function computeCreativePerformance(partnerId: string): Promise<CreativePerf[]> {
