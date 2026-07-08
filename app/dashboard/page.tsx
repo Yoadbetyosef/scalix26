@@ -9,6 +9,7 @@ import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
 import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import { getImpactData } from '@/lib/dashboard/impact'
+import { AttentionSync } from '@/components/dashboard/attention'
 import { enabledModulesOf, effectiveModules } from '@/lib/modules'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 import type { Lead } from '@/types'
@@ -181,13 +182,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     const presenceState: PresenceState = attentionCount > 0 ? 'attention' : handled > 0 ? 'working' : 'ready'
 
-    // The soul: the AI's spoken status (the name lives in the eyebrow, not here).
+    // The AI's spoken status. `idleSentence` is the "all caught up" variant; the reactive header
+    // (AttentionSentence) shows the live unresolved count and falls back to idleSentence at zero.
+    const idleSentence =
+      handled > 0
+        ? 'On duty — watching every channel. Nothing needs you.'
+        : 'On duty, watching your channels. Nothing needs you yet.'
     const stateSentence =
       attentionCount > 0
         ? `${attentionCount} ${attentionCount === 1 ? 'thing needs' : 'things need'} your attention.`
-        : handled > 0
-          ? 'On duty — watching every channel. Nothing needs you.'
-          : 'On duty, watching your channels. Nothing needs you yet.'
+        : idleSentence
 
     // Amy's knowledge — built entirely from the real data already on this page.
     const todayStr = new Date().toLocaleDateString('en-CA')
@@ -215,6 +219,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         briefing={briefing}
         presenceState={presenceState}
         stateSentence={stateSentence}
+        idleSentence={idleSentence}
         businessName={tenant.business_name || ''}
         tenantId={tenant.id}
         figures={[
@@ -232,6 +237,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // fixed tab nav — on top of <main>'s pb-[72px] and the device safe-area inset.
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-md:pb-[calc(100px_+_env(safe-area-inset-bottom))]">
+      {/* Seed the single attention source with fresh server data (overview only). */}
+      {impactData && <AttentionSync tenantId={tenant.id} items={impactData.attention} />}
       {topSection}
 
 

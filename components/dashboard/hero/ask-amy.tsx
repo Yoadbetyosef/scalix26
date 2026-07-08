@@ -7,6 +7,7 @@ import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { AmyRealtime } from './amy-realtime'
 import { AskAmyText } from './ask-amy-text'
 import { type AmyBriefing, dataGreeting } from './ask-amy-shared'
+import { useAttention } from '@/components/dashboard/attention'
 
 export type { AmyBriefing } from './ask-amy-shared'
 
@@ -17,7 +18,12 @@ type Mode = 'idle' | 'live' | 'text'
  * realtime voice conversation (Deepgram Voice Agent, same as the phone). Typing is a
  * quiet fallback. The customer phone pipeline is entirely separate.
  */
-export function AskAmy({ briefing }: { briefing: AmyBriefing }) {
+export function AskAmy({ briefing: serverBriefing }: { briefing: AmyBriefing }) {
+  // The voice assistant speaks the SAME live unresolved notifications as the rest of the dashboard.
+  const { ready, visibleItems } = useAttention()
+  const briefing: AmyBriefing = ready
+    ? { ...serverBriefing, attention: visibleItems.map((v) => ({ label: v.label, href: v.href })) }
+    : serverBriefing
   const name = briefing.employeeName || 'Amy'
   const [mode, setMode] = useState<Mode>('idle')
   // The mobile action bar is fixed to the bottom of the viewport (above the tab nav). It

@@ -1,10 +1,11 @@
 import Link from 'next/link'
-import { Plus, AlertTriangle, ChevronRight } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { RudiPresenceProvider, LiveOrb, GlassToasts } from './rudi-presence'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
 import { AskAmy, type AmyBriefing } from './ask-amy'
+import { AttentionSentence, AttentionPill } from '@/components/dashboard/attention'
 
 export type PresenceState = 'ready' | 'working' | 'attention'
 
@@ -13,6 +14,7 @@ export interface DashboardHeroProps {
   employeeVoice?: string | null
   presenceState: PresenceState
   stateSentence: string
+  idleSentence: string
   businessName: string
   figures: WorkFigure[]
   briefing: AmyBriefing
@@ -30,6 +32,7 @@ export function DashboardHero({
   employeeVoice,
   presenceState,
   stateSentence,
+  idleSentence,
   businessName,
   figures,
   briefing,
@@ -71,17 +74,8 @@ export function DashboardHero({
           </span>
         </div>
 
-        {/* B5 — attention pill, between the header and the orb (mobile only). */}
-        {presenceState === 'attention' && (
-          <a
-            href="#attention-needed"
-            className="mb-4 flex min-h-[48px] items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-left text-amber-900 transition-colors active:bg-amber-100 md:hidden"
-          >
-            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-500" strokeWidth={2} />
-            <span className="min-w-0 flex-1 text-[15px] font-medium leading-snug">{stateSentence}</span>
-            <ChevronRight className="h-5 w-5 flex-shrink-0 text-amber-500" />
-          </a>
-        )}
+        {/* B5 — attention banner, reactive to the single source (mobile only). */}
+        <AttentionPill initialVisible={presenceState === 'attention'} />
 
         {/* B3 orb centerpiece (~112px), standalone and centered. The avatar + pulse rings
             live in the bottom action row (Talk to Rudi), per the design. Only the orb
@@ -105,7 +99,7 @@ export function DashboardHero({
               <span>{eyebrow}</span>
             </p>
             <h1 className="mt-2 max-w-xl text-balance text-xl font-light leading-snug tracking-tight text-ink sm:text-2xl lg:text-[26px]">
-              {stateSentence}
+              <AttentionSentence initial={stateSentence} idleSentence={idleSentence} />
             </h1>
           </div>
         </div>

@@ -188,6 +188,26 @@ function pct(curr: number, prev: number): number | null {
   return Math.round(((curr - prev) / prev) * 100)
 }
 
+// ── ATTENTION: the single definition of what "needs attention" (customer-actionable). ────────
+// One place computes the items; every surface (dashboard header, voice assistant, notification
+// bell, Attention Needed section) consumes them through the client attention store. A2P carrier
+// delivery failures are excluded (platform-side, not customer-fixable).
+export function computeAttention(base: ImpactBase): AttentionItem[] {
+  const attention: AttentionItem[] = []
+  const takeover = selectTakeoverOpen(base)
+  if (takeover.length > 0) attention.push({ label: `${takeover.length} ${takeover.length === 1 ? 'conversation' : 'conversations'} you're handling personally`, href: '/inbox', metric: 'attention_takeover' })
+  const leadsNo = selectLeadsNoFollowup(base)
+  if (leadsNo.length > 0) attention.push({ label: `${leadsNo.length} ${leadsNo.length === 1 ? 'lead' : 'leads'} awaiting follow-up`, href: '/dashboard?tab=leads', metric: 'attention_leads' })
+  const fixableFailures = base.failedErrorCodes.filter((c) => !c || !PLATFORM_DELIVERY_ERROR_CODES.has(c)).length
+  if (fixableFailures > 0) attention.push({ label: `${fixableFailures} ${fixableFailures === 1 ? 'message' : 'messages'} didn't reach customers`, href: '/inbox' })
+  return attention
+}
+
+/** Light path for the client store / notification bell: just the attention items (no metrics recompute). */
+export async function getAttention(tenantId: string): Promise<AttentionItem[]> {
+  return computeAttention(await loadImpactBase(tenantId))
+}
+
 // ── Card data (counts derived from the SAME selectors used by drill-down) ─────
 export async function getImpactData(tenantId: string): Promise<ImpactData> {
   const base = await loadImpactBase(tenantId)
@@ -219,14 +239,7 @@ export async function getImpactData(tenantId: string): Promise<ImpactData> {
 
   const humanTakeoverCount = curManaged.filter((c) => c.human_takeover === true).length
 
-  // Attention (real, customer-actionable; A2P delivery failures excluded).
-  const attention: AttentionItem[] = []
-  const takeover = selectTakeoverOpen(base)
-  if (takeover.length > 0) attention.push({ label: `${takeover.length} ${takeover.length === 1 ? 'conversation' : 'conversations'} you're handling personally`, href: '/inbox', metric: 'attention_takeover' })
-  const leadsNo = selectLeadsNoFollowup(base)
-  if (leadsNo.length > 0) attention.push({ label: `${leadsNo.length} ${leadsNo.length === 1 ? 'lead' : 'leads'} awaiting follow-up`, href: '/dashboard?tab=leads', metric: 'attention_leads' })
-  const fixableFailures = base.failedErrorCodes.filter((c) => !c || !PLATFORM_DELIVERY_ERROR_CODES.has(c)).length
-  if (fixableFailures > 0) attention.push({ label: `${fixableFailures} ${fixableFailures === 1 ? 'message' : 'messages'} didn't reach customers`, href: '/inbox' })
+  const attention = computeAttention(base)
 
   return {
     hasAnyData: base.convs.length > 0 || base.respondedEver.size > 0,
