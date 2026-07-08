@@ -23,9 +23,19 @@ export const LEVELS: { key: string; label: string; minXp: number }[] = [
   { key: 'elite', label: 'Elite', minXp: 45000 },
 ]
 
+// What each level unlocks — surfaced on the dashboard so partners see WHY to level up.
+export const LEVEL_BENEFITS: Record<string, string[]> = {
+  silver: ['Higher commission tier (32.5%)', 'Better marketplace placement', 'Silver partner badge'],
+  gold: ['35% commission tier', 'Featured marketplace listing', 'Gold badge', 'Priority partner support'],
+  platinum: ['37.5% commission tier', 'Top marketplace placement', 'Platinum badge', 'Early access to new Growth OS features'],
+  diamond: ['40% commission tier', 'Elite marketplace tier', 'Diamond badge'],
+  elite: ['Maximum commission share', 'Elite Club access', 'Dedicated partner manager'],
+}
+export const levelBenefits = (levelKey: string | null): string[] => (levelKey ? LEVEL_BENEFITS[levelKey] || [] : [])
+
 export interface LevelInfo {
   level: string; levelKey: string; xp: number
-  nextLevel: string | null; nextAt: number | null; prevAt: number; progressPct: number; xpToNext: number | null
+  nextLevel: string | null; nextLevelKey: string | null; nextAt: number | null; prevAt: number; progressPct: number; xpToNext: number | null
 }
 
 export function levelForXp(xp: number): LevelInfo {
@@ -36,7 +46,7 @@ export function levelForXp(xp: number): LevelInfo {
   const prevAt = cur.minXp
   const nextAt = next?.minXp ?? null
   const progressPct = next ? Math.min(100, Math.round(((xp - prevAt) / (next.minXp - prevAt)) * 100)) : 100
-  return { level: cur.label, levelKey: cur.key, xp, nextLevel: next?.label ?? null, nextAt, prevAt, progressPct, xpToNext: nextAt != null ? Math.max(0, nextAt - xp) : null }
+  return { level: cur.label, levelKey: cur.key, xp, nextLevel: next?.label ?? null, nextLevelKey: next?.key ?? null, nextAt, prevAt, progressPct, xpToNext: nextAt != null ? Math.max(0, nextAt - xp) : null }
 }
 
 // Achievements (milestone badges). Evaluated from aggregates in refreshPartnerStats().
