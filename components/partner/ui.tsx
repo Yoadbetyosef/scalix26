@@ -27,12 +27,16 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   )
 }
 
+// Metric card — the number dominates; label + hint are quiet context. Fixed min-height so a row of
+// cards aligns perfectly regardless of whether a hint is present.
 export function StatCard({ label, value, hint, accent }: { label: string; value: ReactNode; hint?: string; accent?: boolean }) {
   return (
-    <div className={cn('rounded-2xl border border-hairline bg-surface p-4 shadow-e1', accent && 'ring-1 ring-accent/20')}>
-      <div className="text-[12px] font-medium uppercase tracking-wide text-muted">{label}</div>
-      <div className="mt-1.5 text-2xl font-semibold tracking-tight text-ink">{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-subtle">{hint}</div>}
+    <div className={cn('flex min-h-[104px] flex-col justify-between rounded-2xl border bg-surface p-4 shadow-e1', accent ? 'border-accent/30' : 'border-hairline')}>
+      <div className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted truncate">{label}</div>
+      <div>
+        <div className={cn('text-[27px] font-semibold leading-none tracking-tight tabular-nums', accent ? 'text-accent-strong' : 'text-ink')}>{value}</div>
+        {hint && <div className="mt-1.5 text-xs leading-snug text-subtle">{hint}</div>}
+      </div>
     </div>
   )
 }
