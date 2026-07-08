@@ -2,29 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 
-// Top partners by paid customers (all-time). Company names only — no financials leaked.
+// Scales to 100k+ partners: cached partner_stats (indexed order+limit) + indexed rank COUNT.
 export async function GET(req: NextRequest) {
   const ctx = await authenticatePartnerRequest(req)
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const db = createAdminClient()
 
-  const { data: refs } = await db.from('referrals').select('partner_id, status').eq('status', 'paid')
-  const counts: Record<string, number> = {}
-  for (const r of refs || []) counts[r.partner_id] = (counts[r.partner_id] || 0) + 1
+  const { data: top } = await db.from('partner_stats')
+    .select('partner_id, active_customers, partners(company_name)')
+    .order('active_customers', { ascending: false }).limit(25)
 
-  const ids = Object.keys(counts)
-  const names: Record<string, string> = {}
-  if (ids.length) {
-    const { data: partners } = await db.from('partners').select('id, company_name, slug').in('id', ids)
-    for (const p of partners || []) names[p.id] = p.company_name || p.slug
-  }
+  const { data: self } = await db.from('partner_stats').select('active_customers').eq('partner_id', ctx.partnerId).maybeSingle()
+  const myCustomers = self?.active_customers ?? 0
+  const { count: higher } = await db.from('partner_stats').select('partner_id', { count: 'exact', head: true }).gt('active_customers', myCustomers)
 
-  const rows = Object.entries(counts)
-    .map(([id, customers]) => ({ partnerId: id, name: names[id] || 'Partner', customers, isYou: id === ctx.partnerId }))
-    .sort((a, b) => b.customers - a.customers)
-    .slice(0, 25)
-    .map((r, i) => ({ ...r, rank: i + 1 }))
-
-  const you = rows.find((r) => r.isYou) || { rank: null, customers: counts[ctx.partnerId] || 0, isYou: true, name: ctx.companyName || 'You' }
-  return NextResponse.json({ leaderboard: rows, you })
+  const leaderboard = (top || []).map((r, i) => ({
+    rank: i + 1, name: (r.partners as unknown as { company_name?: string } | null)?.company_name || 'Partner',
+    customers: r.active_customers || 0, isYou: r.partner_id === ctx.partnerId,
+  }))
+  return NextResponse.json({ leaderboard, you: { rank: (higher || 0) + 1, customers: myCustomers } })
 }

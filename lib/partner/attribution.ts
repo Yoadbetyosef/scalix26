@@ -9,6 +9,8 @@ import { awardXp, XP } from '@/lib/partner/xp'
 export const COOKIE_FIRST = 'sx_ref_first'   // first-touch link id (set once)
 export const COOKIE_LAST = 'sx_ref_last'     // last-touch link id (overwritten each click)
 export const COOKIE_VID = 'sx_vid'           // stable visitor id
+export const COOKIE_PARTNER = 'sx_partner'   // demo-source partner id (no link)
+export const COOKIE_DEMO = 'sx_demo'         // demo id that sourced the signup
 export const REF_MAX_AGE = 60 * 60 * 24 * 90 // 90 days
 export const VID_MAX_AGE = 60 * 60 * 24 * 400
 
@@ -19,7 +21,7 @@ export function hashIp(ip: string | null | undefined): string | null {
 
 export function newVisitorId(): string { return randomUUID() }
 
-export interface AttributionCookies { firstLinkId?: string; lastLinkId?: string; visitorId?: string }
+export interface AttributionCookies { firstLinkId?: string; lastLinkId?: string; visitorId?: string; partnerId?: string; demoId?: string }
 
 // Minimal shape shared by next/headers cookies() and NextRequest.cookies.
 interface CookieReader { get(name: string): { value: string } | undefined }
@@ -29,6 +31,8 @@ export function readAttributionCookies(store: CookieReader): AttributionCookies 
     firstLinkId: store.get(COOKIE_FIRST)?.value || undefined,
     lastLinkId: store.get(COOKIE_LAST)?.value || undefined,
     visitorId: store.get(COOKIE_VID)?.value || undefined,
+    partnerId: store.get(COOKIE_PARTNER)?.value || undefined,
+    demoId: store.get(COOKIE_DEMO)?.value || undefined,
   }
 }
 
@@ -46,49 +50,59 @@ export async function resolveAttribution(params: {
   cookies: AttributionCookies
 }): Promise<void> {
   const { tenantId, userId, email, cookies } = params
-  if (!cookies.lastLinkId && !cookies.firstLinkId) return
+  // Attribution can come from a referral LINK (click) or a DEMO (partner cookie, no link).
+  if (!cookies.lastLinkId && !cookies.firstLinkId && !cookies.partnerId) return
   try {
     const db = createAdminClient()
     const linkIds = [cookies.lastLinkId, cookies.firstLinkId].filter(Boolean) as string[]
-    const { data: links } = await db.from('referral_links').select('id, partner_id, campaign_id').in('id', linkIds)
+    const { data: links } = linkIds.length ? await db.from('referral_links').select('id, partner_id, campaign_id').in('id', linkIds) : { data: [] }
     const byId = Object.fromEntries((links || []).map((l) => [l.id, l]))
     const lastLink = cookies.lastLinkId ? byId[cookies.lastLinkId] : undefined
     const firstLink = cookies.firstLinkId ? byId[cookies.firstLinkId] : undefined
-    const owning = lastLink || firstLink // last-touch wins
-    if (!owning) return
+    // Owning partner: last-touch link wins; else the demo-source partner cookie.
+    const owningPartnerId = lastLink?.partner_id || firstLink?.partner_id || cookies.partnerId
+    if (!owningPartnerId) return
 
     // Self-referral guard: the referring partner's members can't farm commission on their own biz.
     const { data: selfMember } = await db.from('partner_members').select('id')
-      .eq('partner_id', owning.partner_id).eq('user_id', userId).limit(1).maybeSingle()
-    const { data: partner } = await db.from('partners').select('id, contact_email, default_commission_plan_id').eq('id', owning.partner_id).maybeSingle()
-    const isSelf = !!selfMember || (partner?.contact_email && partner.contact_email.toLowerCase() === email.toLowerCase())
+      .eq('partner_id', owningPartnerId).eq('user_id', userId).limit(1).maybeSingle()
+    const { data: partner } = await db.from('partners').select('id, contact_email, default_commission_plan_id').eq('id', owningPartnerId).maybeSingle()
+    if (!partner) return
+    const isSelf = !!selfMember || (partner.contact_email && partner.contact_email.toLowerCase() === email.toLowerCase())
 
     const now = new Date().toISOString()
     await db.from('referrals').upsert({
-      partner_id: owning.partner_id,
+      partner_id: owningPartnerId,
       tenant_id: tenantId,
-      first_touch_link_id: firstLink?.id || owning.id,
-      last_touch_link_id: owning.id,
+      first_touch_link_id: firstLink?.id || lastLink?.id || null,
+      last_touch_link_id: lastLink?.id || firstLink?.id || null,
       first_touch_at: now,
       last_touch_at: now,
       visitor_id: cookies.visitorId || null,
       attributed_email: email,
       status: isSelf ? 'rejected' : 'signup',
-      commission_plan_id: partner?.default_commission_plan_id || null,
+      commission_plan_id: partner.default_commission_plan_id || null,
+      demo_id: cookies.demoId || null,
     }, { onConflict: 'tenant_id' })
 
     if (!isSelf) {
-      await db.from('tenants').update({ referred_by_partner_id: owning.partner_id }).eq('id', tenantId)
-      await logPartnerAction(owning.partner_id, 'system', {
-        action: 'referral.signup', targetType: 'tenant', targetId: tenantId, after: { email },
+      await db.from('tenants').update({ referred_by_partner_id: owningPartnerId }).eq('id', tenantId)
+
+      // Demo → customer: mark the demo as trial-converted + log the funnel event.
+      if (cookies.demoId) {
+        await db.from('demos').update({ converted_trial: true }).eq('id', cookies.demoId).eq('partner_id', owningPartnerId)
+        await db.from('demo_events').insert({ demo_id: cookies.demoId, partner_id: owningPartnerId, event_type: 'signup', meta: { email } }).then(() => {}, () => {})
+      }
+      await logPartnerAction(owningPartnerId, 'system', {
+        action: 'referral.signup', targetType: 'tenant', targetId: tenantId, after: { email, source: cookies.demoId ? 'demo' : 'link' },
       })
       // Notify the partner org of the new signup.
       await db.from('partner_notifications').insert({
-        partner_id: owning.partner_id, kind: 'new_customer',
-        title: 'New referred signup', body: `${email} signed up through your link.`, link: '/partner/customers',
+        partner_id: owningPartnerId, kind: 'new_customer',
+        title: 'New referred signup', body: `${email} signed up${cookies.demoId ? ' from your demo' : ' through your link'}.`, link: '/partner/customers',
       })
       // XP: one grant per referred signup (idempotent on the tenant).
-      await awardXp(owning.partner_id, 'referral_signup', XP.referral_signup, { uniqueKey: `referral_signup:${tenantId}` })
+      await awardXp(owningPartnerId, 'referral_signup', XP.referral_signup, { uniqueKey: `referral_signup:${tenantId}` })
     }
   } catch (e) {
     console.error('[attribution] resolve failed:', (e as Error).message)

@@ -7,6 +7,7 @@ import type { PartnerStatsFull } from '@/lib/partner/stats'
 // generator (LLM) lives in /api/partner/coach/email.
 
 export interface Mission { key: string; label: string; xp: number; done: boolean; href: string }
+// `icon` is a Scalix icon key (see CoachIcon), never an emoji.
 export interface CoachCard { icon: string; title: string; body?: string; cta?: string; href?: string; tone: 'action' | 'win' | 'tip' }
 
 export interface CoachData {
@@ -42,29 +43,29 @@ export async function getCoach(partnerId: string, stats: PartnerStatsFull): Prom
 
   // Momentum toward the next level.
   if (lvl.nextLevel && lvl.xpToNext != null && lvl.xpToNext <= 400) {
-    cards.push({ icon: '🔥', title: `You're ${lvl.xpToNext} XP from ${lvl.nextLevel}`, body: 'Generate a demo or close a deal to level up.', cta: 'Generate a demo', href: '/partner/demos', tone: 'action' })
+    cards.push({ icon: 'flame', title: `You're ${lvl.xpToNext} XP from ${lvl.nextLevel}`, body: 'Generate a demo or close a deal to level up.', cta: 'Generate a demo', href: '/partner/demos', tone: 'action' })
   }
   // The critical TTFC path.
-  if (lc === 0) cards.push({ icon: '🔗', title: 'Create your referral link', body: 'It takes 5 seconds and unlocks everything else.', cta: 'Create link', href: '/partner/referrals', tone: 'action' })
-  else if (dc === 0) cards.push({ icon: '🎬', title: 'Generate your first AI demo', body: 'A personalized demo is your #1 closing tool.', cta: 'Generate demo', href: '/partner/demos', tone: 'action' })
-  else if (sharedCount === 0) cards.push({ icon: '📤', title: 'Send a demo to a prospect', body: 'Demos close deals by themselves — get one in front of a business today.', cta: 'Send a demo', href: '/partner/demos', tone: 'action' })
+  if (lc === 0) cards.push({ icon: 'link', title: 'Create your referral link', body: 'It takes 5 seconds and unlocks everything else.', cta: 'Create link', href: '/partner/referrals', tone: 'action' })
+  else if (dc === 0) cards.push({ icon: 'demo', title: 'Generate your first AI demo', body: 'A personalized demo is your #1 closing tool.', cta: 'Generate demo', href: '/partner/demos', tone: 'action' })
+  else if (sharedCount === 0) cards.push({ icon: 'send', title: 'Send a demo to a prospect', body: 'Demos close deals by themselves — get one in front of a business today.', cta: 'Send a demo', href: '/partner/demos', tone: 'action' })
 
-  if (clicks > 0 && dc === 0) cards.push({ icon: '👀', title: `Your link has ${clicks} clicks but no demos yet`, body: 'Turn that interest into demos to start converting.', cta: 'Generate a demo', href: '/partner/demos', tone: 'tip' })
+  if (clicks > 0 && dc === 0) cards.push({ icon: 'eye', title: `Your link has ${clicks} clicks but no demos yet`, body: 'Turn that interest into demos to start converting.', cta: 'Generate a demo', href: '/partner/demos', tone: 'tip' })
 
-  if (stats.total_customers >= 4 && stats.conversion_rate < 25) cards.push({ icon: '📉', title: 'Your conversion rate has room to grow', body: `You're at ${stats.conversion_rate}%. Following up within 24h of a demo lifts conversions the most.`, tone: 'tip' })
+  if (stats.total_customers >= 4 && stats.conversion_rate < 25) cards.push({ icon: 'trend', title: 'Your conversion rate has room to grow', body: `You're at ${stats.conversion_rate}%. Following up within 24h of a demo lifts conversions the most.`, tone: 'tip' })
 
-  if (dc > 0 && dc < 3) cards.push({ icon: '⚡', title: 'Generate 3 demos this week', body: 'Volume wins. Partners who send 3+ demos/week close 3× more.', cta: 'Generate a demo', href: '/partner/demos', tone: 'action' })
+  if (dc > 0 && dc < 3) cards.push({ icon: 'zap', title: 'Generate 3 demos this week', body: 'Volume wins. Partners who send 3+ demos/week close 3× more.', cta: 'Generate a demo', href: '/partner/demos', tone: 'action' })
 
-  if (!certified) cards.push({ icon: '🎓', title: 'Get certified to sell faster', body: 'The Academy exam earns your Certified Partner badge (+100 XP).', cta: 'Open Academy', href: '/partner/learning', tone: 'tip' })
+  if (!certified) cards.push({ icon: 'cert', title: 'Get certified to sell faster', body: 'The Academy exam earns your Certified Partner badge (+100 XP).', cta: 'Open Academy', href: '/partner/learning', tone: 'tip' })
 
   // A projected-earnings nudge if they have momentum.
   if (stats.active_customers >= 1) {
     const projAnnual = stats.mrr_generated_cents * 12
-    cards.push({ icon: '💰', title: `You're on track for ${(projAnnual / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}/yr`, body: 'Each new customer adds recurring income for life. Keep going.', cta: 'Refer more', href: '/partner/referrals', tone: 'win' })
+    cards.push({ icon: 'earnings', title: `You're on track for ${(projAnnual / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}/yr`, body: 'Each new customer adds recurring income for life. Keep going.', cta: 'Refer more', href: '/partner/referrals', tone: 'win' })
   }
 
   // Always offer the AI-written outreach.
-  cards.push({ icon: '✍️', title: 'Get a personalized outreach message', body: 'Let your AI coach write a cold email tailored to a niche.', cta: 'Write outreach', href: '/partner/coach', tone: 'tip' })
+  cards.push({ icon: 'write', title: 'Get a personalized outreach message', body: 'Let your AI coach write a cold email tailored to a niche.', cta: 'Write outreach', href: '/partner/coach', tone: 'tip' })
 
   return { missions, cards: cards.slice(0, 5), signals: { linkCount: lc, demoCount: dc, sharedCount, clicks, certified } }
 }

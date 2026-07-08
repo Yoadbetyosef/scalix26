@@ -30,6 +30,7 @@ interface ReferralRow {
   status: string
   commission_plan_id: string | null
   converted_at: string | null
+  demo_id: string | null
 }
 
 /** Idempotent ledger insert. Returns true if a NEW entry was written. */
@@ -70,7 +71,7 @@ export async function autoApproveCommissions(holdDays = Number(process.env.PARTN
 
 async function getReferralForTenant(db: Db, tenantId: string): Promise<ReferralRow | null> {
   const { data } = await db.from('referrals')
-    .select('id, partner_id, tenant_id, status, commission_plan_id, converted_at')
+    .select('id, partner_id, tenant_id, status, commission_plan_id, converted_at, demo_id')
     .eq('tenant_id', tenantId).maybeSingle()
   // Only attributed, non-rejected referrals earn.
   if (!data || data.status === 'rejected') return null
@@ -147,12 +148,17 @@ export async function recordCommissionForInvoice(invoice: Stripe.Invoice, tenant
       // Conversion moment.
       await db.from('referrals').update({ status: 'paid', converted_at: new Date().toISOString() }).eq('id', ref.id)
       await db.from('partner_notifications').insert({
-        partner_id: ref.partner_id, kind: 'new_customer', title: 'Referred customer converted to paid! 🎉',
+        partner_id: ref.partner_id, kind: 'new_customer', title: 'Referred customer converted to paid',
         body: 'One of your referrals just started a paid subscription.', link: '/partner/commissions',
       })
       await logPartnerAction(ref.partner_id, 'system', { action: 'referral.paid', targetType: 'tenant', targetId: tenant.id })
       // XP: one grant per converted customer (idempotent on the referral).
       await awardXp(ref.partner_id, 'customer_paid', XP.customer_paid, { uniqueKey: `customer_paid:${ref.id}` })
+      // Demo → paid: close the loop on the exact demo that sourced this customer.
+      if (ref.demo_id) {
+        await db.from('demos').update({ converted_paid: true }).eq('id', ref.demo_id)
+        await db.from('demo_events').insert({ demo_id: ref.demo_id, partner_id: ref.partner_id, event_type: 'paid', meta: { tenant_id: tenant.id } }).then(() => {}, () => {})
+      }
       // Conversion email to the partner (best-effort).
       try {
         const { data: partner } = await db.from('partners').select('contact_email, company_name').eq('id', ref.partner_id).maybeSingle()

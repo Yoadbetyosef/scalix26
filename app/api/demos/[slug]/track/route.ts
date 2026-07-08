@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { logDemoEvent, updateDemoEngagement } from '@/lib/partner/demo'
 
 // Public demo analytics beacon. event=view (on load) → records a view + unique visitor + advances
 // the linked lead to 'demo_viewed'. event=dwell (on leave) → records time-on-demo. No auth.
@@ -27,9 +28,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
 
     // First-ever view: notify partner + advance linked lead.
     if ((demo.view_count || 0) === 0) {
-      await db.from('partner_notifications').insert({ partner_id: demo.partner_id, kind: 'demo_viewed', title: 'Your demo was viewed 👀', body: `${demo.prospect_name} just opened their demo.`, link: '/partner/demos' })
+      await db.from('partner_notifications').insert({ partner_id: demo.partner_id, kind: 'demo_viewed', title: 'Your demo was viewed', body: `${demo.prospect_name} just opened their demo.`, link: '/partner/demos' })
     }
     if (demo.lead_id) await db.from('crm_leads').update({ stage: 'demo_viewed', updated_at: new Date().toISOString() }).eq('id', demo.lead_id).eq('stage', 'demo_generated')
+    await logDemoEvent(db, demo.id, demo.partner_id, 'view', visitorId)
     return NextResponse.json({ ok: true, viewId: view?.id })
   }
 
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     const ms = Math.max(0, Math.min(body.ms, 1000 * 60 * 30)) // cap 30 min
     await db.from('demo_views').update({ dwell_ms: ms }).eq('id', body.viewId).eq('demo_id', demo.id)
     await db.from('demos').update({ total_dwell_ms: (demo.total_dwell_ms || 0) + ms }).eq('id', demo.id)
+    await updateDemoEngagement(db, demo.id)
     return NextResponse.json({ ok: true })
   }
 

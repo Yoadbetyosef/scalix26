@@ -1,7 +1,7 @@
 import { getPartnerContext } from '@/lib/partner/rbac'
-import { refreshPartnerStats } from '@/lib/partner/stats'
+import { getPartnerStatsCached } from '@/lib/partner/stats'
 import { getCoach } from '@/lib/partner/coach'
-import { PageHeader, Panel } from '@/components/partner/ui'
+import { PageHeader, Panel, CoachIcon } from '@/components/partner/ui'
 import { OutreachWriter } from '@/components/partner/outreach-writer'
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 export default async function CoachPage() {
   const ctx = await getPartnerContext()
   if (!ctx) return null
-  const stats = await refreshPartnerStats(ctx.partnerId)
+  const stats = await getPartnerStatsCached(ctx.partnerId)
   const coach = await getCoach(ctx.partnerId, stats)
 
   return (
@@ -23,7 +23,7 @@ export default async function CoachPage() {
             {coach.cards.map((c, i) => (
               <div key={i} className={`rounded-xl border p-3 ${c.tone === 'win' ? 'border-green-200 bg-green-50/50' : c.tone === 'action' ? 'border-accent/25 bg-accent/5' : 'border-hairline bg-surface'}`}>
                 <div className="flex items-start gap-2.5">
-                  <span className="text-xl leading-none">{c.icon}</span>
+                  <span className="mt-0.5 text-accent-strong"><CoachIcon name={c.icon} className="h-5 w-5" /></span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-ink">{c.title}</div>
                     {c.body && <div className="mt-0.5 text-sm text-subtle">{c.body}</div>}

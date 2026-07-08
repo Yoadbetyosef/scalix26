@@ -4,13 +4,19 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { logAdminAction } from '@/lib/admin/audit'
 
 // Admin: list partners with rollup stats; update status/tier.
-export async function GET() {
+export async function GET(req: NextRequest) {
   const ctx = await getAdminContext()
   if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
-  const { data: partners } = await db.from('partners')
-    .select('id, company_name, slug, partner_type, status, tier, health_score, contact_email, created_at')
-    .order('created_at', { ascending: false }).limit(500)
+  const { searchParams } = new URL(req.url)
+  const search = searchParams.get('search')?.trim()
+  const page = Math.max(0, Number(searchParams.get('page') || 0))
+  const pageSize = 50
+  let q = db.from('partners')
+    .select('id, company_name, slug, partner_type, status, tier, health_score, contact_email, created_at', { count: 'exact' })
+    .order('created_at', { ascending: false })
+  if (search) q = q.or(`company_name.ilike.%${search}%,contact_email.ilike.%${search}%,slug.ilike.%${search}%`)
+  const { data: partners, count } = await q.range(page * pageSize, page * pageSize + pageSize - 1)
 
   const ids = (partners || []).map((p) => p.id)
   const stats: Record<string, { customers: number; pending: number; paid: number }> = {}
@@ -26,7 +32,7 @@ export async function GET() {
       if (e.status === 'paid') stats[e.partner_id].paid += e.amount_cents
     }
   }
-  return NextResponse.json({ partners: (partners || []).map((p) => ({ ...p, stats: stats[p.id] || { customers: 0, pending: 0, paid: 0 } })) })
+  return NextResponse.json({ partners: (partners || []).map((p) => ({ ...p, stats: stats[p.id] || { customers: 0, pending: 0, paid: 0 } })), total: count ?? 0, page, pageSize })
 }
 
 export async function PATCH(req: NextRequest) {

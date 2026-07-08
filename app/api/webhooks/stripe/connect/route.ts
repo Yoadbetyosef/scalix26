@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe/client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { syncConnectFromAccount } from '@/lib/stripe/connect'
+import { syncPartnerConnectFromAccount, handlePartnerTransferFailure } from '@/lib/partner/connect'
 
 // SEPARATE Connect webhook (its own STRIPE_CONNECT_WEBHOOK_SECRET) — the platform
 // billing webhook (/api/webhooks/stripe + STRIPE_WEBHOOK_SECRET) is untouched.
@@ -41,8 +42,18 @@ export async function POST(req: NextRequest) {
     }
 
     case 'account.updated': {
-      // Persist the tenant's live capability flags (charges/payouts/onboarding) + status.
-      await syncConnectFromAccount(event.data.object)
+      // A partner Express account? Sync partner payout status. Otherwise it's a tenant account.
+      const acct = event.data.object
+      const isPartner = await syncPartnerConnectFromAccount(acct)
+      if (!isPartner) await syncConnectFromAccount(acct)
+      break
+    }
+
+    case 'transfer.reversed': {
+      // A partner payout transfer was reversed — revert entries + mark the payout failed for retry.
+      // (Synchronous transfer failures are already handled at creation time in executePayout.)
+      const tr = event.data.object as { id: string }
+      await handlePartnerTransferFailure(tr.id, `Stripe ${event.type}`)
       break
     }
   }

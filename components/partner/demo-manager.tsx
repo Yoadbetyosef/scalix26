@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Panel, EmptyRow } from '@/components/partner/ui'
 import { Sparkles, Copy, ExternalLink, Eye, Send } from 'lucide-react'
 
-interface Demo { id: string; public_slug: string; prospect_name: string; industry: string | null; view_count: number; unique_visitors: number; total_dwell_ms: number; last_viewed_at: string | null; created_at: string }
+interface Demo { id: string; public_slug: string; prospect_name: string; industry: string | null; view_count: number; unique_visitors: number; total_dwell_ms: number; chat_count: number; engagement_score: number; converted_trial: boolean; converted_paid: boolean; last_viewed_at: string | null; created_at: string; attribution: { signups: number; paid: number; commission_cents: number } }
 
 function fmtDwell(ms: number, views: number) {
   if (!views || !ms) return '0s'
@@ -89,12 +89,18 @@ export function DemoManager({ canCreate }: { canCreate: boolean }) {
             {demos.map((d) => (
               <div key={d.id} className="flex flex-wrap items-center gap-3 py-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-ink">{d.prospect_name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink">{d.prospect_name}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${d.engagement_score >= 60 ? 'bg-green-50 text-green-700' : d.engagement_score >= 30 ? 'bg-amber-50 text-amber-700' : 'bg-sunken text-muted'}`}>{d.engagement_score} engagement</span>
+                    {d.converted_paid ? <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">Paid</span>
+                      : d.converted_trial ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Trial</span> : null}
+                  </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-                    <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" /> {d.view_count} views</span>
-                    <span>· {d.unique_visitors} unique</span>
-                    <span>· ⏱ {fmtDwell(d.total_dwell_ms, d.view_count)} avg</span>
-                    <span>· {new Date(d.created_at).toLocaleDateString()}</span>
+                    <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" /> {d.view_count} views · {d.unique_visitors} unique</span>
+                    <span>· {fmtDwell(d.total_dwell_ms, d.view_count)} avg</span>
+                    <span>· {d.chat_count} chats</span>
+                    <span>· {d.attribution.signups} signups · {d.attribution.paid} paid</span>
+                    {d.attribution.commission_cents > 0 && <span className="font-medium text-green-700">· ${(d.attribution.commission_cents / 100).toFixed(0)} earned</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

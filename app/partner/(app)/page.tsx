@@ -1,11 +1,11 @@
 import Link from 'next/link'
 import { getPartnerContext } from '@/lib/partner/rbac'
 import { createAdminClient } from '@/lib/supabase/server'
-import { refreshPartnerStats } from '@/lib/partner/stats'
+import { getPartnerStatsCached } from '@/lib/partner/stats'
 import { getCoach } from '@/lib/partner/coach'
 import { levelForXp } from '@/lib/partner/xp'
-import { PageHeader, StatCard, Panel, money } from '@/components/partner/ui'
-import { CheckCircle2, Circle, ArrowRight, Flame, Trophy } from 'lucide-react'
+import { PageHeader, StatCard, Panel, money, CoachIcon } from '@/components/partner/ui'
+import { CheckCircle2, Circle, ArrowRight, Flame, Trophy, Brain, Target } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +14,7 @@ export default async function PartnerDashboard() {
   if (!ctx) return null
   const db = createAdminClient()
 
-  const stats = await refreshPartnerStats(ctx.partnerId)
+  const stats = await getPartnerStatsCached(ctx.partnerId)
   const [{ count: totalPartners }, coach] = await Promise.all([
     db.from('partners').select('id', { count: 'exact', head: true }).eq('status', 'active'),
     getCoach(ctx.partnerId, stats),
@@ -36,10 +36,10 @@ export default async function PartnerDashboard() {
 
       {/* Money + rank — the four things a partner must see instantly. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="💰 Total Earnings" value={money(stats.lifetime_earnings_cents)} hint="Paid to date" accent />
-        <StatCard label="🏆 Global Rank" value={`#${stats.global_rank ?? '—'}`} hint={`of ${totalPartners ?? 1} partners`} />
-        <StatCard label="💵 Next Payout" value={money(nextPayout)} hint="Pending + approved" />
-        <StatCard label="📈 Monthly Income" value={money(projMonthly)} hint="Recurring you generate" />
+        <StatCard label="Total Earnings" value={money(stats.lifetime_earnings_cents)} hint="Paid to date" accent />
+        <StatCard label="Global Rank" value={`#${stats.global_rank ?? '—'}`} hint={`of ${totalPartners ?? 1} partners`} />
+        <StatCard label="Next Payout" value={money(nextPayout)} hint="Pending + approved" />
+        <StatCard label="Monthly Income" value={money(projMonthly)} hint="Recurring you generate" />
       </div>
 
       {/* Tier + XP progress */}
@@ -66,12 +66,12 @@ export default async function PartnerDashboard() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {/* AI Sales Coach */}
-        <Panel title="🧠 Your AI Sales Coach">
+        <Panel title={<span className="inline-flex items-center gap-2"><Brain className="h-4 w-4 text-accent-strong" /> Your AI Sales Coach</span>}>
           <div className="space-y-2.5">
             {coach.cards.map((c, i) => (
               <div key={i} className={`rounded-xl border p-3 ${c.tone === 'win' ? 'border-green-200 bg-green-50/50' : c.tone === 'action' ? 'border-accent/25 bg-accent/5' : 'border-hairline bg-surface'}`}>
                 <div className="flex items-start gap-2.5">
-                  <span className="text-xl leading-none">{c.icon}</span>
+                  <span className="mt-0.5 text-accent-strong"><CoachIcon name={c.icon} className="h-5 w-5" /></span>
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-ink">{c.title}</div>
                     {c.body && <div className="mt-0.5 text-sm text-subtle">{c.body}</div>}
@@ -84,7 +84,7 @@ export default async function PartnerDashboard() {
         </Panel>
 
         {/* Missions */}
-        <Panel title="🎯 Missions">
+        <Panel title={<span className="inline-flex items-center gap-2"><Target className="h-4 w-4 text-accent-strong" /> Missions</span>}>
           <ul className="space-y-1">
             {coach.missions.map((m) => (
               <li key={m.key}>

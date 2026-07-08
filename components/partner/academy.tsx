@@ -42,7 +42,7 @@ export function Academy() {
     const answers = examLesson.quiz!.map((_, i) => examAnswers[i] ?? -1)
     const res = await fetch('/api/partner/learning', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ courseId: course.id, examAnswers: answers }) })
     const j = await res.json()
-    if (j.passed) toast.success(`Passed with ${j.score}%! Badge earned 🎓`)
+    if (j.passed) toast.success(`Passed with ${j.score}%! Badge earned.`)
     else toast.error(`Scored ${j.score}%. You need 70% — review and retry.`)
     load()
   }

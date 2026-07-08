@@ -91,10 +91,9 @@ export async function refreshPartnerStats(partnerId: string): Promise<PartnerSta
   const lvl = levelForXp(xp)
   const streak = await computeStreak(db, partnerId)
 
-  // Global rank by cached XP (approximate at scale, exact enough here).
-  const { data: others } = await db.from('partner_stats').select('partner_id, xp')
-  const higher = (others || []).filter((o) => o.partner_id !== partnerId && (o.xp || 0) > xp).length
-  const globalRank = higher + 1
+  // Global rank via an indexed COUNT (scales to 100k+ — no full-table scan).
+  const { count: higher } = await db.from('partner_stats').select('partner_id', { count: 'exact', head: true }).gt('xp', xp)
+  const globalRank = (higher || 0) + 1
 
   await db.from('partner_stats').upsert({
     partner_id: partnerId, ...stats, xp, level: lvl.level, global_rank: globalRank, streak_days: streak,
@@ -126,11 +125,39 @@ async function grantMilestones(db: ReturnType<typeof createAdminClient>, partner
   }
 }
 
-/** Recompute every partner (nightly cron / admin trigger). */
-export async function recomputeAllPartnerStats(): Promise<number> {
+/**
+ * Read the cached stats row; refresh only if missing or stale. Keeps dashboard/coach loads O(1)
+ * DB reads instead of a full recompute on every navigation (scales to 100k+ partners).
+ */
+export async function getPartnerStatsCached(partnerId: string, maxAgeMs = 5 * 60 * 1000): Promise<PartnerStatsFull> {
   const db = createAdminClient()
-  const { data: partners } = await db.from('partners').select('id').eq('status', 'active')
+  const { data } = await db.from('partner_stats').select('*').eq('partner_id', partnerId).maybeSingle()
+  if (!data || (data.computed_at && Date.now() - new Date(data.computed_at).getTime() > maxAgeMs)) {
+    return refreshPartnerStats(partnerId)
+  }
+  return {
+    mrr_generated_cents: data.mrr_generated_cents, active_customers: data.active_customers, total_customers: data.total_customers,
+    new_customers_30d: data.new_customers_30d, trial_customers: data.trial_customers, churned_customers: data.churned_customers,
+    conversion_rate: data.conversion_rate, pending_commission_cents: data.pending_commission_cents, paid_commission_cents: data.paid_commission_cents,
+    lifetime_earnings_cents: data.lifetime_earnings_cents, health_score: data.health_score,
+    xp: data.xp, level: data.level, global_rank: data.global_rank, streak_days: data.streak_days,
+  }
+}
+
+/**
+ * Recompute stats for partners with RECENT activity only (bounded work — scales to 100k+ partners
+ * where recomputing everyone nightly is infeasible). Activity = an XP event or referral in the
+ * window. A slow full sweep can still be triggered explicitly if ever needed.
+ */
+export async function recomputeAllPartnerStats(windowHours = 25): Promise<number> {
+  const db = createAdminClient()
+  const cutoff = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString()
+  const [{ data: xpRows }, { data: refRows }] = await Promise.all([
+    db.from('partner_xp_events').select('partner_id').gte('created_at', cutoff),
+    db.from('referrals').select('partner_id').gte('created_at', cutoff),
+  ])
+  const ids = new Set<string>([...(xpRows || []).map((r) => r.partner_id), ...(refRows || []).map((r) => r.partner_id)])
   let n = 0
-  for (const p of partners || []) { await refreshPartnerStats(p.id); n++ }
+  for (const id of ids) { await refreshPartnerStats(id); n++ }
   return n
 }

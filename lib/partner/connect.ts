@@ -54,6 +54,30 @@ export async function getExpressStatus(partnerId: string): Promise<ExpressStatus
   }
 }
 
+/** Sync a partner Express account's capability flags from an account.updated event. Returns true
+ * if this account belongs to a partner (so the webhook knows it was handled). */
+export async function syncPartnerConnectFromAccount(account: { id: string; payouts_enabled?: boolean; details_submitted?: boolean }): Promise<boolean> {
+  const db = createAdminClient()
+  const { data: partner } = await db.from('partners').select('id, connect_payouts_enabled').eq('stripe_connect_express_id', account.id).maybeSingle()
+  if (!partner) return false
+  const nowEnabled = !!account.payouts_enabled
+  await db.from('partners').update({ connect_payouts_enabled: nowEnabled, connect_onboarding_complete: !!account.details_submitted }).eq('id', partner.id)
+  if (nowEnabled && !partner.connect_payouts_enabled) {
+    await db.from('partner_notifications').insert({ partner_id: partner.id, kind: 'payouts_enabled', title: 'Payouts are set up', body: 'Approved commissions will now be transferred to your account automatically.', link: '/partner/commissions' })
+  }
+  return true
+}
+
+/** A partner transfer failed/reversed: un-pay the bundled entries and mark the payout failed. */
+export async function handlePartnerTransferFailure(transferId: string, reason: string): Promise<void> {
+  const db = createAdminClient()
+  const { data: payout } = await db.from('payouts').select('id, partner_id').eq('stripe_transfer_id', transferId).maybeSingle()
+  if (!payout) return
+  await db.from('commission_entries').update({ status: 'approved', paid_at: null, payout_id: null }).eq('payout_id', payout.id)
+  await db.from('payouts').update({ status: 'failed', last_error: reason, updated_at: new Date().toISOString() }).eq('id', payout.id)
+  await db.from('partner_notifications').insert({ partner_id: payout.partner_id, kind: 'payout_failed', title: 'Payout failed', body: 'We could not complete your payout — it will be retried automatically.', link: '/partner/commissions' })
+}
+
 export interface ConnectPayResult { ok: boolean; transferId?: string; error?: string }
 
 /**

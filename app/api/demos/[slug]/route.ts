@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ slu
   db.from('demos').update({ view_count: (demo.view_count || 0) + 1, last_viewed_at: new Date().toISOString() }).eq('id', demo.id).then(() => {})
   if ((demo.view_count || 0) === 0) {
     db.from('partner_notifications').insert({
-      partner_id: demo.partner_id, kind: 'demo_viewed', title: 'Your demo was viewed 👀',
+      partner_id: demo.partner_id, kind: 'demo_viewed', title: 'Your demo was viewed',
       body: `The demo for ${demo.prospect_name} was just opened.`, link: '/partner/demos',
     }).then(() => {})
   }

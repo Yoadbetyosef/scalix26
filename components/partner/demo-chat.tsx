@@ -19,8 +19,10 @@ export function DemoChat({ slug, greeting, accent }: { slug: string; greeting: s
     if (!text || busy) return
     const next = [...messages, { role: 'user' as const, content: text }]
     setMessages(next); setInput(''); setBusy(true)
+    let vid = ''
+    try { vid = localStorage.getItem('sx_demo_vid') || '' } catch { /* noop */ }
     try {
-      const res = await fetch(`/api/demos/${slug}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: next }) })
+      const res = await fetch(`/api/demos/${slug}/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: next, visitorId: vid }) })
       const j = await res.json()
       setMessages((m) => [...m, { role: 'assistant', content: j.reply || '…' }])
     } catch {

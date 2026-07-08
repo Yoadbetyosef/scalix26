@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Panel } from '@/components/partner/ui'
-import { Sparkles, Copy } from 'lucide-react'
+import { Sparkles, Copy, PenLine } from 'lucide-react'
 
 export function OutreachWriter() {
   const [niche, setNiche] = useState('')
@@ -22,7 +22,7 @@ export function OutreachWriter() {
 
   const input = 'h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
   return (
-    <Panel title="✍️ Personalized outreach writer">
+    <Panel title={<span className="inline-flex items-center gap-2"><PenLine className="h-4 w-4" /> Personalized outreach writer</span>}>
       <div className="space-y-2">
         <div className="grid grid-cols-2 gap-2">
           <input className={input} placeholder="Niche (e.g. HVAC, locksmith)" value={niche} onChange={(e) => setNiche(e.target.value)} />

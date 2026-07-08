@@ -17,9 +17,31 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const db = createAdminClient()
   const { data } = await db.from('demos')
-    .select('id, public_slug, prospect_name, industry, view_count, unique_visitors, total_dwell_ms, last_viewed_at, created_at')
+    .select('id, public_slug, prospect_name, industry, mode, view_count, unique_visitors, total_dwell_ms, chat_count, engagement_score, converted_trial, converted_paid, last_viewed_at, created_at')
     .eq('partner_id', ctx.partnerId).order('created_at', { ascending: false })
-  return NextResponse.json({ demos: data || [] })
+
+  // Per-demo attribution: signups + paid + commission generated (from referrals.demo_id).
+  const ids = (data || []).map((d) => d.id)
+  const byDemo: Record<string, { signups: number; paid: number; commission_cents: number }> = {}
+  if (ids.length) {
+    const { data: refs } = await db.from('referrals').select('demo_id, status, tenant_id').in('demo_id', ids)
+    const paidTenants: string[] = []
+    for (const r of refs || []) {
+      const k = r.demo_id as string
+      byDemo[k] ||= { signups: 0, paid: 0, commission_cents: 0 }
+      byDemo[k].signups++
+      if (r.status === 'paid') { byDemo[k].paid++; if (r.tenant_id) paidTenants.push(r.tenant_id) }
+    }
+    if (paidTenants.length) {
+      const { data: entries } = await db.from('commission_entries').select('tenant_id, amount_cents, status').eq('partner_id', ctx.partnerId).in('tenant_id', paidTenants)
+      const tenantToDemo = Object.fromEntries((refs || []).filter((r) => r.tenant_id).map((r) => [r.tenant_id, r.demo_id]))
+      for (const e of entries || []) {
+        const dk = tenantToDemo[e.tenant_id as string]
+        if (dk && byDemo[dk] && e.status === 'paid') byDemo[dk].commission_cents += e.amount_cents
+      }
+    }
+  }
+  return NextResponse.json({ demos: (data || []).map((d) => ({ ...d, attribution: byDemo[d.id] || { signups: 0, paid: 0, commission_cents: 0 } })) })
 }
 
 export async function POST(req: NextRequest) {

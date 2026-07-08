@@ -43,7 +43,8 @@ interface Summary { pending_cents: number; approved_cents: number; paid_cents: n
 interface Data { summary: Summary; entries: Entry[]; payouts: Payout[] }
 
 const STATUS_STYLE: Record<string, string> = {
-  pending: 'bg-amber-50 text-amber-700', approved: 'bg-blue-50 text-blue-700', paid: 'bg-green-50 text-green-700', void: 'bg-gray-100 text-gray-500',
+  pending: 'bg-amber-50 text-amber-700', approved: 'bg-blue-50 text-blue-700', paid: 'bg-green-50 text-green-700',
+  void: 'bg-gray-100 text-gray-500', failed: 'bg-red-50 text-red-600', processing: 'bg-sky-50 text-sky-700', draft: 'bg-gray-100 text-gray-500',
 }
 
 export function CommissionsView() {

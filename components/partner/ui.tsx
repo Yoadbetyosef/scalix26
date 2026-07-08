@@ -1,5 +1,16 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { Flame, Link2, MonitorPlay, Send, Eye, TrendingDown, Zap, GraduationCap, DollarSign, PenLine, Sparkles, type LucideIcon } from 'lucide-react'
+
+// Maps Coach card icon keys → Scalix icon system (no emoji anywhere in the product).
+const COACH_ICONS: Record<string, LucideIcon> = {
+  flame: Flame, link: Link2, demo: MonitorPlay, send: Send, eye: Eye, trend: TrendingDown,
+  zap: Zap, cert: GraduationCap, earnings: DollarSign, write: PenLine,
+}
+export function CoachIcon({ name, className }: { name: string; className?: string }) {
+  const Icon = COACH_ICONS[name] || Sparkles
+  return <Icon className={className || 'h-5 w-5'} />
+}
 
 // Small shared primitives for the partner portal so every page has consistent, premium chrome.
 

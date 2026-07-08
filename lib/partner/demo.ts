@@ -1,4 +1,31 @@
 import { browserScrapeHeaders } from '@/lib/scrape-headers'
+import { createAdminClient } from '@/lib/supabase/server'
+
+type Db = ReturnType<typeof createAdminClient>
+
+/** Log a granular demo event (backbone for engagement + attribution + future replay). */
+export async function logDemoEvent(db: Db, demoId: string, partnerId: string, eventType: string, visitorId?: string | null, meta?: Record<string, unknown>): Promise<void> {
+  try { await db.from('demo_events').insert({ demo_id: demoId, partner_id: partnerId, visitor_id: visitorId || null, event_type: eventType, meta: meta || {} }) } catch { /* best-effort */ }
+}
+
+/**
+ * Recompute + store a demo's engagement score (0–100) from time-on-demo, chat depth, and outcome.
+ * A single deterministic signal partners can act on ("this prospect is hot").
+ */
+export async function updateDemoEngagement(db: Db, demoId: string): Promise<void> {
+  try {
+    const { data: d } = await db.from('demos').select('total_dwell_ms, view_count, chat_count, converted_trial, converted_paid').eq('id', demoId).maybeSingle()
+    if (!d) return
+    const dwellSec = d.view_count ? (d.total_dwell_ms || 0) / d.view_count / 1000 : 0
+    const score = Math.min(100, Math.round(
+      Math.min(dwellSec / 3, 30) +          // up to 30 for time
+      Math.min((d.chat_count || 0) * 8, 30) + // up to 30 for chat depth
+      (d.converted_trial ? 20 : 0) +
+      (d.converted_paid ? 40 : 0)
+    ))
+    await db.from('demos').update({ engagement_score: score }).eq('id', demoId)
+  } catch { /* best-effort */ }
+}
 
 // Builds the branding + AI briefing for a demo from the prospect's public site. Best-effort:
 // every field degrades gracefully so a demo can always be generated, even with just a name.

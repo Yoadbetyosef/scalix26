@@ -41,15 +41,16 @@ export function levelForXp(xp: number): LevelInfo {
 
 // Achievements (milestone badges). Evaluated from aggregates in refreshPartnerStats().
 export interface Achievement { key: string; label: string; xp: number; icon: string }
+// `icon` is a Scalix icon key (rendered via lucide), never an emoji.
 export const ACHIEVEMENTS: Record<string, Achievement> = {
-  first_referral: { key: 'first_referral', label: 'First Referral', xp: 25, icon: '🔗' },
-  first_demo: { key: 'first_demo', label: 'First Demo', xp: 25, icon: '🎬' },
-  first_customer: { key: 'first_customer', label: 'Certified Partner', xp: 100, icon: '🏅' },
-  ten_customers: { key: 'ten_customers', label: 'Gold Partner', xp: 250, icon: '🥇' },
-  hundred_customers: { key: 'hundred_customers', label: 'Centurion', xp: 1000, icon: '💯' },
-  commission_1k: { key: 'commission_1k', label: '$1,000 Earned', xp: 150, icon: '💰' },
-  commission_10k: { key: 'commission_10k', label: '$10,000 Earned', xp: 750, icon: '💎' },
-  one_year: { key: 'one_year', label: '1 Year Partner', xp: 200, icon: '🎂' },
+  first_referral: { key: 'first_referral', label: 'First Referral', xp: 25, icon: 'link' },
+  first_demo: { key: 'first_demo', label: 'First Demo', xp: 25, icon: 'demo' },
+  first_customer: { key: 'first_customer', label: 'Certified Partner', xp: 100, icon: 'award' },
+  ten_customers: { key: 'ten_customers', label: 'Gold Partner', xp: 250, icon: 'medal' },
+  hundred_customers: { key: 'hundred_customers', label: 'Centurion', xp: 1000, icon: 'trophy' },
+  commission_1k: { key: 'commission_1k', label: '$1,000 Earned', xp: 150, icon: 'dollar' },
+  commission_10k: { key: 'commission_10k', label: '$10,000 Earned', xp: 750, icon: 'gem' },
+  one_year: { key: 'one_year', label: '1 Year Partner', xp: 200, icon: 'cake' },
 }
 
 type Db = ReturnType<typeof createAdminClient>
@@ -75,14 +76,14 @@ export async function awardXp(partnerId: string, kind: string, xp: number, opts?
 
     // Achievement celebration.
     if (opts?.label) {
-      await db.from('partner_notifications').insert({ partner_id: partnerId, kind: 'achievement', title: `Achievement unlocked: ${opts.label} ${opts.meta?.icon || '🏆'}`, body: `+${xp} XP`, link: '/partner' })
+      await db.from('partner_notifications').insert({ partner_id: partnerId, kind: 'achievement', title: `Achievement unlocked: ${opts.label}`, body: `+${xp} XP`, link: '/partner' })
     }
     // Level-up celebration.
     const afterXp = beforeXp + (granted ? xp : 0)
     const before = levelForXp(beforeXp).levelKey
     const after = levelForXp(afterXp).levelKey
     if (before !== after) {
-      await db.from('partner_notifications').insert({ partner_id: partnerId, kind: 'level_up', title: `Level up! You reached ${levelForXp(afterXp).level} 🎉`, body: 'Keep the momentum going.', link: '/partner' })
+      await db.from('partner_notifications').insert({ partner_id: partnerId, kind: 'level_up', title: `Level up! You reached ${levelForXp(afterXp).level}`, body: 'Keep the momentum going.', link: '/partner' })
     }
     return true
   } catch (e) {

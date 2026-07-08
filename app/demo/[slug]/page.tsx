@@ -38,6 +38,14 @@ export default async function PublicDemoPage({ params }: { params: Promise<{ slu
 
         <DemoChat slug={slug} greeting={briefing.greeting || `Hi! Thanks for contacting ${demo.prospect_name}. How can I help you today?`} accent={accent} />
 
+        <div className="mt-6 rounded-2xl border border-hairline bg-surface p-5 text-center shadow-e1">
+          <div className="font-semibold text-ink">Want this AI employee for {demo.prospect_name}?</div>
+          <p className="mt-1 text-sm text-subtle">Answer every call &amp; text 24/7 and never miss a job.</p>
+          <a href={`/demo/${slug}/start`} className="mt-3 inline-flex h-11 items-center justify-center rounded-xl px-6 text-sm font-medium text-white" style={{ background: accent }}>
+            Get started free
+          </a>
+        </div>
+
         <p className="mt-8 text-center text-xs text-muted">
           Powered by <span className="font-medium text-subtle">Scalix26</span> · This is a live AI demo
         </p>

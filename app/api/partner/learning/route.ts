@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (passed) {
       await db.from('certifications').insert({ partner_id: ctx.partnerId, user_id: ctx.userId, course_id: b.courseId, score, badge: 'Certified Partner' })
       await db.from('enrollments').update({ completed_at: new Date().toISOString() }).eq('user_id', ctx.userId).eq('course_id', b.courseId)
-      await db.from('partner_notifications').insert({ partner_id: ctx.partnerId, user_id: ctx.userId, kind: 'cert_earned', title: 'Certification earned! 🎓', body: `You scored ${score}% and earned the Certified Partner badge.`, link: '/partner/learning' })
+      await db.from('partner_notifications').insert({ partner_id: ctx.partnerId, user_id: ctx.userId, kind: 'cert_earned', title: 'Certification earned', body: `You scored ${score}% and earned the Certified Partner badge.`, link: '/partner/learning' })
       await awardXp(ctx.partnerId, 'certification', XP.certification, { uniqueKey: `cert:${ctx.userId}:${b.courseId}`, userId: ctx.userId })
     }
     return NextResponse.json({ ok: true, score, passed })
