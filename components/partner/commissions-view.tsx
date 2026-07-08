@@ -39,7 +39,8 @@ function PayoutSetup() {
 
 interface Entry { id: string; entry_type: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; created_at: string }
 interface Payout { id: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; statement_url: string | null; paid_at: string | null; created_at: string }
-interface Data { summary: { pending_cents: number; approved_cents: number; paid_cents: number; lifetime_cents: number }; entries: Entry[]; payouts: Payout[] }
+interface Summary { pending_cents: number; approved_cents: number; paid_cents: number; lifetime_cents: number; estimated_next_payout_cents: number; projected_monthly_cents: number; projected_annual_cents: number; average_commission_cents: number; mrr_created_cents: number }
+interface Data { summary: Summary; entries: Entry[]; payouts: Payout[] }
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700', approved: 'bg-blue-50 text-blue-700', paid: 'bg-green-50 text-green-700', void: 'bg-gray-100 text-gray-500',
@@ -68,6 +69,13 @@ export function CommissionsView() {
         <StatCard label="Approved" value={money(s.approved_cents)} hint="Awaiting payout" accent />
         <StatCard label="Paid" value={money(s.paid_cents)} hint="Received" />
         <StatCard label="Lifetime" value={money(s.lifetime_cents)} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Est. Next Payout" value={money(s.estimated_next_payout_cents)} hint="Pending + approved" />
+        <StatCard label="Projected / mo" value={money(s.projected_monthly_cents)} hint="Recurring you generate" />
+        <StatCard label="Projected / yr" value={money(s.projected_annual_cents)} hint="At current MRR" />
+        <StatCard label="Avg. Commission" value={money(s.average_commission_cents)} hint="Per paid entry" />
       </div>
 
       <Panel title="Ledger" action={<button onClick={exportCsv} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-1.5 text-xs font-medium text-subtle hover:text-ink"><Download className="h-3.5 w-3.5" /> Export CSV</button>}>

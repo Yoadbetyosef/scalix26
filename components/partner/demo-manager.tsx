@@ -5,7 +5,13 @@ import { toast } from 'sonner'
 import { Panel, EmptyRow } from '@/components/partner/ui'
 import { Sparkles, Copy, ExternalLink, Eye, Send } from 'lucide-react'
 
-interface Demo { id: string; public_slug: string; prospect_name: string; industry: string | null; view_count: number; last_viewed_at: string | null; created_at: string }
+interface Demo { id: string; public_slug: string; prospect_name: string; industry: string | null; view_count: number; unique_visitors: number; total_dwell_ms: number; last_viewed_at: string | null; created_at: string }
+
+function fmtDwell(ms: number, views: number) {
+  if (!views || !ms) return '0s'
+  const avg = Math.round(ms / views / 1000)
+  return avg >= 60 ? `${Math.floor(avg / 60)}m ${avg % 60}s` : `${avg}s`
+}
 
 function SendDemo({ id, onClose }: { id: string; onClose: () => void }) {
   const [email, setEmail] = useState(''); const [phone, setPhone] = useState(''); const [busy, setBusy] = useState(false)
@@ -84,8 +90,10 @@ export function DemoManager({ canCreate }: { canCreate: boolean }) {
               <div key={d.id} className="flex flex-wrap items-center gap-3 py-3">
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-ink">{d.prospect_name}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
                     <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" /> {d.view_count} views</span>
+                    <span>· {d.unique_visitors} unique</span>
+                    <span>· ⏱ {fmtDwell(d.total_dwell_ms, d.view_count)} avg</span>
                     <span>· {new Date(d.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>

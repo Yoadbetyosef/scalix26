@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { DemoChat } from '@/components/partner/demo-chat'
+import { DemoTracker } from '@/components/partner/demo-tracker'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,15 +14,14 @@ export default async function PublicDemoPage({ params }: { params: Promise<{ slu
     .eq('public_slug', slug).maybeSingle()
   if (!demo) notFound()
 
-  // Fire a view increment (best-effort).
-  db.from('demos').update({ view_count: (demo.view_count || 0) + 1, last_viewed_at: new Date().toISOString() }).eq('id', demo.id).then(() => {})
-
+  // View + dwell tracking is handled client-side by <DemoTracker/> (unique visitors + time).
   const branding = (demo.branding || {}) as { logoUrl?: string; color?: string }
   const briefing = (demo.briefing || {}) as { greeting?: string }
   const accent = branding.color || '#5B6CF0'
 
   return (
     <div className="min-h-screen bg-canvas">
+      <DemoTracker slug={slug} />
       <div className="mx-auto max-w-2xl px-4 py-10 sm:py-16">
         <div className="mb-8 text-center">
           {branding.logoUrl ? (

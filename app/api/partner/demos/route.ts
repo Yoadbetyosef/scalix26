@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const db = createAdminClient()
   const { data } = await db.from('demos')
-    .select('id, public_slug, prospect_name, industry, view_count, last_viewed_at, created_at')
+    .select('id, public_slug, prospect_name, industry, view_count, unique_visitors, total_dwell_ms, last_viewed_at, created_at')
     .eq('partner_id', ctx.partnerId).order('created_at', { ascending: false })
   return NextResponse.json({ demos: data || [] })
 }
@@ -52,9 +52,9 @@ export async function POST(req: NextRequest) {
   }).select('id, public_slug, prospect_name').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // If generated from a CRM lead, auto-advance it to 'demo_sent' + log the activity.
+  // If generated from a CRM lead, auto-advance it to 'demo_generated' + log the activity.
   if (body.leadId) {
-    await db.from('crm_leads').update({ stage: 'demo_sent', demo_id: demo.id, updated_at: new Date().toISOString() }).eq('id', body.leadId).eq('partner_id', ctx.partnerId)
+    await db.from('crm_leads').update({ stage: 'demo_generated', demo_id: demo.id, updated_at: new Date().toISOString() }).eq('id', body.leadId).eq('partner_id', ctx.partnerId)
     await db.from('crm_activities').insert({ partner_id: ctx.partnerId, lead_id: body.leadId, actor_id: ctx.userId, kind: 'demo_sent', body: `Demo generated for ${body.prospectName}`, meta: { demo_id: demo.id } })
   }
 
