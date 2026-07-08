@@ -1,13 +1,16 @@
+import { getPartnerContext, canEditMarketplace } from '@/lib/partner/rbac'
 import { PageHeader } from '@/components/partner/ui'
-import { ComingSoon } from '@/components/partner/coming-soon'
+import { MarketplaceEditor } from '@/components/partner/marketplace-editor'
 
 export const dynamic = 'force-dynamic'
 
-export default function MarketplaceSettingsPage() {
+export default async function MarketplaceSettingsPage() {
+  const ctx = await getPartnerContext()
+  if (!ctx) return null
   return (
     <div>
       <PageHeader title="Marketplace" subtitle="Your public profile in the certified partner directory." />
-      <ComingSoon title="Marketplace profiles are being built" blurb="List your agency, showcase specialties and reviews, and get discovered by customers." />
+      <MarketplaceEditor canEdit={canEditMarketplace(ctx)} slug={ctx.slug} />
     </div>
   )
 }

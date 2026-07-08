@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getPartnerContext } from '@/lib/partner/rbac'
 import { createAdminClient } from '@/lib/supabase/server'
+import { refreshPartnerStats } from '@/lib/partner/stats'
 import { PageHeader, StatCard, Panel, money } from '@/components/partner/ui'
 import { Share2, MonitorPlay, GraduationCap, ArrowRight } from 'lucide-react'
 
@@ -11,13 +12,12 @@ export default async function PartnerDashboard() {
   if (!ctx) return null
   const db = createAdminClient()
 
-  const [{ data: stats }, { count: linkCount }, { count: demoCount }] = await Promise.all([
-    db.from('partner_stats').select('*').eq('partner_id', ctx.partnerId).maybeSingle(),
+  // Compute-on-read: fresh KPIs from the ledger, cached to partner_stats.
+  const [s, { count: linkCount }, { count: demoCount }] = await Promise.all([
+    refreshPartnerStats(ctx.partnerId),
     db.from('referral_links').select('id', { count: 'exact', head: true }).eq('partner_id', ctx.partnerId),
     db.from('demos').select('id', { count: 'exact', head: true }).eq('partner_id', ctx.partnerId),
   ])
-
-  const s = stats || {}
   const hasLink = (linkCount ?? 0) > 0
   const hasDemo = (demoCount ?? 0) > 0
 

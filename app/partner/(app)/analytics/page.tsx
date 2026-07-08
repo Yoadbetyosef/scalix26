@@ -1,13 +1,16 @@
+import { getPartnerContext } from '@/lib/partner/rbac'
 import { PageHeader } from '@/components/partner/ui'
-import { ComingSoon } from '@/components/partner/coming-soon'
+import { AnalyticsView } from '@/components/partner/analytics-view'
 
 export const dynamic = 'force-dynamic'
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  const ctx = await getPartnerContext()
+  if (!ctx) return null
   return (
     <div>
-      <PageHeader title="Analytics" subtitle="Revenue, conversion, and performance insights." />
-      <ComingSoon title="Advanced analytics is being built" blurb="Revenue by source, CAC, LTV, funnel, and forecasting are coming next." />
+      <PageHeader title="Analytics" subtitle="Your funnel, earnings over time, and best-performing links." />
+      <AnalyticsView />
     </div>
   )
 }

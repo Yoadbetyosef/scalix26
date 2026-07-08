@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getPartnerContext } from '@/lib/partner/rbac'
 import { createClient } from '@/lib/supabase/server'
 import { PartnerSidebar } from '@/components/partner/partner-sidebar'
+import { PartnerNotifications } from '@/components/partner/partner-notifications'
 
 // Guards the authenticated partner portal. A signed-in user who is not yet a partner is sent to
 // the partner signup; a signed-out user is already bounced to /partner/login by middleware.
@@ -20,6 +21,7 @@ export default async function PartnerAppLayout({ children }: { children: React.R
       <div className="md:pl-16 xl:pl-56">
         <main className="mx-auto max-w-[1200px] px-4 pb-24 pt-6 sm:px-6 md:pb-10">{children}</main>
       </div>
+      <PartnerNotifications />
     </div>
   )
 }

@@ -1,13 +1,16 @@
+import { getPartnerContext } from '@/lib/partner/rbac'
 import { PageHeader } from '@/components/partner/ui'
-import { ComingSoon } from '@/components/partner/coming-soon'
+import { MarketingLibrary } from '@/components/partner/marketing-library'
 
 export const dynamic = 'force-dynamic'
 
-export default function MarketingPage() {
+export default async function MarketingPage() {
+  const ctx = await getPartnerContext()
+  if (!ctx) return null
   return (
     <div>
-      <PageHeader title="Marketing Center" subtitle="Ready-to-use assets to help you sell." />
-      <ComingSoon title="Marketing library is being built" blurb="Searchable, downloadable decks, scripts, one-pagers, and social content are coming next." />
+      <PageHeader title="Marketing Center" subtitle="Ready-to-use assets to help you sell faster." />
+      <MarketingLibrary />
     </div>
   )
 }

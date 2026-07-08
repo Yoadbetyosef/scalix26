@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
   }).select('id, public_slug, prospect_name').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
+  // If generated from a CRM lead, auto-advance it to 'demo_sent' + log the activity.
+  if (body.leadId) {
+    await db.from('crm_leads').update({ stage: 'demo_sent', demo_id: demo.id, updated_at: new Date().toISOString() }).eq('id', body.leadId).eq('partner_id', ctx.partnerId)
+    await db.from('crm_activities').insert({ partner_id: ctx.partnerId, lead_id: body.leadId, actor_id: ctx.userId, kind: 'demo_sent', body: `Demo generated for ${body.prospectName}`, meta: { demo_id: demo.id } })
+  }
+
   await logPartnerAction(ctx.partnerId, ctx.userId, { action: 'demo.created', targetType: 'demo', targetId: demo.id, after: { prospect: body.prospectName } })
   return NextResponse.json({ success: true, demo })
 }
