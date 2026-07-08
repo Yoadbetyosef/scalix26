@@ -18,17 +18,26 @@ export interface CoachData {
 
 export async function getCoach(partnerId: string, stats: PartnerStatsFull): Promise<CoachData> {
   const db = createAdminClient()
-  const [{ count: linkCount }, { count: demoCount }, { data: links }, { data: shares }, { count: certCount }] = await Promise.all([
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString()
+  const [{ count: linkCount }, { count: demoCount }, { data: links }, { data: shares }, { count: certCount }, { count: demosWeek }, { data: paidRefs }] = await Promise.all([
     db.from('referral_links').select('id', { count: 'exact', head: true }).eq('partner_id', partnerId),
     db.from('demos').select('id', { count: 'exact', head: true }).eq('partner_id', partnerId),
     db.from('referral_links').select('click_count').eq('partner_id', partnerId),
     db.from('partner_xp_events').select('id').eq('partner_id', partnerId).eq('kind', 'demo_shared').limit(1),
     db.from('certifications').select('id', { count: 'exact', head: true }).eq('partner_id', partnerId),
+    db.from('demos').select('id', { count: 'exact', head: true }).eq('partner_id', partnerId).gte('created_at', weekAgo),
+    db.from('referrals').select('tenants(industry)').eq('partner_id', partnerId).eq('status', 'paid'),
   ])
   const clicks = (links || []).reduce((s, l) => s + (l.click_count || 0), 0)
   const sharedCount = (shares || []).length
   const certified = (certCount || 0) > 0
   const lc = linkCount || 0, dc = demoCount || 0
+  const dWeek = demosWeek || 0
+
+  // Data-driven: which industry converts best for THIS partner.
+  const industryCount: Record<string, number> = {}
+  for (const r of paidRefs || []) { const ind = ((r.tenants as unknown as { industry?: string } | null)?.industry || '').trim(); if (ind) industryCount[ind] = (industryCount[ind] || 0) + 1 }
+  const topIndustry = Object.entries(industryCount).sort((a, b) => b[1] - a[1])[0]
 
   const missions: Mission[] = [
     { key: 'link', label: 'Create your referral link', xp: XP.first_link, done: lc > 0, href: '/partner/referrals' },
@@ -54,7 +63,12 @@ export async function getCoach(partnerId: string, stats: PartnerStatsFull): Prom
 
   if (stats.total_customers >= 4 && stats.conversion_rate < 25) cards.push({ icon: 'trend', title: 'Your conversion rate has room to grow', body: `You're at ${stats.conversion_rate}%. Following up within 24h of a demo lifts conversions the most.`, tone: 'tip' })
 
-  if (dc > 0 && dc < 3) cards.push({ icon: 'zap', title: 'Generate 3 demos this week', body: 'Volume wins. Partners who send 3+ demos/week close 3× more.', cta: 'Generate a demo', href: '/partner/demos', tone: 'action' })
+  // Data-driven weekly pace (uses the real count).
+  if (dc > 0 && dWeek < 3) cards.push({ icon: 'zap', title: dWeek === 0 ? "You haven't generated a demo this week" : `You've generated ${dWeek} demo${dWeek === 1 ? '' : 's'} this week`, body: 'Partners who send 3+ demos/week close 3× more. Aim for 3.', cta: 'Generate a demo', href: '/partner/demos', tone: 'action' })
+  else if (dWeek >= 3) cards.push({ icon: 'zap', title: `${dWeek} demos this week — strong pace`, body: 'Keep the volume up; this is exactly how top partners scale.', cta: 'Generate another', href: '/partner/demos', tone: 'win' })
+
+  // Data-driven niche insight (your best-converting industry).
+  if (topIndustry && topIndustry[1] >= 2) cards.push({ icon: 'trend', title: `${topIndustry[0]} converts best for you`, body: `${topIndustry[1]} of your paying customers are ${topIndustry[0]} businesses. Generate more ${topIndustry[0]} demos to compound it.`, cta: 'Generate a demo', href: '/partner/demos', tone: 'tip' })
 
   if (!certified) cards.push({ icon: 'cert', title: 'Get certified to sell faster', body: 'The Academy exam earns your Certified Partner badge (+100 XP).', cta: 'Open Academy', href: '/partner/learning', tone: 'tip' })
 
