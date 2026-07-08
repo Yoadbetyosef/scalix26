@@ -25,14 +25,14 @@ export async function resolvePartnerContextForUser(userId: string): Promise<Part
   const svc = createAdminClient()
   const { data: member } = await svc
     .from('partner_members')
-    .select('partner_id, role, status, partners(id, partner_type, status, company_name, slug)')
+    .select('partner_id, role, status, partners(id, partner_type, status, company_name, slug, enabled_modules)')
     .eq('user_id', userId)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
   if (!member) return null
-  const p = member.partners as unknown as { id: string; partner_type: PartnerType; status: string; company_name: string | null; slug: string } | null
+  const p = member.partners as unknown as { id: string; partner_type: PartnerType; status: string; company_name: string | null; slug: string; enabled_modules: string[] | null } | null
   if (!p) return null
   return {
     userId,
@@ -42,6 +42,7 @@ export async function resolvePartnerContextForUser(userId: string): Promise<Part
     status: p.status,
     companyName: p.company_name,
     slug: p.slug,
+    enabledModulesRaw: p.enabled_modules,
   }
 }
 

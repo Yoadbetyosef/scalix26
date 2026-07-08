@@ -11,27 +11,30 @@ import {
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ScalixLogo } from '@/components/brand/scalix-logo'
-import { supportsTeams, type PartnerType } from '@/lib/partner/roles'
+import { type PartnerType } from '@/lib/partner/roles'
+import { partnerModuleForPath, type PartnerModuleKey } from '@/lib/partner/modules'
 
 export interface PartnerNavProps {
   companyName: string | null
   slug: string
   partnerType: PartnerType
   hasTenant: boolean
+  enabledModules: PartnerModuleKey[]
 }
 
-const TYPE_LABEL: Record<PartnerType, string> = {
-  affiliate: 'Affiliate', growth: 'Growth Partner', agency: 'Agency',
-  enterprise: 'Enterprise', internal_rep: 'Internal Rep',
+const TYPE_LABEL: Partial<Record<PartnerType, string>> = {
+  affiliate: 'Affiliate', creator: 'Creator', growth: 'Growth Partner', agency: 'Agency',
+  technology: 'Technology', implementation: 'Implementation', industry_expert: 'Industry Expert',
+  franchise: 'Franchise', white_label: 'White Label', enterprise: 'Enterprise', internal_rep: 'Internal Rep',
 }
 
-export function PartnerSidebar({ companyName, partnerType, hasTenant }: PartnerNavProps) {
+export function PartnerSidebar({ companyName, partnerType, hasTenant, enabledModules }: PartnerNavProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
   const [moreOpen, setMoreOpen] = useState(false)
 
-  const items = [
+  const allItems = [
     { href: '/partner', icon: LayoutDashboard, label: 'Dashboard', exact: true },
     { href: '/partner/coach', icon: Brain, label: 'AI Coach' },
     { href: '/partner/referrals', icon: Share2, label: 'Referrals' },
@@ -43,10 +46,16 @@ export function PartnerSidebar({ companyName, partnerType, hasTenant }: PartnerN
     { href: '/partner/learning', icon: GraduationCap, label: 'Academy' },
     { href: '/partner/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { href: '/partner/marketplace', icon: Store, label: 'Marketplace' },
-    ...(supportsTeams(partnerType) ? [{ href: '/partner/team', icon: Users, label: 'Team' }] : []),
+    { href: '/partner/team', icon: Users, label: 'Team' },
     { href: '/partner/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/partner/settings', icon: Settings, label: 'Settings' },
   ]
+  // Core routes (dashboard, commissions, settings) have no module → always shown; the rest are
+  // gated by the partner's enabled module set.
+  const items = allItems.filter((i) => {
+    const m = partnerModuleForPath(i.href)
+    return !m || enabledModules.includes(m)
+  })
 
   const isActive = (href: string, exact?: boolean) => (exact ? pathname === href : pathname === href || pathname.startsWith(href + '/'))
 
@@ -65,7 +74,7 @@ export function PartnerSidebar({ companyName, partnerType, hasTenant }: PartnerN
           <ScalixLogo size={26} className="flex-shrink-0" />
           <div className="hidden xl:block min-w-0">
             <div className="text-ink font-semibold text-[15px] tracking-tight leading-tight truncate">{companyName || 'Partner'}</div>
-            <div className="text-[11px] text-muted leading-tight">{TYPE_LABEL[partnerType]} · Partner</div>
+            <div className="text-[11px] text-muted leading-tight">{TYPE_LABEL[partnerType] || 'Partner'} · Partner</div>
           </div>
         </div>
 

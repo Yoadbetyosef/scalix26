@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import type { PartnerType } from './rbac'
+import { presetModulesFor } from './modules'
 import { logPartnerAction } from './audit'
 
 export interface CreatePartnerInput {
@@ -39,14 +40,17 @@ export async function createPartner(input: CreatePartnerInput): Promise<CreatePa
     .from('commission_plans').select('id').is('partner_id', null).eq('active', true)
     .order('created_at', { ascending: true }).limit(1).maybeSingle()
 
+  const partnerType = input.partnerType || 'affiliate'
   const { data: partner, error: pErr } = await db
     .from('partners')
     .insert({
-      partner_type: input.partnerType || 'affiliate',
+      partner_type: partnerType,
       company_name: input.companyName || null,
       contact_email: input.contactEmail,
       contact_phone: input.contactPhone || null,
       status: 'active',
+      // Seed the module set from the type preset (admin can toggle any module later).
+      enabled_modules: presetModulesFor(partnerType),
       default_commission_plan_id: defaultPlan?.id || null,
       origin_tenant_id: input.originTenantId || null,
     })

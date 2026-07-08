@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const page = Math.max(0, Number(searchParams.get('page') || 0))
   const pageSize = 50
   let q = db.from('partners')
-    .select('id, company_name, slug, partner_type, status, tier, health_score, contact_email, created_at', { count: 'exact' })
+    .select('id, company_name, slug, partner_type, status, tier, health_score, contact_email, enabled_modules, created_at', { count: 'exact' })
     .order('created_at', { ascending: false })
   if (search) q = q.or(`company_name.ilike.%${search}%,contact_email.ilike.%${search}%,slug.ilike.%${search}%`)
   const { data: partners, count } = await q.range(page * pageSize, page * pageSize + pageSize - 1)
@@ -38,11 +38,13 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const ctx = await getAdminContext()
   if (!ctx || !canWrite(ctx.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  const { id, status, tier } = await req.json().catch(() => ({}))
+  const { id, status, tier, enabled_modules } = await req.json().catch(() => ({}))
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const patch: Record<string, unknown> = {}
   if (status && ['pending', 'active', 'suspended', 'banned'].includes(status)) patch.status = status
   if (typeof tier === 'number') patch.tier = tier
+  // Per-partner module gating. Sanitized against the known module registry; empty array = all off.
+  if (Array.isArray(enabled_modules)) patch.enabled_modules = enabled_modules.filter((m) => typeof m === 'string')
   const db = createAdminClient()
   const { error } = await db.from('partners').update(patch).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

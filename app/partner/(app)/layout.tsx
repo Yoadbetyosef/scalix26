@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import { getPartnerContext } from '@/lib/partner/rbac'
 import { createClient } from '@/lib/supabase/server'
+import { enabledPartnerModules } from '@/lib/partner/modules'
 import { PartnerSidebar } from '@/components/partner/partner-sidebar'
+import { PartnerModuleGuard } from '@/components/partner/module-guard'
 import { PartnerNotifications } from '@/components/partner/partner-notifications'
 
 // Guards the authenticated partner portal. A signed-in user who is not yet a partner is sent to
@@ -15,9 +17,12 @@ export default async function PartnerAppLayout({ children }: { children: React.R
   const { data: { user } } = await supabase.auth.getUser()
   const { data: tenant } = user ? await supabase.from('tenants').select('id').eq('user_id', user.id).maybeSingle() : { data: null }
 
+  const enabledModules = enabledPartnerModules({ enabled_modules: ctx.enabledModulesRaw })
+
   return (
     <div className="min-h-screen bg-canvas">
-      <PartnerSidebar companyName={ctx.companyName} slug={ctx.slug} partnerType={ctx.partnerType} hasTenant={!!tenant} />
+      <PartnerModuleGuard enabledModules={enabledModules} />
+      <PartnerSidebar companyName={ctx.companyName} slug={ctx.slug} partnerType={ctx.partnerType} hasTenant={!!tenant} enabledModules={enabledModules} />
       <div className="md:pl-16 xl:pl-56">
         <main className="mx-auto max-w-[1200px] px-4 pb-24 pt-6 sm:px-6 md:pb-10">{children}</main>
       </div>

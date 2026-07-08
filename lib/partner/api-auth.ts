@@ -45,10 +45,10 @@ export async function authenticatePartnerRequest(req: NextRequest): Promise<Part
 /** Build a context directly from a partner id (owner seat) when no member user resolves. */
 async function partnerContextForPartnerId(partnerId: string): Promise<PartnerContext | null> {
   const svc = createAdminClient()
-  const { data: p } = await svc.from('partners').select('id, partner_type, status, company_name, slug').eq('id', partnerId).maybeSingle()
+  const { data: p } = await svc.from('partners').select('id, partner_type, status, company_name, slug, enabled_modules').eq('id', partnerId).maybeSingle()
   const { data: owner } = await svc.from('partner_members').select('user_id, role').eq('partner_id', partnerId).eq('status', 'active').order('created_at', { ascending: true }).limit(1).maybeSingle()
   if (!p || !owner?.user_id) return null
-  return { userId: owner.user_id, partnerId, partnerType: p.partner_type, role: owner.role, status: p.status, companyName: p.company_name, slug: p.slug }
+  return { userId: owner.user_id, partnerId, partnerType: p.partner_type, role: owner.role, status: p.status, companyName: p.company_name, slug: p.slug, enabledModulesRaw: p.enabled_modules }
 }
 
 /** Standard 401 for partner API routes. */

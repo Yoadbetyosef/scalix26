@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'sonner'
+import { PARTNER_MODULES, enabledPartnerModules, presetModulesFor, type PartnerModuleKey } from '@/lib/partner/modules'
+import type { PartnerType } from '@/lib/partner/roles'
 
 interface Partner {
   id: string; company_name: string | null; slug: string; partner_type: string; status: string; tier: number
-  health_score: number | null; contact_email: string; stats: { customers: number; pending: number; paid: number }
+  health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number }
 }
 
 const money = (c: number) => `$${((c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
@@ -13,12 +15,19 @@ const money = (c: number) => `$${((c || 0) / 100).toLocaleString('en-US', { mini
 export function AdminPartners({ canWrite }: { canWrite: boolean }) {
   const [partners, setPartners] = useState<Partner[]>([])
   const [loading, setLoading] = useState(true)
+  const [modulesFor, setModulesFor] = useState<Partner | null>(null)
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/partners'); const j = await res.json()
     setPartners(j.partners || []); setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
+
+  async function saveModules(id: string, modules: PartnerModuleKey[]) {
+    const res = await fetch('/api/admin/partners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, enabled_modules: modules }) })
+    if (!res.ok) return toast.error('Failed')
+    toast.success('Modules updated'); setModulesFor(null); load()
+  }
 
   async function setStatus(id: string, status: string) {
     const res = await fetch('/api/admin/partners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) })
@@ -59,6 +68,7 @@ export function AdminPartners({ canWrite }: { canWrite: boolean }) {
               {canWrite && (
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
+                    <button onClick={() => setModulesFor(p)} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Modules</button>
                     <button onClick={() => commission(p.id, 'approve')} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Approve</button>
                     <button onClick={() => commission(p.id, 'pay')} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">Pay out</button>
                     {p.status === 'active'
@@ -72,6 +82,37 @@ export function AdminPartners({ canWrite }: { canWrite: boolean }) {
           {partners.length === 0 && <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No partners yet.</td></tr>}
         </tbody>
       </table>
+      {modulesFor && <ModulesModal partner={modulesFor} onClose={() => setModulesFor(null)} onSave={saveModules} />}
+    </div>
+  )
+}
+
+function ModulesModal({ partner, onClose, onSave }: { partner: Partner; onClose: () => void; onSave: (id: string, m: PartnerModuleKey[]) => void }) {
+  const [set, setSet] = useState<Set<string>>(new Set(enabledPartnerModules(partner)))
+  const toggle = (k: string) => setSet((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-lg bg-white p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 font-semibold text-gray-900">Modules — {partner.company_name || partner.slug}</div>
+        <div className="mb-3 flex items-center gap-2 text-xs text-gray-500">
+          <button onClick={() => setSet(new Set(PARTNER_MODULES.map((m) => m.key)))} className="rounded border border-gray-300 px-2 py-0.5 hover:bg-gray-50">All</button>
+          <button onClick={() => setSet(new Set(presetModulesFor(partner.partner_type as PartnerType)))} className="rounded border border-gray-300 px-2 py-0.5 hover:bg-gray-50">Reset to preset</button>
+          <button onClick={() => setSet(new Set())} className="rounded border border-gray-300 px-2 py-0.5 hover:bg-gray-50">None</button>
+        </div>
+        <div className="max-h-80 space-y-1 overflow-y-auto">
+          {PARTNER_MODULES.map((m) => (
+            <label key={m.key} className="flex items-center gap-2.5 rounded px-2 py-1.5 hover:bg-gray-50">
+              <input type="checkbox" checked={set.has(m.key)} onChange={() => toggle(m.key)} />
+              <span className="flex-1 text-sm text-gray-800">{m.label}</span>
+              <span className="text-xs text-gray-400">{m.description}</span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded px-3 py-1.5 text-sm text-gray-500">Cancel</button>
+          <button onClick={() => onSave(partner.id, [...set] as PartnerModuleKey[])} className="rounded bg-gray-900 px-4 py-1.5 text-sm font-medium text-white">Save</button>
+        </div>
+      </div>
     </div>
   )
 }
