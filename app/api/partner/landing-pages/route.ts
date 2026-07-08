@@ -23,13 +23,13 @@ export async function GET(req: NextRequest) {
   const crTitle = new Map((creatives || []).map((c) => [c.id, c.title]))
   const out = (pages || []).map((p) => {
     const link = p.referral_links as unknown as { code?: string; click_count?: number } | null
-    const cfg = (p.config || {}) as { status?: string; accent?: string }
+    const cfg = (p.config || {}) as Record<string, unknown> & { status?: string }
     return {
       id: p.id, slug: p.slug, headline: p.headline, subhead: p.subhead, cta_text: p.cta_text,
       views: p.view_count || 0, clicks: link?.click_count || 0, link_code: link?.code || null,
       campaign_id: p.campaign_id, campaign_name: p.campaign_id ? cName.get(p.campaign_id) || null : null,
       creative_id: p.creative_id, creative_title: p.creative_id ? crTitle.get(p.creative_id) || null : null,
-      status: cfg.status || 'published', accent: cfg.accent || null, created_at: p.created_at,
+      status: cfg.status || 'published', config: cfg, created_at: p.created_at,
     }
   })
   return NextResponse.json({ pages: out })
@@ -72,10 +72,15 @@ export async function PATCH(req: NextRequest) {
   if (!b.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const db = createAdminClient()
   const patch: Record<string, unknown> = {}
-  for (const f of ['headline', 'subhead', 'cta_text']) if (f in b && b[f]) patch[f] = b[f]
-  if (b.status && STATUSES.includes(b.status)) {
+  for (const f of ['headline', 'subhead', 'cta_text', 'campaign_id', 'creative_id']) if (f in b) patch[f] = b[f]
+  // Merge config changes (status + builder fields) onto the existing config.
+  const wantsConfig = (b.status && STATUSES.includes(b.status)) || (b.config && typeof b.config === 'object')
+  if (wantsConfig) {
     const { data: cur } = await db.from('landing_pages').select('config').eq('id', b.id).eq('partner_id', ctx.partnerId).maybeSingle()
-    patch.config = { ...((cur?.config as object) || {}), status: b.status }
+    const merged: Record<string, unknown> = { ...((cur?.config as object) || {}) }
+    if (b.config && typeof b.config === 'object') Object.assign(merged, b.config)
+    if (b.status && STATUSES.includes(b.status)) merged.status = b.status
+    patch.config = merged
   }
   const { error } = await db.from('landing_pages').update(patch).eq('id', b.id).eq('partner_id', ctx.partnerId)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
