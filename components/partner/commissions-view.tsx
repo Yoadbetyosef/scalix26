@@ -1,8 +1,41 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { StatCard, Panel, EmptyRow, money } from '@/components/partner/ui'
-import { Download } from 'lucide-react'
+import { Download, CheckCircle2, CreditCard } from 'lucide-react'
+
+function PayoutSetup() {
+  const [status, setStatus] = useState<{ connected: boolean; payoutsEnabled: boolean; onboardingComplete: boolean } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { fetch('/api/partner/connect').then((r) => r.json()).then(setStatus) }, [])
+
+  async function connect() {
+    setBusy(true)
+    const res = await fetch('/api/partner/connect', { method: 'POST' })
+    const j = await res.json(); setBusy(false)
+    if (!res.ok) return toast.error(j.error || 'Failed')
+    if (j.url) window.location.href = j.url
+  }
+
+  if (!status) return null
+  if (status.payoutsEnabled) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <CheckCircle2 className="h-5 w-5" /> Payouts are set up — approved commissions are transferred automatically.
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent/5 p-4">
+      <div className="flex items-center gap-3">
+        <CreditCard className="h-6 w-6 text-accent-strong" />
+        <div><div className="font-medium text-ink">Set up payouts</div><div className="text-sm text-subtle">Connect your bank to receive commissions automatically.</div></div>
+      </div>
+      <button onClick={connect} disabled={busy} className="h-10 rounded-lg bg-ink px-4 text-sm font-medium text-white disabled:opacity-50">{busy ? 'Opening…' : status.onboardingComplete ? 'Finish setup' : 'Set up payouts'}</button>
+    </div>
+  )
+}
 
 interface Entry { id: string; entry_type: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; created_at: string }
 interface Payout { id: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; statement_url: string | null; paid_at: string | null; created_at: string }
@@ -29,6 +62,7 @@ export function CommissionsView() {
 
   return (
     <div className="space-y-6">
+      <PayoutSetup />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Pending" value={money(s.pending_cents)} hint="Not yet approved" />
         <StatCard label="Approved" value={money(s.approved_cents)} hint="Awaiting payout" accent />

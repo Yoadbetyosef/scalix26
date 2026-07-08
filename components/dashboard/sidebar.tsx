@@ -17,6 +17,7 @@ import {
   TrendingUp,
   MoreHorizontal,
   X,
+  Handshake,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -149,6 +150,17 @@ export function Sidebar() {
           </div>
         )}
 
+        {/* Partner program — the viral loop entry point */}
+        <div className="px-2 pt-2">
+          <Link
+            href="/partner"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-accent-strong hover:bg-accent/5 transition-colors"
+          >
+            <Handshake className="w-5 h-5 flex-shrink-0" />
+            <span className="hidden xl:block">Partner Program</span>
+          </Link>
+        </div>
+
         {/* Sign out */}
         <div className="px-2 py-4 border-t border-hairline">
           <button
@@ -233,7 +245,14 @@ export function Sidebar() {
                 )
               })}
             </nav>
-            <div className="px-4 pb-6 border-t border-hairline pt-3">
+            <div className="px-4 pb-6 border-t border-hairline pt-3 space-y-1">
+              <Link
+                href="/partner"
+                className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-accent-strong hover:bg-accent/5 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"
+              >
+                <Handshake className="w-5 h-5 flex-shrink-0" />
+                Partner Program
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98] active:bg-red-100"

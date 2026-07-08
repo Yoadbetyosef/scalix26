@@ -1,6 +1,9 @@
 import type Stripe from 'stripe'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { sendEmail, emailTemplates } from '@/lib/email/send'
+
+const PARTNER_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'
 
 // The commission engine. Every ledger write goes through insertEntry(), which upserts on the
 // unique idempotency_key so Stripe's at-least-once webhook delivery can never double-pay. Paid
@@ -48,6 +51,20 @@ async function insertEntry(db: Db, e: {
     })
   }
   return inserted
+}
+
+/**
+ * Auto-approve pending commission entries older than the hold window (default 30 days). This is
+ * the trust mechanism: partners see money move from 'pending' → 'approved' automatically instead
+ * of waiting on a human. Clawbacks (churn) still create offsetting entries independently.
+ */
+export async function autoApproveCommissions(holdDays = Number(process.env.PARTNER_COMMISSION_HOLD_DAYS) || 30): Promise<number> {
+  const db = createAdminClient()
+  const cutoff = new Date(Date.now() - holdDays * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await db.from('commission_entries')
+    .update({ status: 'approved', approved_at: new Date().toISOString() })
+    .eq('status', 'pending').lt('created_at', cutoff).select('id')
+  return data?.length || 0
 }
 
 async function getReferralForTenant(db: Db, tenantId: string): Promise<ReferralRow | null> {
@@ -133,6 +150,14 @@ export async function recordCommissionForInvoice(invoice: Stripe.Invoice, tenant
         body: 'One of your referrals just started a paid subscription.', link: '/partner/commissions',
       })
       await logPartnerAction(ref.partner_id, 'system', { action: 'referral.paid', targetType: 'tenant', targetId: tenant.id })
+      // Conversion email to the partner (best-effort).
+      try {
+        const { data: partner } = await db.from('partners').select('contact_email, company_name').eq('id', ref.partner_id).maybeSingle()
+        if (partner?.contact_email) {
+          const tmpl = emailTemplates.partnerConversion(partner.company_name || 'there', `${PARTNER_APP_URL}/partner/commissions`)
+          await sendEmail(partner.contact_email, tmpl.subject, tmpl.html)
+        }
+      } catch { /* best-effort */ }
 
       if (plan.one_time_cents && plan.one_time_cents > 0) {
         await insertEntry(db, { partner_id: ref.partner_id, referral_id: ref.id, tenant_id: tenant.id, plan_id: plan.id, entry_type: 'one_time', amount_cents: plan.one_time_cents, currency, source_event: 'invoice.payment_succeeded', source_ref: invoice.id, idempotency_key: `onetime:${ref.id}` })

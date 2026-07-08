@@ -120,4 +120,35 @@ ${a.email ? `<tr><td><strong>Email</strong></td><td>${a.email}</td></tr>` : ''}
 <tr><td><strong>Amount</strong></td><td>$${(user.amount / 100).toFixed(2)}</td></tr>
 </table>`,
   }),
+
+  // ── Partner OS ──────────────────────────────────────────────────────────
+  partnerInvite: (company: string, role: string, joinUrl: string) => ({
+    subject: `You're invited to join ${company} on Scalix26`,
+    html: `<p>Hi,</p>
+<p>You've been invited to join <strong>${company}</strong> as <strong>${role}</strong> on the Scalix26 Partner platform.</p>
+<p><a href="${joinUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Accept invitation</a></p>
+<p>Sign in with this email and you'll be added automatically.</p>`,
+  }),
+
+  partnerConversion: (name: string, dashboardUrl: string) => ({
+    subject: 'A referral just converted to paid! 🎉',
+    html: `<p>Hi ${name},</p>
+<p>Great news — one of the customers you referred just started a <strong>paid subscription</strong>. Your recurring commission has started.</p>
+<p><a href="${dashboardUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">View commissions</a></p>`,
+  }),
+
+  partnerPayout: (name: string, amount: number, currency: string, dashboardUrl: string) => ({
+    subject: `Your payout of ${(amount / 100).toLocaleString('en-US', { style: 'currency', currency: currency.toUpperCase() })} is on the way 💸`,
+    html: `<p>Hi ${name},</p>
+<p>We've issued a payout of <strong>${(amount / 100).toLocaleString('en-US', { style: 'currency', currency: currency.toUpperCase() })}</strong> for your Scalix26 partner commissions.</p>
+<p><a href="${dashboardUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">View statement</a></p>`,
+  }),
+
+  partnerDemo: (business: string, demoUrl: string) => ({
+    subject: `See your AI employee in action — ${business}`,
+    html: `<p>Hi,</p>
+<p>We built a live demo of an AI employee for <strong>${business}</strong>. It answers calls, texts, and questions 24/7 — try chatting with it:</p>
+<p><a href="${demoUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Try your AI demo</a></p>
+<p>${demoUrl}</p>`,
+  }),
 }

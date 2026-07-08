@@ -60,6 +60,10 @@ export default function PartnerLoginPage() {
           </div>
         </div>
 
+        <div className="text-right">
+          <Link href="/auth/forgot-password" className="text-xs text-muted transition-colors hover:text-ink">Forgot password?</Link>
+        </div>
+
         {error && <div className="rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-2.5 text-sm text-danger">{error}</div>}
 
         <Button type="submit" loading={loading}

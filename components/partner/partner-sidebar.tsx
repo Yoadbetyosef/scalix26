@@ -6,7 +6,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Share2, Building2, KanbanSquare, MonitorPlay, Coins,
   Megaphone, GraduationCap, Store, Users, BarChart3, Settings, LogOut,
-  MoreHorizontal, X, ArrowLeftRight,
+  MoreHorizontal, X, ArrowLeftRight, Trophy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -40,6 +40,7 @@ export function PartnerSidebar({ companyName, partnerType, hasTenant }: PartnerN
     { href: '/partner/commissions', icon: Coins, label: 'Commissions' },
     { href: '/partner/marketing', icon: Megaphone, label: 'Marketing' },
     { href: '/partner/learning', icon: GraduationCap, label: 'Academy' },
+    { href: '/partner/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { href: '/partner/marketplace', icon: Store, label: 'Marketplace' },
     ...(supportsTeams(partnerType) ? [{ href: '/partner/team', icon: Users, label: 'Team' }] : []),
     { href: '/partner/analytics', icon: BarChart3, label: 'Analytics' },

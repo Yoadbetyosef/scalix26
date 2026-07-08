@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { Bell, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 interface Notif { id: string; kind: string; title: string; body: string | null; link: string | null; read_at: string | null; created_at: string }
 
@@ -16,7 +17,18 @@ export function PartnerNotifications() {
     if (!res.ok) return
     const j = await res.json(); setItems(j.notifications || []); setUnread(j.unread || 0)
   }, [])
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [load])
+  useEffect(() => {
+    load()
+    // Realtime: refetch on any new notification the user is allowed to see (RLS-filtered).
+    // A 60s poll stays as a fallback if Realtime isn't enabled on the table.
+    const supabase = createClient()
+    const channel = supabase
+      .channel('partner_notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'partner_notifications' }, () => load())
+      .subscribe()
+    const t = setInterval(load, 60000)
+    return () => { clearInterval(t); supabase.removeChannel(channel) }
+  }, [load])
 
   async function markAll() {
     await fetch('/api/partner/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ all: true }) })

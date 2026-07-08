@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { Award, MapPin, Globe, Star, ArrowLeft } from 'lucide-react'
+import { ReviewForm } from '@/components/partner/review-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +47,10 @@ export default async function PartnerProfile({ params }: { params: Promise<{ slu
               {profile.specialties.map((s: string) => <span key={s} className="rounded-full bg-sunken px-2.5 py-1 text-xs font-medium text-subtle">{s}</span>)}
             </div>
           ) : null}
+        </div>
+
+        <div className="mt-6">
+          <ReviewForm partnerSlug={slug} />
         </div>
 
         {reviews && reviews.length > 0 && (

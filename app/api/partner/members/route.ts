@@ -3,6 +3,9 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { canManageTeam, type PartnerRole } from '@/lib/partner/rbac'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { sendEmail, emailTemplates } from '@/lib/email/send'
+
+const PARTNER_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'
 
 const ROLES: PartnerRole[] = ['owner', 'manager', 'sales', 'marketing', 'finance', 'support']
 
@@ -37,6 +40,11 @@ export async function POST(req: NextRequest) {
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   await logPartnerAction(ctx.partnerId, ctx.userId, { action: 'member.invited', targetType: 'member', after: { email, role: r } })
+  // Invitation email (best-effort).
+  try {
+    const tmpl = emailTemplates.partnerInvite(ctx.companyName || 'a Scalix26 partner', r, `${PARTNER_APP_URL}/partner/login`)
+    await sendEmail(String(email), tmpl.subject, tmpl.html)
+  } catch { /* best-effort */ }
   return NextResponse.json({ success: true })
 }
 

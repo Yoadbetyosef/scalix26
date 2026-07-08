@@ -43,6 +43,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ code
 
   after(async () => {
     try {
+      // Click-fraud guard: ignore repeat clicks from the same visitor on the same link within
+      // 30 minutes (refresh spamming) so counts + attribution stay honest.
+      const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+      const { data: recent } = await db.from('referral_clicks')
+        .select('id').eq('link_id', link.id).eq('visitor_id', visitorId).gte('created_at', cutoff).limit(1)
+      if (recent && recent.length) return
+
       await db.from('referral_clicks').insert({
         link_id: link.id, partner_id: link.partner_id, visitor_id: visitorId,
         ip_hash: ipHash, user_agent: userAgent, referer, utm,
