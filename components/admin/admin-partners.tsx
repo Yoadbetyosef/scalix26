@@ -3,23 +3,30 @@
 import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import { PARTNER_MODULES, enabledPartnerModules, presetModulesFor, type PartnerModuleKey } from '@/lib/partner/modules'
-import type { PartnerType } from '@/lib/partner/roles'
+import { PARTNER_TYPES, type PartnerType } from '@/lib/partner/roles'
 
 interface Partner {
-  id: string; company_name: string | null; slug: string; partner_type: string; status: string; tier: number
-  health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number }
+  id: string; company_name: string | null; slug: string; partner_type: string; billing_mode: string | null; default_commission_plan_id: string | null
+  status: string; tier: number; health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number }
 }
+interface PlanLite { id: string; name: string; partner_id: string | null }
+const BILLING_MODES: { key: string; label: string }[] = [
+  { key: 'revenue_share', label: 'Revenue share' }, { key: 'reseller', label: 'Reseller' }, { key: 'white_label', label: 'White label' },
+]
 
 const money = (c: number) => `$${((c || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`
 
 export function AdminPartners({ canWrite }: { canWrite: boolean }) {
   const [partners, setPartners] = useState<Partner[]>([])
+  const [plans, setPlans] = useState<PlanLite[]>([])
   const [loading, setLoading] = useState(true)
   const [modulesFor, setModulesFor] = useState<Partner | null>(null)
+  const [programFor, setProgramFor] = useState<Partner | null>(null)
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/admin/partners'); const j = await res.json()
-    setPartners(j.partners || []); setLoading(false)
+    const [res, planRes] = await Promise.all([fetch('/api/admin/partners'), fetch('/api/admin/commission-plans')])
+    const j = await res.json(); const pj = await planRes.json().catch(() => ({}))
+    setPartners(j.partners || []); setPlans(pj.plans || []); setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -27,6 +34,11 @@ export function AdminPartners({ canWrite }: { canWrite: boolean }) {
     const res = await fetch('/api/admin/partners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, enabled_modules: modules }) })
     if (!res.ok) return toast.error('Failed')
     toast.success('Modules updated'); setModulesFor(null); load()
+  }
+  async function saveProgram(id: string, body: Record<string, unknown>) {
+    const res = await fetch('/api/admin/partners', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
+    if (!res.ok) return toast.error('Failed')
+    toast.success('Partner deal updated'); setProgramFor(null); load()
   }
 
   async function setStatus(id: string, status: string) {
@@ -68,6 +80,7 @@ export function AdminPartners({ canWrite }: { canWrite: boolean }) {
               {canWrite && (
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap gap-1">
+                    <button onClick={() => setProgramFor(p)} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Deal</button>
                     <button onClick={() => setModulesFor(p)} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Modules</button>
                     <button onClick={() => commission(p.id, 'approve')} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">Approve</button>
                     <button onClick={() => commission(p.id, 'pay')} className="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">Pay out</button>
@@ -83,6 +96,59 @@ export function AdminPartners({ canWrite }: { canWrite: boolean }) {
         </tbody>
       </table>
       {modulesFor && <ModulesModal partner={modulesFor} onClose={() => setModulesFor(null)} onSave={saveModules} />}
+      {programFor && <ProgramModal partner={programFor} plans={plans} onClose={() => setProgramFor(null)} onSave={saveProgram} />}
+    </div>
+  )
+}
+
+// Per-partner economics: partner type + billing mode + default commission plan. Reuses the existing
+// engine — changing the type optionally re-applies its module preset; the resolved plan drives money.
+function ProgramModal({ partner, plans, onClose, onSave }: { partner: Partner; plans: PlanLite[]; onClose: () => void; onSave: (id: string, body: Record<string, unknown>) => void }) {
+  const [type, setType] = useState<string>(partner.partner_type)
+  const [billing, setBilling] = useState<string>(partner.billing_mode || 'revenue_share')
+  const [planId, setPlanId] = useState<string>(partner.default_commission_plan_id || '')
+  const [applyPreset, setApplyPreset] = useState(false)
+  const sel = 'mt-1 h-9 w-full rounded border border-gray-300 px-2 text-sm'
+  // Global plans + any plan already scoped to this partner.
+  const planOptions = plans.filter((p) => !p.partner_id || p.partner_id === partner.id)
+
+  function save() {
+    const body: Record<string, unknown> = { partner_type: type, billing_mode: billing, default_commission_plan_id: planId || null }
+    if (applyPreset) body.enabled_modules = presetModulesFor(type as PartnerType)
+    onSave(partner.id, body)
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-lg bg-white p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 font-semibold text-gray-900">Partner deal — {partner.company_name || partner.slug}</div>
+        <div className="space-y-3">
+          <label className="block text-xs font-medium text-gray-500">Partner type
+            <select className={sel} value={type} onChange={(e) => setType(e.target.value)}>
+              {PARTNER_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs font-medium text-gray-500">Billing mode
+            <select className={sel} value={billing} onChange={(e) => setBilling(e.target.value)}>
+              {BILLING_MODES.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+            </select>
+          </label>
+          <label className="block text-xs font-medium text-gray-500">Default commission plan
+            <select className={sel} value={planId} onChange={(e) => setPlanId(e.target.value)}>
+              <option value="">Global default</option>
+              {planOptions.map((p) => <option key={p.id} value={p.id}>{p.name}{p.partner_id ? ' (partner-specific)' : ''}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 pt-1 text-sm text-gray-700">
+            <input type="checkbox" checked={applyPreset} onChange={(e) => setApplyPreset(e.target.checked)} />
+            Apply this type&apos;s module preset
+          </label>
+          <p className="text-xs text-gray-400">A custom <span className="font-medium">Partner Deal</span> (under Programs) still overrides this default. Refunds/tiers are handled by the existing Economics Engine.</p>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded px-3 py-1.5 text-sm text-gray-500">Cancel</button>
+          <button onClick={save} className="rounded bg-gray-900 px-4 py-1.5 text-sm font-medium text-white">Save changes</button>
+        </div>
+      </div>
     </div>
   )
 }

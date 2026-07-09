@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAdminContext, canWrite } from '@/lib/admin/rbac'
 import { createAdminClient } from '@/lib/supabase/server'
 import { logAdminAction } from '@/lib/admin/audit'
+import { PARTNER_TYPES } from '@/lib/partner/roles'
+
+const TYPE_KEYS = new Set(PARTNER_TYPES.map((t) => t.key as string))
+const BILLING_MODES = new Set(['revenue_share', 'reseller', 'white_label'])
 
 // Admin: list partners with rollup stats; update status/tier.
 export async function GET(req: NextRequest) {
@@ -13,7 +17,7 @@ export async function GET(req: NextRequest) {
   const page = Math.max(0, Number(searchParams.get('page') || 0))
   const pageSize = 50
   let q = db.from('partners')
-    .select('id, company_name, slug, partner_type, status, tier, health_score, contact_email, enabled_modules, created_at', { count: 'exact' })
+    .select('id, company_name, slug, partner_type, billing_mode, default_commission_plan_id, status, tier, health_score, contact_email, enabled_modules, created_at', { count: 'exact' })
     .order('created_at', { ascending: false })
   if (search) q = q.or(`company_name.ilike.%${search}%,contact_email.ilike.%${search}%,slug.ilike.%${search}%`)
   const { data: partners, count } = await q.range(page * pageSize, page * pageSize + pageSize - 1)
@@ -38,13 +42,18 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const ctx = await getAdminContext()
   if (!ctx || !canWrite(ctx.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  const { id, status, tier, enabled_modules } = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({}))
+  const { id, status, tier, enabled_modules, partner_type, billing_mode } = body
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
   const patch: Record<string, unknown> = {}
   if (status && ['pending', 'active', 'suspended', 'banned'].includes(status)) patch.status = status
   if (typeof tier === 'number') patch.tier = tier
   // Per-partner module gating. Sanitized against the known module registry; empty array = all off.
   if (Array.isArray(enabled_modules)) patch.enabled_modules = enabled_modules.filter((m) => typeof m === 'string')
+  // Economics assignment (reuses existing engine — partner_type preset + resolved plan).
+  if (partner_type && TYPE_KEYS.has(partner_type)) patch.partner_type = partner_type
+  if (billing_mode && BILLING_MODES.has(billing_mode)) patch.billing_mode = billing_mode
+  if ('default_commission_plan_id' in body) patch.default_commission_plan_id = body.default_commission_plan_id || null
   const db = createAdminClient()
   const { error } = await db.from('partners').update(patch).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

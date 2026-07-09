@@ -7,7 +7,7 @@ interface Plan { id: string; partner_id: string | null; name: string; model: str
 interface Campaign { id: string; name: string; kind: string; amount_cents: number | null; threshold: number | null; active: boolean; partner_type: string | null }
 interface Review { id: string; rating: number; body: string | null; status: string; partners: { company_name: string | null } | null }
 interface Rule { id: string; name: string; metric: string; threshold: number; action: string; to_type: string | null; to_tier: number | null; active: boolean }
-interface Deal { id: string; partner_id: string; active: boolean; note: string | null; partners: { company_name: string | null; slug: string } | null; commission_plans: { name: string } | null }
+interface Deal { id: string; partner_id: string; commission_plan_id: string | null; active: boolean; note: string | null; partners: { company_name: string | null; slug: string } | null; commission_plans: { name: string } | null }
 interface PartnerLite { id: string; company_name: string | null; slug: string }
 
 export function AdminPrograms({ canWrite }: { canWrite: boolean }) {
@@ -34,6 +34,11 @@ export function AdminPrograms({ canWrite }: { canWrite: boolean }) {
   async function moderate(id: string, status: string) {
     const res = await fetch('/api/admin/reviews', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) })
     if (!res.ok) return toast.error('Failed'); load()
+  }
+  async function patchDeal(id: string, patch: Record<string, unknown>) {
+    const res = await fetch('/api/admin/deals', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) })
+    if (!res.ok) return toast.error('Failed')
+    toast.success('Deal updated'); load()
   }
 
   return (
@@ -122,7 +127,7 @@ export function AdminPrograms({ canWrite }: { canWrite: boolean }) {
         <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase text-gray-500">
-              <th className="px-3 py-2">Partner</th><th className="px-3 py-2">Plan</th><th className="px-3 py-2">Note</th><th className="px-3 py-2">Active</th>
+              <th className="px-3 py-2">Partner</th><th className="px-3 py-2">Plan</th><th className="px-3 py-2">Note</th><th className="px-3 py-2">Active</th>{canWrite && <th className="px-3 py-2">Actions</th>}
             </tr></thead>
             <tbody>
               {deals.map((d) => (
@@ -131,9 +136,22 @@ export function AdminPrograms({ canWrite }: { canWrite: boolean }) {
                   <td className="px-3 py-2 text-gray-600">{d.commission_plans?.name || '—'}</td>
                   <td className="px-3 py-2 max-w-xs truncate text-gray-500">{d.note || '—'}</td>
                   <td className="px-3 py-2">{d.active ? <span className="text-green-600">●</span> : <span className="text-gray-300">●</span>}</td>
+                  {canWrite && (
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <select value={d.commission_plan_id || ''} onChange={(e) => patchDeal(d.id, { commission_plan_id: e.target.value || null })} className="h-8 rounded border border-gray-300 px-1.5 text-xs">
+                          <option value="">No plan</option>
+                          {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        {d.active
+                          ? <button onClick={() => patchDeal(d.id, { active: false })} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">Deactivate</button>
+                          : <button onClick={() => patchDeal(d.id, { active: true })} className="rounded border border-green-200 px-2 py-1 text-xs text-green-700 hover:bg-green-50">Activate</button>}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
-              {deals.length === 0 && <tr><td colSpan={4} className="px-3 py-6 text-center text-gray-400">No partner deals.</td></tr>}
+              {deals.length === 0 && <tr><td colSpan={canWrite ? 5 : 4} className="px-3 py-6 text-center text-gray-400">No partner deals.</td></tr>}
             </tbody>
           </table>
         </div>
