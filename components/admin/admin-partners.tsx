@@ -7,9 +7,11 @@ import { PARTNER_TYPES, type PartnerType } from '@/lib/partner/roles'
 
 interface Partner {
   id: string; company_name: string | null; slug: string; partner_type: string; billing_mode: string | null; default_commission_plan_id: string | null
+  price_book_id: string | null; custom_wholesale_discount_pct: number | null; retail_markup_pct: number | null; agreement_notes: string | null
   status: string; tier: number; health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number }
 }
 interface PlanLite { id: string; name: string; partner_id: string | null; model?: string }
+interface PriceBookLite { id: string; name: string; billing_mode: string; is_active: boolean }
 const BILLING_MODES: { key: string; label: string }[] = [
   { key: 'revenue_share', label: 'Revenue share' }, { key: 'reseller', label: 'Reseller' }, { key: 'white_label', label: 'White label' },
 ]
@@ -19,14 +21,15 @@ const money = (c: number) => `$${((c || 0) / 100).toLocaleString('en-US', { mini
 export function AdminPartners({ canWrite }: { canWrite: boolean }) {
   const [partners, setPartners] = useState<Partner[]>([])
   const [plans, setPlans] = useState<PlanLite[]>([])
+  const [priceBooks, setPriceBooks] = useState<PriceBookLite[]>([])
   const [loading, setLoading] = useState(true)
   const [modulesFor, setModulesFor] = useState<Partner | null>(null)
   const [programFor, setProgramFor] = useState<Partner | null>(null)
 
   const load = useCallback(async () => {
-    const [res, planRes] = await Promise.all([fetch('/api/admin/partners'), fetch('/api/admin/commission-plans')])
-    const j = await res.json(); const pj = await planRes.json().catch(() => ({}))
-    setPartners(j.partners || []); setPlans(pj.plans || []); setLoading(false)
+    const [res, planRes, pbRes] = await Promise.all([fetch('/api/admin/partners'), fetch('/api/admin/commission-plans'), fetch('/api/admin/price-books')])
+    const j = await res.json(); const pj = await planRes.json().catch(() => ({})); const bj = await pbRes.json().catch(() => ({}))
+    setPartners(j.partners || []); setPlans(pj.plans || []); setPriceBooks(bj.books || []); setLoading(false)
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -96,31 +99,44 @@ export function AdminPartners({ canWrite }: { canWrite: boolean }) {
         </tbody>
       </table>
       {modulesFor && <ModulesModal partner={modulesFor} onClose={() => setModulesFor(null)} onSave={saveModules} />}
-      {programFor && <ProgramModal partner={programFor} plans={plans} onClose={() => setProgramFor(null)} onSave={saveProgram} />}
+      {programFor && <ProgramModal partner={programFor} plans={plans} priceBooks={priceBooks} onClose={() => setProgramFor(null)} onSave={saveProgram} />}
     </div>
   )
 }
 
 // Per-partner economics: partner type + billing mode + default commission plan. Reuses the existing
 // engine — changing the type optionally re-applies its module preset; the resolved plan drives money.
-function ProgramModal({ partner, plans, onClose, onSave }: { partner: Partner; plans: PlanLite[]; onClose: () => void; onSave: (id: string, body: Record<string, unknown>) => void }) {
+function ProgramModal({ partner, plans, priceBooks, onClose, onSave }: { partner: Partner; plans: PlanLite[]; priceBooks: PriceBookLite[]; onClose: () => void; onSave: (id: string, body: Record<string, unknown>) => void }) {
   const [type, setType] = useState<string>(partner.partner_type)
   const [billing, setBilling] = useState<string>(partner.billing_mode || 'revenue_share')
   const [planId, setPlanId] = useState<string>(partner.default_commission_plan_id || '')
+  const [priceBookId, setPriceBookId] = useState<string>(partner.price_book_id || '')
+  const [discount, setDiscount] = useState<string>(partner.custom_wholesale_discount_pct != null ? String(partner.custom_wholesale_discount_pct) : '')
+  const [markup, setMarkup] = useState<string>(partner.retail_markup_pct != null ? String(partner.retail_markup_pct) : '')
+  const [notes, setNotes] = useState<string>(partner.agreement_notes || '')
   const [applyPreset, setApplyPreset] = useState(false)
   const sel = 'mt-1 h-9 w-full rounded border border-gray-300 px-2 text-sm'
+  const isWholesale = billing === 'white_label' || billing === 'reseller'
   // Global plans + any plan already scoped to this partner.
   const planOptions = plans.filter((p) => !p.partner_id || p.partner_id === partner.id)
+  const bookOptions = priceBooks.filter((b) => b.billing_mode === billing)
 
   // Non-blocking consistency warnings (admin can still save).
   const selModel = planOptions.find((p) => p.id === planId)?.model
   const warnings: string[] = []
   if (type === 'white_label' && billing !== 'white_label') warnings.push('White Label partners are usually on white_label billing mode.')
   if (billing === 'white_label' && type !== 'white_label') warnings.push('white_label billing is usually paired with the White Label partner type.')
-  if ((billing === 'white_label' || billing === 'reseller') && !(selModel === 'wholesale' || selModel === 'white_label' || selModel === 'custom')) warnings.push('Wholesale / reseller billing usually uses a wholesale, white_label, or custom commission plan.')
+  if (isWholesale && !priceBookId) warnings.push('White Label / Reseller partners should have a price book assigned.')
+  if (isWholesale && selModel && !(selModel === 'wholesale' || selModel === 'white_label' || selModel === 'custom')) warnings.push('Commission plans are not the primary economics for white_label/reseller — assign a price book instead.')
 
   function save() {
-    const body: Record<string, unknown> = { partner_type: type, billing_mode: billing, default_commission_plan_id: planId || null }
+    const body: Record<string, unknown> = {
+      partner_type: type, billing_mode: billing, default_commission_plan_id: planId || null,
+      price_book_id: isWholesale ? (priceBookId || null) : null,
+      custom_wholesale_discount_pct: isWholesale ? discount : null,
+      retail_markup_pct: isWholesale ? markup : null,
+      agreement_notes: notes || null,
+    }
     if (applyPreset) body.enabled_modules = presetModulesFor(type as PartnerType)
     onSave(partner.id, body)
   }
@@ -144,7 +160,33 @@ function ProgramModal({ partner, plans, onClose, onSave }: { partner: Partner; p
               <option value="">Global default</option>
               {planOptions.map((p) => <option key={p.id} value={p.id}>{p.name}{p.partner_id ? ' (partner-specific)' : ''}</option>)}
             </select>
+            {isWholesale && <span className="mt-0.5 block text-[11px] font-normal text-gray-400">Not the primary economics for white-label/reseller — assign a price book below.</span>}
           </label>
+
+          {isWholesale && (
+            <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">White Label / Reseller pricing</div>
+              <label className="block text-xs font-medium text-gray-500">Price book
+                <select className={sel} value={priceBookId} onChange={(e) => setPriceBookId(e.target.value)}>
+                  <option value="">None assigned</option>
+                  {bookOptions.map((b) => <option key={b.id} value={b.id}>{b.name}{b.is_active ? '' : ' (inactive)'}</option>)}
+                </select>
+                {bookOptions.length === 0 && <span className="mt-0.5 block text-[11px] font-normal text-amber-600">No {billing} price books yet — create one under Programs.</span>}
+              </label>
+              <div className="flex gap-2">
+                <label className="block flex-1 text-xs font-medium text-gray-500">Custom wholesale discount %
+                  <input className={sel} inputMode="decimal" placeholder="optional" value={discount} onChange={(e) => setDiscount(e.target.value)} />
+                </label>
+                <label className="block flex-1 text-xs font-medium text-gray-500">Retail markup %
+                  <input className={sel} inputMode="decimal" placeholder="optional" value={markup} onChange={(e) => setMarkup(e.target.value)} />
+                </label>
+              </div>
+              <label className="block text-xs font-medium text-gray-500">Agreement notes
+                <textarea className="mt-1 w-full rounded border border-gray-300 p-2 text-sm" rows={2} placeholder="Internal notes on this partner's agreement" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </label>
+            </div>
+          )}
+
           <label className="flex items-center gap-2 pt-1 text-sm text-gray-700">
             <input type="checkbox" checked={applyPreset} onChange={(e) => setApplyPreset(e.target.checked)} />
             Apply this type&apos;s module preset

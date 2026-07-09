@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const page = Math.max(0, Number(searchParams.get('page') || 0))
   const pageSize = 50
   let q = db.from('partners')
-    .select('id, company_name, slug, partner_type, billing_mode, default_commission_plan_id, status, tier, health_score, contact_email, enabled_modules, created_at', { count: 'exact' })
+    .select('id, company_name, slug, partner_type, billing_mode, default_commission_plan_id, price_book_id, custom_wholesale_discount_pct, retail_markup_pct, agreement_notes, status, tier, health_score, contact_email, enabled_modules, created_at', { count: 'exact' })
     .order('created_at', { ascending: false })
   if (search) q = q.or(`company_name.ilike.%${search}%,contact_email.ilike.%${search}%,slug.ilike.%${search}%`)
   const { data: partners, count } = await q.range(page * pageSize, page * pageSize + pageSize - 1)
@@ -54,6 +54,11 @@ export async function PATCH(req: NextRequest) {
   if (partner_type && TYPE_KEYS.has(partner_type)) patch.partner_type = partner_type
   if (billing_mode && BILLING_MODES.has(billing_mode)) patch.billing_mode = billing_mode
   if ('default_commission_plan_id' in body) patch.default_commission_plan_id = body.default_commission_plan_id || null
+  // White label / reseller: price book + optional overrides + agreement notes.
+  if ('price_book_id' in body) patch.price_book_id = body.price_book_id || null
+  if ('custom_wholesale_discount_pct' in body) patch.custom_wholesale_discount_pct = body.custom_wholesale_discount_pct === '' || body.custom_wholesale_discount_pct == null ? null : Number(body.custom_wholesale_discount_pct)
+  if ('retail_markup_pct' in body) patch.retail_markup_pct = body.retail_markup_pct === '' || body.retail_markup_pct == null ? null : Number(body.retail_markup_pct)
+  if ('agreement_notes' in body) patch.agreement_notes = body.agreement_notes || null
   const db = createAdminClient()
   const { error } = await db.from('partners').update(patch).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

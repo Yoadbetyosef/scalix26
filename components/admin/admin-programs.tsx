@@ -157,6 +157,8 @@ export function AdminPrograms({ canWrite }: { canWrite: boolean }) {
         </div>
       </section>
 
+      <PriceBooksSection canWrite={canWrite} />
+
       <section>
         <h2 className="mb-2 font-semibold text-gray-900">Marketplace reviews</h2>
         <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -284,6 +286,118 @@ function NewDeal({ partners, plans, onSaved }: { partners: PartnerLite[]; plans:
       </select>
       <input className={`${inp} w-48`} placeholder="Note" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} />
       <button onClick={save} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">Save</button>
+      <button onClick={() => setOpen(false)} className="text-sm text-gray-500">Cancel</button>
+    </div>
+  )
+}
+
+// ── White Label / Reseller price books (separate from commission plans) ──
+interface PBItem { id: string; plan_name: string; plan_code: string; wholesale_price_cents: number; suggested_retail_price_cents: number; setup_fee_cents: number | null; sort_order: number; is_active: boolean }
+interface PriceBookRow { id: string; name: string; billing_mode: string; description: string | null; is_active: boolean; partner_count: number; items: PBItem[] }
+const dollars = (c: number | null) => c == null ? '—' : `$${(c / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+
+function PriceBooksSection({ canWrite }: { canWrite: boolean }) {
+  const [books, setBooks] = useState<PriceBookRow[]>([])
+  const load = useCallback(() => { fetch('/api/admin/price-books').then((r) => r.json()).then((j) => setBooks(j.books || [])).catch(() => {}) }, [])
+  useEffect(() => { load() }, [load])
+  async function patchBook(id: string, patch: Record<string, unknown>) { await fetch('/api/admin/price-books', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'book', id, ...patch }) }); load() }
+  async function del(kind: 'book' | 'item', id: string) { await fetch(`/api/admin/price-books?kind=${kind}&id=${id}`, { method: 'DELETE' }); load() }
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold text-gray-900">White Label / Reseller price books</h2>
+          <p className="text-xs text-gray-400">Wholesale &amp; suggested retail pricing for white-label/reseller partners — separate from commission plans.</p>
+        </div>
+        {canWrite && <NewPriceBook onSaved={load} />}
+      </div>
+      <div className="space-y-3">
+        {books.map((b) => (
+          <div key={b.id} className="rounded-lg border border-gray-200 bg-white p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="font-medium text-gray-900">{b.name}</span>
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-600">{b.billing_mode.replace('_', ' ')}</span>
+              <span className="text-xs text-gray-400">{b.partner_count} partner{b.partner_count === 1 ? '' : 's'}</span>
+              <span className={`text-xs ${b.is_active ? 'text-green-600' : 'text-gray-400'}`}>{b.is_active ? '● active' : '○ inactive'}</span>
+              {canWrite && <div className="ml-auto flex gap-1">
+                <button onClick={() => patchBook(b.id, { is_active: !b.is_active })} className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">{b.is_active ? 'Deactivate' : 'Activate'}</button>
+                {b.partner_count === 0 && <button onClick={() => del('book', b.id)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">Delete</button>}
+              </div>}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-gray-200 text-left text-xs uppercase text-gray-500">
+                  <th className="py-1.5 pr-3">Plan</th><th className="py-1.5 pr-3">Code</th><th className="py-1.5 pr-3 text-right">Wholesale</th><th className="py-1.5 pr-3 text-right">Retail</th><th className="py-1.5 pr-3 text-right">Setup</th>{canWrite && <th className="py-1.5"></th>}
+                </tr></thead>
+                <tbody>
+                  {b.items.map((it) => (
+                    <tr key={it.id} className="border-b border-gray-100">
+                      <td className="py-1.5 pr-3 font-medium text-gray-900">{it.plan_name}</td>
+                      <td className="py-1.5 pr-3 text-gray-500">{it.plan_code}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-700">{dollars(it.wholesale_price_cents)}/mo</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-500">{dollars(it.suggested_retail_price_cents)}/mo</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-400">{dollars(it.setup_fee_cents)}</td>
+                      {canWrite && <td className="py-1.5 text-right"><button onClick={() => del('item', it.id)} className="text-gray-400 hover:text-red-600">✕</button></td>}
+                    </tr>
+                  ))}
+                  {b.items.length === 0 && <tr><td colSpan={canWrite ? 6 : 5} className="py-3 text-center text-gray-400">No plans yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            {canWrite && <div className="mt-2"><NewPriceBookItem bookId={b.id} onSaved={load} /></div>}
+          </div>
+        ))}
+        {books.length === 0 && <div className="rounded-lg border border-dashed border-gray-200 bg-white p-6 text-center text-sm text-gray-400">No price books yet. Create one for white-label or reseller partners.</div>}
+      </div>
+    </section>
+  )
+}
+
+function NewPriceBook({ onSaved }: { onSaved: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ name: '', billing_mode: 'white_label', description: '' })
+  async function save() {
+    if (!f.name.trim()) return toast.error('Name required')
+    const res = await fetch('/api/admin/price-books', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'book', ...f }) })
+    if (!res.ok) { const j = await res.json(); return toast.error(j.error || 'Failed') }
+    toast.success('Price book created'); setF({ name: '', billing_mode: 'white_label', description: '' }); setOpen(false); onSaved()
+  }
+  if (!open) return <button onClick={() => setOpen(true)} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">+ New price book</button>
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input className={inp} placeholder="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+      <select className={inp} value={f.billing_mode} onChange={(e) => setF({ ...f, billing_mode: e.target.value })}><option value="white_label">White Label</option><option value="reseller">Reseller</option></select>
+      <input className={`${inp} w-56`} placeholder="Description" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
+      <button onClick={save} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">Save</button>
+      <button onClick={() => setOpen(false)} className="text-sm text-gray-500">Cancel</button>
+    </div>
+  )
+}
+
+function NewPriceBookItem({ bookId, onSaved }: { bookId: string; onSaved: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState({ plan_name: '', plan_code: '', wholesale: '', retail: '', setup: '' })
+  async function save() {
+    if (!f.plan_name.trim() || !f.plan_code.trim()) return toast.error('Plan name + code required')
+    const res = await fetch('/api/admin/price-books', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      kind: 'item', price_book_id: bookId, plan_name: f.plan_name, plan_code: f.plan_code,
+      wholesale_price_cents: f.wholesale ? Math.round(Number(f.wholesale) * 100) : 0,
+      suggested_retail_price_cents: f.retail ? Math.round(Number(f.retail) * 100) : 0,
+      setup_fee_cents: f.setup ? Math.round(Number(f.setup) * 100) : null,
+    }) })
+    if (!res.ok) { const j = await res.json(); return toast.error(j.error || 'Failed') }
+    toast.success('Plan added'); setF({ plan_name: '', plan_code: '', wholesale: '', retail: '', setup: '' }); setOpen(false); onSaved()
+  }
+  if (!open) return <button onClick={() => setOpen(true)} className="text-xs font-medium text-gray-600 hover:text-gray-900">+ Add plan</button>
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input className={inp} placeholder="Plan name" value={f.plan_name} onChange={(e) => setF({ ...f, plan_name: e.target.value })} />
+      <input className={`${inp} w-24`} placeholder="code" value={f.plan_code} onChange={(e) => setF({ ...f, plan_code: e.target.value })} />
+      <input className={`${inp} w-24`} placeholder="Wholesale $" value={f.wholesale} onChange={(e) => setF({ ...f, wholesale: e.target.value })} />
+      <input className={`${inp} w-24`} placeholder="Retail $" value={f.retail} onChange={(e) => setF({ ...f, retail: e.target.value })} />
+      <input className={`${inp} w-20`} placeholder="Setup $" value={f.setup} onChange={(e) => setF({ ...f, setup: e.target.value })} />
+      <button onClick={save} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">Add</button>
       <button onClick={() => setOpen(false)} className="text-sm text-gray-500">Cancel</button>
     </div>
   )

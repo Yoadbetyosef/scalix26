@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { StatCard, Panel, EmptyRow, money } from '@/components/partner/ui'
 import { PARTNER_TYPES } from '@/lib/partner/roles'
+import { effectiveItemPricing, type PriceBook, type PartnerClient, type WholesaleSummary } from '@/lib/partner/wholesale'
 import {
   Download, CheckCircle2, CreditCard, ArrowRight, Link2, MonitorPlay, ShieldCheck, Wallet, TrendingUp,
   Info, X, Mail, Rocket, Clock, BadgeCheck, Percent, Repeat, Layers, CalendarClock, BookOpen, Building2, Tag,
@@ -253,67 +254,75 @@ function PayoutTimeline({ s }: { s: Summary }) {
   )
 }
 
-// Wholesale (white_label / reseller) partners are NOT commission earners — never show the
-// commission ledger/engine here. Show their deal + wholesale pricing / agreement instead.
-function WholesaleCommissions({ d, payouts }: { d: Deal; payouts: Payout[] }) {
+// Wholesale (white_label / reseller) partners are NOT commission earners. This is "Partner Economics":
+// price book + real client revenue/margin from partner_clients — never the commission ledger.
+interface ClientsResp { clients: PartnerClient[]; summary: WholesaleSummary; priceBook: PriceBook | null; overrides: { discount: number | null; markup: number | null } }
+function WholesaleCommissions({ d }: { d: Deal; payouts: Payout[] }) {
   const isWL = d.billing_mode === 'white_label'
   const label = isWL ? 'White Label' : 'Reseller'
-  const discount = d.wholesale_discount_pct
-  const retail = d.reference_retail_cents
-  const cost = discount != null ? Math.round(retail * (1 - discount / 100)) : null
-  const margin = discount != null && cost != null ? retail - cost : null
+  const [w, setW] = useState<ClientsResp | null>(null)
+  useEffect(() => { fetch('/api/partner/clients').then((r) => r.json()).then(setW).catch(() => {}) }, [])
+  const s = w?.summary
+  const book = w?.priceBook
+
   return (
     <div className="space-y-6">
       <Panel title={<span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-accent-strong" /> My Partner Deal</span>}>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           <DealItem icon={BadgeCheck} label="Partner type" value={partnerTypeLabel(d.partner_type)} />
           <DealItem icon={Building2} label="Billing model" value={d.billing_mode ? (BILLING_LABEL[d.billing_mode] || cap(d.billing_mode)) : label} accent />
-          <DealItem icon={Repeat} label="Plan" value={d.model ? (MODEL_LABEL[d.model] || d.model) : (d.plan_name || '—')} />
-          <DealItem icon={Layers} label="Active client accounts" value={String(d.active_customers)} />
+          <DealItem icon={Tag} label="Price book" value={book?.name || 'Not assigned'} />
+          <DealItem icon={Layers} label="Active client accounts" value={s ? String(s.active_clients) : '—'} />
           <DealItem icon={Info} label="Deal source" value={SOURCE_LABEL[d.deal_source]} />
         </div>
         <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-subtle" /> You resell Scalix26 at your own retail price and keep the margin — commissions don&apos;t apply to wholesale partners.</p>
       </Panel>
 
-      <Panel title={<span className="inline-flex items-center gap-2"><Tag className="h-4 w-4 text-accent-strong" /> {isWL ? 'Wholesale & partner pricing' : 'Reseller pricing'}</span>}>
-        {discount != null ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <DealItem icon={Tag} label="Reference retail" value={`${money(retail)}/mo`} />
-              <DealItem icon={Layers} label={isWL ? 'Your wholesale cost' : 'Your cost'} value={cost != null ? `${money(cost)}/mo` : '—'} accent />
-              <DealItem icon={Percent} label={isWL ? 'Estimated margin' : 'Estimated profit'} value={margin != null ? `${money(margin)}/mo` : '—'} />
-              <DealItem icon={Building2} label="Est. monthly margin" value={margin != null ? `${money(margin * d.active_customers)}/mo` : '—'} />
-            </div>
-            {(d.platform_fee_cents != null || d.setup_fee_cents != null) && (
-              <div className="flex flex-wrap gap-4 rounded-xl border border-hairline bg-canvas p-3 text-sm text-subtle">
-                {d.platform_fee_cents != null && <span>Platform fee: <span className="font-medium text-ink">{money(d.platform_fee_cents)}/mo</span></span>}
-                {d.setup_fee_cents != null && <span>Setup fee: <span className="font-medium text-ink">{money(d.setup_fee_cents)}</span></span>}
-              </div>
-            )}
-            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><Info className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Margins are estimates at the reference retail price — your actual retail and invoicing are set by your Scalix26 agreement.</p>
-          </div>
-        ) : (
+      {/* Client economics — real data from your client accounts */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label={isWL ? 'Client Revenue' : 'Resale Revenue'} value={s && s.has_pricing ? money(s.monthly_retail_cents) : '—'} hint="Monthly, from your clients" />
+        <StatCard label="Wholesale Cost" value={s && s.has_pricing ? money(s.monthly_wholesale_cents) : '—'} hint="Owed to Scalix26" />
+        <StatCard label={isWL ? 'Gross Profit' : 'Profit'} value={s && s.has_pricing ? money(s.gross_profit_cents) : '—'} accent hint="Revenue − wholesale" />
+        <StatCard label="Margin" value={s && s.margin_pct != null ? `${s.margin_pct}%` : '—'} hint="Gross margin" />
+      </div>
+
+      <Panel title={<span className="inline-flex items-center gap-2"><Tag className="h-4 w-4 text-accent-strong" /> Price Book{book ? ` · ${book.name}` : ''}</span>}>
+        {!book || book.items.length === 0 ? (
           <div className="rounded-xl border border-dashed border-hairline-strong bg-canvas p-6 text-center">
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/10 text-accent-strong"><ShieldCheck className="h-5 w-5" /></div>
             <h3 className="font-semibold text-ink">{label} agreement</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-subtle">Your {isWL ? 'white-label' : 'reseller'} pricing is managed by your Scalix26 agreement. Contact us for wholesale pricing and billing details.</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-subtle">No price book is assigned yet. Your {isWL ? 'white-label' : 'reseller'} pricing is managed by your Scalix26 agreement.</p>
             <a href={`mailto:${PAYOUT_SUPPORT_EMAIL}`} className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-medium text-white"><Mail className="h-4 w-4" /> {PAYOUT_SUPPORT_EMAIL}</a>
           </div>
+        ) : (
+          <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
+            <thead><tr className="border-b border-hairline text-left text-xs uppercase text-muted">
+              <th className="py-2 pr-3">Plan</th><th className="py-2 pr-3 text-right">Wholesale</th><th className="py-2 pr-3 text-right">Suggested retail</th><th className="py-2 pr-3 text-right">Est. profit</th><th className="py-2 text-right">Margin</th>
+            </tr></thead>
+            <tbody>{book.items.map((it) => {
+              const p = effectiveItemPricing(it, { customWholesaleDiscountPct: w?.overrides.discount ?? null, retailMarkupPct: w?.overrides.markup ?? null })
+              return (
+                <tr key={it.id} className="border-b border-hairline/60">
+                  <td className="py-2 pr-3 font-medium text-ink">{it.plan_name}</td>
+                  <td className="py-2 pr-3 text-right text-ink">{money(p.wholesale_cents)}/mo</td>
+                  <td className="py-2 pr-3 text-right text-subtle">{money(p.retail_cents)}/mo</td>
+                  <td className="py-2 pr-3 text-right font-medium text-green-700">{money(p.margin_cents)}/mo</td>
+                  <td className="py-2 text-right font-medium text-ink">{p.margin_pct}%</td>
+                </tr>
+              )
+            })}</tbody>
+          </table></div>
         )}
       </Panel>
 
-      {payouts.length > 0 && (
-        <Panel title="Invoices & payouts">
-          <div className="divide-y divide-hairline">
-            {payouts.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 py-2.5">
-                <div className="min-w-0 flex-1"><div className="text-sm font-medium text-ink">{money(p.amount_cents, p.currency)}</div><div className="truncate text-xs text-muted">{p.paid_at ? `Paid ${fmtDate(p.paid_at)}` : fmtDate(p.created_at)}</div></div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[p.status] || ''}`}>{p.status}</span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      )}
+      <Panel title="Billing summary">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <DealItem icon={Percent} label={isWL ? 'Amount owed to Scalix26' : 'Balance due'} value={s && s.has_pricing ? `${money(s.monthly_wholesale_cents)}/mo` : '—'} accent />
+          <DealItem icon={Wallet} label={isWL ? 'Client revenue' : 'Resale revenue'} value={s && s.has_pricing ? `${money(s.monthly_retail_cents)}/mo` : '—'} />
+          <DealItem icon={Layers} label="Billing period" value={new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} />
+        </div>
+        <p className="mt-3 flex items-start gap-1.5 text-[11px] leading-relaxed text-muted"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Your {isWL ? 'white-label' : 'reseller'} billing is managed by your Scalix26 agreement. Manage clients &amp; pricing from your dashboard. Questions? <a href={`mailto:${PAYOUT_SUPPORT_EMAIL}`} className="font-medium text-accent-strong hover:underline">{PAYOUT_SUPPORT_EMAIL}</a></p>
+      </Panel>
     </div>
   )
 }

@@ -37,7 +37,7 @@ export default async function PartnerDashboard() {
   // dashboard instead of the commission one — never "earn X% commission".
   const econ = await resolvePartnerEconomics(ctx.partnerId)
   if (econ.billingMode === 'white_label' || econ.billingMode === 'reseller') {
-    return <WholesalePartnerDashboard mode={econ.billingMode} companyName={ctx.companyName} econ={econ} activeCustomers={stats.active_customers} streak={stats.streak_days} />
+    return <WholesalePartnerDashboard mode={econ.billingMode} companyName={ctx.companyName} streak={stats.streak_days} discount={econ.customWholesaleDiscountPct} markup={econ.retailMarkupPct} />
   }
 
   const [{ count: totalPartners }, coach] = await Promise.all([
