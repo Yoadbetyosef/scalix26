@@ -8,22 +8,33 @@ import { resolvePct } from '@/lib/partner/commission'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Db = any
-interface PlanRow { recurring_pct: number | null; model: string; tiers: { min_customers: number | null; min_volume_cents: number | null; pct: number }[] | null }
+type DealSource = 'custom_deal' | 'partner_default' | 'global_default'
+interface PlanRow {
+  name: string | null; recurring_pct: number | null; model: string; duration_months: number | null
+  tiers: { min_customers: number | null; min_volume_cents: number | null; pct: number }[] | null
+  clawback_window_days: number | null; payout_schedule: string | null; currency: string | null
+}
+const PLAN_COLS = 'name, model, recurring_pct, duration_months, tiers, clawback_window_days, payout_schedule, currency'
 
-// Resolve the partner's effective commission plan (deal → partner default → global default).
-async function resolveEffectivePlan(db: Db, partnerId: string): Promise<PlanRow | null> {
+// Resolve the partner's effective commission plan (Sprint 2 order: partner_deal → partner default →
+// global default) and report which source won — no new logic, mirrors getEffectivePlan.
+async function resolveEffectivePlan(db: Db, partnerId: string): Promise<{ plan: PlanRow | null; source: DealSource }> {
   const now = new Date().toISOString()
   const { data: deal } = await db.from('partner_deals').select('commission_plan_id')
     .eq('partner_id', partnerId).eq('active', true).not('commission_plan_id', 'is', null)
     .or(`starts_at.is.null,starts_at.lte.${now}`).or(`ends_at.is.null,ends_at.gte.${now}`)
     .order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const { data: partner } = await db.from('partners').select('default_commission_plan_id').eq('id', partnerId).maybeSingle()
-  for (const id of [deal?.commission_plan_id, partner?.default_commission_plan_id].filter(Boolean)) {
-    const { data } = await db.from('commission_plans').select('recurring_pct, model, tiers').eq('id', id).maybeSingle()
-    if (data) return data as PlanRow
+  if (deal?.commission_plan_id) {
+    const { data } = await db.from('commission_plans').select(PLAN_COLS).eq('id', deal.commission_plan_id).maybeSingle()
+    if (data) return { plan: data as PlanRow, source: 'custom_deal' }
   }
-  const { data } = await db.from('commission_plans').select('recurring_pct, model, tiers').is('partner_id', null).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  return (data as PlanRow) || null
+  const { data: partner } = await db.from('partners').select('default_commission_plan_id').eq('id', partnerId).maybeSingle()
+  if (partner?.default_commission_plan_id) {
+    const { data } = await db.from('commission_plans').select(PLAN_COLS).eq('id', partner.default_commission_plan_id).maybeSingle()
+    if (data) return { plan: data as PlanRow, source: 'partner_default' }
+  }
+  const { data } = await db.from('commission_plans').select(PLAN_COLS).is('partner_id', null).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return { plan: (data as PlanRow) || null, source: 'global_default' }
 }
 
 export async function GET(req: NextRequest) {
@@ -75,27 +86,34 @@ export async function GET(req: NextRequest) {
     mrr_created_cents: stats.mrr_generated_cents,
   }
 
-  // ── Forecast (deterministic, real data only) ──
-  const plan = await resolveEffectivePlan(db, ctx.partnerId)
+  // ── Resolve the deal once (Sprint 2 Economics Engine) and derive rate/tier for both the deal
+  //    card and the forecast. Real data only — no hardcoded rates. ──
+  const { plan, source: dealSource } = await resolveEffectivePlan(db, ctx.partnerId)
+  const { data: partnerRow } = await db.from('partners').select('partner_type, billing_mode').eq('id', ctx.partnerId).maybeSingle()
+  const active = stats.active_customers
+
   let currentRatePct: number | null = null
   let nextTier: { at_customers: number; pct: number } | null = null
+  let tier: { index: number; total: number; pct: number | null } | null = null
   if (plan) {
     currentRatePct = plan.model === 'tiered' && plan.tiers?.length
-      ? await resolvePct(db as Parameters<typeof resolvePct>[0], plan as Parameters<typeof resolvePct>[1], ctx.partnerId)
+      ? await resolvePct(db as Parameters<typeof resolvePct>[0], plan as unknown as Parameters<typeof resolvePct>[1], ctx.partnerId)
       : (plan.recurring_pct ?? null)
     if (plan.tiers?.length) {
-      const upcoming = plan.tiers
-        .filter((t) => t.min_customers != null && t.min_customers > stats.active_customers && t.pct > (currentRatePct ?? 0))
-        .sort((a, b) => (a.min_customers! - b.min_customers!))[0]
+      const sorted = [...plan.tiers].sort((a, b) => (a.min_customers ?? 0) - (b.min_customers ?? 0))
+      const metCount = sorted.filter((t) => t.min_customers == null || t.min_customers <= active).length
+      tier = { index: Math.max(1, metCount), total: sorted.length, pct: currentRatePct }
+      const upcoming = sorted.filter((t) => t.min_customers != null && t.min_customers > active && t.pct > (currentRatePct ?? 0))[0]
       if (upcoming) nextTier = { at_customers: upcoming.min_customers!, pct: upcoming.pct }
     }
   }
-  const avgPerCustomer = stats.active_customers > 0 ? stats.monthly_commission_cents / stats.active_customers : null
-  const needed = (targetCents: number) => avgPerCustomer && avgPerCustomer > 0 ? Math.max(0, Math.ceil(targetCents / avgPerCustomer) - stats.active_customers) : null
+
+  const avgPerCustomer = active > 0 ? stats.monthly_commission_cents / active : null
+  const needed = (targetCents: number) => avgPerCustomer && avgPerCustomer > 0 ? Math.max(0, Math.ceil(targetCents / avgPerCustomer) - active) : null
   const forecast = {
     monthly_recurring_cents: stats.monthly_commission_cents,
     projected_annual_cents: stats.projected_annual_cents,
-    active_customers: stats.active_customers,
+    active_customers: active,
     avg_per_customer_cents: avgPerCustomer != null ? Math.round(avgPerCustomer) : null,
     customers_to_1000: needed(100000),
     customers_to_5000: needed(500000),
@@ -103,9 +121,29 @@ export async function GET(req: NextRequest) {
     next_tier: nextTier,
   }
 
+  // "My Partner Deal" — resolved economics, no hardcoded values.
+  const deal = {
+    partner_type: partnerRow?.partner_type ?? null,
+    billing_mode: partnerRow?.billing_mode ?? null,
+    plan_name: plan?.name ?? null,
+    model: plan?.model ?? null,
+    is_recurring: plan ? ['recurring_pct', 'tiered', 'hybrid'].includes(plan.model) : false,
+    duration_months: plan?.duration_months ?? null,          // null = lifetime (if recurring)
+    current_rate_pct: currentRatePct,
+    base_rate_pct: plan?.recurring_pct ?? null,
+    tier,
+    next_tier: nextTier ? { ...nextTier, customers_remaining: Math.max(0, nextTier.at_customers - active) } : null,
+    active_customers: active,
+    approval_days: Number(process.env.PARTNER_COMMISSION_HOLD_DAYS) || 30,
+    clawback_window_days: plan?.clawback_window_days ?? null,
+    payout_schedule: plan?.payout_schedule ?? null,
+    deal_source: dealSource,
+    currency: plan?.currency ?? 'usd',
+  }
+
   const { data: payouts } = await db.from('payouts')
     .select('id, amount_cents, currency, status, period_start, period_end, statement_url, paid_at, created_at')
     .eq('partner_id', ctx.partnerId).order('created_at', { ascending: false }).limit(50)
 
-  return NextResponse.json({ summary, forecast, entries: enriched, payouts: payouts || [] })
+  return NextResponse.json({ summary, forecast, deal, entries: enriched, payouts: payouts || [] })
 }

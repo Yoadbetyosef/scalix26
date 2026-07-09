@@ -3,21 +3,21 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { StatCard, Panel, EmptyRow, money } from '@/components/partner/ui'
+import { PARTNER_TYPES } from '@/lib/partner/roles'
 import {
   Download, CheckCircle2, CreditCard, ArrowRight, Link2, MonitorPlay, ShieldCheck, Wallet, TrendingUp,
-  Info, X, Mail, Rocket, Clock,
+  Info, X, Mail, Rocket, Clock, BadgeCheck, Percent, Repeat, Layers, CalendarClock, BookOpen,
 } from 'lucide-react'
 
 const PAYOUT_SUPPORT_EMAIL = 'partners@scalix26.com'
 
 interface ConnectStatus { configured: boolean; connected: boolean; payoutsEnabled: boolean; onboardingComplete: boolean }
+const partnerTypeLabel = (t: string | null) => (t ? PARTNER_TYPES.find((p) => p.key === t)?.label || 'Partner' : 'Partner')
 
 // ── Payout banner ─────────────────────────────────────────────────────────
-function PayoutBanner() {
-  const [s, setS] = useState<ConnectStatus | null>(null)
+function PayoutBanner({ s }: { s: ConnectStatus | null }) {
   const [busy, setBusy] = useState(false)
   const [showManual, setShowManual] = useState(false)
-  useEffect(() => { fetch('/api/partner/connect').then((r) => r.json()).then(setS).catch(() => setS({ configured: false, connected: false, payoutsEnabled: false, onboardingComplete: false })) }, [])
 
   async function setup() {
     setBusy(true)
@@ -97,8 +97,91 @@ function PayoutBanner() {
 interface Entry { id: string; entry_type: string; amount_cents: number; currency: string; status: string; source: string; customer_name: string | null; plan_name: string | null; period_start: string | null; period_end: string | null; created_at: string; payout_date: string | null }
 interface Payout { id: string; amount_cents: number; currency: string; status: string; period_start: string | null; period_end: string | null; statement_url: string | null; paid_at: string | null; created_at: string }
 interface Forecast { monthly_recurring_cents: number; projected_annual_cents: number; active_customers: number; avg_per_customer_cents: number | null; customers_to_1000: number | null; customers_to_5000: number | null; current_rate_pct: number | null; next_tier: { at_customers: number; pct: number } | null }
+interface Deal {
+  partner_type: string | null; billing_mode: string | null; plan_name: string | null; model: string | null; is_recurring: boolean
+  duration_months: number | null; current_rate_pct: number | null; base_rate_pct: number | null
+  tier: { index: number; total: number; pct: number | null } | null
+  next_tier: { at_customers: number; pct: number; customers_remaining: number } | null
+  active_customers: number; approval_days: number; clawback_window_days: number | null; payout_schedule: string | null
+  deal_source: 'custom_deal' | 'partner_default' | 'global_default'; currency: string
+}
 interface Summary { pending_cents: number; approved_cents: number; paid_cents: number; lifetime_cents: number; estimated_next_payout_cents: number; monthly_recurring_income_cents: number; projected_annual_cents: number; portfolio_value_cents: number; expansion_cents: number; churn_cents: number; active_customers: number; average_commission_cents: number }
-interface Data { summary: Summary; forecast: Forecast; entries: Entry[]; payouts: Payout[] }
+interface Data { summary: Summary; forecast: Forecast; deal: Deal; entries: Entry[]; payouts: Payout[] }
+
+const BILLING_LABEL: Record<string, string> = { revenue_share: 'Revenue share', reseller: 'Reseller', wholesale: 'Wholesale', white_label: 'White label' }
+const MODEL_LABEL: Record<string, string> = { recurring_pct: 'Revenue share — recurring', tiered: 'Revenue share — tiered', one_time: 'One-time bounty', hybrid: 'Hybrid (bounty + recurring)', wholesale: 'Wholesale', white_label: 'White label', custom: 'Custom deal' }
+const SOURCE_LABEL: Record<string, string> = { custom_deal: 'Custom partner deal', partner_default: 'Partner plan', global_default: 'Global default' }
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+// ── My Partner Deal ──────────────────────────────────────────────────────
+function DealItem({ icon: Icon, label, value, accent }: { icon: typeof Percent; label: string; value: React.ReactNode; accent?: boolean }) {
+  return (
+    <div className={`rounded-xl border p-3 ${accent ? 'border-accent/25 bg-accent/[0.05]' : 'border-hairline bg-canvas'}`}>
+      <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.04em] text-muted"><Icon className="h-3 w-3" />{label}</div>
+      <div className={`mt-1 text-sm font-semibold ${accent ? 'text-accent-strong' : 'text-ink'}`}>{value}</div>
+    </div>
+  )
+}
+
+function MyPartnerDeal({ d, connect }: { d: Deal; connect: ConnectStatus | null }) {
+  const [showProgram, setShowProgram] = useState(false)
+  const rateLabel = d.current_rate_pct != null ? `${d.current_rate_pct}%${d.is_recurring ? ' recurring' : ''}` : (d.model === 'custom' ? 'Custom deal' : '—')
+  const recurringLabel = d.is_recurring ? (d.duration_months == null ? 'Lifetime while active' : `${d.duration_months} months`) : 'One-time'
+  const tierLabel = d.tier ? `Tier ${d.tier.index} of ${d.tier.total}${d.tier.pct != null ? ` · ${d.tier.pct}%` : ''}` : (d.model ? 'Flat rate' : '—')
+  const nextTierLabel = d.next_tier ? `Close ${d.next_tier.customers_remaining} more customer${d.next_tier.customers_remaining === 1 ? '' : 's'} to unlock ${d.next_tier.pct}%` : (d.tier ? 'You’re on the top tier' : '—')
+  const payoutMode = connect?.payoutsEnabled ? 'Automatic (Stripe Connect)' : 'Manual'
+  const scheduleLabel = d.payout_schedule ? `Paid ${d.payout_schedule} after approval` : 'Paid after approval'
+  const approvalLabel = `Approved after ${d.approval_days} days unless refunded or charged back`
+  const refundLabel = `Refunds & chargebacks within ${d.clawback_window_days ?? 60} days automatically adjust your commissions`
+
+  return (
+    <Panel
+      title={<span className="inline-flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-accent-strong" /> My Partner Deal</span>}
+      action={<button onClick={() => setShowProgram(true)} className="inline-flex items-center gap-1 rounded-lg border border-hairline-strong px-3 py-1.5 text-xs font-medium text-subtle hover:text-ink"><BookOpen className="h-3.5 w-3.5" /> View program details</button>}
+    >
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <DealItem icon={BadgeCheck} label="Partner type" value={partnerTypeLabel(d.partner_type)} />
+        <DealItem icon={Percent} label="Commission rate" value={rateLabel} accent />
+        <DealItem icon={Wallet} label="Billing mode" value={d.billing_mode ? (BILLING_LABEL[d.billing_mode] || cap(d.billing_mode)) : 'Revenue share'} />
+        <DealItem icon={Repeat} label="Commission plan" value={<span>{d.model ? MODEL_LABEL[d.model] || d.model : (d.plan_name || '—')}<span className="block text-[11px] font-normal text-muted">{recurringLabel}</span></span>} />
+        <DealItem icon={Layers} label="Current tier" value={tierLabel} />
+        <DealItem icon={TrendingUp} label="Next tier unlock" value={<span className="text-xs font-medium leading-snug">{nextTierLabel}</span>} />
+        <DealItem icon={CalendarClock} label="Approval window" value={<span className="text-xs font-medium leading-snug">{approvalLabel}</span>} />
+        <DealItem icon={CreditCard} label="Payout mode" value={payoutMode} />
+        <DealItem icon={Clock} label="Payout schedule" value={<span className="text-xs font-medium leading-snug">{scheduleLabel}</span>} />
+        <DealItem icon={ShieldCheck} label="Refunds & chargebacks" value={<span className="text-xs font-medium leading-snug">{refundLabel}</span>} />
+        <DealItem icon={Info} label="Deal source" value={SOURCE_LABEL[d.deal_source]} />
+      </div>
+
+      {showProgram && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={() => setShowProgram(false)}>
+          <div className="flex max-h-[88vh] w-full max-w-lg flex-col rounded-t-2xl bg-white sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-hairline px-5 py-3.5">
+              <div className="font-semibold text-ink">How the partner program works</div>
+              <button onClick={() => setShowProgram(false)} className="rounded-full bg-sunken p-1.5 text-subtle"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-4 overflow-y-auto p-5 text-sm leading-relaxed">
+              <Prog icon={Percent} title="How commissions are calculated">You earn <span className="font-medium text-ink">{rateLabel}</span> of each referred customer’s subscription. Every entry is computed from the real Stripe billing event for that customer — never estimated.</Prog>
+              <Prog icon={CalendarClock} title="When they become approved">New commissions start as <span className="font-medium text-ink">Pending</span>, then auto-approve after <span className="font-medium text-ink">{d.approval_days} days</span> — the window that lets any refund or chargeback settle first. {refundLabel}.</Prog>
+              <Prog icon={CreditCard} title="How payouts work">Payout mode is <span className="font-medium text-ink">{payoutMode}</span>. {scheduleLabel}. {payoutMode === 'Manual' ? 'Until automatic payouts are enabled, Scalix26 processes them manually — your ledger is always accurate.' : 'Approved commissions transfer to your connected account automatically.'}</Prog>
+              <Prog icon={Layers} title="How to unlock higher tiers">{d.tier ? <>You’re on <span className="font-medium text-ink">tier {d.tier.index} of {d.tier.total}</span>. {d.next_tier ? `Reach ${d.next_tier.at_customers} paying customers to unlock ${d.next_tier.pct}%.` : 'You’ve reached the top tier — nice work.'}</> : 'Your plan uses a single flat rate — no tiers to unlock.'}</Prog>
+              <Prog icon={Repeat} title="What recurring commissions mean">{d.is_recurring ? <>You keep earning <span className="font-medium text-ink">every month a customer stays active</span> ({d.duration_months == null ? 'for their lifetime' : `for up to ${d.duration_months} months`}) — not just once.</> : 'This plan pays a one-time bounty per customer.'}</Prog>
+            </div>
+            <div className="border-t border-hairline p-4"><button onClick={() => setShowProgram(false)} className="h-10 w-full rounded-lg bg-ink text-sm font-medium text-white">Got it</button></div>
+          </div>
+        </div>
+      )}
+    </Panel>
+  )
+}
+function Prog({ icon: Icon, title, children }: { icon: typeof Percent; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent-strong"><Icon className="h-3.5 w-3.5" /></span>
+      <div><div className="font-medium text-ink">{title}</div><p className="mt-0.5 text-subtle">{children}</p></div>
+    </div>
+  )
+}
 
 const STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700', approved: 'bg-blue-50 text-blue-700', paid: 'bg-green-50 text-green-700',
@@ -171,8 +254,12 @@ function PayoutTimeline({ s }: { s: Summary }) {
 
 export function CommissionsView() {
   const [data, setData] = useState<Data | null>(null)
+  const [connect, setConnect] = useState<ConnectStatus | null>(null)
   const [err, setErr] = useState(false)
-  useEffect(() => { fetch('/api/partner/commissions').then((r) => r.json()).then(setData).catch(() => setErr(true)) }, [])
+  useEffect(() => {
+    fetch('/api/partner/commissions').then((r) => r.json()).then(setData).catch(() => setErr(true))
+    fetch('/api/partner/connect').then((r) => r.json()).then(setConnect).catch(() => setConnect({ configured: false, connected: false, payoutsEnabled: false, onboardingComplete: false }))
+  }, [])
 
   function exportCsv() {
     if (!data) return
@@ -188,7 +275,9 @@ export function CommissionsView() {
 
   return (
     <div className="space-y-6">
-      <PayoutBanner />
+      <PayoutBanner s={connect} />
+
+      <MyPartnerDeal d={data.deal} connect={connect} />
 
       {/* Primary metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -220,7 +309,7 @@ export function CommissionsView() {
           <div className="rounded-xl border border-dashed border-hairline-strong bg-canvas p-8 text-center">
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/10 text-accent-strong"><Wallet className="h-5 w-5" /></div>
             <h3 className="font-semibold text-ink">No commissions yet</h3>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-subtle">Your first commission appears here after a referred customer becomes paid. Start by sharing a referral link or sending a live demo.</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-subtle">{data.deal.current_rate_pct != null ? <>You’re currently on the <span className="font-medium text-ink">{data.deal.current_rate_pct}%{data.deal.is_recurring ? ' recurring' : ''}</span> partner plan. </> : ''}Your first commission appears here after a referred customer becomes paid. Start by sharing a referral link or sending a live demo.</p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <a href="/partner/referrals" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-medium text-white"><Link2 className="h-4 w-4" /> Create referral link</a>
               <a href="/partner/demos" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-subtle hover:text-ink"><MonitorPlay className="h-4 w-4" /> Generate demo</a>
