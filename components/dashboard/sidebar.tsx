@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   X,
   Handshake,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -56,6 +57,7 @@ export function Sidebar() {
   const [plan, setPlan] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   // Default to ALL so nothing flickers/hides before the tenant's modules load.
   const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(ALL_MODULES)
 
@@ -89,6 +91,9 @@ export function Sidebar() {
 
   // Resolve the host-based brand (myLocksmith / Scalix26 / default) once on mount.
   useEffect(() => { setBrand(detectBrand()) }, [])
+
+  // Admin-only: show the Admin link if this user resolves to a platform admin (server-verified).
+  useEffect(() => { fetch('/api/me/admin').then((r) => r.json()).then((j) => setIsAdmin(!!j.isAdmin)).catch(() => {}) }, [])
 
   // Close drawer on route change
   useEffect(() => { setMoreOpen(false) }, [pathname])
@@ -159,6 +164,15 @@ export function Sidebar() {
             <Handshake className="w-5 h-5 flex-shrink-0" />
             <span className="hidden xl:block">Partner Program</span>
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-subtle hover:bg-sunken/70 hover:text-ink transition-colors"
+            >
+              <Shield className="w-5 h-5 flex-shrink-0" />
+              <span className="hidden xl:block">Admin</span>
+            </Link>
+          )}
         </div>
 
         {/* Sign out */}
@@ -253,6 +267,15 @@ export function Sidebar() {
                 <Handshake className="w-5 h-5 flex-shrink-0" />
                 Partner Program
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-subtle hover:bg-sunken w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"
+                >
+                  <Shield className="w-5 h-5 flex-shrink-0" />
+                  Admin
+                </Link>
+              )}
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98] active:bg-red-100"
