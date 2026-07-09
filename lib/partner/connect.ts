@@ -10,6 +10,14 @@ export interface ExpressStatus {
   accountId?: string
   payoutsEnabled: boolean
   onboardingComplete: boolean
+  configured: boolean
+}
+
+// Automatic payouts require BOTH a Stripe key AND Stripe Connect enabled on the platform account.
+// Connect is opt-in via env so the UI degrades to a clean "manual payout" state instead of throwing
+// raw Stripe errors when Connect isn't enabled yet.
+export function isConnectConfigured(): boolean {
+  return !!stripe && process.env.STRIPE_CONNECT_ENABLED === 'true'
 }
 
 /** Create the partner's Express account if missing; returns the account id. */
@@ -37,20 +45,22 @@ export async function createOnboardingLink(partnerId: string, returnUrl: string,
   return link.url
 }
 
-/** Retrieve + persist the partner's Express payout status. */
+/** Retrieve + persist the partner's Express payout status. Never throws — degrades to manual mode. */
 export async function getExpressStatus(partnerId: string): Promise<ExpressStatus> {
+  const configured = isConnectConfigured()
+  if (!configured) return { connected: false, payoutsEnabled: false, onboardingComplete: false, configured: false }
   const db = createAdminClient()
   const { data: partner } = await db.from('partners').select('stripe_connect_express_id').eq('id', partnerId).maybeSingle()
   const accountId = partner?.stripe_connect_express_id
-  if (!accountId || !stripe) return { connected: false, payoutsEnabled: false, onboardingComplete: false }
+  if (!accountId || !stripe) return { connected: false, payoutsEnabled: false, onboardingComplete: false, configured }
   try {
     const acct = await stripe.accounts.retrieve(accountId)
     const payoutsEnabled = !!acct.payouts_enabled
     const onboardingComplete = !!acct.details_submitted
     await db.from('partners').update({ connect_payouts_enabled: payoutsEnabled, connect_onboarding_complete: onboardingComplete }).eq('id', partnerId)
-    return { connected: true, accountId, payoutsEnabled, onboardingComplete }
+    return { connected: true, accountId, payoutsEnabled, onboardingComplete, configured }
   } catch {
-    return { connected: true, accountId, payoutsEnabled: false, onboardingComplete: false }
+    return { connected: true, accountId, payoutsEnabled: false, onboardingComplete: false, configured }
   }
 }
 

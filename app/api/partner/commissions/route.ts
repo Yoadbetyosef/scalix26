@@ -2,28 +2,67 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { computePartnerStats } from '@/lib/partner/stats'
+import { resolvePct } from '@/lib/partner/commission'
 
 // Read-only commission ledger for the authed partner. Partners can never mutate their ledger.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Db = any
+interface PlanRow { recurring_pct: number | null; model: string; tiers: { min_customers: number | null; min_volume_cents: number | null; pct: number }[] | null }
+
+// Resolve the partner's effective commission plan (deal → partner default → global default).
+async function resolveEffectivePlan(db: Db, partnerId: string): Promise<PlanRow | null> {
+  const now = new Date().toISOString()
+  const { data: deal } = await db.from('partner_deals').select('commission_plan_id')
+    .eq('partner_id', partnerId).eq('active', true).not('commission_plan_id', 'is', null)
+    .or(`starts_at.is.null,starts_at.lte.${now}`).or(`ends_at.is.null,ends_at.gte.${now}`)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const { data: partner } = await db.from('partners').select('default_commission_plan_id').eq('id', partnerId).maybeSingle()
+  for (const id of [deal?.commission_plan_id, partner?.default_commission_plan_id].filter(Boolean)) {
+    const { data } = await db.from('commission_plans').select('recurring_pct, model, tiers').eq('id', id).maybeSingle()
+    if (data) return data as PlanRow
+  }
+  const { data } = await db.from('commission_plans').select('recurring_pct, model, tiers').is('partner_id', null).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return (data as PlanRow) || null
+}
+
 export async function GET(req: NextRequest) {
   const ctx = await authenticatePartnerRequest(req)
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const db = createAdminClient()
 
-  const { data: entries } = await db.from('commission_entries')
-    .select('id, entry_type, amount_cents, currency, status, source_event, period_start, period_end, created_at, tenant_id')
+  const { data: rawEntries } = await db.from('commission_entries')
+    .select('id, entry_type, amount_cents, currency, status, source_event, source_ref, plan_id, tenant_id, period_start, period_end, created_at, paid_at')
     .eq('partner_id', ctx.partnerId).order('created_at', { ascending: false }).limit(500)
+  const entries = rawEntries || []
+
+  // Enrich with customer (tenant) name + commission plan name (bulk lookups, no N+1).
+  const tenantIds = [...new Set(entries.map((e) => e.tenant_id).filter(Boolean))]
+  const planIds = [...new Set(entries.map((e) => e.plan_id).filter(Boolean))]
+  const [{ data: tenants }, { data: plans }] = await Promise.all([
+    tenantIds.length ? db.from('tenants').select('id, business_name').in('id', tenantIds) : Promise.resolve({ data: [] }),
+    planIds.length ? db.from('commission_plans').select('id, name').in('id', planIds) : Promise.resolve({ data: [] }),
+  ])
+  const tName = new Map((tenants || []).map((t: { id: string; business_name: string | null }) => [t.id, t.business_name]))
+  const pName = new Map((plans || []).map((p: { id: string; name: string | null }) => [p.id, p.name]))
+  const enriched = entries.map((e) => ({
+    id: e.id, entry_type: e.entry_type, amount_cents: e.amount_cents, currency: e.currency, status: e.status,
+    source: e.source_event ? 'stripe' : 'referral',
+    customer_name: e.tenant_id ? tName.get(e.tenant_id) || 'Customer' : null,
+    plan_name: e.plan_id ? pName.get(e.plan_id) || null : null,
+    period_start: e.period_start, period_end: e.period_end, created_at: e.created_at, payout_date: e.paid_at,
+  }))
 
   const sum = (pred: (e: { status: string; amount_cents: number }) => boolean) =>
-    (entries || []).filter(pred).reduce((s, e) => s + e.amount_cents, 0)
-
-  const paidEntries = (entries || []).filter((e) => e.status === 'paid' && e.amount_cents > 0)
+    entries.filter(pred).reduce((s, e) => s + e.amount_cents, 0)
+  const paidEntries = entries.filter((e) => e.status === 'paid' && e.amount_cents > 0)
   const stats = await computePartnerStats(ctx.partnerId)
+
   const summary = {
     pending_cents: sum((e) => e.status === 'pending'),
     approved_cents: sum((e) => e.status === 'approved'),
     paid_cents: sum((e) => e.status === 'paid'),
     lifetime_cents: sum((e) => e.status === 'paid'),
-    // Economics dashboard
     estimated_next_payout_cents: sum((e) => e.status === 'pending' || e.status === 'approved'),
     monthly_recurring_income_cents: stats.monthly_commission_cents,
     projected_monthly_cents: stats.monthly_commission_cents,
@@ -36,9 +75,37 @@ export async function GET(req: NextRequest) {
     mrr_created_cents: stats.mrr_generated_cents,
   }
 
+  // ── Forecast (deterministic, real data only) ──
+  const plan = await resolveEffectivePlan(db, ctx.partnerId)
+  let currentRatePct: number | null = null
+  let nextTier: { at_customers: number; pct: number } | null = null
+  if (plan) {
+    currentRatePct = plan.model === 'tiered' && plan.tiers?.length
+      ? await resolvePct(db as Parameters<typeof resolvePct>[0], plan as Parameters<typeof resolvePct>[1], ctx.partnerId)
+      : (plan.recurring_pct ?? null)
+    if (plan.tiers?.length) {
+      const upcoming = plan.tiers
+        .filter((t) => t.min_customers != null && t.min_customers > stats.active_customers && t.pct > (currentRatePct ?? 0))
+        .sort((a, b) => (a.min_customers! - b.min_customers!))[0]
+      if (upcoming) nextTier = { at_customers: upcoming.min_customers!, pct: upcoming.pct }
+    }
+  }
+  const avgPerCustomer = stats.active_customers > 0 ? stats.monthly_commission_cents / stats.active_customers : null
+  const needed = (targetCents: number) => avgPerCustomer && avgPerCustomer > 0 ? Math.max(0, Math.ceil(targetCents / avgPerCustomer) - stats.active_customers) : null
+  const forecast = {
+    monthly_recurring_cents: stats.monthly_commission_cents,
+    projected_annual_cents: stats.projected_annual_cents,
+    active_customers: stats.active_customers,
+    avg_per_customer_cents: avgPerCustomer != null ? Math.round(avgPerCustomer) : null,
+    customers_to_1000: needed(100000),
+    customers_to_5000: needed(500000),
+    current_rate_pct: currentRatePct,
+    next_tier: nextTier,
+  }
+
   const { data: payouts } = await db.from('payouts')
     .select('id, amount_cents, currency, status, period_start, period_end, statement_url, paid_at, created_at')
     .eq('partner_id', ctx.partnerId).order('created_at', { ascending: false }).limit(50)
 
-  return NextResponse.json({ summary, entries: entries || [], payouts: payouts || [] })
+  return NextResponse.json({ summary, forecast, entries: enriched, payouts: payouts || [] })
 }
