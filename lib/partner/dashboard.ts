@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { XP, levelForXp } from '@/lib/partner/xp'
 import type { PartnerStatsFull } from '@/lib/partner/stats'
 import type { PartnerModuleKey } from '@/lib/partner/modules'
+import { resolvePartnerEconomics, estPerCustomerMonthlyCents, type BillingMode, type PartnerEconomics } from '@/lib/partner/economics-resolve'
 
 // Assembles the partner "Business Operating System" model: Today's Focus, money left on the table,
 // a multi-factor health score, forecasts, goals, top channel, grouped missions, data-fed alerts, a
@@ -20,6 +21,9 @@ export interface Goal { key: string; label: string; current: number; target: num
 export interface ChannelPerf { channel: string; label: string; customers: number }
 
 export interface DashboardExtras {
+  billingMode: BillingMode
+  ratePct: number | null
+  model: string | null
   focus: FocusItem[]
   quickActions: QuickAction[]
   moneyOnTable: { monthly_cents: number; items: MoneyItem[] }
@@ -38,7 +42,6 @@ interface Signals { linkCount: number; demoCount: number; sharedCount: number; c
 const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString() }
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString()
 const startOfMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString() }
-const EST_PER_CUSTOMER_MONTHLY = 8910 // ≈30% of a $297 plan — the estimated monthly commission per customer
 
 const CHANNEL_LABEL: Record<string, string> = { meta: 'Meta', google: 'Google', tiktok: 'TikTok', linkedin: 'LinkedIn', email: 'Email', organic: 'Organic', referral: 'Direct Referral', other: 'Other' }
 
@@ -52,9 +55,11 @@ const AUDIT_ICON: Record<string, string> = {
   'referral.paid': 'earnings', 'referral.churned': 'trend', 'member.invited': 'team', 'partner.created': 'flame', 'api_key.created': 'zap',
 }
 
-export async function getDashboardExtras(partnerId: string, enabledModules: PartnerModuleKey[], stats: PartnerStatsFull, signals: Signals): Promise<DashboardExtras> {
+export async function getDashboardExtras(partnerId: string, enabledModules: PartnerModuleKey[], stats: PartnerStatsFull, signals: Signals, econArg?: PartnerEconomics): Promise<DashboardExtras> {
   const db = createAdminClient()
   const has = (m: PartnerModuleKey) => enabledModules.includes(m)
+  // Same resolved economics the /partner/commissions page uses — one source of truth.
+  const econ = econArg ?? await resolvePartnerEconomics(partnerId)
 
   const [refsRes, demosRes, xpRes, campRes, leadsRes, auditRes, ecoRes] = await Promise.all([
     db.from('referrals').select('id, status, campaign_id, created_at, converted_at').eq('partner_id', partnerId).neq('status', 'rejected'),
@@ -83,13 +88,19 @@ export async function getDashboardExtras(partnerId: string, enabledModules: Part
   const trials = refs.filter((r) => r.status === 'signup' || r.status === 'trial').length
   const xp30 = xpEvents.filter((e) => e.created_at >= d30).reduce((s, e) => s + (e.xp || 0), 0)
   const activeCampaigns = camps.filter((c) => c.status === 'active').length
-  const perCustomer = stats.active_customers > 0 && stats.monthly_commission_cents > 0 ? Math.round(stats.monthly_commission_cents / stats.active_customers) : EST_PER_CUSTOMER_MONTHLY
+  // Estimated commission per customer: actuals if the partner has paid customers, else the RESOLVED
+  // rate applied to a reference price (never a hardcoded percentage).
+  const perCustomer = stats.active_customers > 0 && stats.monthly_commission_cents > 0
+    ? Math.round(stats.monthly_commission_cents / stats.active_customers)
+    : estPerCustomerMonthlyCents(econ.ratePct)
   const lvl = levelForXp(stats.xp)
 
-  // ── Money left on the table (unrealized monthly recurring income) ──
+  // ── Money left on the table (unrealized monthly recurring income) — commission model only. ──
   const moneyItems: MoneyItem[] = []
-  if (trials > 0) moneyItems.push({ label: `${trials} trial${trials === 1 ? '' : 's'} not yet converted`, amount_cents: trials * perCustomer })
-  if (leads > 0) moneyItems.push({ label: `${leads} prospect${leads === 1 ? '' : 's'} in your pipeline`, amount_cents: leads * perCustomer })
+  if (econ.billingMode === 'revenue_share') {
+    if (trials > 0) moneyItems.push({ label: `${trials} trial${trials === 1 ? '' : 's'} not yet converted`, amount_cents: trials * perCustomer })
+    if (leads > 0) moneyItems.push({ label: `${leads} prospect${leads === 1 ? '' : 's'} in your pipeline`, amount_cents: leads * perCustomer })
+  }
   const moneyOnTable = { monthly_cents: moneyItems.reduce((s, i) => s + i.amount_cents, 0), items: moneyItems }
 
   // ── Health score (0–100) across the whole business ──
@@ -184,5 +195,5 @@ export async function getDashboardExtras(partnerId: string, enabledModules: Part
   if (has('team')) quick.push({ key: 'team', label: 'Invite Team', href: '/partner/team' })
   const quickActions = quick.sort((a, b) => (b.primary ? 1 : 0) - (a.primary ? 1 : 0)).slice(0, 5)
 
-  return { focus: focusTop, quickActions, moneyOnTable, health, forecast, goals, topChannel, missions, alerts, activity, ecosystem }
+  return { billingMode: econ.billingMode, ratePct: econ.ratePct, model: econ.model, focus: focusTop, quickActions, moneyOnTable, health, forecast, goals, topChannel, missions, alerts, activity, ecosystem }
 }

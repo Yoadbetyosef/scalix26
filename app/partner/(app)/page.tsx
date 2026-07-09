@@ -4,6 +4,8 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getPartnerStatsCached } from '@/lib/partner/stats'
 import { getCoach } from '@/lib/partner/coach'
 import { getDashboardExtras } from '@/lib/partner/dashboard'
+import { resolvePartnerEconomics } from '@/lib/partner/economics-resolve'
+import { WholesalePartnerDashboard } from '@/components/partner/partner-wholesale-dashboard'
 import { levelForXp, levelBenefits } from '@/lib/partner/xp'
 import { enabledPartnerModules } from '@/lib/partner/modules'
 import { PageHeader, StatCard, Panel, money, CoachIcon } from '@/components/partner/ui'
@@ -30,11 +32,19 @@ export default async function PartnerDashboard() {
 
   const enabledModules = enabledPartnerModules({ enabled_modules: ctx.enabledModulesRaw })
   const stats = await getPartnerStatsCached(ctx.partnerId)
+
+  // Resolved economics (single source of truth). Wholesale relationships get a mode-specific
+  // dashboard instead of the commission one — never "earn X% commission".
+  const econ = await resolvePartnerEconomics(ctx.partnerId)
+  if (econ.billingMode === 'white_label' || econ.billingMode === 'reseller') {
+    return <WholesalePartnerDashboard mode={econ.billingMode} companyName={ctx.companyName} econ={econ} activeCustomers={stats.active_customers} streak={stats.streak_days} />
+  }
+
   const [{ count: totalPartners }, coach] = await Promise.all([
     db.from('partners').select('id', { count: 'exact', head: true }).eq('status', 'active'),
     getCoach(ctx.partnerId, stats),
   ])
-  const x = await getDashboardExtras(ctx.partnerId, enabledModules, stats, coach.signals)
+  const x = await getDashboardExtras(ctx.partnerId, enabledModules, stats, coach.signals, econ)
   const lvl = levelForXp(stats.xp)
   const benefits = levelBenefits(lvl.nextLevelKey)
   const healthColor = x.health.score >= 70 ? 'text-green-600' : x.health.score >= 40 ? 'text-amber-500' : 'text-red-500'

@@ -9,7 +9,7 @@ interface Partner {
   id: string; company_name: string | null; slug: string; partner_type: string; billing_mode: string | null; default_commission_plan_id: string | null
   status: string; tier: number; health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number }
 }
-interface PlanLite { id: string; name: string; partner_id: string | null }
+interface PlanLite { id: string; name: string; partner_id: string | null; model?: string }
 const BILLING_MODES: { key: string; label: string }[] = [
   { key: 'revenue_share', label: 'Revenue share' }, { key: 'reseller', label: 'Reseller' }, { key: 'white_label', label: 'White label' },
 ]
@@ -112,6 +112,13 @@ function ProgramModal({ partner, plans, onClose, onSave }: { partner: Partner; p
   // Global plans + any plan already scoped to this partner.
   const planOptions = plans.filter((p) => !p.partner_id || p.partner_id === partner.id)
 
+  // Non-blocking consistency warnings (admin can still save).
+  const selModel = planOptions.find((p) => p.id === planId)?.model
+  const warnings: string[] = []
+  if (type === 'white_label' && billing !== 'white_label') warnings.push('White Label partners are usually on white_label billing mode.')
+  if (billing === 'white_label' && type !== 'white_label') warnings.push('white_label billing is usually paired with the White Label partner type.')
+  if ((billing === 'white_label' || billing === 'reseller') && !(selModel === 'wholesale' || selModel === 'white_label' || selModel === 'custom')) warnings.push('Wholesale / reseller billing usually uses a wholesale, white_label, or custom commission plan.')
+
   function save() {
     const body: Record<string, unknown> = { partner_type: type, billing_mode: billing, default_commission_plan_id: planId || null }
     if (applyPreset) body.enabled_modules = presetModulesFor(type as PartnerType)
@@ -142,6 +149,12 @@ function ProgramModal({ partner, plans, onClose, onSave }: { partner: Partner; p
             <input type="checkbox" checked={applyPreset} onChange={(e) => setApplyPreset(e.target.checked)} />
             Apply this type&apos;s module preset
           </label>
+          {warnings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+              <div className="mb-1 font-medium">Heads up — this setup may be inconsistent:</div>
+              <ul className="list-disc space-y-0.5 pl-4">{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+            </div>
+          )}
           <p className="text-xs text-gray-400">A custom <span className="font-medium">Partner Deal</span> (under Programs) still overrides this default. Refunds/tiers are handled by the existing Economics Engine.</p>
         </div>
         <div className="mt-5 flex justify-end gap-2">
