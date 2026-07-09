@@ -6,7 +6,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Share2, Building2, KanbanSquare, MonitorPlay, Coins,
   Megaphone, GraduationCap, Store, Users, BarChart3, Settings, LogOut,
-  MoreHorizontal, X, ArrowLeftRight, Trophy, Brain,
+  MoreHorizontal, X, ArrowLeftRight, Trophy, Brain, CreditCard, Palette, Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -18,9 +18,23 @@ export interface PartnerNavProps {
   companyName: string | null
   slug: string
   partnerType: PartnerType
+  billingMode?: string
   hasTenant: boolean
   enabledModules: PartnerModuleKey[]
 }
+
+// White-label / reseller partners run a different product — a dedicated nav, no affiliate concepts.
+const WHOLESALE_ITEMS = [
+  { href: '/partner', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+  { href: '/partner/clients', icon: Building2, label: 'Client Accounts' },
+  { href: '/partner/commissions', icon: Wallet, label: 'Partner Economics' },
+  { href: '/partner/billing', icon: CreditCard, label: 'Billing' },
+  { href: '/partner/marketing', icon: Megaphone, label: 'Marketing' },
+  { href: '/partner/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/partner/branding', icon: Palette, label: 'Branding' },
+  { href: '/partner/team', icon: Users, label: 'Team' },
+  { href: '/partner/settings', icon: Settings, label: 'Settings' },
+]
 
 const TYPE_LABEL: Partial<Record<PartnerType, string>> = {
   affiliate: 'Affiliate', creator: 'Creator', growth: 'Growth Partner', agency: 'Agency',
@@ -28,11 +42,13 @@ const TYPE_LABEL: Partial<Record<PartnerType, string>> = {
   franchise: 'Franchise', white_label: 'White Label', enterprise: 'Enterprise', internal_rep: 'Internal Rep',
 }
 
-export function PartnerSidebar({ companyName, partnerType, hasTenant, enabledModules }: PartnerNavProps) {
+export function PartnerSidebar({ companyName, partnerType, billingMode, hasTenant, enabledModules }: PartnerNavProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
   const [moreOpen, setMoreOpen] = useState(false)
+  const wholesale = billingMode === 'white_label' || billingMode === 'reseller'
+  const roleLabel = wholesale ? (billingMode === 'white_label' ? 'White Label' : 'Reseller') : (TYPE_LABEL[partnerType] || 'Partner')
 
   const allItems = [
     { href: '/partner', icon: LayoutDashboard, label: 'Dashboard', exact: true },
@@ -50,9 +66,9 @@ export function PartnerSidebar({ companyName, partnerType, hasTenant, enabledMod
     { href: '/partner/analytics', icon: BarChart3, label: 'Analytics' },
     { href: '/partner/settings', icon: Settings, label: 'Settings' },
   ]
-  // Core routes (dashboard, commissions, settings) have no module → always shown; the rest are
-  // gated by the partner's enabled module set.
-  const items = allItems.filter((i) => {
+  // White-label / reseller → dedicated wholesale nav. Otherwise the affiliate nav, gated by the
+  // partner's enabled module set (core routes have no module → always shown).
+  const items = wholesale ? WHOLESALE_ITEMS : allItems.filter((i) => {
     const m = partnerModuleForPath(i.href)
     return !m || enabledModules.includes(m)
   })
@@ -74,7 +90,7 @@ export function PartnerSidebar({ companyName, partnerType, hasTenant, enabledMod
           <ScalixLogo size={26} className="flex-shrink-0" />
           <div className="hidden xl:block min-w-0">
             <div className="text-ink font-semibold text-[15px] tracking-tight leading-tight truncate">{companyName || 'Partner'}</div>
-            <div className="text-[11px] text-muted leading-tight">{TYPE_LABEL[partnerType] || 'Partner'} · Partner</div>
+            <div className="text-[11px] text-muted leading-tight">{roleLabel} · Partner</div>
           </div>
         </div>
 
