@@ -28,6 +28,7 @@ import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { TrialWidget } from '@/components/dashboard/trial-widget'
 import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
+import { useBrand } from '@/components/brand/brand-provider'
 import { ALL_MODULES, enabledModulesOf, effectiveModules, moduleForNav, type ModuleKey, type ModuleState } from '@/lib/modules'
 
 const navItems = [
@@ -54,6 +55,7 @@ export function Sidebar() {
   const supabase = createClient()
   const [businessName, setBusinessName] = useState<string>('')
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
+  const pb = useBrand() // DB-driven partner brand (resolved by domain)
   const [plan, setPlan] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -118,11 +120,13 @@ export function Sidebar() {
     <>
       {/* Desktop Sidebar — calm, light, premium */}
       <aside className="hidden md:flex flex-col w-16 xl:w-56 bg-white border-r border-hairline min-h-screen fixed left-0 top-0 bottom-0 z-40">
-        {/* Logo — the one place the brand color lives */}
+        {/* Logo — partner brand on their domain, Scalix otherwise */}
         <div className="flex items-center gap-2.5 px-4 py-5 border-b border-hairline">
-          <ScalixLogo size={26} className="flex-shrink-0" />
+          {pb?.isPartnerBrand && pb.logoUrl
+            ? <img src={pb.logoUrl} alt={pb.name} className="h-6 w-auto max-w-[130px] object-contain flex-shrink-0" />
+            : <ScalixLogo size={26} className="flex-shrink-0" />}
           <span className="hidden xl:block text-ink font-semibold text-[15px] tracking-tight leading-tight truncate">
-            {businessName || brand.name}
+            {businessName || pb?.name || brand.name}
           </span>
         </div>
 
@@ -184,6 +188,7 @@ export function Sidebar() {
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="hidden xl:block">Sign Out</span>
           </button>
+          {pb?.isPartnerBrand && pb.poweredByScalix && <div className="hidden xl:block px-3 pt-2 text-[10px] text-muted">Powered by Scalix</div>}
         </div>
       </aside>
 
