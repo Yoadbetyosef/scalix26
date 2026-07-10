@@ -6,7 +6,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Share2, Building2, KanbanSquare, MonitorPlay, Coins,
   Megaphone, GraduationCap, Store, Users, BarChart3, Settings, LogOut,
-  MoreHorizontal, X, ArrowLeftRight, Trophy, Brain, CreditCard, Palette, Wallet,
+  MoreHorizontal, X, ArrowLeftRight, Trophy, Brain, CreditCard, Palette, Wallet, Plug,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -27,6 +27,7 @@ export interface PartnerNavProps {
 const WHOLESALE_ITEMS = [
   { href: '/partner', icon: LayoutDashboard, label: 'Dashboard', exact: true },
   { href: '/partner/clients', icon: Building2, label: 'Client Accounts' },
+  { href: '/partner/infrastructure', icon: Plug, label: 'Infrastructure' },
   { href: '/partner/commissions', icon: Wallet, label: 'Partner Economics' },
   { href: '/partner/billing', icon: CreditCard, label: 'Billing' },
   { href: '/partner/marketing', icon: Megaphone, label: 'Marketing' },

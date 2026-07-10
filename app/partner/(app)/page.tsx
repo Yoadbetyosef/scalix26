@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getPartnerContext } from '@/lib/partner/rbac'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getPartnerStatsCached } from '@/lib/partner/stats'
@@ -37,6 +38,9 @@ export default async function PartnerDashboard() {
   // dashboard instead of the commission one — never "earn X% commission".
   const econ = await resolvePartnerEconomics(ctx.partnerId)
   if (econ.billingMode === 'white_label' || econ.billingMode === 'reseller') {
+    // First run → the setup wizard; after launch → the white-label dashboard.
+    const { data: wl } = await db.from('partners').select('wl_setup_complete').eq('id', ctx.partnerId).maybeSingle()
+    if (!wl?.wl_setup_complete) redirect('/partner/setup')
     return <WholesalePartnerDashboard mode={econ.billingMode} companyName={ctx.companyName} streak={stats.streak_days} discount={econ.customWholesaleDiscountPct} markup={econ.retailMarkupPct} />
   }
 

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { partnerModuleForPath, type PartnerModuleKey } from '@/lib/partner/modules'
 
 // Wholesale (white_label / reseller) partners run a different product — only these routes are theirs.
-const WHOLESALE_ALLOWED = ['/partner/clients', '/partner/commissions', '/partner/billing', '/partner/marketing', '/partner/analytics', '/partner/branding', '/partner/team', '/partner/settings']
+const WHOLESALE_ALLOWED = ['/partner/clients', '/partner/infrastructure', '/partner/setup', '/partner/commissions', '/partner/billing', '/partner/marketing', '/partner/analytics', '/partner/branding', '/partner/team', '/partner/settings']
 
 // Redirects to the dashboard on direct-URL access to a route that isn't part of this partner's
 // product: for wholesale partners, any affiliate route; otherwise, a disabled module.

@@ -23,20 +23,24 @@ export async function GET(req: NextRequest) {
   const { data: partners, count } = await q.range(page * pageSize, page * pageSize + pageSize - 1)
 
   const ids = (partners || []).map((p) => p.id)
-  const stats: Record<string, { customers: number; pending: number; paid: number }> = {}
+  const stats: Record<string, { customers: number; pending: number; paid: number; client_count: number; providers_connected: number }> = {}
   if (ids.length) {
-    const [{ data: refs }, { data: entries }] = await Promise.all([
+    const [{ data: refs }, { data: entries }, { data: clients }, { data: integrations }] = await Promise.all([
       db.from('referrals').select('partner_id, status').in('partner_id', ids),
       db.from('commission_entries').select('partner_id, amount_cents, status').in('partner_id', ids),
+      db.from('partner_clients').select('partner_id').in('partner_id', ids).eq('status', 'active'),
+      db.from('partner_integrations').select('partner_id').in('partner_id', ids).eq('status', 'connected'),
     ])
-    for (const p of ids) stats[p] = { customers: 0, pending: 0, paid: 0 }
+    for (const p of ids) stats[p] = { customers: 0, pending: 0, paid: 0, client_count: 0, providers_connected: 0 }
     for (const r of refs || []) if (r.status === 'paid') stats[r.partner_id].customers++
     for (const e of entries || []) {
       if (e.status === 'pending' || e.status === 'approved') stats[e.partner_id].pending += e.amount_cents
       if (e.status === 'paid') stats[e.partner_id].paid += e.amount_cents
     }
+    for (const c of clients || []) stats[c.partner_id].client_count++
+    for (const i of integrations || []) stats[i.partner_id].providers_connected++
   }
-  return NextResponse.json({ partners: (partners || []).map((p) => ({ ...p, stats: stats[p.id] || { customers: 0, pending: 0, paid: 0 } })), total: count ?? 0, page, pageSize })
+  return NextResponse.json({ partners: (partners || []).map((p) => ({ ...p, stats: stats[p.id] || { customers: 0, pending: 0, paid: 0, client_count: 0, providers_connected: 0 } })), total: count ?? 0, page, pageSize })
 }
 
 export async function PATCH(req: NextRequest) {

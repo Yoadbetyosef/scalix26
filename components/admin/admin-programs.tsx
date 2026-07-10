@@ -43,6 +43,8 @@ export function AdminPrograms({ canWrite }: { canWrite: boolean }) {
 
   return (
     <div className="space-y-8">
+      <PlatformSettingsSection canWrite={canWrite} />
+
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-semibold text-gray-900">Commission plans</h2>
@@ -288,6 +290,35 @@ function NewDeal({ partners, plans, onSaved }: { partners: PartnerLite[]; plans:
       <button onClick={save} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">Save</button>
       <button onClick={() => setOpen(false)} className="text-sm text-gray-500">Cancel</button>
     </div>
+  )
+}
+
+// ── Platform pricing (configurable — never hardcoded) ──
+function PlatformSettingsSection({ canWrite }: { canWrite: boolean }) {
+  const [onboarding, setOnboarding] = useState(''); const [monthly, setMonthly] = useState(''); const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    fetch('/api/admin/platform-settings').then((r) => r.json()).then((j) => {
+      const s = j.settings || {}; setOnboarding(String((Number(s.wl_onboarding_fee_cents) || 0) / 100)); setMonthly(String((Number(s.wl_monthly_cents) || 0) / 100)); setLoaded(true)
+    }).catch(() => setLoaded(true))
+  }, [])
+  async function saveOne(key: string, dollars: string) {
+    const res = await fetch('/api/admin/platform-settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, value: Math.round(Number(dollars) * 100) }) })
+    if (!res.ok) return toast.error('Failed'); toast.success('Saved')
+  }
+  if (!loaded) return null
+  return (
+    <section>
+      <h2 className="mb-2 font-semibold text-gray-900">White Label platform pricing</h2>
+      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-gray-200 bg-white p-4">
+        <label className="text-xs font-medium text-gray-500">Onboarding fee ($ one-time)
+          <div className="mt-1 flex gap-2"><input className={`${inp} w-28`} inputMode="decimal" value={onboarding} onChange={(e) => setOnboarding(e.target.value)} disabled={!canWrite} />{canWrite && <button onClick={() => saveOne('wl_onboarding_fee_cents', onboarding)} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">Save</button>}</div>
+        </label>
+        <label className="text-xs font-medium text-gray-500">Monthly platform fee ($/mo)
+          <div className="mt-1 flex gap-2"><input className={`${inp} w-28`} inputMode="decimal" value={monthly} onChange={(e) => setMonthly(e.target.value)} disabled={!canWrite} />{canWrite && <button onClick={() => saveOne('wl_monthly_cents', monthly)} className="rounded bg-gray-900 px-3 py-1.5 text-sm font-medium text-white">Save</button>}</div>
+        </label>
+        <p className="text-xs text-gray-400">These drive white-label onboarding/subscription pricing everywhere — change without a deploy.</p>
+      </div>
+    </section>
   )
 }
 

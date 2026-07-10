@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { StatCard, money } from '@/components/partner/ui'
 import { effectiveItemPricing, type PriceBook, type PriceBookItem, type PartnerClient, type WholesaleSummary } from '@/lib/partner/wholesale'
+import { ProvisionClientWizard } from '@/components/partner/provision-client-wizard'
 import { Plus, UserPlus, DownloadCloud, Search, X, Pencil, ChevronLeft, ChevronRight, Users } from 'lucide-react'
 
 interface Resp { clients: PartnerClient[]; page: number; pageSize: number; total: number; summary: WholesaleSummary; priceBook: PriceBook | null; overrides: { discount: number | null; markup: number | null }; importableCount: number }
@@ -80,7 +81,7 @@ export function WholesaleClients({ mode }: { mode: 'white_label' | 'reseller' })
           <option value="">All statuses</option>{STATUSES.map((x) => <option key={x} value={x} className="capitalize">{x}</option>)}
         </select>
         {data && data.importableCount > 0 && <button onClick={importReferrals} className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-hairline-strong px-3 text-sm font-medium text-subtle hover:text-ink"><DownloadCloud className="h-4 w-4" /> Import {data.importableCount}</button>}
-        <button onClick={() => setAddOpen(true)} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-medium text-white"><UserPlus className="h-4 w-4" /> {isWL ? 'Add Client' : 'Add Client'}</button>
+        <button onClick={() => setAddOpen(true)} className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-medium text-white"><UserPlus className="h-4 w-4" /> New Client</button>
       </div>
 
       {/* Bulk bar */}
@@ -100,7 +101,7 @@ export function WholesaleClients({ mode }: { mode: 'white_label' | 'reseller' })
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/10 text-accent-strong"><Users className="h-5 w-5" /></div>
             <h3 className="font-semibold text-ink">{q || status ? 'No matching clients' : 'No client accounts yet'}</h3>
             <p className="mx-auto mt-1 max-w-sm text-sm text-subtle">{q || status ? 'Try a different search or filter.' : `Add the businesses you manage under your ${isWL ? 'white-label' : 'reseller'} account, then set each client's retail price to track your margin.`}</p>
-            {!q && !status && <div className="mt-4 flex flex-wrap justify-center gap-2"><button onClick={() => setAddOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-medium text-white"><UserPlus className="h-4 w-4" /> Add client</button>{data.importableCount > 0 && <button onClick={importReferrals} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-subtle hover:text-ink"><DownloadCloud className="h-4 w-4" /> Import {data.importableCount} paid</button>}</div>}
+            {!q && !status && <div className="mt-4 flex flex-wrap justify-center gap-2"><button onClick={() => setAddOpen(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-medium text-white"><UserPlus className="h-4 w-4" /> New client</button>{data.importableCount > 0 && <button onClick={importReferrals} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-subtle hover:text-ink"><DownloadCloud className="h-4 w-4" /> Import {data.importableCount} paid</button>}</div>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -142,7 +143,7 @@ export function WholesaleClients({ mode }: { mode: 'white_label' | 'reseller' })
         )}
       </div>
 
-      {addOpen && <ClientModal mode="create" book={data?.priceBook} discount={data?.overrides.discount ?? null} markup={data?.overrides.markup ?? null} onClose={() => setAddOpen(false)} onSaved={() => { setAddOpen(false); load(page, q, status) }} />}
+      {addOpen && <ProvisionClientWizard book={data?.priceBook} discount={data?.overrides.discount ?? null} markup={data?.overrides.markup ?? null} onClose={() => setAddOpen(false)} onCreated={() => { setAddOpen(false); load(1, q, status) }} />}
       {edit && <ClientModal mode="edit" client={edit} book={data?.priceBook} discount={data?.overrides.discount ?? null} markup={data?.overrides.markup ?? null} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(page, q, status) }} />}
     </div>
   )

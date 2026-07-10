@@ -2,7 +2,13 @@ import twilio from 'twilio'
 import { createServiceClient } from '@/lib/supabase/server'
 import { deriveAreaCode, stateToAbbr } from '@/lib/twilio/area-code'
 
-export async function provisionAgentPhoneNumber(tenantId: string, agentId: string): Promise<string | null> {
+// `partnerTwilio` routes provisioning through a White Label partner's OWN Twilio account (they pay
+// the provider directly). When omitted, falls back to the platform env — fully backward compatible.
+export async function provisionAgentPhoneNumber(
+  tenantId: string,
+  agentId: string,
+  partnerTwilio?: { accountSid: string; authToken: string; messagingServiceSid?: string },
+): Promise<string | null> {
   const supabase = await createServiceClient()
 
   // Idempotent: return existing number if this agent already has one
@@ -16,7 +22,9 @@ export async function provisionAgentPhoneNumber(tenantId: string, agentId: strin
 
   if (existing?.twilio_number) return existing.twilio_number
 
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+  const client = partnerTwilio
+    ? twilio(partnerTwilio.accountSid, partnerTwilio.authToken)
+    : twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
 
   // Region-aware, progressive number search so a new number matches the customer's
@@ -84,7 +92,7 @@ export async function provisionAgentPhoneNumber(tenantId: string, agentId: strin
   // Unregistered Number". FAIL-SAFE + NON-BLOCKING: any failure here only logs;
   // the customer still keeps their number and voice still works. IDEMPOTENT:
   // Twilio code 21710 ("already exists in Messaging Service") is treated as success.
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID
+  const messagingServiceSid = partnerTwilio?.messagingServiceSid || process.env.TWILIO_MESSAGING_SERVICE_SID
   if (messagingServiceSid) {
     try {
       await client.messaging.v1.services(messagingServiceSid)

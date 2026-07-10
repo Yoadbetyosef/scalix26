@@ -8,7 +8,7 @@ import { PARTNER_TYPES, type PartnerType } from '@/lib/partner/roles'
 interface Partner {
   id: string; company_name: string | null; slug: string; partner_type: string; billing_mode: string | null; default_commission_plan_id: string | null
   price_book_id: string | null; custom_wholesale_discount_pct: number | null; retail_markup_pct: number | null; agreement_notes: string | null
-  status: string; tier: number; health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number }
+  status: string; tier: number; health_score: number | null; contact_email: string; enabled_modules: string[] | null; stats: { customers: number; pending: number; paid: number; client_count: number; providers_connected: number }
 }
 interface PlanLite { id: string; name: string; partner_id: string | null; model?: string }
 interface PriceBookLite { id: string; name: string; billing_mode: string; is_active: boolean }
@@ -166,6 +166,7 @@ function ProgramModal({ partner, plans, priceBooks, onClose, onSave }: { partner
           {isWholesale && (
             <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">White Label / Reseller pricing</div>
+              <div className="flex gap-4 rounded border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-600"><span>Clients: <span className="font-medium text-gray-900">{partner.stats.client_count}</span></span><span>Infra connected: <span className="font-medium text-gray-900">{partner.stats.providers_connected}/4</span></span></div>
               <label className="block text-xs font-medium text-gray-500">Price book
                 <select className={sel} value={priceBookId} onChange={(e) => setPriceBookId(e.target.value)}>
                   <option value="">None assigned</option>
