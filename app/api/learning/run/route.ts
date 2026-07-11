@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { runLearning } from '@/lib/learning/engine'
 import { formatReport } from '@/lib/learning/report'
 import { LEARNING } from '@/lib/learning/config'
+import { cronAuthorized } from '@/lib/cron/auth'
 
 // Background learning pass. Cron-triggered for all tenants; supports a per-tenant dry run
 // for review (no writes). This route NEVER changes customer-facing behavior — it only
@@ -14,12 +15,8 @@ async function handle(req: NextRequest) {
   const dry = url.searchParams.get('dry') === '1' || url.searchParams.get('dry') === 'true'
   const tenantId = url.searchParams.get('tenantId') || undefined
 
-  // Auth: Vercel cron, an explicit CRON_SECRET bearer, or local dev (for the review run).
-  const auth = req.headers.get('authorization') || ''
-  const cronOk = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
-  const vercelCron = !!req.headers.get('x-vercel-cron')
-  const devOk = process.env.NODE_ENV !== 'production'
-  if (!cronOk && !vercelCron && !devOk) {
+  // Auth: shared fail-closed CRON_SECRET bearer (Vercel cron auto-attaches it); local dev bypass only.
+  if (!cronAuthorized(req)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 

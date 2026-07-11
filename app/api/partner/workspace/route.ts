@@ -4,7 +4,8 @@ import { getPartnerContext } from '@/lib/partner/rbac'
 import { logPartnerAction } from '@/lib/partner/audit'
 import { partnerOwnsTenant, ACTIVE_WS_COOKIE } from '@/lib/workspace'
 
-const OPERATOR_ENABLED = process.env.WL_OPERATOR_ENABLED !== 'false'
+// Fail-closed: only an explicit 'true' enables the operator switch (see lib/workspace.ts).
+const OPERATOR_ENABLED = process.env.WL_OPERATOR_ENABLED === 'true'
 
 // Secure active-workspace switch. Ownership is verified server-side; a client tenant id from the
 // browser is NEVER trusted without confirming tenants.white_label_partner_id === this partner.

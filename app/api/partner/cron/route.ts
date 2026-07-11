@@ -5,17 +5,28 @@ import { autoApproveCommissions } from '@/lib/partner/commission'
 import { autoPayoutRun } from '@/lib/partner/payout'
 import { evaluateUpgrades } from '@/lib/partner/upgrades'
 import { recomputeMarketingStats } from '@/lib/partner/marketing-stats'
+import { cronAuthorized } from '@/lib/cron/auth'
 
 export const maxDuration = 300
 
-// Nightly Partner OS maintenance: recompute every partner's dashboard stats + health score, and
-// ensure next month's referral_clicks partition exists. Mirrors the brain cron auth.
+// Nightly Partner OS maintenance: auto-approve commissions, auto-pay connect-enabled partners,
+// recompute stats/upgrades/marketing, and roll the click partition forward. Mirrors the brain cron auth.
+//
+// KILL-SWITCH (fail-closed): this job runs the money-movement path — autoApproveCommissions +
+// autoPayoutRun (Stripe Connect transfers). It stays OFF until the commission + payout engine is
+// validated with real partners in production. Set PARTNER_CRON_ENABLED=true to enable. Mirrors the
+// LEARNING_CRON_ENABLED pattern. Unset / anything-but-'true' → the job is a no-op.
 async function handle(req: NextRequest) {
-  const auth = req.headers.get('authorization') || ''
-  const cronOk = !!process.env.CRON_SECRET && auth === `Bearer ${process.env.CRON_SECRET}`
-  const vercelCron = !!req.headers.get('x-vercel-cron')
-  const devOk = process.env.NODE_ENV !== 'production'
-  if (!cronOk && !vercelCron && !devOk) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!cronAuthorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  if (process.env.PARTNER_CRON_ENABLED !== 'true') {
+    return NextResponse.json({
+      ok: true,
+      ran: false,
+      reason: 'partner_cron_disabled',
+      message: 'Partner cron (auto-approve + auto-payout) is disabled until the commission/payout engine is validated with real partners. Set PARTNER_CRON_ENABLED=true to enable.',
+    })
+  }
 
   const approved = await autoApproveCommissions()
   // Auto-pay connect-enabled partners above the minimum threshold (hands-off once Stripe is on).

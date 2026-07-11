@@ -42,9 +42,7 @@ export async function sendReviewForAppointment(
   return { ok: true }
 }
 
-// Cron auth shared by the review endpoints. Set CRON_SECRET in Vercel to the
-// same value used in cron-job.org's Authorization header.
-export function cronAuthorized(req: Request): boolean {
-  const secret = process.env.CRON_SECRET || 'scalix26-drip-2026'
-  return req.headers.get('authorization') === `Bearer ${secret}`
-}
+// Cron auth for the review/mailbox endpoints. Re-exported from the single shared authenticator
+// (lib/cron/auth.ts) — fail-closed, no fallback secret. Set CRON_SECRET in Vercel; the same value
+// goes in any external scheduler's Authorization header.
+export { cronAuthorized } from '@/lib/cron/auth'

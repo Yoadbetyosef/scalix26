@@ -15,6 +15,10 @@
     {
       "path": "/api/partner/cron",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/webhook-events",
+      "schedule": "0 3 * * *"
     }
   ]
 }

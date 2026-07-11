@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
+import { cronAuthorized } from '@/lib/cron/auth'
 
 // Quiet hours: no sends between 21:00 and 08:00 (business timezone).
 const QUIET_TZ = 'America/New_York'
@@ -35,12 +36,9 @@ type Campaign = {
 }
 
 async function handle(req: NextRequest) {
-  // Vercel Cron attaches `Authorization: Bearer <CRON_SECRET>` when CRON_SECRET
-  // is set. If set, require it (blocks public triggering).
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+  // Fail-closed: Vercel Cron auto-attaches `Authorization: Bearer <CRON_SECRET>`. A missing secret
+  // no longer falls open — a deployed job with no configured secret is rejected.
+  if (!cronAuthorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   // Quiet hours — skip this run, the next hourly cron retries.
   const hour = businessHour()

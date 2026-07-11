@@ -51,7 +51,13 @@ export async function updateSession(request: NextRequest) {
     // public demo pages + their data, and the public partner marketplace directory.
     '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
     // White Label client-invite acceptance (recipient is not yet authenticated).
-    '/invite/', '/api/invite/']
+    '/invite/', '/api/invite/',
+    // Scheduled jobs: Vercel/external cron requests carry NO user session, so they must bypass the
+    // login redirect to reach the route — where cronAuthorized (the fail-closed CRON_SECRET bearer)
+    // is the real gate. These are NOT open: a request without the secret gets 401 at the route.
+    // (drip/reviews/mailbox/email-process are already covered above via /api/drip, /api/mailbox,
+    //  /api/reviews/*, /api/webhooks.)
+    '/api/brain/cron', '/api/partner/cron', '/api/learning/run', '/api/cron/']
   const adminRoutes = ['/admin', '/api/admin']
 
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))

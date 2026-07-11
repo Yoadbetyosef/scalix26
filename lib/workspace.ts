@@ -11,7 +11,9 @@ import { getPartnerContext } from '@/lib/partner/rbac'
 // rollback is instant. WL_OPERATOR_ENABLED=false kills the operator path entirely.
 
 export const ACTIVE_WS_COOKIE = 'active_ws'
-const OPERATOR_ENABLED = process.env.WL_OPERATOR_ENABLED !== 'false'
+// Fail-closed: operator mode is OFF unless WL_OPERATOR_ENABLED is explicitly 'true'. A missing or
+// mistyped env var must never silently enable cross-tenant operation in production.
+const OPERATOR_ENABLED = process.env.WL_OPERATOR_ENABLED === 'true'
 
 export interface ActiveWorkspace {
   tenantId: string | null
