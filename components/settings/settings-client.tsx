@@ -25,9 +25,12 @@ const CHANNEL_TONE: Record<string, string> = {
 interface Props {
   tenant: Tenant
   channels: Channel[]
+  // Operator mode (a White Label partner operating a client): hide the Scalix billing/subscription
+  // section entirely — a client's plan is governed by the partner, never Scalix Stripe.
+  hideBilling?: boolean
 }
 
-export function SettingsClient({ tenant, channels }: Props) {
+export function SettingsClient({ tenant, channels, hideBilling = false }: Props) {
 
   async function openBillingPortal() {
     const res = await fetch('/api/stripe/portal', { method: 'POST' })
@@ -168,7 +171,8 @@ export function SettingsClient({ tenant, channels }: Props) {
         </CardContent>
       </Card>
 
-      {/* Billing */}
+      {/* Billing — hidden in operator mode (a White Label client never sees Scalix billing). */}
+      {!hideBilling && (
       <Card id="billing" className="scroll-mt-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2.5">
@@ -264,6 +268,7 @@ export function SettingsClient({ tenant, channels }: Props) {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

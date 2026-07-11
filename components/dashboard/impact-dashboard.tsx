@@ -9,6 +9,7 @@ import { CountUp } from '@/components/ui/count-up'
 import { BusinessBrainCard } from '@/components/dashboard/business-brain-card'
 import { AttentionNeeded } from '@/components/dashboard/attention-needed'
 import type { AttentionItem } from '@/lib/dashboard/impact'
+import { useBrand } from '@/components/brand/brand-provider'
 
 function Trend({ pct, suffix = '%' }: { pct: number | null; suffix?: string }) {
   if (pct === null || pct === undefined) return null
@@ -56,6 +57,8 @@ function BigNumber({ children }: { children: React.ReactNode }) {
 
 export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: { data: ImpactData; businessName: string; brainAgentId?: string; tenantId: string }) {
   const opp = data.opportunities.value
+  // Brand-aware: operator mode → the White Label partner's brand; otherwise Scalix/host brand.
+  const brandName = useBrand()?.name || 'Scalix'
 
   // Channel recap sentence, e.g. "3 by text, 2 by phone, 13 by email" (count>0 only).
   const channelLine = data.channelBreakdown.map((c) => `${c.count} ${c.label}`).join(', ')
@@ -104,9 +107,9 @@ export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: 
         <div className="rounded-2xl border border-hairline-strong bg-gradient-to-br from-sunken to-white p-5 sm:p-6">
           <div className="flex items-center gap-2 mb-3">
             <ShieldAlert className="w-5 h-5 text-muted" />
-            <h2 className="text-lg sm:text-xl font-normal text-ink">What Would Have Happened Without Scalix</h2>
+            <h2 className="text-lg sm:text-xl font-normal text-ink">What Would Have Happened Without {brandName}</h2>
           </div>
-          <p className="text-sm text-subtle mb-3">Without Scalix, these customer moments could have been missed.</p>
+          <p className="text-sm text-subtle mb-3">Without {brandName}, these customer moments could have been missed.</p>
           <ul className="space-y-2">
             <li className="text-sm sm:text-[15px] text-ink">
               <span className="font-semibold text-ink">{opp}</span>
@@ -122,7 +125,7 @@ export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: 
       {/* 4) IMPACT METRIC CARDS — exactly four (clickable → proof drawer when value>0) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sx-stagger">
         <ImpactCard icon={Users} label="Customers Assisted" tone="blue" desc="People who received a response without waiting on you."
-          onClick={data.customersHelped.value > 0 ? () => setDrawer({ metric: 'customers_assisted', title: `${data.customersHelped.value} Customers Assisted`, subtitle: 'People who received a response from your business through Scalix.', headerCount: `${data.customersHelped.value}` }) : undefined}>
+          onClick={data.customersHelped.value > 0 ? () => setDrawer({ metric: 'customers_assisted', title: `${data.customersHelped.value} Customers Assisted`, subtitle: `People who received a response from your business through ${brandName}.`, headerCount: `${data.customersHelped.value}` }) : undefined}>
           <BigNumber><CountUp value={data.customersHelped.value} /></BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-muted">{data.customersHelped.lifetime.toLocaleString()} since you started</span>
@@ -131,7 +134,7 @@ export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: 
         </ImpactCard>
 
         <ImpactCard icon={ShieldCheck} label="Potential Customers Protected" tone="green" desc="People who reached out while you were busy, unavailable, or after hours."
-          onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: 'Scalix handled these customer moments while you focused on running your business.', headerCount: `${data.opportunities.value}` }) : undefined}>
+          onClick={data.opportunities.value > 0 ? () => setDrawer({ metric: 'opportunities', title: `${data.opportunities.value} Potential Customers Protected`, subtitle: `${brandName} handled these customer moments while you focused on running your business.`, headerCount: `${data.opportunities.value}` }) : undefined}>
           <BigNumber><CountUp value={data.opportunities.value} /></BigNumber>
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-xs text-muted">{data.opportunities.lifetime.toLocaleString()} since you started</span>
@@ -139,14 +142,14 @@ export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: 
           </div>
         </ImpactCard>
 
-        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" tone="purple" desc="Calls, texts, emails, chats, and social messages Scalix helped manage."
+        <ImpactCard icon={MessagesSquare} label="Conversations Handled Without You" tone="purple" desc={`Calls, texts, emails, chats, and social messages ${brandName} helped manage.`}
           onClick={data.conversationsManaged.value > 0 ? () => setDrawer({ metric: 'conversations_managed', title: `${data.conversationsManaged.value} Conversations Handled Without You`, subtitle: 'These conversations received responses without requiring your personal attention.', headerCount: `${data.conversationsManaged.value}` }) : undefined}>
           <BigNumber><CountUp value={data.conversationsManaged.value} /></BigNumber>
           <div className="mt-1.5"><Trend pct={data.conversationsManaged.trendPct} /></div>
         </ImpactCard>
 
-        <ImpactCard icon={Activity} label="Business Coverage" tone="amber" desc="Scalix kept your business responsive when customers reached out."
-          onClick={data.coveragePct.value !== null && data.coveragePct.total > 0 ? () => setDrawer({ metric: 'coverage', title: 'Business Coverage', subtitle: 'Every customer who reached out, and whether Scalix kept you responsive.', headerCount: `${data.coveragePct.value}%` }) : undefined}>
+        <ImpactCard icon={Activity} label="Business Coverage" tone="amber" desc={`${brandName} kept your business responsive when customers reached out.`}
+          onClick={data.coveragePct.value !== null && data.coveragePct.total > 0 ? () => setDrawer({ metric: 'coverage', title: 'Business Coverage', subtitle: `Every customer who reached out, and whether ${brandName} kept you responsive.`, headerCount: `${data.coveragePct.value}%` }) : undefined}>
           {data.coveragePct.value === null ? (
             <>
               <p className="text-2xl font-semibold text-muted leading-none">—</p>
@@ -169,7 +172,7 @@ export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: 
         <Card>
           <CardContent className="p-5 sm:p-6">
             {data.channelBreakdown.length === 0 ? (
-              <p className="text-sm text-subtle">Scalix is ready — as customers reach out, {businessName}&apos;s recap will appear here.</p>
+              <p className="text-sm text-subtle">{brandName} is ready — as customers reach out, {businessName}&apos;s recap will appear here.</p>
             ) : (
               <ul className="space-y-3">
                 <li className="flex items-start gap-3">

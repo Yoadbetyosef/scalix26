@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { maxEmployeesForPlan, planLimitMessage } from '@/lib/plans'
 import { resolveTimezone } from '@/lib/timezone'
 import { seedDefaultSkills } from '@/lib/skills'
@@ -16,9 +17,15 @@ export async function POST(req: NextRequest) {
   const { name, voice, greeting, personality_score, business_name, industry, website, system_prompt, timezone: browserTz } = body
   const resolvedTimezone = resolveTimezone({ browserTz })
 
-  const service = await createServiceClient()
+  // Admin client (operator-safe): createServiceClient downgrades to the operator's JWT under RLS, so the
+  // tenant lookup + agent insert would target the partner's own tenant (or fail RLS) for a WL client.
+  const service = createAdminClient()
+  // Create under the active workspace (owner tenant, or the client tenant a White Label partner
+  // is operating). New agents belong ONLY to the active tenant.
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
   const { data: tenant } = await service
-    .from('tenants').select('id, plan').eq('user_id', user.id).limit(1).maybeSingle()
+    .from('tenants').select('id, plan').eq('id', activeTenantId).maybeSingle()
   if (!tenant) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
 
   // ── IDEMPOTENT DRAFT REUSE ─────────────────────────────────────────────────

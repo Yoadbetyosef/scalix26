@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { getDrilldownRows } from '@/lib/dashboard/drilldown'
 import type { DrilldownMetric } from '@/lib/dashboard/impact'
 
@@ -18,13 +19,13 @@ export async function GET(req: NextRequest) {
   const offset = Math.max(0, parseInt(req.nextUrl.searchParams.get('offset') || '0', 10) || 0)
   const limit = Math.min(50, Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') || '50', 10) || 50))
 
-  // Resolve the caller's tenant (verified ownership) — same pattern as the dashboard.
-  const service = await createServiceClient()
-  const { data: tenant } = await service.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) return NextResponse.json({ error: 'no tenant' }, { status: 404 })
+  // Active workspace (owner tenant, or the client tenant a WL partner is operating). Tenant is resolved
+  // server-side and never accepted from the client; getDrilldownRows uses the admin client, tenant-scoped.
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) return NextResponse.json({ error: 'no tenant' }, { status: 404 })
 
   try {
-    const result = await getDrilldownRows(tenant.id, metric, offset, limit)
+    const result = await getDrilldownRows(tenantId, metric, offset, limit)
     return NextResponse.json(result)
   } catch (err) {
     console.error('[drilldown] failed:', err instanceof Error ? err.message : err)

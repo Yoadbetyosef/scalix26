@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { sendSMS } from '@/lib/twilio/client'
 import { releaseAgentNumber } from '@/lib/twilio/release'
 import { hoursToSlots, type DayHours } from '@/lib/appointments'
@@ -31,14 +32,10 @@ export async function PATCH(
 
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
-  const { data: tenant } = await serviceSupabase
-    .from('tenants')
-    .select('id')
-    .eq('id', agent.tenant_id)
-    .eq('user_id', user.id)
-    .single()
-
-  if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Authorize against the active workspace (owner's tenant, or the client tenant a White Label
+  // partner has switched into and been server-validated for). Writes go ONLY to the active tenant.
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const allowed = [
     'name', 'greeting', 'personality', 'personality_score', 'voice', 'system_prompt', 'status',
@@ -118,9 +115,8 @@ export async function DELETE(
     .from('ai_employees').select('id, tenant_id').eq('id', agentId).single()
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
-  const { data: tenant } = await serviceSupabase
-    .from('tenants').select('id').eq('id', agent.tenant_id).eq('user_id', user.id).single()
-  if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // 1+2) BEFORE deleting (the cascade will wipe channel rows): collect + release
   //       the Twilio number(s) via the shared helper (dedupe by SID, 20404 = success,

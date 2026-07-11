@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 
 // Toggle human takeover for a conversation. When enabled, the AI stops
 // responding and a human handles the conversation manually.
@@ -15,17 +16,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'enabled (boolean) is required' }, { status: 400 })
   }
 
-  // RLS ("Tenant conversations access") ensures the user can only update
-  // conversations belonging to their own tenant.
-  const { data, error } = await supabase
-    .from('conversations')
-    .update({ human_takeover: enabled })
-    .eq('id', id)
-    .select('id')
-    .maybeSingle()
+  // Authorize against the active workspace (owner tenant, or the validated client tenant a White
+  // Label partner switched into). The write goes ONLY to a conversation in that tenant.
+  const activeTenantId = await getActiveTenantId()
+  const admin = createAdminClient()
+  const { data: conv } = await admin.from('conversations').select('id, tenant_id').eq('id', id).maybeSingle()
+  if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+  if (!activeTenantId || conv.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  const { error } = await admin.from('conversations').update({ human_takeover: enabled }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  if (!data) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
 
   return NextResponse.json({ ok: true, human_takeover: enabled })
 }

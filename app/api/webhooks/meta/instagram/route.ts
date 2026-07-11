@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
 import { transcribeAudioUrl } from '@/lib/deepgram/transcribe'
+import { verifyMetaSignature, shouldReject } from '@/lib/webhooks/verify'
+import { claimEvent, completeEvent, fingerprint, type Claim } from '@/lib/webhooks/idempotency'
 
 // The inbound customer text — from a normal text message, or (voice notes) transcribed from
 // an audio attachment via Deepgram. Returns '' when there's nothing we can act on.
@@ -63,16 +65,22 @@ async function sendFacebookReply(recipientId: string, text: string, accessToken:
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const supabase = await createServiceClient()
+  // Verify X-Hub-Signature-256 over the RAW body (never re-serialize) before parsing — a forged Meta
+  // event is never processed or persisted. Signature verification is the primary security layer.
+  const raw = await req.text()
+  if (shouldReject(verifyMetaSignature(raw, req.headers.get('x-hub-signature-256')))) {
+    console.error('[meta] X-Hub-Signature-256 verification failed — rejecting.')
+    return new NextResponse('Forbidden', { status: 403 })
+  }
+  const body = JSON.parse(raw || '{}')
 
-  // TEMP DEBUG (voice-message diagnosis): capture the raw Meta payload so we can see exactly
-  // what an Instagram/Facebook voice note looks like. Remove once fixed.
-  try {
-    if (body.object === 'instagram' || body.object === 'page') {
-      await supabase.from('analytics_events').insert({ tenant_id: null, event_type: 'meta_webhook_debug', data: body })
-    }
-  } catch { /* debug best-effort */ }
+  // Idempotency: Meta re-delivers byte-identical payloads on retry. Fingerprint the raw body so a retry
+  // never re-processes (no duplicate AI reply / outbound message).
+  const claim: Claim = await claimEvent('meta', fingerprint('meta', raw), body.object || 'meta', null)
+  if (claim.unavailable) return new NextResponse('Service Unavailable', { status: 503 }) // fail-closed
+  if (claim.duplicate) { console.log('[meta] duplicate delivery — skipping'); return NextResponse.json({ status: 'duplicate' }) }
+
+  const supabase = await createServiceClient()
 
   // Instagram DMs
   if (body.object === 'instagram') {
@@ -119,6 +127,7 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+    await completeEvent(claim)
     return NextResponse.json({ status: 'ok' })
   }
 
@@ -163,8 +172,10 @@ export async function POST(req: NextRequest) {
         }
       }
     }
+    await completeEvent(claim)
     return NextResponse.json({ status: 'ok' })
   }
 
+  await completeEvent(claim)
   return NextResponse.json({ status: 'ignored' })
 }

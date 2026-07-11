@@ -1,4 +1,5 @@
-import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Brain } from 'lucide-react'
@@ -19,9 +20,13 @@ export default async function AIEmployeeEditPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const serviceSupabase = await createServiceClient()
+  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
+  // server-validated tenantId on every query.
+  const serviceSupabase = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/setup')
   const { data: tenant } = await serviceSupabase
-    .from('tenants').select('id, slug, google_review_url, review_automation_enabled').eq('user_id', user.id).limit(1).maybeSingle()
+    .from('tenants').select('id, slug, google_review_url, review_automation_enabled').eq('id', tenantId).maybeSingle()
   if (!tenant) redirect('/setup')
 
   // Availability & reviews (tenant-level) — now edited inline on this page.

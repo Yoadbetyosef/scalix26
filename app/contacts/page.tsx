@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Phone, Mail, MessageCircle, ChevronRight } from 'lucide-react'
@@ -19,14 +20,16 @@ export default async function ContactsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const serviceSupabase = await createServiceClient()
-  const { data: tenant } = await serviceSupabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) redirect('/auth/signup')
+  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
+  // server-validated tenantId as the sole scope.
+  const serviceSupabase = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
 
-  const { data: contacts } = await supabase
+  const { data: contacts } = await serviceSupabase
     .from('contacts')
     .select('*')
-    .eq('tenant_id', tenant.id)
+    .eq('tenant_id', tenantId)
     .order('last_interaction', { ascending: false })
     .limit(100)
 

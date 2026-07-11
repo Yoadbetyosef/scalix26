@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { StatCard, money } from '@/components/partner/ui'
 import { effectiveItemPricing, type PriceBook, type PriceBookItem, type PartnerClient, type WholesaleSummary } from '@/lib/partner/wholesale'
 import { ProvisionClientWizard } from '@/components/partner/provision-client-wizard'
-import { Plus, UserPlus, DownloadCloud, Search, X, Pencil, ChevronLeft, ChevronRight, Users } from 'lucide-react'
+import { Plus, UserPlus, DownloadCloud, Search, X, Pencil, ChevronLeft, ChevronRight, Users, LogIn } from 'lucide-react'
 
 interface Resp { clients: PartnerClient[]; page: number; pageSize: number; total: number; summary: WholesaleSummary; priceBook: PriceBook | null; overrides: { discount: number | null; markup: number | null }; importableCount: number }
 const STATUSES = ['active', 'prospect', 'paused', 'churned']
@@ -51,6 +51,11 @@ export function WholesaleClients({ mode }: { mode: 'white_label' | 'reseller' })
     toast.success(`Updated ${ids.length} client${ids.length === 1 ? '' : 's'}`); load(page, q, status)
   }
   async function removeClient(id: string) { await fetch(`/api/partner/clients?id=${id}`, { method: 'DELETE' }); load(page, q, status) }
+  async function enterWorkspace(tenantId: string) {
+    const r = await fetch('/api/partner/workspace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'switch', tenantId }) })
+    if (!r.ok) return toast.error('Could not open workspace')
+    window.location.href = '/dashboard'
+  }
 
   const s = data?.summary
   const total = data?.total ?? 0
@@ -123,7 +128,7 @@ export function WholesaleClients({ mode }: { mode: 'white_label' | 'reseller' })
                     <td className={`py-2.5 pr-3 text-right font-medium ${priced && profit > 0 ? 'text-green-700' : 'text-subtle'}`}>{priced ? money(profit) : '—'}</td>
                     <td className="py-2.5 pr-3 text-muted">{fmtDate(c.created_at)}</td>
                     <td className="py-2.5 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${c.status === 'active' ? 'bg-green-50 text-green-700' : c.status === 'churned' ? 'bg-gray-100 text-gray-500' : 'bg-amber-50 text-amber-700'}`}>{c.status}</span></td>
-                    <td className="py-2.5 pr-4 text-right"><div className="flex justify-end gap-1"><button onClick={() => setEdit(c)} className="rounded border border-hairline-strong p-1.5 text-subtle hover:text-ink" title="Edit"><Pencil className="h-3.5 w-3.5" /></button><button onClick={() => removeClient(c.id)} className="rounded border border-hairline-strong p-1.5 text-muted hover:text-red-600" title="Remove"><X className="h-3.5 w-3.5" /></button></div></td>
+                    <td className="py-2.5 pr-4 text-right"><div className="flex justify-end gap-1">{c.tenant_id && <button onClick={() => enterWorkspace(c.tenant_id!)} className="inline-flex items-center gap-1 rounded border border-hairline-strong px-2 py-1.5 text-xs font-medium text-subtle hover:text-ink" title="Open workspace"><LogIn className="h-3.5 w-3.5" /> Enter</button>}<button onClick={() => setEdit(c)} className="rounded border border-hairline-strong p-1.5 text-subtle hover:text-ink" title="Edit"><Pencil className="h-3.5 w-3.5" /></button><button onClick={() => removeClient(c.id)} className="rounded border border-hairline-strong p-1.5 text-muted hover:text-red-600" title="Remove"><X className="h-3.5 w-3.5" /></button></div></td>
                   </tr>
                 )
               })}</tbody>

@@ -36,7 +36,8 @@ export default function UpdatePasswordPage() {
       const { error } = await supabase.auth.updateUser({ password })
       if (error) throw error
       toast.success('Password updated successfully!')
-      router.push('/dashboard')
+      // Route through the server-side plane decision (partners → /partner, business → /dashboard).
+      router.push('/')
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to update password')
     } finally {

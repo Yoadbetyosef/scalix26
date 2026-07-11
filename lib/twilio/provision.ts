@@ -1,5 +1,5 @@
 import twilio from 'twilio'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { deriveAreaCode, stateToAbbr } from '@/lib/twilio/area-code'
 
 // `partnerTwilio` routes provisioning through a White Label partner's OWN Twilio account (they pay
@@ -9,7 +9,10 @@ export async function provisionAgentPhoneNumber(
   agentId: string,
   partnerTwilio?: { accountSid: string; authToken: string; messagingServiceSid?: string },
 ): Promise<string | null> {
-  const supabase = await createServiceClient()
+  // Admin (true service-role) client: createServiceClient is cookie-based and, when a WL partner is
+  // operating a client workspace, downgrades to the partner's JWT under RLS — the channel insert would
+  // then fail (no RLS insert policy for a non-owned tenant). Scoped entirely by the validated tenantId/agentId args.
+  const supabase = createAdminClient()
 
   // Idempotent: return existing number if this agent already has one
   const { data: existing } = await supabase
@@ -134,7 +137,7 @@ export async function provisionAgentPhoneNumber(
 
 // Legacy alias kept for any remaining callers
 export async function provisionTenantPhoneNumber(tenantId: string): Promise<string | null> {
-  const supabase = await createServiceClient()
+  const supabase = createAdminClient()
 
   const { data: agent } = await supabase
     .from('ai_employees')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { createHmac } from 'crypto'
 import { getProvider } from '@/lib/mailbox'
 import { saveAccount } from '@/lib/mailbox/account'
@@ -64,12 +65,13 @@ export async function GET(req: NextRequest) {
       console.warn('[google/callback] no refresh token returned for', tokens.email)
     }
 
-    // Confirm the agent belongs to this user's tenant before saving.
-    const service = await createServiceClient()
+    // Confirm the agent belongs to the active workspace before saving. Admin client (operator-safe):
+    // createServiceClient would RLS-scope the agent read to the partner's own tenant and miss a WL client agent.
+    const service = createAdminClient()
     const { data: agent } = await service.from('ai_employees').select('id, tenant_id').eq('id', payload.agentId).single()
     if (!agent) { console.warn('[google/callback] agent not found', payload.agentId); return clearNonce(NextResponse.redirect(`${baseUrl}/ai-employees?google_error=invalid_state`)) }
-    const { data: tenant } = await service.from('tenants').select('id').eq('id', agent.tenant_id).eq('user_id', user.id).single()
-    if (!tenant) { console.warn('[google/callback] tenant/owner mismatch for agent', payload.agentId); return clearNonce(NextResponse.redirect(`${baseUrl}/ai-employees?google_error=invalid_state`)) }
+    const activeTenantId = await getActiveTenantId()
+    if (!activeTenantId || agent.tenant_id !== activeTenantId) { console.warn('[google/callback] tenant/workspace mismatch for agent', payload.agentId); return clearNonce(NextResponse.redirect(`${baseUrl}/ai-employees?google_error=invalid_state`)) }
     console.log('[google/callback] verified agent', payload.agentId, 'tenant', agent.tenant_id, '— saving (admin client)')
 
     await saveAccount({ tenantId: agent.tenant_id, aiEmployeeId: payload.agentId, provider: 'google', tokens })

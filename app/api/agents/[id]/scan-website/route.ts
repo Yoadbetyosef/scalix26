@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { browserScrapeHeaders, SCRAPER_ACCEPT_HTML } from '@/lib/scrape-headers'
 
 // Crawl can take a while (many fetches + 1 AI call). Allow up to 60s.
@@ -194,8 +195,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const admin = createAdminClient()
   const { data: agent } = await admin.from('ai_employees').select('id, tenant_id').eq('id', agentId).single()
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
-  const { data: tenant } = await admin.from('tenants').select('id').eq('id', agent.tenant_id).eq('user_id', user.id).single()
-  if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const started = Date.now()
   const target = normalizeUrl(String(url))

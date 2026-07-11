@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
@@ -25,7 +26,12 @@ export default async function ConversationPage({ params, searchParams }: { param
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase.from('tenants').select('id, timezone').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
+  // server-validated tenantId. The conversation is filtered by tenant_id; messages by its verified id.
+  const service = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
+  const { data: tenant } = await service.from('tenants').select('id, timezone').eq('id', tenantId).maybeSingle()
   if (!tenant) redirect('/auth/signup')
 
   // Conversation/message times shown in the tenant's business timezone (same source
@@ -34,7 +40,7 @@ export default async function ConversationPage({ params, searchParams }: { param
 
   const { id } = await params
 
-  const { data: conv } = await supabase
+  const { data: conv } = await service
     .from('conversations')
     .select('*, contact:contacts(*), ai_employee:ai_employees(name)')
     .eq('id', id)
@@ -43,7 +49,7 @@ export default async function ConversationPage({ params, searchParams }: { param
 
   if (!conv) notFound()
 
-  const { data: messages } = await supabase
+  const { data: messages } = await service
     .from('messages')
     .select('*')
     .eq('conversation_id', id)

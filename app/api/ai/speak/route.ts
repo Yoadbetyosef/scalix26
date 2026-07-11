@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -28,14 +29,12 @@ export async function POST(req: NextRequest) {
   } else if (voice && VOICE_MAP[voice]) {
     voiceId = VOICE_MAP[voice]
   } else {
-    // Otherwise use the tenant's active AI employee voice.
-    const serviceSupabase = await createServiceClient()
-    const { data: tenant } = await serviceSupabase
-      .from('tenants').select('id').eq('user_id', user.id)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (tenant) {
-      const { data: employee } = await serviceSupabase
-        .from('ai_employees').select('voice').eq('tenant_id', tenant.id)
+    // Otherwise use the ACTIVE business's active AI employee voice (owner tenant, or the operated
+    // client tenant) — never resolved from user_id.
+    const activeTenantId = await getActiveTenantId()
+    if (activeTenantId) {
+      const { data: employee } = await createAdminClient()
+        .from('ai_employees').select('voice').eq('tenant_id', activeTenantId)
         .eq('status', 'active').limit(1).maybeSingle()
       if (employee?.voice && VOICE_MAP[employee.voice]) voiceId = VOICE_MAP[employee.voice]
     }

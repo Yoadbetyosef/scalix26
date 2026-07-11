@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { MessageCircle, Search, Phone, Mail } from 'lucide-react'
@@ -70,8 +71,13 @@ export default async function InboxPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const { data: tenant } = await supabase
-    .from('tenants').select('id, timezone').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  // Admin client (not createServiceClient, which downgrades to the operator's JWT under RLS and would
+  // scope to the partner's own tenant) + server-validated tenantId on every query → operator-safe.
+  const service = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
+  const { data: tenant } = await service
+    .from('tenants').select('id, timezone').eq('id', tenantId).maybeSingle()
   if (!tenant) redirect('/auth/signup')
 
   // Display all conversation times in the tenant's business timezone (same source the
@@ -81,7 +87,7 @@ export default async function InboxPage({
   const params = await searchParams
   const { status = 'all', channel = 'all', q = '' } = params
 
-  let query = supabase
+  let query = service
     .from('conversations')
     .select('*, contact:contacts(name, phone, email)')
     .eq('tenant_id', tenant.id)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import twilio from 'twilio'
 import { createServiceClient } from '@/lib/supabase/server'
+import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 
 // A2: Twilio delivery status callback. Twilio POSTs the async outcome of each
 // outbound SMS here (queued → sent → delivered, or undelivered/failed with an
@@ -10,13 +10,9 @@ export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body)) as Record<string, string>
 
-  // Validate the Twilio signature against the canonical callback URL we registered
-  // (the same one sendSMS sets via NEXT_PUBLIC_APP_URL), so signing URL == verify URL.
-  const signature = req.headers.get('x-twilio-signature') || ''
-  const url = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/twilio/sms-status`
-  const valid = twilio.validateRequest(process.env.TWILIO_AUTH_TOKEN!, signature, url, params)
-  if (!valid && process.env.NODE_ENV === 'production') {
-    console.warn('[sms-status] signature validation failed for', params.MessageSid)
+  // Signature verification is the primary security layer — a forged status callback is never processed.
+  if (shouldReject(verifyTwilio(req, params))) {
+    console.warn('[sms-status] Twilio signature verification failed for', params.MessageSid)
     return new NextResponse('Forbidden', { status: 403 })
   }
 

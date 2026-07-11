@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { isKnownSkill, skillName } from '@/lib/skills'
 
 // Toggle a skill on/off for an agent. Upserts the `skills` row (the same shape the
@@ -13,11 +14,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { type, active } = await req.json().catch(() => ({}))
   if (!type || !isKnownSkill(type)) return NextResponse.json({ error: 'Unknown skill' }, { status: 400 })
 
-  const service = await createServiceClient()
+  // Admin client (operator-safe): createServiceClient would RLS-scope to the operator's own tenant.
+  // Ownership is validated below against the active workspace before any write.
+  const service = createAdminClient()
   const { data: agent } = await service.from('ai_employees').select('id, tenant_id').eq('id', agentId).single()
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
-  const { data: tenant } = await service.from('tenants').select('id').eq('id', agent.tenant_id).eq('user_id', user.id).single()
-  if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { data: existing } = await service.from('skills')
     .select('id').eq('ai_employee_id', agentId).eq('type', type).maybeSingle()

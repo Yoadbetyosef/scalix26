@@ -9,7 +9,7 @@ export default async function MarketingPage() {
   if (!ctx) return null
   return (
     <div>
-      <PageHeader title="Marketing OS" subtitle="Campaigns, creatives, landing pages, spend, and full-funnel ROI." />
+      <PageHeader title="Marketing" subtitle="Grow your company — campaigns, creatives, and full-funnel ROI." />
       <MarketingOS />
     </div>
   )

@@ -67,4 +67,26 @@ export async function resolveBrandData(host?: string | null): Promise<BrandData>
   return brand
 }
 
+// Resolve a partner's brand by partner id (operator mode: the active client tenant's owning White
+// Label partner). Independent of hostname, so partner branding renders on the Preview / app.scalix26.com
+// before custom DNS is connected. Returns null when the partner hasn't configured a brand yet.
+export async function resolveBrandForPartner(partnerId: string): Promise<BrandData | null> {
+  const key = `partner:${partnerId}`
+  const hit = cache.get(key)
+  if (hit && Date.now() - hit.at < TTL) return hit.brand
+
+  const { data } = await createAdminClient().from('partner_brands').select('*').eq('partner_id', partnerId).maybeSingle()
+  if (!data) return null
+  const brand: BrandData = {
+    name: data.company_name || 'Scalix',
+    logoUrl: data.logo_url || null, faviconUrl: data.favicon_url || null,
+    primaryColor: data.primary_color || null, secondaryColor: data.secondary_color || null,
+    supportEmail: data.support_email || null, supportPhone: data.support_phone || null, website: data.website || null,
+    emailFooter: data.email_footer || null, loginBackgroundUrl: data.login_background_url || null,
+    poweredByScalix: data.powered_by_scalix ?? true, isPartnerBrand: true,
+  }
+  cache.set(key, { at: Date.now(), brand })
+  return brand
+}
+
 export function clearBrandCache() { cache.clear() }

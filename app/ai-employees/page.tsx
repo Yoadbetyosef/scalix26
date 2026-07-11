@@ -1,4 +1,5 @@
-import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle, Camera } from 'lucide-react'
@@ -39,14 +40,16 @@ export default async function AIEmployeesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const serviceSupabase = await createServiceClient()
-  const { data: tenant } = await serviceSupabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) redirect('/auth/signup')
+  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
+  // server-validated tenantId on every query.
+  const serviceSupabase = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
 
-  const { data: employees } = await supabase
+  const { data: employees } = await serviceSupabase
     .from('ai_employees')
     .select('*, channels(*), skills(*)')
-    .eq('tenant_id', tenant.id)
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
 
   // Email connection lives in connected_email_accounts (per-agent), NOT in the
@@ -55,7 +58,7 @@ export default async function AIEmployeesPage() {
   const { data: emailAccounts } = await createAdminClient()
     .from('connected_email_accounts')
     .select('ai_employee_id')
-    .eq('tenant_id', tenant.id)
+    .eq('tenant_id', tenantId)
     .eq('status', 'connected')
   const emailAgentIds = new Set((emailAccounts || []).map((a) => a.ai_employee_id).filter(Boolean))
 

@@ -23,10 +23,11 @@
   position: absolute;
   inset: -28%;
   border-radius: 9999px;
+  /* Brand-aware: derives from the active accent (partner brand in operator mode, Scalix default otherwise). */
   background: radial-gradient(
     circle,
-    color-mix(in oklab, #5aa8f2 20%, transparent) 0%,
-    color-mix(in oklab, #8e9bf0 12%, transparent) 32%,
+    color-mix(in oklab, var(--color-accent) 20%, transparent) 0%,
+    color-mix(in oklab, var(--color-accent-strong) 12%, transparent) 32%,
     transparent 62%
   );
   animation: glowPulse 7s ease-in-out infinite;
@@ -64,13 +65,24 @@
   z-index: 2;
 }
 
-/* The brand gradient ring (echoes the logo), slowly rotating */
+/* The brand gradient ring (echoes the logo), slowly rotating. Built from the active accent so it
+   follows a White Label partner's brand in operator mode, and stays Scalix blue by default. */
 .ring {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
   padding: 2px;
-  background: conic-gradient(from 130deg, #22D3EE, #41c8e8, #5aa8f2, #5B6CF0, #8e9bf0, #A855F7, #b79be8, #22D3EE);
+  background: conic-gradient(
+    from 130deg,
+    color-mix(in oklab, var(--color-accent) 55%, white),
+    var(--color-accent),
+    var(--color-accent-strong),
+    var(--color-accent),
+    color-mix(in oklab, var(--color-accent) 55%, white),
+    var(--color-accent),
+    var(--color-accent-strong),
+    color-mix(in oklab, var(--color-accent) 55%, white)
+  );
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -106,7 +118,7 @@
   position: absolute;
   inset: 8%;
   border-radius: 9999px;
-  border: 2px solid color-mix(in oklab, #5B6CF0 70%, transparent);
+  border: 2px solid color-mix(in oklab, var(--color-accent) 70%, transparent);
   pointer-events: none;
   z-index: 4;
   animation: rippleOut 0.9s ease-out forwards;

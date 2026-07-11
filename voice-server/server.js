@@ -94,6 +94,18 @@ wss.on('connection', (twilioWs) => {
           required: ['date', 'time', 'customer_name', 'customer_phone'],
         },
       },
+      {
+        name: 'send_payment_link',
+        description: 'Send the caller a secure payment link for one of the business products. Use ONLY a price_id from the PAYMENTS list in your instructions; NEVER invent one. Ask the caller for their email so the link can be sent. Only available if PAYMENTS is in your instructions.',
+        parameters: {
+          type: 'object',
+          properties: {
+            price_id: { type: 'string', description: 'The exact price_id from the PAYMENTS list' },
+            customer_email: { type: 'string', description: 'Caller email to send the link to' },
+          },
+          required: ['price_id'],
+        },
+      },
     ];
     if (transferNumber) {
       agentFunctions.unshift({
@@ -219,6 +231,24 @@ wss.on('connection', (twilioWs) => {
             content = j.success ? 'Appointment booked successfully.' : `Could not book: ${j.error || 'please try again'}`;
           } catch (e) { console.error('[book_appointment] error:', e.message); }
           console.log('[booking] book_appointment ->', content);
+          dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content }));
+          continue;
+        }
+
+        if (fn.name === 'send_payment_link') {
+          let content = 'Could not create a payment link right now.';
+          try {
+            const r = await fetch(`${appUrl}/api/stripe/connect/payment-link`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ lead_token: leadToken, price_id: args.price_id, customer_email: args.customer_email || null, customer_phone: callerNumber }),
+            });
+            const j = await r.json();
+            content = (r.ok && j.url)
+              ? (j.emailed ? `Payment link for ${j.productName} emailed to the customer.` : `Payment link for ${j.productName} created. Ask the caller for an email so it can be sent.`)
+              : `Could not create a payment link: ${j.error || 'please try again'}`;
+          } catch (e) { console.error('[send_payment_link] error:', e.message); }
+          console.log('[payment] send_payment_link ->', content);
           dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content }));
           continue;
         }

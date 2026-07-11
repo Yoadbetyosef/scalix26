@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { TrendingUp, Phone, Check, X, RotateCcw, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { EmptyState } from '@/components/ui/empty-state'
 import type { Lead, LeadSource, LeadStatus } from '@/types'
 
@@ -55,13 +54,9 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
   async function updateStatus(e: React.MouseEvent, id: string, status: LeadStatus) {
     e.stopPropagation()
     setUpdating(id)
-    const supabase = createClient()
-    const { error } = await supabase.from('leads').update({ status }).eq('id', id)
-    if (!error) {
-      // A won or dismissed lead shouldn't keep getting drip follow-ups.
-      if (status === 'booked' || status === 'dismissed') {
-        await supabase.from('drip_campaigns').update({ status: 'stopped' }).eq('lead_id', id).eq('status', 'active')
-      }
+    // Server API scopes the write to the validated active business and stops any active drip itself.
+    const res = await fetch(`/api/leads/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
+    if (res.ok) {
       setRows((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
       router.refresh()
     }

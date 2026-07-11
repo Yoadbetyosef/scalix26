@@ -88,9 +88,9 @@ export function AskAmy({ briefing: serverBriefing }: { briefing: AmyBriefing }) 
                 aria-label={`Talk to ${name}`}
                 className="relative inline-flex flex-shrink-0 items-center justify-center transition-transform active:scale-95"
               >
-                <span className="sx-ring sx-ring-sm" style={{ borderColor: '#8B8DF5' }} aria-hidden="true" />
-                <span className="sx-ring sx-ring-sm" style={{ borderColor: '#A5A7F7', animationDelay: '0.8s' }} aria-hidden="true" />
-                <span className="sx-ring sx-ring-sm" style={{ borderColor: '#C7C9F4', animationDelay: '1.6s' }} aria-hidden="true" />
+                <span className="sx-ring sx-ring-sm" style={{ borderColor: 'color-mix(in oklab, var(--color-accent) 65%, white)' }} aria-hidden="true" />
+                <span className="sx-ring sx-ring-sm" style={{ borderColor: 'color-mix(in oklab, var(--color-accent) 45%, white)', animationDelay: '0.8s' }} aria-hidden="true" />
+                <span className="sx-ring sx-ring-sm" style={{ borderColor: 'color-mix(in oklab, var(--color-accent) 25%, white)', animationDelay: '1.6s' }} aria-hidden="true" />
                 <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="lg" />
               </button>
               <button

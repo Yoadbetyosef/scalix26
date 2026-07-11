@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createClient } from '@/lib/supabase/client'
 
 // Weekly Hours now live on the AI employee page (Weekly Hours section), backed by
 // the appointment_slots table — the single source of truth the booking logic reads.
@@ -26,7 +25,6 @@ export function AvailabilityClient({
   embedded?: boolean
 }) {
   const router = useRouter()
-  const supabase = createClient()
 
   const [reviewUrl, setReviewUrl] = useState(googleReviewUrl)
   const [autoReview, setAutoReview] = useState(reviewEnabled)
@@ -35,11 +33,9 @@ export function AvailabilityClient({
   async function saveReviews() {
     setSavingReview(true)
     try {
-      const { error } = await supabase
-        .from('tenants')
-        .update({ google_review_url: reviewUrl.trim() || null, review_automation_enabled: autoReview })
-        .eq('id', tenantId)
-      if (error) throw error
+      // Server API scopes the write to the validated active business (owner or operated client).
+      const res = await fetch('/api/settings/reviews', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ google_review_url: reviewUrl.trim() || null, review_automation_enabled: autoReview }) })
+      if (!res.ok) throw new Error('failed')
       toast.success('Review settings saved!')
       router.refresh()
     } catch {

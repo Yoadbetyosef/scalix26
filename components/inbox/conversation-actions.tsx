@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
@@ -21,15 +20,13 @@ interface Props {
 export function ConversationActions({ conversationId, currentStatus, place = 'top', onAction }: Props) {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   async function updateStatus(status: string) {
     setLoading(true)
     try {
-      await supabase
-        .from('conversations')
-        .update({ status })
-        .eq('id', conversationId)
+      // Server API scopes the write to the validated active business (owner or operated client).
+      const res = await fetch(`/api/conversations/${conversationId}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) })
+      if (!res.ok) throw new Error('failed')
       toast.success(`Marked as ${status}`)
       router.refresh()
       onAction?.()

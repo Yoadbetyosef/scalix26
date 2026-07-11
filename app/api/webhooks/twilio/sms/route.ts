@@ -1,30 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import twilio from 'twilio'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
 import { sendSMS } from '@/lib/twilio/client'
+import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
+import { claimEvent, completeEvent, failEvent, fingerprint } from '@/lib/webhooks/idempotency'
+
+const emptyTwiml = () => new NextResponse('<?xml version="1.0"?><Response></Response>', { headers: { 'Content-Type': 'text/xml' } })
 
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
 
-  // Validate Twilio signature using the actual incoming host
-  const signature = req.headers.get('x-twilio-signature') || ''
-  const host = req.headers.get('host') || ''
-  const protocol = host.includes('localhost') ? 'http' : 'https'
-  const url = `${protocol}://${host}/api/webhooks/twilio/sms`
-
-  const valid = twilio.validateRequest(
-    process.env.TWILIO_AUTH_TOKEN!,
-    signature,
-    url,
-    params
-  )
-
-  console.log('[SMS] Signature valid:', valid, '| URL used:', url)
-
-  if (!valid && process.env.NODE_ENV === 'production') {
-    console.error('[SMS] Signature validation failed. URL:', url)
+  // Signature verification is the primary security layer — a forged request is never processed.
+  if (shouldReject(verifyTwilio(req, params))) {
+    console.error('[SMS] Twilio signature verification failed — rejecting.')
     return new NextResponse('Forbidden', { status: 403 })
   }
 
@@ -58,6 +47,11 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'text/xml' },
     })
   }
+
+  // Idempotency: a Twilio retry of the SAME message must not produce a second AI reply / outbound SMS.
+  const claim = await claimEvent('twilio', params.MessageSid || fingerprint('sms', From, To, Body), 'sms', channel.tenant_id)
+  if (claim.unavailable) return new NextResponse('Service Unavailable', { status: 503 }) // fail-closed: no replay protection → don't process
+  if (claim.duplicate) { console.log('[SMS] duplicate delivery — skipping', params.MessageSid); return emptyTwiml() }
 
   try {
     const result = await runAIPipeline({
@@ -96,11 +90,11 @@ export async function POST(req: NextRequest) {
         console.error('[SMS] sendSMS failed:', smsErr?.message, smsErr?.code, smsErr?.status)
       }
     }
+    await completeEvent(claim, channel.tenant_id)
   } catch (err: any) {
     console.error('[SMS] Pipeline error:', err?.message)
+    await failEvent(claim) // retryable — never permanently suppress a failed event
   }
 
-  return new NextResponse('<?xml version="1.0"?><Response></Response>', {
-    headers: { 'Content-Type': 'text/xml' },
-  })
+  return emptyTwiml()
 }

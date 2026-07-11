@@ -31,7 +31,9 @@ export default function LoginPage() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
-      window.location.href = '/dashboard'
+      // Route through the server-side plane decision in app/page.tsx (partners → /partner,
+      // regular business users → /dashboard) instead of hardcoding /dashboard here.
+      window.location.href = '/'
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Login failed')
     } finally {

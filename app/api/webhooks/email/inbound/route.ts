@@ -4,14 +4,18 @@ import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
 import { isNonCustomerEmail, domainsFromEmails } from '@/lib/email/is-non-customer'
+import { claimEvent, completeEvent, fingerprint } from '@/lib/webhooks/idempotency'
 
 const SECRET = process.env.RESEND_WEBHOOK_SECRET || process.env.RESEND_INBOUND_SECRET || ''
 
 // Verify the Svix signature Resend sends (svix-id/timestamp/signature).
 function verify(rawBody: string, headers: Headers): boolean {
   if (!SECRET) {
-    console.warn('[email-inbound] no RESEND_WEBHOOK_SECRET set — skipping signature check')
-    return true
+    // FAIL-CLOSED: without the Svix signing secret we cannot prove authenticity, so reject (except local
+    // dev, where provider secrets aren't configured). Set RESEND_WEBHOOK_SECRET in Preview/Production.
+    if (process.env.NODE_ENV === 'development') return true
+    console.error('[email-inbound] RESEND_WEBHOOK_SECRET not set — rejecting unverifiable webhook.')
+    return false
   }
   const id = headers.get('svix-id'); const ts = headers.get('svix-timestamp'); const sig = headers.get('svix-signature')
   if (!id || !ts || !sig) return false
@@ -46,6 +50,12 @@ export async function POST(req: NextRequest) {
   let payload: { type?: string; data?: { email_id?: string; from?: string; to?: string; subject?: string } }
   try { payload = JSON.parse(raw) } catch { return NextResponse.json({ ok: true }) }
   if (payload.type !== 'email.received') return NextResponse.json({ ok: true })
+
+  // Idempotency: Svix (Resend) re-delivers with the SAME svix-id on retry. Skip re-processing so a retry
+  // never stores a duplicate inbound message or fires a second AI reply.
+  const claim = await claimEvent('resend', req.headers.get('svix-id') || fingerprint('email', payload.data?.email_id), 'email')
+  if (claim.unavailable) return NextResponse.json({ error: 'dedup store unavailable' }, { status: 503 }) // fail-closed
+  if (claim.duplicate) { console.log('[email-inbound] duplicate delivery — skipping', req.headers.get('svix-id')); return NextResponse.json({ ok: true, duplicate: true }) }
 
   let from = payload.data?.from || ''
   let to: unknown = payload.data?.to || ''
@@ -183,5 +193,6 @@ export async function POST(req: NextRequest) {
     await ownerNote('A customer emailed your AI address (auto-reply is off).')
   }
 
+  await completeEvent(claim, tenant.id)
   return NextResponse.json({ ok: true })
 }

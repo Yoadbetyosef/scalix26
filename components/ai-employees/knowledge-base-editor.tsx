@@ -6,20 +6,17 @@ import { Plus, Pencil, X, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
 
 export type KBEntry = { id: string; title: string; content: string }
 
 export function KnowledgeBaseEditor({
-  tenantId,
   agentId,
   initialEntries,
 }: {
-  tenantId: string
+  tenantId?: string
   agentId: string
   initialEntries: KBEntry[]
 }) {
-  const supabase = createClient()
   const [entries, setEntries] = useState<KBEntry[]>(initialEntries)
   const [editingId, setEditingId] = useState<string | null>(null) // 'new' or an entry id
   const [draft, setDraft] = useState<{ title: string; content: string }>({ title: '', content: '' })
@@ -42,16 +39,15 @@ export function KnowledgeBaseEditor({
     if (!draft.title.trim() || !draft.content.trim()) { toast.error('Title and content are required'); return }
     setSaving(true)
     try {
+      // Server APIs scope the write to the validated active business (owner or operated client).
       if (editingId === 'new') {
-        const { data, error } = await supabase.from('knowledge_base')
-          .insert({ tenant_id: tenantId, ai_employee_id: agentId, title: draft.title.trim(), content: draft.content.trim(), source: 'manual' })
-          .select('id, title, content').single()
-        if (error || !data) throw error
-        setEntries((e) => [...e, data])
+        const res = await fetch(`/api/agents/${agentId}/knowledge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: draft.title.trim(), content: draft.content.trim() }) })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok || !j.entry) throw new Error('failed')
+        setEntries((e) => [...e, j.entry])
       } else {
-        const { error } = await supabase.from('knowledge_base')
-          .update({ title: draft.title.trim(), content: draft.content.trim() }).eq('id', editingId)
-        if (error) throw error
+        const res = await fetch(`/api/agents/${agentId}/knowledge`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entryId: editingId, title: draft.title.trim(), content: draft.content.trim() }) })
+        if (!res.ok) throw new Error('failed')
         setEntries((e) => e.map((x) => (x.id === editingId ? { ...x, title: draft.title.trim(), content: draft.content.trim() } : x)))
       }
       toast.success('Saved')
@@ -65,8 +61,8 @@ export function KnowledgeBaseEditor({
 
   async function remove(id: string) {
     if (!confirm('Delete this entry?')) return
-    const { error } = await supabase.from('knowledge_base').delete().eq('id', id)
-    if (error) { toast.error('Failed to delete'); return }
+    const res = await fetch(`/api/agents/${agentId}/knowledge?entryId=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!res.ok) { toast.error('Failed to delete'); return }
     setEntries((e) => e.filter((x) => x.id !== id))
   }
 

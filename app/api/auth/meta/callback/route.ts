@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { createHmac } from 'crypto'
 import { claimMetaPages } from '@/lib/meta/connect'
 
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
 
   // Single page — auto-connect without picker
   if (pages.length === 1) {
-    const { error: connectErr } = await connectPage(payload.agentId, user.id, pages[0])
+    const { error: connectErr } = await connectPage(payload.agentId, pages[0])
     const back = connectErr ? 'meta_error=page_in_use' : 'meta_connected=true'
     return clearNonce(
       NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?${back}`)
@@ -119,12 +120,19 @@ export async function GET(req: NextRequest) {
   return res
 }
 
-export async function connectPage(agentId: string, userId: string, page: MetaPage): Promise<{ error: string | null }> {
-  const supabase = await createServiceClient()
+export async function connectPage(agentId: string, page: MetaPage): Promise<{ error: string | null }> {
+  // Admin client (operator-safe): createServiceClient would RLS-scope the agent read + claim write to the
+  // partner's own tenant and miss/deny a WL client agent.
+  const supabase = createAdminClient()
 
-  const { data: tenant } = await supabase
-    .from('tenants').select('id').eq('user_id', userId).single()
-  if (!tenant) return { error: 'Account not found.' }
+  // Resolve the tenant from the AGENT and validate it against the active workspace
+  // (owner tenant, or the client tenant a White Label partner switched into) — never
+  // from the raw user, which would mis-route a client's page to the partner's own tenant.
+  const { data: agent } = await supabase.from('ai_employees').select('id, tenant_id').eq('id', agentId).maybeSingle()
+  if (!agent) return { error: 'Account not found.' }
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return { error: 'Account not found.' }
+  const tenant = { id: agent.tenant_id }
 
   // Build the page(s) to claim: the FB page, plus its linked IG account if present.
   const pages: { type: 'facebook' | 'instagram'; metaPageId: string; credentials: Record<string, string> }[] = [

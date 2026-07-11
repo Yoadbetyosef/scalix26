@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
 import { stripMarkdown } from '@/lib/utils'
 import { requestBaseUrl } from '@/lib/request-url'
 import { getBusinessTimezone } from '@/lib/timezone'
 import { currentDateContext } from '@/lib/appointments'
+import { catalogPromptLine } from '@/lib/stripe/connect'
 
 // How long the owner's phone rings before the AI receptionist takes over.
 // ~12s ≈ 2-3 rings — short enough to take over before voicemail typically grabs the
@@ -60,6 +62,13 @@ function voiceLangConfig(lang: string | null | undefined, agentVoice: string | n
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
+
+  // Signature verification is the primary security layer — a forged call is never processed.
+  if (shouldReject(verifyTwilio(req, params))) {
+    console.error('[voice] Twilio signature verification failed — rejecting.')
+    return new NextResponse('Forbidden', { status: 403 })
+  }
+
   const { From, To } = params
   const isGatherCallback = 'SpeechResult' in params
   const SpeechResult = params.SpeechResult || ''
@@ -263,6 +272,10 @@ export async function POST(req: NextRequest) {
       // per request), never frozen at deploy time.
       const tz = await getBusinessTimezone(channel.tenant_id, tenantTz)
       voiceSystemPrompt += `\n\n${currentDateContext(tz)}`
+
+      // Stripe product catalog (cached) so the agent can offer real products and pass the
+      // exact price_id to send_payment_link. No-op if the business hasn't connected Stripe.
+      try { const payLine = await catalogPromptLine(channel.tenant_id); if (payLine) voiceSystemPrompt += `\n\n${payLine}` } catch { /* fail-safe */ }
 
       const sp = escapeXml(voiceSystemPrompt)
       ownerPhone = ownerPhone || agent?.forward_to_phone || ''

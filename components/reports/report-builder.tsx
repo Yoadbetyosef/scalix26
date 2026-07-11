@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 interface Props {
@@ -18,32 +17,11 @@ export function ReportBuilder({ tenantId }: Props) {
   async function exportCSV() {
     setLoading(true)
     try {
-      const supabase = createClient()
-      const daysAgo = new Date(Date.now() - parseInt(dateRange) * 24 * 60 * 60 * 1000).toISOString()
-
-      const { data } = await supabase
-        .from('conversations')
-        .select('*, contact:contacts(name, phone)')
-        .eq('tenant_id', tenantId)
-        .gte('created_at', daysAgo)
-        .order('created_at', { ascending: false })
-
-      if (!data) return
-
-      const csv = [
-        'ID,Contact,Phone,Channel,Status,Sentiment,Created At,Summary',
-        ...(data as Array<{ id: string; contact?: { name?: string; phone?: string }; channel: string; status: string; sentiment?: string; created_at: string; summary?: string }>).map(row => [
-          row.id,
-          row.contact?.name || '',
-          row.contact?.phone || '',
-          row.channel,
-          row.status,
-          row.sentiment || '',
-          row.created_at,
-          `"${(row.summary || '').replace(/"/g, '""')}"`,
-        ].join(','))
-      ].join('\n')
-
+      // Server export (operator-safe): the API resolves the active workspace + reads with the admin
+      // client, so it works both for a business owner and a White Label partner operating a client.
+      const res = await fetch(`/api/reports/export?days=${encodeURIComponent(dateRange)}`)
+      if (!res.ok) throw new Error('export failed')
+      const csv = await res.text()
       const blob = new Blob([csv], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

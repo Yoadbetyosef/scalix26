@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { normalizePaymentSettings, isPaymentCollectionActive, type PaymentCollectionSettings } from '@/lib/stripe/payment-collection'
 
 // Owner-facing Payment Collection settings for one agent. GET returns current settings +
@@ -11,8 +12,8 @@ async function ownedAgent(agentId: string) {
   const admin = createAdminClient()
   const { data: agent } = await admin.from('ai_employees').select('id, tenant_id, payment_collection_settings').eq('id', agentId).single()
   if (!agent) return { error: 'Not found' as const, status: 404 as const }
-  const { data: tenant } = await admin.from('tenants').select('id').eq('id', agent.tenant_id).eq('user_id', user.id).maybeSingle()
-  if (!tenant) return { error: 'Forbidden' as const, status: 403 as const }
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return { error: 'Forbidden' as const, status: 403 as const }
   return { admin, agent }
 }
 

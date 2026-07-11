@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { getConnectedAccountId } from '@/lib/stripe/connect'
 import { createConnectCheckout } from '@/lib/stripe/payment-collection'
 import { requestBaseUrl } from '@/lib/request-url'
@@ -16,7 +17,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: pr } = await admin.from('payment_requests').select('*').eq('id', id).maybeSingle()
   if (!pr) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: tenant } = await admin.from('tenants').select('id, business_name').eq('id', pr.tenant_id).eq('user_id', user.id).maybeSingle()
+  // Authorize against the active workspace (owner tenant, or the client tenant a WL partner is operating).
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || pr.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { data: tenant } = await admin.from('tenants').select('id, business_name').eq('id', pr.tenant_id).maybeSingle()
   if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (pr.status !== 'pending') return NextResponse.json({ error: `Request is already ${pr.status}` }, { status: 409 })
 

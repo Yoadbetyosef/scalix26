@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import { BusinessBrain } from '@/components/ai-employees/business-brain'
 
@@ -8,10 +9,11 @@ export default async function BusinessBrainPage({ params }: { params: Promise<{ 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const service = await createServiceClient()
-  const { data: tenant } = await service.from('tenants').select('id').eq('user_id', user.id).limit(1).maybeSingle()
-  if (!tenant) redirect('/setup')
-  const { data: employee } = await service.from('ai_employees').select('id, name').eq('id', id).eq('tenant_id', tenant.id).maybeSingle()
+  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant).
+  const service = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/setup')
+  const { data: employee } = await service.from('ai_employees').select('id, name').eq('id', id).eq('tenant_id', tenantId).maybeSingle()
   if (!employee) notFound()
 
   return (

@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import type { AttentionItem } from '@/lib/dashboard/impact'
 import { useAttention } from '@/components/dashboard/attention'
 import { attentionStore } from '@/lib/dashboard/attention-store'
+import { useBrand } from '@/components/brand/brand-provider'
 
 // The "Attention Needed" list. Reads the SINGLE source of truth (attentionStore) — the exact same
 // unresolved-notification state as the dashboard header, voice assistant, and notification bell.
@@ -17,13 +18,14 @@ export function AttentionNeeded({ onOpenMetric }: {
   onOpenMetric: (item: AttentionItem) => void
 }) {
   const { ready, visibleItems } = useAttention()
+  const brandName = useBrand()?.name || 'Scalix'
 
   if (ready && visibleItems.length === 0) {
     return (
       <Card>
         <CardContent className="p-5 sm:p-6 flex items-center gap-3">
           <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-          <span className="text-sm text-ink">You&apos;re all caught up — Scalix has everything handled.</span>
+          <span className="text-sm text-ink">You&apos;re all caught up — {brandName} has everything handled.</span>
         </CardContent>
       </Card>
     )

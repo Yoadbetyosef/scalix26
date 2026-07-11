@@ -1,4 +1,5 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,28 +15,26 @@ export interface AgentCtx {
 export type AuthResult = AgentCtx | { error: string; status: 401 | 403 | 404 }
 
 /**
- * Resolve + authorize an AI employee for the logged-in owner. Tenant ownership is checked
- * by construction: we load the agent with the service role, then confirm its tenant
- * belongs to THIS user (`tenants.user_id = user.id`). Every downstream query must keep
- * filtering by the returned tenantId — the admin client bypasses RLS.
+ * Resolve + authorize an AI employee for the ACTIVE business (owner tenant, or the client tenant a
+ * White Label partner is operating). Tenant ownership is validated by the shared server context — the
+ * agent's tenant must equal the active tenant — NOT by the logged-in user's user_id (which would resolve
+ * to the operator's own tenant in operator mode). Every downstream query keeps filtering by tenantId.
  */
 export async function authAgent(agentId: string): Promise<AuthResult> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Unauthorized', status: 401 }
+  const ctx = await requireActiveBusinessContext()
+  if (!ctx) return { error: 'Unauthorized', status: 401 }
 
   const admin = createAdminClient()
   // select('*') so the page still works before the playbook migration is applied
   // (missing columns simply won't be present rather than throwing).
   const { data: agent } = await admin.from('ai_employees').select('*').eq('id', agentId).single()
   if (!agent) return { error: 'Agent not found', status: 404 }
+  if (agent.tenant_id !== ctx.tenantId) return { error: 'Forbidden', status: 403 }
 
-  const { data: tenant } = await admin
-    .from('tenants').select('*')
-    .eq('id', agent.tenant_id).eq('user_id', user.id).single()
+  const { data: tenant } = await admin.from('tenants').select('*').eq('id', ctx.tenantId).single()
   if (!tenant) return { error: 'Forbidden', status: 403 }
 
-  return { admin, agent, tenant, tenantId: agent.tenant_id }
+  return { admin, agent, tenant, tenantId: ctx.tenantId }
 }
 
 export function isAuthError(r: AuthResult): r is { error: string; status: 401 | 403 | 404 } {

@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Phone, Mail, MapPin, MessageCircle, Globe, Calendar, Clock } from 'lucide-react'
@@ -13,26 +14,28 @@ export default async function ContactProfilePage({ params, searchParams }: { par
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const service = await createServiceClient()
-  const { data: tenant } = await service.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) redirect('/auth/signup')
+  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant);
+  // both queries filter by the server-validated tenantId.
+  const service = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
 
   const { id } = await params
 
-  const { data: contact } = await supabase
+  const { data: contact } = await service
     .from('contacts')
     .select('*')
     .eq('id', id)
-    .eq('tenant_id', tenant.id)
+    .eq('tenant_id', tenantId)
     .maybeSingle()
 
   if (!contact) notFound()
 
-  const { data: conversations } = await supabase
+  const { data: conversations } = await service
     .from('conversations')
     .select('id, channel, status, summary, created_at, updated_at')
     .eq('contact_id', id)
-    .eq('tenant_id', tenant.id)
+    .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false })
     .limit(50)
 

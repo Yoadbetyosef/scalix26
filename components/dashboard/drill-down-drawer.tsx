@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { AiThinking } from '@/components/brand/ai-thinking'
+import { useBrand } from '@/components/brand/brand-provider'
 
 type OutcomeTag = { label: string; tone: 'green' | 'blue' | 'purple' | 'indigo' | 'amber' | 'gray' }
 type ProofRow = {
@@ -55,6 +56,7 @@ const TL_ICON: Record<TimelineEvent['kind'], { icon: React.ElementType; cls: str
 function ConversationTimeline({ conversationId }: { conversationId: string }) {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null)
   const [error, setError] = useState(false)
+  const brandName = useBrand()?.name || 'Scalix'
   useEffect(() => {
     let active = true
     setError(false); setEvents(null)
@@ -82,7 +84,7 @@ function ConversationTimeline({ conversationId }: { conversationId: string }) {
                 <Icon className="w-3 h-3" />
               </span>
               <p className={`text-xs ${milestone ? 'font-semibold text-ink' : 'text-ink'}`}>
-                {milestone ? e.label : (e.kind === 'outbound' ? 'Scalix' : 'Customer')}
+                {milestone ? e.label : (e.kind === 'outbound' ? brandName : 'Customer')}
               </p>
               {!milestone && e.text && <p className="text-xs text-subtle mt-0.5 line-clamp-2">{e.text}</p>}
               <p className="text-[10px] text-muted mt-0.5">{formatDateTime(e.at)}</p>
@@ -96,6 +98,7 @@ function ConversationTimeline({ conversationId }: { conversationId: string }) {
 
 function ProofRowItem({ row }: { row: ProofRow }) {
   const [open, setOpen] = useState(false)
+  const brandName = useBrand()?.name || 'Scalix'
   const ch = CHANNEL[row.channel || ''] || { icon: MessageCircle, label: row.channel || 'Conversation', cls: 'bg-sunken text-subtle' }
   const Icon = ch.icon
   const expandable = row.kind === 'conversation'
@@ -123,7 +126,7 @@ function ProofRowItem({ row }: { row: ProofRow }) {
                   <Clock className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="text-xs font-bold text-emerald-800">Owner Time Saved</span>
                 </div>
-                <p className="text-[11px] text-emerald-700/90 mt-0.5">No owner involvement required · Handled automatically by Scalix.</p>
+                <p className="text-[11px] text-emerald-700/90 mt-0.5">No owner involvement required · Handled automatically by {brandName}.</p>
               </div>
             )}
 

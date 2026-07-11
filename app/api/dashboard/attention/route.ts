@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { getAttention } from '@/lib/dashboard/impact'
 
 // The single source of truth for "unresolved notifications", fetched by the client attention store
@@ -10,10 +11,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ items: [] }, { status: 401 })
 
-  const svc = await createServiceClient()
-  const { data: tenant } = await svc.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) return NextResponse.json({ items: [] })
+  // Resolve the active workspace (owner tenant, or the client tenant a WL partner is operating) so the
+  // bell reflects the tenant the operator is inside, not the partner's own. getAttention uses the admin client.
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) return NextResponse.json({ items: [] })
 
-  const items = await getAttention(tenant.id)
+  const items = await getAttention(tenantId)
   return NextResponse.json({ items })
 }

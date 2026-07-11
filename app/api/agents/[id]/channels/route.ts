@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
+import { getPartnerTwilio } from '@/lib/partner/integrations'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
 import { decrypt } from '@/lib/mailbox/crypto'
 import { claimMetaPages } from '@/lib/meta/connect'
@@ -17,7 +19,10 @@ export async function POST(
   const body = await req.json()
   const { action, type } = body
 
-  const serviceSupabase = await createServiceClient()
+  // Admin client (operator-safe): createServiceClient downgrades to the operator's JWT under RLS, which
+  // would scope reads/writes — and critically the white_label_partner_id lookup below — to the partner's
+  // OWN tenant, mis-routing a WL client's provisioning to the platform Twilio. Ownership is validated below.
+  const serviceSupabase = createAdminClient()
 
   // Verify the agent belongs to this user's tenant
   const { data: agent } = await serviceSupabase
@@ -28,19 +33,19 @@ export async function POST(
 
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
-  const { data: tenant } = await serviceSupabase
-    .from('tenants')
-    .select('id')
-    .eq('id', agent.tenant_id)
-    .eq('user_id', user.id)
-    .single()
+  // Authorize against the active workspace (owner tenant, or the validated client tenant a White
+  // Label partner switched into). Writes go ONLY to the active tenant.
+  const activeTenantId = await getActiveTenantId()
+  if (!activeTenantId || agent.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  if (!tenant) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // White-label client tenants provision through their OWNER partner's own Twilio account (they pay).
+  const { data: tRow } = await serviceSupabase.from('tenants').select('white_label_partner_id').eq('id', agent.tenant_id).maybeSingle()
+  const partnerTwilio = tRow?.white_label_partner_id ? await getPartnerTwilio(tRow.white_label_partner_id) : null
 
   // ── Provision phone number ──────────────────────────────────────────────────
   if (action === 'provision_phone') {
     try {
-      const phoneNumber = await provisionAgentPhoneNumber(agent.tenant_id, agentId)
+      const phoneNumber = await provisionAgentPhoneNumber(agent.tenant_id, agentId, partnerTwilio || undefined)
       if (!phoneNumber) return NextResponse.json({ error: 'No phone numbers available' }, { status: 503 })
       return NextResponse.json({ phoneNumber })
     } catch (err) {
@@ -62,7 +67,11 @@ export async function POST(
       const sid = (phoneChannels[0].credentials as Record<string, string>)?.sid
       if (sid) {
         try {
-          const client = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+          // Release against the account that owns the number: a WL client's number lives on the
+          // partner's Twilio subaccount, so use partner creds when present (else the platform account).
+          const client = partnerTwilio
+            ? twilio(partnerTwilio.accountSid, partnerTwilio.authToken)
+            : twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
           await client.incomingPhoneNumbers(sid).remove()
         } catch (err) {
           console.error('[agents/channels] Twilio release failed:', err)

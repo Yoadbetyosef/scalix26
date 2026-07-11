@@ -2,7 +2,6 @@
 
 import { useState, useEffect, type ElementType } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -193,7 +192,6 @@ function relativeTime(iso: string): string {
 
 export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccounts = [], googleConnected, googleError, onboarding, skills, availabilitySlots, googleReviewUrl, reviewEnabled }: Props) {
   const router = useRouter()
-  const supabase = createClient()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     name: employee.name || '',
@@ -394,7 +392,8 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
   async function toggleStatus() {
     const newStatus = form.status === 'active' ? 'draft' : 'active'
     setForm(f => ({ ...f, status: newStatus }))
-    await supabase.from('ai_employees').update({ status: newStatus }).eq('id', employee.id)
+    // Server API (operator-safe) scopes the write to the validated active business.
+    await fetch(`/api/agents/${employee.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus }) })
     toast.success(newStatus === 'active' ? 'Agent is now live!' : 'Agent paused')
   }
 

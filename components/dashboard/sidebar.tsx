@@ -48,7 +48,20 @@ const navItems = [
 // First 4 (visible) items go in the mobile bottom bar, the rest in the "More" drawer.
 // The split happens per-render after module filtering (see visibleNav below).
 
-export function Sidebar() {
+// Routes verified operator-safe (reads AND mutations scoped to the active client tenant). These appear
+// in a White Label operator's client workspace — the FULL product minus Scalix billing. "Billing &
+// Subscription" is intentionally excluded (a client's plan is governed by the partner, never Scalix).
+const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Leads', 'Inbox', 'Contacts', 'Catalog', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
+
+export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules }: {
+  operator?: boolean
+  // True across the whole White Label plane (partner operating a client OR a WL customer's own login):
+  // hides Partner Program, Admin, and Scalix billing. `operator` additionally drives tenant resolution.
+  whiteLabel?: boolean
+  operatorBusinessName?: string | null
+  operatorModules?: ModuleKey[]
+} = {}) {
+  const hidePartnerSurfaces = operator || whiteLabel
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -73,6 +86,14 @@ export function Sidebar() {
   }
 
   useEffect(() => {
+    // Operator mode: the client can't be resolved via user_id (that's the PARTNER's tenant). Use the
+    // server-validated client name + client modules passed as props, and never load the partner's
+    // plan/trial (no Scalix billing inside a client workspace).
+    if (operator) {
+      setBusinessName(operatorBusinessName || '')
+      if (operatorModules) setEnabledModules(operatorModules)
+      return
+    }
     async function loadBusinessName() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -89,18 +110,25 @@ export function Sidebar() {
       setEnabledModules(effectiveModules(enabledModulesOf(tenant), flags, isEnterprise))
     }
     loadBusinessName()
-  }, [])
+  }, [operator, operatorBusinessName, operatorModules])
 
   // Resolve the host-based brand (myLocksmith / Scalix26 / default) once on mount.
   useEffect(() => { setBrand(detectBrand()) }, [])
 
   // Admin-only: show the Admin link if this user resolves to a platform admin (server-verified).
-  useEffect(() => { fetch('/api/me/admin').then((r) => r.json()).then((j) => setIsAdmin(!!j.isAdmin)).catch(() => {}) }, [])
+  // NEVER inside a client workspace — admin/partner surfaces must not leak into operator mode.
+  useEffect(() => {
+    if (hidePartnerSurfaces) { setIsAdmin(false); return }
+    fetch('/api/me/admin').then((r) => r.json()).then((j) => setIsAdmin(!!j.isAdmin)).catch(() => {})
+  }, [hidePartnerSurfaces])
 
   // Close drawer on route change
   useEffect(() => { setMoreOpen(false) }, [pathname])
 
   async function handleSignOut() {
+    // Clear any active operator workspace cookie before signing out (best-effort; the httpOnly
+    // cookie can only be cleared server-side, and middleware also clears it when there's no user).
+    if (operator) await fetch('/api/partner/workspace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'exit' }) }).catch(() => {})
     await supabase.auth.signOut()
     router.push('/auth/login')
   }
@@ -109,6 +137,11 @@ export function Sidebar() {
   // (Dashboard, Analytics, Reports, Billing, Settings) always show. Filtering before the
   // primary/more split keeps up to 4 items in the mobile bottom bar.
   const visibleNav = navItems.filter((i) => {
+    // The whole White Label plane (partner operating a client, OR a WL customer's own login) never sees
+    // Scalix billing — a client's plan is governed by the partner. All product routes are operator-safe.
+    if (hidePartnerSurfaces && i.label === 'Billing & Subscription') return false
+    // Belt-and-suspenders: in impersonation mode keep the verified operator-safe allowlist.
+    if (operator && !OPERATOR_SAFE_LABELS.has(i.label)) return false
     const m = moduleForNav(i.href)
     return !m || enabledModules.includes(m)
   })
@@ -152,32 +185,34 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Trial / plan status */}
-        {plan && (
+        {/* Trial / plan status — Scalix billing, hidden across the whole White Label plane. */}
+        {!hidePartnerSurfaces && plan && (
           <div className="px-2 pt-2">
             <TrialWidget plan={plan} trialEndsAt={trialEndsAt} />
           </div>
         )}
 
-        {/* Partner program — the viral loop entry point */}
-        <div className="px-2 pt-2">
-          <Link
-            href="/partner"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-accent-strong hover:bg-accent/5 transition-colors"
-          >
-            <Handshake className="w-5 h-5 flex-shrink-0" />
-            <span className="hidden xl:block">Partner Program</span>
-          </Link>
-          {isAdmin && (
+        {/* Partner program + Admin — owner surfaces only. NEVER shown to a White Label operator or client. */}
+        {!hidePartnerSurfaces && (
+          <div className="px-2 pt-2">
             <Link
-              href="/admin"
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-subtle hover:bg-sunken/70 hover:text-ink transition-colors"
+              href="/partner"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-accent-strong hover:bg-accent/5 transition-colors"
             >
-              <Shield className="w-5 h-5 flex-shrink-0" />
-              <span className="hidden xl:block">Admin</span>
+              <Handshake className="w-5 h-5 flex-shrink-0" />
+              <span className="hidden xl:block">Partner Program</span>
             </Link>
-          )}
-        </div>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-subtle hover:bg-sunken/70 hover:text-ink transition-colors"
+              >
+                <Shield className="w-5 h-5 flex-shrink-0" />
+                <span className="hidden xl:block">Admin</span>
+              </Link>
+            )}
+          </div>
+        )}
 
         {/* Sign out */}
         <div className="px-2 py-4 border-t border-hairline">
@@ -265,14 +300,16 @@ export function Sidebar() {
               })}
             </nav>
             <div className="px-4 pb-6 border-t border-hairline pt-3 space-y-1">
-              <Link
-                href="/partner"
-                className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-accent-strong hover:bg-accent/5 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"
-              >
-                <Handshake className="w-5 h-5 flex-shrink-0" />
-                Partner Program
-              </Link>
-              {isAdmin && (
+              {!hidePartnerSurfaces && (
+                <Link
+                  href="/partner"
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-accent-strong hover:bg-accent/5 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"
+                >
+                  <Handshake className="w-5 h-5 flex-shrink-0" />
+                  Partner Program
+                </Link>
+              )}
+              {!hidePartnerSurfaces && isAdmin && (
                 <Link
                   href="/admin"
                   className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-subtle hover:bg-sunken w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"

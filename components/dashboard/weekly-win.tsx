@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { CountUp } from '@/components/ui/count-up'
+import { useBrand } from '@/components/brand/brand-provider'
 
 // W4 — the once-a-week "win moment" (Monzo pattern). Full-screen takeover on the first
 // dashboard open of the week, using ONLY the recovered-this-week metric already fetched.
@@ -19,6 +20,7 @@ function startOfWeek(): number {
 
 export function WeeklyWin({ count, name, voice }: { count: number; name: string; voice?: string | null }) {
   const [show, setShow] = useState(false)
+  const brandName = useBrand()?.name || 'Scalix'
 
   useEffect(() => {
     if (count <= 0) return
@@ -31,7 +33,7 @@ export function WeeklyWin({ count, name, voice }: { count: number; name: string;
 
   if (!show) return null
 
-  const summary = `${name} recovered ${count} conversation${count === 1 ? '' : 's'} for me this week on Scalix.`
+  const summary = `${name} recovered ${count} conversation${count === 1 ? '' : 's'} for me this week on ${brandName}.`
   const onShare = async () => {
     try {
       if (typeof navigator !== 'undefined' && navigator.share) await navigator.share({ text: summary })

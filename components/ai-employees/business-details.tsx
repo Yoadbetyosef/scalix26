@@ -7,7 +7,6 @@ import { DollarSign, MapPin, Ban } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { createClient } from '@/lib/supabase/client'
 
 // Each field is stored as a knowledge_base entry (source 'template') scoped to
 // THIS agent, so it loads on the agent's calls/texts but not other agents'.
@@ -20,16 +19,14 @@ const FIELDS = [
 ] as const
 
 export function BusinessDetails({
-  tenantId,
   agentId,
   initial,
 }: {
-  tenantId: string
+  tenantId?: string
   agentId: string
   initial: Record<string, string>
 }) {
   const router = useRouter()
-  const supabase = createClient()
   const [values, setValues] = useState<Record<string, string>>(() => {
     const v: Record<string, string> = {}
     for (const f of FIELDS) v[f.title] = initial[f.title] || ''
@@ -40,16 +37,10 @@ export function BusinessDetails({
   async function save() {
     setSaving(true)
     try {
-      for (const f of FIELDS) {
-        await supabase.from('knowledge_base').delete()
-          .eq('tenant_id', tenantId).eq('ai_employee_id', agentId).eq('source', 'template').eq('title', f.title)
-        const content = values[f.title].trim()
-        if (content) {
-          const { error } = await supabase.from('knowledge_base')
-            .insert({ tenant_id: tenantId, ai_employee_id: agentId, title: f.title, content, source: 'template' })
-          if (error) throw error
-        }
-      }
+      // Server API scopes the write to the validated active business (owner or operated client).
+      const details = Object.fromEntries(FIELDS.map((f) => [f.title, values[f.title]]))
+      const res = await fetch(`/api/agents/${agentId}/business-details`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ details }) })
+      if (!res.ok) throw new Error('failed')
       toast.success('Business details saved!')
       router.refresh()
     } catch {

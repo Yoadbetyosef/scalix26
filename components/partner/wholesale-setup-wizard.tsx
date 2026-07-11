@@ -60,7 +60,7 @@ export function WholesaleSetupWizard() {
         {step === 1 && (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold text-ink">Your business</h2>
-            <p className="text-sm text-subtle">This is how your AI company presents to your clients.</p>
+            <p className="text-sm text-subtle">This is how your AI company presents to the world.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2"><label className={lbl}>Company name</label><input className={inp} value={biz.company_name} onChange={(e) => setBiz({ ...biz, company_name: e.target.value })} /></div>
               <div><label className={lbl}>Logo URL</label><input className={inp} value={biz.logo_url} onChange={(e) => setBiz({ ...biz, logo_url: e.target.value })} placeholder="https://…" /></div>
@@ -74,17 +74,17 @@ export function WholesaleSetupWizard() {
         {step === 2 && (
           <div>
             <h2 className="text-lg font-semibold text-ink">Connect your infrastructure</h2>
-            <p className="mb-4 text-sm text-subtle">You bring your own accounts — Scalix runs your clients on them and never bills these providers. Connect what you have now; you can add the rest anytime from Infrastructure.</p>
+            <p className="mb-4 text-sm text-subtle">Every business you run operates on your own phone and AI accounts. Connect what you have now — you can add the rest anytime from Settings.</p>
             <WholesaleInfrastructure onChange={setConnected} />
             <p className="mt-3 text-xs text-muted">{connected} provider{connected === 1 ? '' : 's'} connected. You can launch and finish connecting later.</p>
           </div>
         )}
         {step === 3 && (
           <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-ink">Your retail pricing</h2>
-            <p className="text-sm text-subtle">You choose what your clients pay. Your wholesale cost comes from your assigned price book.</p>
+            <h2 className="text-lg font-semibold text-ink">Your pricing</h2>
+            <p className="text-sm text-subtle">Set what each business pays for your software. Price them however you like.</p>
             {!book || book.items.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-hairline-strong bg-canvas p-6 text-center text-sm text-subtle">No price book assigned yet — your pricing is set by your Scalix26 agreement. You can still launch and set client prices individually.</div>
+              <div className="rounded-xl border border-dashed border-hairline-strong bg-canvas p-6 text-center text-sm text-subtle">No plans yet — you can set a price for each business individually when you create it.</div>
             ) : (
               <div className="space-y-2">
                 {book.items.map((it) => {
@@ -93,9 +93,8 @@ export function WholesaleSetupWizard() {
                   return (
                     <div key={it.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-hairline bg-canvas p-3">
                       <div className="min-w-[100px] font-medium text-ink">{it.plan_name}</div>
-                      <div className="text-xs text-muted">Wholesale <span className="text-subtle">{money(p.wholesale_cents)}/mo</span></div>
-                      <label className="ml-auto flex items-center gap-2 text-xs text-subtle">Your retail $<input className="h-9 w-24 rounded-lg border border-hairline-strong px-2 text-sm" inputMode="decimal" value={retail[it.plan_code] ?? String(p.retail_cents / 100)} onChange={(e) => setRetail((v) => ({ ...v, [it.plan_code]: e.target.value }))} /></label>
-                      <div className="text-xs font-medium text-green-700">+{money(retailCents - p.wholesale_cents)}/mo</div>
+                      <label className="ml-auto flex items-center gap-2 text-xs text-subtle">Price $<input className="h-9 w-24 rounded-lg border border-hairline-strong px-2 text-sm" inputMode="decimal" value={retail[it.plan_code] ?? String(p.retail_cents / 100)} onChange={(e) => setRetail((v) => ({ ...v, [it.plan_code]: e.target.value }))} />/mo</label>
+                      <div className="text-xs font-medium text-green-700">You keep {money(retailCents - p.wholesale_cents)}/mo</div>
                     </div>
                   )
                 })}
@@ -107,7 +106,7 @@ export function WholesaleSetupWizard() {
           <div className="text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 text-accent-strong"><Rocket className="h-6 w-6" /></div>
             <h2 className="text-lg font-semibold text-ink">Launch your AI company</h2>
-            <p className="mx-auto mt-1 max-w-md text-sm text-subtle">{biz.company_name || 'Your business'} is ready. You&apos;ll manage clients, pricing, and infrastructure from your dashboard. You can refine everything anytime.</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-subtle">{biz.company_name || 'Your company'} is ready. You&apos;ll manage your businesses, pricing, and brand from your dashboard. You can refine everything anytime.</p>
             <div className="mx-auto mt-4 grid max-w-sm grid-cols-3 gap-2 text-xs">
               <div className="rounded-lg border border-hairline bg-canvas p-2"><div className="font-semibold text-ink">{connected}</div><div className="text-muted">Providers</div></div>
               <div className="rounded-lg border border-hairline bg-canvas p-2"><div className="font-semibold text-ink">{book?.items.length || 0}</div><div className="text-muted">Plans</div></div>

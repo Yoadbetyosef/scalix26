@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { MessagesSquare, CheckCircle2, Clock, Bot } from 'lucide-react'
@@ -9,9 +10,12 @@ export default async function AnalyticsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const serviceSupabase = await createServiceClient()
-  const { data: tenant } = await serviceSupabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) redirect('/auth/signup')
+  // Active-workspace aware (owner tenant, or the client tenant a WL partner is operating) + admin client
+  // with explicit tenant_id scoping. The RLS cookie client would resolve to the operator's own tenant.
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
+  const tenant = { id: tenantId }
+  const db = createAdminClient()
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
@@ -20,11 +24,11 @@ export default async function AnalyticsPage() {
     { count: resolvedConversations },
     { data: conversations },
   ] = await Promise.all([
-    supabase.from('conversations').select('*', { count: 'exact', head: true })
+    db.from('conversations').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenant.id).gte('created_at', thirtyDaysAgo),
-    supabase.from('conversations').select('*', { count: 'exact', head: true })
+    db.from('conversations').select('*', { count: 'exact', head: true })
       .eq('tenant_id', tenant.id).eq('status', 'resolved').gte('created_at', thirtyDaysAgo),
-    supabase.from('conversations').select('channel, status, created_at, duration_seconds')
+    db.from('conversations').select('channel, status, created_at, duration_seconds')
       .eq('tenant_id', tenant.id).gte('created_at', thirtyDaysAgo),
   ])
 

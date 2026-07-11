@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requestBaseUrl } from '@/lib/request-url'
+import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 
 function escapeXml(str: string): string {
   return str
@@ -26,6 +27,13 @@ function ttsPlay(text: string, baseUrl: string): string {
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
+
+  // Signature verification is the primary security layer — a forged request is never processed.
+  if (shouldReject(verifyTwilio(req, params))) {
+    console.error('[voice/ai-fallback] Twilio signature verification failed — rejecting.')
+    return new NextResponse('Forbidden', { status: 403 })
+  }
+
   const { To, DialCallStatus } = params
   // forced → the AMD callback sent the caller here off a voicemail bridge.
   const forced = req.nextUrl.searchParams.get('forced')

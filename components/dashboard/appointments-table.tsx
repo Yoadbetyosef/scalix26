@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Calendar, Check, BellOff, Phone, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatTime12 } from '@/lib/appointments'
 
@@ -46,16 +45,15 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
 
   async function markCompleted(id: string) {
     setBusy(id)
-    const supabase = createClient()
-    const { error } = await supabase.from('appointments').update({ status: 'completed' }).eq('id', id)
-    if (!error) { setRows((r) => r.map((a) => (a.id === id ? { ...a, status: 'completed' } : a))); router.refresh() }
+    // Server API scopes the write to the validated active business (owner or operated client).
+    const res = await fetch(`/api/appointments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) })
+    if (res.ok) { setRows((r) => r.map((a) => (a.id === id ? { ...a, status: 'completed' } : a))); router.refresh() }
     setBusy(null)
   }
   async function skipReview(id: string) {
     setBusy(id)
-    const supabase = createClient()
-    const { error } = await supabase.from('appointments').update({ skip_review: true }).eq('id', id)
-    if (!error) { setRows((r) => r.map((a) => (a.id === id ? { ...a, skip_review: true } : a))); router.refresh() }
+    const res = await fetch(`/api/appointments/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ skip_review: true }) })
+    if (res.ok) { setRows((r) => r.map((a) => (a.id === id ? { ...a, skip_review: true } : a))); router.refresh() }
     setBusy(null)
   }
   async function sendReview(id: string) {

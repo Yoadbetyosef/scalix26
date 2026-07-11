@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { sendSMS } from '@/lib/twilio/client'
 import { sendEmailReply } from '@/lib/email/send'
 import { getProvider } from '@/lib/mailbox'
@@ -25,14 +26,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const text = content.trim()
 
-  // Load conversation via RLS (owner only).
-  const { data: conv } = await authed
+  // Load with service role, then authorize against the active workspace (owner tenant, or the
+  // validated client tenant a White Label partner switched into). Send goes ONLY to that tenant.
+  const activeTenantId = await getActiveTenantId()
+  const { data: conv } = await createAdminClient()
     .from('conversations')
     .select('id, tenant_id, channel, human_takeover, ai_employee_id, summary, email_account_id, contact:contacts(phone, email)')
     .eq('id', id)
     .single()
 
   if (!conv) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+  if (!activeTenantId || conv.tenant_id !== activeTenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (!conv.human_takeover) {
     return NextResponse.json({ error: 'Take over the conversation before sending messages' }, { status: 400 })
   }
@@ -41,7 +45,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const contactPhone = contact?.phone || undefined
   const contactEmail = contact?.email || undefined
   const channel = conv.channel as string
-  const service = await createServiceClient()
+  // Admin client (operator-safe): createServiceClient would RLS-scope channel/message reads+writes to the
+  // operator's own tenant. All queries below filter by the already-validated conv.tenant_id.
+  const service = createAdminClient()
 
   let delivered = false
   let note = ''

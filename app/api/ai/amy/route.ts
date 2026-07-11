@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 import { answerAsAmy } from '@/lib/amy/answer'
 
-// Amy as Chief of Staff — answers from THIS business's real data via the Business
-// Context Layer. Auth-gated; the tenant is resolved server-side from the session, so
-// Amy can only ever read the signed-in owner's own workspace.
+// Amy as Chief of Staff — answers from THIS business's real data via the Business Context Layer.
+// The tenant is the validated ACTIVE workspace (owner tenant, or the client tenant a White Label
+// partner is operating) — never resolved from user_id — so Amy speaks for the business being operated.
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const bctx = await requireActiveBusinessContext()
+  if (!bctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const admin = createAdminClient()
   const { data: tenant } = await admin
-    .from('tenants').select('id, business_name').eq('user_id', user.id)
-    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    .from('tenants').select('id, business_name').eq('id', bctx.tenantId).maybeSingle()
   if (!tenant) return NextResponse.json({ error: 'no_tenant' }, { status: 404 })
 
   const body = (await req.json().catch(() => ({}))) as { message?: unknown }

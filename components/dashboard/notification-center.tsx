@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Bell, X, ArrowUpRight, AlertTriangle } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { useAttention } from '@/components/dashboard/attention'
 import { attentionStore } from '@/lib/dashboard/attention-store'
 
@@ -18,16 +17,15 @@ export function NotificationCenter() {
   const [tenantId, setTenantId] = useState<string | null>(null)
   const { ready, visibleItems, unresolvedCount } = useAttention()
 
-  // Bind the tenant once → the store loads dismiss state, wires realtime, and fetches the count.
+  // Bind the ACTIVE business tenant once → the store loads dismiss state, wires realtime, and fetches
+  // the count. Resolved server-side (validated active workspace) so a White Label partner operating a
+  // client binds to the CLIENT's tenant, never the operator's own. Never derive tenant from user_id here.
   useEffect(() => {
-    const supabase = createClient()
     ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: tenant } = await supabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-      if (!tenant) return
-      setTenantId(tenant.id)
-      attentionStore.setTenant(tenant.id)
+      const j = await fetch('/api/me/context').then((r) => r.json()).catch(() => null)
+      if (!j?.tenantId) return
+      setTenantId(j.tenantId)
+      attentionStore.setTenant(j.tenantId)
     })()
   }, [])
 

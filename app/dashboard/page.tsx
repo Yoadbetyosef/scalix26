@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
@@ -15,7 +16,12 @@ import { getModuleFlags } from '@/lib/admin/module-flags'
 import type { Lead } from '@/types'
 
 async function getDashboardData(tenantId: string) {
-  const supabase = await createClient()
+  // Admin (true service-role) client + explicit tenant_id on every query (verified) → works for the
+  // owner tenant AND for a White Label partner operating a client workspace. NOTE: createServiceClient
+  // is the cookie-based SSR client — in operator mode it downgrades to the partner's JWT and RLS scopes
+  // to the partner's OWN tenant, silently returning zero rows for the client tenant. createAdminClient
+  // never picks up the user session, so the server-validated tenantId filter is the sole (and correct) scope.
+  const supabase = createAdminClient()
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
@@ -122,16 +128,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Use service client to bypass RLS for tenant lookup
-  const serviceSupabase = await createServiceClient()
-  const { data: tenant } = await serviceSupabase
-    .from('tenants')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
+  // Active workspace = the owner's tenant, or the client tenant a White Label partner switched into.
+  const serviceSupabase = createAdminClient()
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/setup')
+  const { data: tenant } = await serviceSupabase.from('tenants').select('*').eq('id', tenantId).maybeSingle()
   if (!tenant) redirect('/setup')
 
   // Module gating: the Leads tab needs `pipeline`, Appointments needs `scheduling`. Direct

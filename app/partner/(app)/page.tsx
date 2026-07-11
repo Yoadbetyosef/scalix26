@@ -6,7 +6,10 @@ import { getPartnerStatsCached } from '@/lib/partner/stats'
 import { getCoach } from '@/lib/partner/coach'
 import { getDashboardExtras } from '@/lib/partner/dashboard'
 import { resolvePartnerEconomics } from '@/lib/partner/economics-resolve'
-import { WholesalePartnerDashboard } from '@/components/partner/partner-wholesale-dashboard'
+import { getCompanyOverview } from '@/lib/partner/company'
+import { resolveBrandForPartner } from '@/lib/partner/brand'
+import { CompanyHome } from '@/components/partner/company-home'
+// NOTE: the old WholesalePartnerDashboard (reseller framing) is retired for WL/reseller — replaced by CompanyHome.
 import { levelForXp, levelBenefits } from '@/lib/partner/xp'
 import { enabledPartnerModules } from '@/lib/partner/modules'
 import { PageHeader, StatCard, Panel, money, CoachIcon } from '@/components/partner/ui'
@@ -38,10 +41,14 @@ export default async function PartnerDashboard() {
   // dashboard instead of the commission one — never "earn X% commission".
   const econ = await resolvePartnerEconomics(ctx.partnerId)
   if (econ.billingMode === 'white_label' || econ.billingMode === 'reseller') {
-    // First run → the setup wizard; after launch → the white-label dashboard.
+    // First run → the setup wizard; after launch → the company HQ (revenue-forward).
     const { data: wl } = await db.from('partners').select('wl_setup_complete').eq('id', ctx.partnerId).maybeSingle()
     if (!wl?.wl_setup_complete) redirect('/partner/setup')
-    return <WholesalePartnerDashboard mode={econ.billingMode} companyName={ctx.companyName} streak={stats.streak_days} discount={econ.customWholesaleDiscountPct} markup={econ.retailMarkupPct} />
+    const [overview, brand] = await Promise.all([
+      getCompanyOverview(ctx.partnerId),
+      resolveBrandForPartner(ctx.partnerId),
+    ])
+    return <CompanyHome overview={overview} companyName={brand?.name || ctx.companyName || 'Your Company'} />
   }
 
   const [{ count: totalPartners }, coach] = await Promise.all([

@@ -4,6 +4,7 @@ import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { canCreateDemos } from '@/lib/partner/roles'
 import { insertTenantWithUniqueSlug } from '@/lib/tenants'
 import { seedDefaultSkills } from '@/lib/skills'
+import { ALL_MODULES } from '@/lib/modules'
 import { resolvePartnerEconomics, effectiveItemPricing } from '@/lib/partner/economics-resolve'
 import { getPartnerTwilio } from '@/lib/partner/integrations'
 import { provisionAgentPhoneNumber } from '@/lib/twilio/provision'
@@ -38,10 +39,12 @@ export async function POST(req: NextRequest) {
   const retailCents = b.retail_price_cents ?? (planCode && retailDefaults[planCode]) ?? p?.retail_cents ?? null
 
   // 1) Workspace (tenant) — reuse the slug-safe creator; user_id NULL, linked to the partner.
+  // A White Label client is sold the FULL platform, so provision with the complete module set (global
+  // feature flags still apply). This makes every product route available when the partner operates it.
   const { data: tenant, error: tErr } = await insertTenantWithUniqueSlug(db, {
     business_name: businessName, white_label_partner_id: ctx.partnerId,
     phone: b.owner_phone || null, email: b.owner_email || null, website: b.website || null,
-    plan: planCode || 'trial',
+    plan: planCode || 'trial', enabled_modules: ALL_MODULES,
   })
   if (tErr || !tenant) return NextResponse.json({ error: 'Could not create workspace' }, { status: 400 })
 

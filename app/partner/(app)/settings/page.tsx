@@ -12,7 +12,7 @@ export default async function PartnerSettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" subtitle="Manage your team, API access, and partner profile." />
+      <PageHeader title="Settings" subtitle="Manage your team, integrations, and account." />
       <div className="space-y-6">
         {supportsTeams(ctx.partnerType) && <TeamManager canManage={canManageTeam(ctx)} />}
         <ApiKeysManager canManage={canManageApiKeys(ctx)} />

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { getConversationTimeline } from '@/lib/dashboard/timeline'
 
 // READ-ONLY per-conversation timeline. Tenant resolved from the authenticated user;
@@ -12,12 +13,13 @@ export async function GET(req: NextRequest) {
   const conversationId = req.nextUrl.searchParams.get('conversation') || ''
   if (!conversationId) return NextResponse.json({ error: 'conversation required' }, { status: 400 })
 
-  const service = await createServiceClient()
-  const { data: tenant } = await service.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) return NextResponse.json({ error: 'no tenant' }, { status: 404 })
+  // Active workspace (owner tenant, or the client tenant a WL partner is operating). getConversationTimeline
+  // uses the admin client and enforces the conversation belongs to this tenant.
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) return NextResponse.json({ error: 'no tenant' }, { status: 404 })
 
   try {
-    const events = await getConversationTimeline(tenant.id, conversationId)
+    const events = await getConversationTimeline(tenantId, conversationId)
     return NextResponse.json({ events })
   } catch (err) {
     console.error('[timeline] failed:', err instanceof Error ? err.message : err)

@@ -27,11 +27,31 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Exit operator mode (clear the active_ws cookie) ONLY when the session is gone (sign-out).
+  //
+  // We must NOT clear active_ws just because a request path is /partner. The browser fires background
+  // requests to /partner* — prefetch, RSC prefetch, and plain speculative fetches — even when no
+  // /partner link is visible, and some of those carry NO prefetch header. Clearing on any such request
+  // silently destroyed the operator session on the /dashboard load, so the next sidebar click fell out
+  // of operator mode. (This was THE root cause of "clicking a sidebar item exits to the company dashboard".)
+  //
+  // Per product rule, operator mode is exited ONLY by explicit actions, each of which clears the cookie
+  // server-side via POST /api/partner/workspace {action:'exit'}: the operator bar's "Back to Company"
+  // and "Switch Business", and Sign Out. A stale/forged/suspended cookie is already inert because
+  // getActiveWorkspace() re-validates ownership on every request.
+  const clearWs = !user
+  const withWsCleared = (res: NextResponse) => {
+    if (clearWs) res.cookies.set('active_ws', '', { maxAge: 0, path: '/' })
+    return res
+  }
+
   // Public routes that don't need auth
   const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
     // Partner OS public surface: referral redirect + click tracking, partner signup/login,
     // public demo pages + their data, and the public partner marketplace directory.
-    '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login']
+    '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
+    // White Label client-invite acceptance (recipient is not yet authenticated).
+    '/invite/', '/api/invite/']
   const adminRoutes = ['/admin', '/api/admin']
 
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
@@ -70,7 +90,7 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublic && pathname !== '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
+    return withWsCleared(NextResponse.redirect(url))
   }
 
   // Suspended businesses: the owner's auth app_metadata carries `suspended` (getUser returns
@@ -80,14 +100,17 @@ export async function updateSession(request: NextRequest) {
   if (suspended && user && !isPublic && !isAdminRoute && pathname !== '/suspended' && !pathname.startsWith('/auth') && !pathname.startsWith('/api')) {
     const url = request.nextUrl.clone()
     url.pathname = '/suspended'
-    return NextResponse.redirect(url)
+    return withWsCleared(NextResponse.redirect(url))
   }
 
+  // An already-authenticated user landing on an auth page goes to the root, which decides the
+  // correct plane (partners → /partner, regular business users → /dashboard). Do NOT hardcode
+  // /dashboard here — that bypasses the partner-vs-business routing in app/page.tsx.
   if (user && (pathname === '/auth/login' || pathname === '/auth/signup')) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return withWsCleared(supabaseResponse)
 }

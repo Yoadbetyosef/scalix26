@@ -1,5 +1,6 @@
 import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/server'
+import { getPartnerTwilio } from '@/lib/partner/integrations'
 
 // Shared Twilio number-release logic. Extracted verbatim from the agent DELETE
 // endpoint so the DELETE path and the Stripe-cancellation path use the exact same
@@ -31,7 +32,22 @@ async function releaseFromChannels(
   }
   if (sidToInfo.size === 0) return res
 
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
+  // Release against the account that OWNS the number: for a White Label client tenant the
+  // number was provisioned on the PARTNER's Twilio subaccount, so releasing it from the
+  // platform account would 20404 (no-op) and leave the partner paying for an orphan. Resolve
+  // the tenant's partner Twilio and use it; fall back to the platform account otherwise.
+  let accountSid = process.env.TWILIO_ACCOUNT_SID!
+  let authToken = process.env.TWILIO_AUTH_TOKEN!
+  const { data: tRow } = await supabase.from('tenants').select('white_label_partner_id').eq('id', tenantId).maybeSingle()
+  if (tRow?.white_label_partner_id) {
+    const partnerTwilio = await getPartnerTwilio(tRow.white_label_partner_id)
+    if (partnerTwilio) {
+      accountSid = partnerTwilio.accountSid
+      authToken = partnerTwilio.authToken
+      console.log('[release] using partner Twilio for WL client tenant', tenantId)
+    }
+  }
+  const client = twilio(accountSid, authToken)
   for (const [sid, info] of sidToInfo) {
     try {
       await client.incomingPhoneNumbers(sid).remove()

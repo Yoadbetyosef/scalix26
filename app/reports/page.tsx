@@ -1,4 +1,5 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,9 +18,11 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const serviceSupabase = await createServiceClient()
-  const { data: tenant } = await serviceSupabase.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) redirect('/auth/signup')
+  // Active workspace (owner tenant, or the client tenant a WL partner is operating). The export API
+  // re-resolves + reads server-side; this just gates access and provides the id for the client prop.
+  const tenantId = await getActiveTenantId()
+  if (!tenantId) redirect('/auth/signup')
+  const tenant = { id: tenantId }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
