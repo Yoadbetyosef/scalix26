@@ -97,6 +97,15 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
           return ''
         })()
 
+        // WL prepaid billing pre-flight — authorize this realtime session before any billable Deepgram
+        // usage. A paused/depleted partner gets 402 → we abort before sending `config` (no session opens).
+        // On success we receive a short-lived token the proxy verifies before configuring the agent.
+        // Runs in parallel with mic/socket setup so a funded partner sees no added latency.
+        const authPromise = (async (): Promise<{ status: number; token: string | null }> => {
+          try { const r = await fetch('/api/ai/amy/realtime-auth', { method: 'POST' }); return { status: r.status, token: r.ok ? ((await r.json()).token ?? null) : null } }
+          catch { return { status: 0, token: null } } // network hiccup → the proxy's token check still guards when configured
+        })()
+
         const ws = new WebSocket(PROXY_URL)
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws
@@ -182,8 +191,16 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
         ws.onopen = async () => {
           connectedRef.current = true
           log('proxy open', Math.round(performance.now() - tapT0), 'ms')
-          const snapshot = await snapshotPromise
+          const [snapshot, auth] = await Promise.all([snapshotPromise, authPromise])
           if (cancelled || ws.readyState !== WebSocket.OPEN) return
+          // Billing gate: a definitive 402 means the partner is paused — never send config (no Deepgram
+          // session, no cost). Any other outcome proceeds; the proxy re-checks the token server-side.
+          if (auth.status === 402) {
+            setErrorMsg('Live voice is unavailable right now.')
+            setPhase('error')
+            try { ws.close() } catch { /* noop */ }
+            return
+          }
           ws.send(JSON.stringify({
             type: 'config',
             voice: TTS_VOICE(briefing.employeeVoice),
@@ -192,6 +209,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
             greeting: '',
             inputSampleRate: ctx.sampleRate,
             eot: 0.7,
+            authToken: auth.token,
           }))
           agentReady = true
           for (const b of buffered) ws.send(b)

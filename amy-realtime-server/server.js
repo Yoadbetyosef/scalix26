@@ -7,7 +7,26 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env.local') });
 const http = require('http');
+const crypto = require('crypto');
 const WebSocket = require('ws');
+
+// WL prepaid billing gate — verify the short-lived HMAC session token minted by the app's
+// /api/ai/amy/realtime-auth route (only issued after assertPartnerActive passes). KEEP this format
+// identical to lib/billing/amy-realtime-token.ts. Inert until AMY_REALTIME_SECRET is set on BOTH
+// services — until then verification is skipped so the existing deploy keeps working during rollout.
+function verifyAmyToken(token) {
+  const secret = process.env.AMY_REALTIME_SECRET;
+  if (!secret) return false;
+  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
+  const [payload, sig] = token.split('.');
+  const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const expected = b64url(crypto.createHmac('sha256', secret).update(payload).digest());
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  let data; try { data = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); } catch { return false; }
+  if (!data.exp || data.exp * 1000 < Date.now()) return false;
+  return true;
+}
 
 // Hosting platforms (Render/Railway/Fly) inject the port to bind via $PORT — honour it so
 // the public deploy's health check + WebSocket upgrade actually reach us. Falls back to the
@@ -100,7 +119,17 @@ wss.on('connection', (browser) => {
   browser.on('message', (data, isBinary) => {
     if (isBinary) { if (dg.readyState === WebSocket.OPEN) dg.send(data); return } // mic audio → agent
     let msg; try { msg = JSON.parse(data.toString()); } catch { return }
-    if (msg.type === 'config') { config = msg; trySendSettings(); }
+    if (msg.type === 'config') {
+      // Reject an unauthorized/paused session BEFORE configuring Deepgram (Settings = start of billable
+      // agent usage). Skipped entirely until AMY_REALTIME_SECRET is configured.
+      if (process.env.AMY_REALTIME_SECRET && !verifyAmyToken(msg.authToken)) {
+        console.log('[amy] session rejected — invalid/missing billing token');
+        try { browser.send(JSON.stringify({ type: 'Error', description: 'billing_paused' })); } catch {}
+        try { browser.close(); } catch {}
+        return;
+      }
+      config = msg; trySendSettings();
+    }
     // The browser executed a function (real action) — relay its result to the agent.
     else if (msg.type === 'FunctionCallResponse') { if (dg.readyState === WebSocket.OPEN) dg.send(data.toString()); }
   });
