@@ -7,6 +7,7 @@ import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
 import { recordBillingEvent } from '@/lib/partner/economics'
 import { enforce, clientIp } from '@/lib/ratelimit'
+import { handleBalanceStripeEvent } from '@/lib/billing/stripe-events'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mylocksmithai.com'
 
@@ -31,6 +32,10 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
+
+  // Prepaid wallet events (partner balance top-ups / auto-reload / saved cards) are handled here and
+  // short-circuit — they're a separate money flow from the tenant subscription switch below.
+  if (await handleBalanceStripeEvent(event)) return NextResponse.json({ received: true })
 
   const supabase = await createServiceClient()
 

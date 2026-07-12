@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Home, Building2, DollarSign, Megaphone, Palette, Users, Settings, LogOut, MoreHorizontal, X } from 'lucide-react'
+import { Home, Building2, DollarSign, Wallet, Megaphone, Palette, Users, Settings, LogOut, MoreHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
@@ -13,6 +13,7 @@ const NAV = [
   { href: '/partner', icon: Home, label: 'Home', exact: true },
   { href: '/partner/businesses', icon: Building2, label: 'Businesses' },
   { href: '/partner/revenue', icon: DollarSign, label: 'Revenue' },
+  { href: '/partner/balance', icon: Wallet, label: 'Balance' },
   { href: '/partner/marketing', icon: Megaphone, label: 'Marketing' },
   { href: '/partner/branding', icon: Palette, label: 'Brand' },
   { href: '/partner/team', icon: Users, label: 'Team' },
