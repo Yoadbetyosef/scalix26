@@ -22,7 +22,8 @@ const rpc = (body) => fetch(`${BASE}/rest/v1/rpc/apply_balance_txn`, { method: '
 const del = (path) => fetch(`${BASE}/rest/v1/${path}`, { method: 'DELETE', headers: H })
 const reset = async () => { await del(`partner_balance_transactions?partner_id=eq.${P}`); await del(`partner_balances?partner_id=eq.${P}`) }
 const wallet = async () => (await (await fetch(`${BASE}/rest/v1/partner_balances?select=balance_cents,status&partner_id=eq.${P}`, { headers: H })).json())[0] || {}
-const usageRows = async () => (await (await fetch(`${BASE}/rest/v1/partner_balance_transactions?select=id&type=eq.usage&partner_id=eq.${P}`, { headers: H })).json()).length
+const usageRows = async () => (await (await fetch(`${BASE}/rest/v1/partner_balance_transactions?select=id&transaction_type=eq.usage&partner_id=eq.${P}`, { headers: H })).json()).length
+const recon = async () => (await (await fetch(`${BASE}/rest/v1/partner_ledger_reconciliation?select=cache_balance_cents,ledger_sum_cents,drift_cents&partner_id=eq.${P}`, { headers: H })).json())[0] || {}
 const credit = (amt, key) => rpc({ p_partner_id: P, p_type: 'top_up', p_amount_cents: amt, p_idempotency_key: key })
 const debit = (amt, key) => rpc({ p_partner_id: P, p_type: 'usage', p_amount_cents: -amt, p_idempotency_key: key, p_category: 'ai' })
 
@@ -69,6 +70,11 @@ await reset(); await credit(5000, `${K}-e-c1`)
   ok('after failure status is payment_required', w0.status === 'payment_required')
   ok('credit restores status active', w.status === 'active')
   ok('credit restores balance (10000)', Number(w.balance_cents) === 10000) }
+
+// F — reconciliation: cache balance == Σ ledger (every dollar accounted, drift 0)
+{ const rc = await recon()
+  ok('reconciliation: ledger sum == cache balance (10000)', Number(rc.ledger_sum_cents) === 10000 && Number(rc.cache_balance_cents) === 10000)
+  ok('reconciliation: drift is zero', Number(rc.drift_cents) === 0) }
 
 await reset()
 console.log(`\n${pass} passed, ${fail} failed\n`)
