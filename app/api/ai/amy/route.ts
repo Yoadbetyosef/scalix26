@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { answerAsAmy } from '@/lib/amy/answer'
 import { enforce } from '@/lib/ratelimit'
+import { assertPartnerActive, BILLING_PAUSED_CODE, PAUSED_API_MESSAGE } from '@/lib/billing/gate'
 
 // Amy as Chief of Staff — answers from THIS business's real data via the Business Context Layer.
 // The tenant is the validated ACTIVE workspace (owner tenant, or the client tenant a White Label
@@ -12,6 +13,12 @@ export async function POST(req: NextRequest) {
   if (!bctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const limited = await enforce('ai_amy', `tenant:${bctx.tenantId}`)
   if (limited) return limited
+
+  // WL prepaid billing gate — the dashboard assistant is a billable LLM action; a paused/depleted
+  // owning partner can't run it. Inert for direct Scalix tenants and while WL_BILLING_ENABLED is off.
+  if (!(await assertPartnerActive({ tenantId: bctx.tenantId })).ok) {
+    return NextResponse.json({ error: BILLING_PAUSED_CODE, message: PAUSED_API_MESSAGE }, { status: 402 })
+  }
 
   const admin = createAdminClient()
   const { data: tenant } = await admin

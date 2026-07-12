@@ -168,4 +168,18 @@ ${a.email ? `<tr><td><strong>Email</strong></td><td>${a.email}</td></tr>` : ''}
 <p><a href="${demoUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Try your AI demo</a></p>
 <p>${demoUrl}</p>`,
   }),
+
+  balanceLow: (name: string, amount: number, currency: string, balanceUrl: string) => ({
+    subject: 'Your Scalix balance is running low',
+    html: `<p>Hi ${name},</p>
+<p>Your account balance is down to <strong>${(amount / 100).toLocaleString('en-US', { style: 'currency', currency: currency.toUpperCase() })}</strong>. Top up soon to keep your clients' voice, messaging, and AI running without interruption.</p>
+<p><a href="${balanceUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Add balance</a></p>`,
+  }),
+
+  balancePaused: (name: string, balanceUrl: string) => ({
+    subject: 'Action needed: your Scalix balance is empty',
+    html: `<p>Hi ${name},</p>
+<p>Your account balance has run out, so new voice calls, messages, and AI replies for your clients are <strong>paused</strong>. Your data and settings are safe — top up to resume service right away.</p>
+<p><a href="${balanceUrl}" style="background:#5B6CF0;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">Top up now</a></p>`,
+  }),
 }

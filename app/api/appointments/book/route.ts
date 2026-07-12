@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
+import { assertPartnerActive } from '@/lib/billing/gate'
 import { parseDate, parseTime, dayOfWeek, formatTime12, MIN_LEAD_TIME_MINUTES, nowInTimezone, slotMinutes } from '@/lib/appointments'
 import { getBusinessTimezone } from '@/lib/timezone'
 import { getCalendarAccess } from '@/lib/calendar/store'
@@ -114,6 +115,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Notify everyone (best-effort; never fail the confirmed booking on a send error).
+  // WL prepaid billing gate — the appointment is ALWAYS persisted (data untouched); only the billable
+  // SMS/email confirmations are withheld when the owning partner is paused/depleted. Resolved once.
+  const notifyAllowed = (await assertPartnerActive({ tenantId: tenant.id })).ok
   const { data: ch } = await supabase.from('channels').select('twilio_number')
     .eq('tenant_id', tenant.id).eq('type', 'sms').not('twilio_number', 'is', null).limit(1).maybeSingle()
   const fromNumber = ch?.twilio_number || undefined
@@ -132,7 +136,7 @@ export async function POST(req: NextRequest) {
 
   // 1) Customer → SMS confirmation, to the contact's number we already have.
   //    Skipped when the channel already confirms in-channel via SMS (suppress flag).
-  if (!suppressCustomerSms) {
+  if (!suppressCustomerSms && notifyAllowed) {
     try {
       await sendSMS(phone, `✅ Confirmed! Your appointment is on ${when}. See you then! - ${business}`, fromNumber)
     } catch (err) {
@@ -141,11 +145,11 @@ export async function POST(req: NextRequest) {
   }
   // 2) Owner → SMS + email that the AI booked an appointment.
   const ownerSms = `📅 New appointment: ${name || 'Customer'} on ${when} for ${service || 'service'}. Phone: ${phone}`
-  if (ownerPhone) {
+  if (ownerPhone && notifyAllowed) {
     try { await sendSMS(ownerPhone, ownerSms, fromNumber) }
     catch (err) { console.error('[book] owner SMS failed:', err instanceof Error ? err.message : err) }
   }
-  if (ownerEmail) {
+  if (ownerEmail && notifyAllowed) {
     try {
       const tmpl = emailTemplates.appointmentBooked({ business, customer: name || 'Customer', when, phone, service: service || 'Service', email, channel })
       await sendEmail(ownerEmail, tmpl.subject, tmpl.html)

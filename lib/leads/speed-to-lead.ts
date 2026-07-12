@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
+import { assertPartnerActive } from '@/lib/billing/gate'
 import type { LeadSource } from '@/types'
 
 interface SpeedToLeadInput {
@@ -40,6 +41,11 @@ function buildMessage(source: LeadSource, name: string | null | undefined, emplo
 export async function runSpeedToLead(input: SpeedToLeadInput): Promise<SpeedToLeadResult> {
   const supabase = await createServiceClient()
   const { tenantId, leadId, contactId, phone, name, source } = input
+
+  // WL prepaid billing gate — a paused/depleted partner does not incur a new outbound SMS. The lead
+  // row itself is created/updated by the caller (data untouched); only this billable text is withheld.
+  // No-op for direct Scalix tenants and while WL_BILLING_ENABLED is off.
+  if (!(await assertPartnerActive({ tenantId })).ok) return { smsSent: false, error: 'billing_paused' }
 
   // Tenant (for business name fallback) + active AI employee (name + from number)
   const [tenantRes, employeeRes, channelRes] = await Promise.all([

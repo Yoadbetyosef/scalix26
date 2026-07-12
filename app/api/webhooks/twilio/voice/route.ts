@@ -9,6 +9,7 @@ import { getBusinessTimezone } from '@/lib/timezone'
 import { currentDateContext } from '@/lib/appointments'
 import { catalogPromptLine } from '@/lib/stripe/connect'
 import { enforce, clientIp } from '@/lib/ratelimit'
+import { assertPartnerActive, PAUSED_VOICE_MESSAGE } from '@/lib/billing/gate'
 
 // How long the owner's phone rings before the AI receptionist takes over.
 // ~12s ≈ 2-3 rings — short enough to take over before voicemail typically grabs the
@@ -105,6 +106,19 @@ export async function POST(req: NextRequest) {
     return new NextResponse('<?xml version="1.0"?><Response></Response>', {
       headers: { 'Content-Type': 'text/xml' },
     })
+  }
+
+  // WL prepaid billing gate — if the owning partner is paused/depleted/past-due, this number answers
+  // with a brief paused message instead of engaging the (paid) AI receptionist, forwarding, or opening
+  // a realtime stream. Covers the first turn and every gather turn. No-op for direct Scalix tenants and
+  // while WL_BILLING_ENABLED is off.
+  if (channel && !(await assertPartnerActive({ tenantId: channel.tenant_id })).ok) {
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  ${ttsPlay(PAUSED_VOICE_MESSAGE)}
+  <Hangup/>
+</Response>`
+    return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })
   }
 
   // Gather callback — user spoke

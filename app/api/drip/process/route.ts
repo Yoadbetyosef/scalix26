@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
 import { cronAuthorized } from '@/lib/cron/auth'
+import { assertPartnerActive } from '@/lib/billing/gate'
 
 // Quiet hours: no sends between 21:00 and 08:00 (business timezone).
 const QUIET_TZ = 'America/New_York'
@@ -56,7 +57,17 @@ async function handle(req: NextRequest) {
     .lte('next_send_at', nowIso)
     .limit(200)
 
-  let sent = 0, stopped = 0, completed = 0
+  let sent = 0, stopped = 0, completed = 0, blocked = 0
+  // WL prepaid billing gate — cached per tenant for this run so a paused/depleted partner sends no drip
+  // SMS. The campaign is left untouched (not advanced/stopped) so it simply resumes after a top-up.
+  const gateCache = new Map<string, boolean>()
+  const partnerAllowsSend = async (tenantId: string): Promise<boolean> => {
+    const cached = gateCache.get(tenantId)
+    if (cached !== undefined) return cached
+    const ok = (await assertPartnerActive({ tenantId })).ok
+    gateCache.set(tenantId, ok)
+    return ok
+  }
   for (const c of (campaigns || []) as Campaign[]) {
     // Safety net: never message a lead that's already booked or dismissed.
     const { data: lead } = await supabase.from('leads').select('status').eq('id', c.lead_id).maybeSingle()
@@ -65,6 +76,9 @@ async function handle(req: NextRequest) {
       stopped++
       continue
     }
+
+    // Billing-paused partner → skip this send; leave the campaign to retry after the balance is topped up.
+    if (!(await partnerAllowsSend(c.tenant_id))) { blocked++; continue }
 
     const n = c.messages_sent || 0
     const text = dripMessage(n, c.contact_name, c.business_name || 'us', c.issue)
@@ -89,7 +103,7 @@ async function handle(req: NextRequest) {
     sent++
   }
 
-  return NextResponse.json({ ok: true, processed: campaigns?.length || 0, sent, stopped, completed })
+  return NextResponse.json({ ok: true, processed: campaigns?.length || 0, sent, stopped, completed, blocked })
 }
 
 // Vercel Cron invokes with GET; allow POST for manual triggering too.

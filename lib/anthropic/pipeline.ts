@@ -11,6 +11,7 @@ import { normalizePaymentSettings } from '@/lib/stripe/payment-collection'
 import { getRecognitionContext, recognitionPromptBlock } from '@/lib/customer/recognition'
 import { enabledModulesOf } from '@/lib/modules'
 import { trackLlm } from '@/lib/cost/track'
+import { assertPartnerActive } from '@/lib/billing/gate'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
 
 interface PipelineInput {
@@ -174,8 +175,9 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   let conversationId = input.conversationId
 
-  // Records the inbound customer message (no AI reply) when a human has taken over.
-  const recordTakeoverAndSkip = (): PipelineOutput => {
+  // Records the inbound customer message (no AI reply) when the AI must stand down — a human has
+  // taken over, or the owning WL partner's prepaid balance is paused/depleted (billing gate).
+  const recordInboundAndSkip = (): PipelineOutput => {
     const nowTs = new Date().toISOString()
     Promise.all([
       supabase.from('messages').insert([
@@ -203,7 +205,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       .maybeSingle()
     if (existing) {
       conversationId = existing.id
-      if (existing.human_takeover === true) return recordTakeoverAndSkip()
+      if (existing.human_takeover === true) return recordInboundAndSkip()
     }
   }
 
@@ -232,11 +234,16 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
 
   // Takeover check for the passed-in conversationId path (voice subsequent turns)
   if (input.conversationId && (takeoverRes.data as { human_takeover?: boolean } | null)?.human_takeover === true) {
-    return recordTakeoverAndSkip()
+    return recordInboundAndSkip()
   }
 
   const skills = skillsRes.data || []
   const history = historyRes.data || []
+
+  // WL prepaid billing pre-flight — if the owning partner is paused/depleted/past-due, the assistant
+  // declines rather than spending on a paid AI turn. The inbound message is still recorded and all
+  // existing data is untouched. No-op for direct Scalix tenants and while WL_BILLING_ENABLED is off.
+  if (!(await assertPartnerActive({ tenantId: input.tenantId })).ok) return recordInboundAndSkip()
 
   // Financial Intent — available ONLY when the Payment Collection skill is ON and Stripe
   // Connect is active. Drives both the prompt injection and whether we enter the tool turn.

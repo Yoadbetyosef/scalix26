@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { roundCents } from './pricing'
 import { debitBalance } from './balance'
 import { ensureFunded } from './reload'
+import { syncBalanceNotice } from './notify'
 
 // Billing cron core: roll IMMUTABLE unsettled White Label usage into balance debits. Pricing is NOT
 // recomputed here — each event already carries its snapshotted partner_charge_cents (frozen at meter
@@ -104,6 +105,10 @@ export async function runBillingCron(opts?: { limit?: number }): Promise<Billing
         res.insufficient++ // insufficient_balance → leave unsettled for retry after top-up; partner paused
       }
     }
+
+    // Post-deduct: reconcile the partner's balance notice (bell + email) against the new balance.
+    // Fires at most once per crossing (none → low → paused); best-effort — never fails the cron.
+    try { await syncBalanceNotice(partnerId) } catch { /* notifications are non-critical */ }
   }
   return res
 }

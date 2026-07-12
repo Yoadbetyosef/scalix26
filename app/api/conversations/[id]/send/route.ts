@@ -6,6 +6,7 @@ import { enforce } from '@/lib/ratelimit'
 import { sendEmailReply } from '@/lib/email/send'
 import { getProvider } from '@/lib/mailbox'
 import { getValidAccount, type AccountRow } from '@/lib/mailbox/account'
+import { assertPartnerActive } from '@/lib/billing/gate'
 
 const ACCOUNT_COLS = 'id, tenant_id, ai_employee_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, history_id, status, created_at'
 
@@ -54,9 +55,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   let delivered = false
   let note = ''
+  // Truthful persisted outcome for the transcript row. Stays null on a normal SMS send (the Twilio
+  // status callback fills it in later); set to a terminal marker when we KNOW the customer did not
+  // receive the message, so the transcript never implies a delivery that didn't happen.
+  let deliveryStatus: string | null = null
+
+  // WL prepaid billing gate — suppress NEW billable outbound work (Twilio SMS/WhatsApp incl. the
+  // voice→SMS follow-up, and metered email) when the owning partner is paused/depleted. The attempt is
+  // still saved to the transcript below (existing data untouched) but marked billing_blocked — never
+  // delivered — until the balance is topped up. Meta social DMs (instagram/facebook) carry no metered
+  // provider cost, so they are intentionally NOT gated. No-op while WL_BILLING_ENABLED is off.
+  const billableChannel = channel === 'sms' || channel === 'whatsapp' || channel === 'voice' || channel === 'email'
+  const billingBlocked = billableChannel && !(await assertPartnerActive({ tenantId: conv.tenant_id })).ok
 
   try {
-    if (channel === 'sms' || channel === 'voice') {
+    if (billingBlocked) {
+      deliveryStatus = 'billing_blocked'
+      note = 'Messaging is paused until the account balance is topped up — saved to the thread but not delivered.'
+    } else if (channel === 'sms' || channel === 'voice') {
       // Voice conversations have no live text channel — deliver as a follow-up SMS.
       if (contactPhone) {
         const { data: ch } = await service
@@ -153,14 +169,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       note = `Unsupported channel "${channel}" — saved to the thread but not delivered.`
     }
   } catch (err) {
+    deliveryStatus = 'failed'
     note = `Send failed: ${err instanceof Error ? err.message : 'unknown error'}`
     console.error('[send] delivery failed:', note)
   }
 
-  // Always record the agent message in the transcript.
+  // Always record the agent message in the transcript, tagged with its true outcome. A billing-blocked
+  // or failed attempt is stored as such (delivered:false) so the transcript never implies the customer
+  // received it; a successful SMS keeps delivery_status null for the provider callback to resolve.
   const now = new Date().toISOString()
-  await service.from('messages').insert({ conversation_id: id, tenant_id: conv.tenant_id, role: 'agent', content: text, channel })
+  await service.from('messages').insert({ conversation_id: id, tenant_id: conv.tenant_id, role: 'agent', content: text, channel, delivery_status: deliveryStatus })
   await service.from('conversations').update({ updated_at: now }).eq('id', id)
 
-  return NextResponse.json({ ok: true, delivered, note })
+  return NextResponse.json({ ok: true, delivered, note, code: deliveryStatus ?? undefined })
 }

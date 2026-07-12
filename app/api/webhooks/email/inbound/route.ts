@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
+import { assertPartnerActive } from '@/lib/billing/gate'
 import { isNonCustomerEmail, domainsFromEmails } from '@/lib/email/is-non-customer'
 import { claimEvent, completeEvent, fingerprint } from '@/lib/webhooks/idempotency'
 import { enforce, clientIp } from '@/lib/ratelimit'
@@ -168,6 +169,10 @@ export async function POST(req: NextRequest) {
     // No configured agent — never auto-reply with a generic persona; notify owner.
     console.warn('[email-inbound] no agent for tenant ' + tenant.id + ', skipping auto-reply')
     await ownerNote('A customer emailed your AI address.')
+  } else if (agent.email_auto_reply !== false && !(await assertPartnerActive({ tenantId: tenant.id })).ok) {
+    // WL prepaid billing gate — owning partner paused/depleted: do not spend on a paid AI email reply.
+    // The inbound message is already stored above (Inbox); existing data untouched.
+    console.log('[email-inbound] billing paused for tenant ' + tenant.id + ' — skipping AI auto-reply')
   } else if (agent.email_auto_reply !== false) {
     try {
       console.log('[email-inbound] generating Claude reply for', fromEmail)
