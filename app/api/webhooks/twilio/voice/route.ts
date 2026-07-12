@@ -188,6 +188,9 @@ export async function POST(req: NextRequest) {
       const reqBase = requestBaseUrl(req)
       const fallbackAction = `${reqBase}/api/webhooks/twilio/voice/ai-fallback`
       const amdCallback = `${reqBase}/api/webhooks/twilio/voice/amd`
+      // Bill the owner-dial child leg: report its completion (with its own CallSid + duration) to the
+      // voice-status route, which meters that leg's Twilio telephony once.
+      const legStatus = `${reqBase}/api/webhooks/twilio/voice/status`
       // machineDetection on the dialed <Number> runs AMD on the owner's leg. If a
       // voicemail/machine answers, the amd callback redirects the caller to the AI.
       // answerOnBridge keeps the caller on ringback (not "answered") until a real
@@ -196,7 +199,7 @@ export async function POST(req: NextRequest) {
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial timeout="${RING_TIMEOUT_SECONDS}" action="${fallbackAction}" method="POST" answerOnBridge="true">
-    <Number machineDetection="Enable" machineDetectionTimeout="5" machineDetectionSpeechThreshold="1900" machineDetectionSpeechEndThreshold="1000" machineDetectionSilenceTimeout="3000" amdStatusCallback="${amdCallback}" amdStatusCallbackMethod="POST">${escapeXml(forwardTo)}</Number>
+    <Number machineDetection="Enable" machineDetectionTimeout="5" machineDetectionSpeechThreshold="1900" machineDetectionSpeechEndThreshold="1000" machineDetectionSilenceTimeout="3000" amdStatusCallback="${amdCallback}" amdStatusCallbackMethod="POST" statusCallback="${legStatus}" statusCallbackEvent="completed" statusCallbackMethod="POST">${escapeXml(forwardTo)}</Number>
   </Dial>
 </Response>`
       return new NextResponse(twiml, { headers: { 'Content-Type': 'text/xml' } })

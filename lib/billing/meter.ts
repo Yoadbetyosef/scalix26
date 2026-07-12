@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import type { BillingCategory } from './pricing'
 
 // Universal usage meter. Called at every DETERMINISTIC billable provider call site (fire-and-forget —
@@ -24,12 +25,13 @@ export interface MeterInput {
   model?: string
   kind?: string                 // legacy usage_events.kind (defaults to category; AI uses 'llm' for COGS back-compat)
   pricingRuleId?: string | null // provider_rates row id, if rate-card priced
+  metadata?: Record<string, unknown> | null // provider request/event context (voice: direction, status, ParentCallSid, …)
 }
 
 export function meterUsage(input: MeterInput): void {
   // Only meter deterministic events: a stable resource_id + positive quantity are required.
   if (!input.tenantId || !input.resourceId || input.quantity <= 0) return
-  ;(async () => {
+  const task = async () => {
     try {
       const { createAdminClient } = await import('@/lib/supabase/server')
       const { resolveMarkupPct } = await import('./pricing')
@@ -63,10 +65,18 @@ export function meterUsage(input: MeterInput): void {
         currency: 'usd',
         billing_version: BILLING_VERSION,
         pricing_rule_id: input.pricingRuleId ?? null,
+        metadata: input.metadata ?? null,
         priced: false,
-      }, { onConflict: 'provider,resource_id', ignoreDuplicates: true }) // deterministic dedup
+      })
+      // Deterministic dedup: the partial unique index (provider, resource_id) raises 23505 on a
+      // retry, which the catch below turns into a silent no-op. (A plain INSERT is used instead of
+      // upsert because ON CONFLICT cannot infer a PARTIAL unique index.)
     } catch {
       /* best-effort: metering must never break the request that produced it */
     }
-  })()
+  }
+  // Run AFTER the response so the insert can't be dropped when the serverless function freezes
+  // (Vercel keeps the function alive via waitUntil). Falls back to a bare promise if `after()` is
+  // unavailable (e.g. called outside a request context).
+  try { after(task) } catch { void task() }
 }

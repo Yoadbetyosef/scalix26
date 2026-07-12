@@ -86,6 +86,10 @@ export async function provisionAgentPhoneNumber(
     smsMethod: 'POST',
     voiceUrl: `${baseUrl}/api/webhooks/twilio/voice`,
     voiceMethod: 'POST',
+    // Call-status callback = the billing source of truth for voice (fires at call completion with
+    // CallSid + CallDuration + CallStatus). Existing numbers need a one-time backfill of this URL.
+    statusCallback: `${baseUrl}/api/webhooks/twilio/voice/status`,
+    statusCallbackMethod: 'POST',
   })
 
   // A2P 10DLC: attach the freshly purchased US number to our approved Messaging
