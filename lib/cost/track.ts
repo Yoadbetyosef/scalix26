@@ -1,32 +1,36 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { randomUUID } from 'crypto'
 import { llmCost } from './rates'
+import { meterUsage } from '@/lib/billing/meter'
 
 interface Usage { input_tokens?: number; output_tokens?: number }
 
 /**
- * Record LLM token usage + its cost for a tenant. Best-effort: never throws, never blocks the
- * request that produced it. Exact token counts come from the Anthropic response's `usage`.
+ * Record LLM token usage for a tenant. Routes through the immutable universal meter (lib/billing/meter):
+ * writes a self-describing usage_events row (real provider = anthropic, exact tokens, snapshotted
+ * provider cost + markup + partner charge) and — for White Label client tenants — makes it billable to
+ * the partner balance. Best-effort, never blocks. Pass the Anthropic completion `id` as resourceId so
+ * events are deterministic + deduped; customerId is the end contact when available.
  */
-export function trackLlm(tenantId: string | undefined, model: string, usage: Usage | undefined): void {
+export function trackLlm(
+  tenantId: string | undefined,
+  model: string,
+  usage: Usage | undefined,
+  opts?: { resourceId?: string; customerId?: string | null },
+): void {
   if (!tenantId || !usage) return
   const inTok = usage.input_tokens || 0
   const outTok = usage.output_tokens || 0
   if (inTok + outTok === 0) return
-  // Fire-and-forget; do not await in the hot path.
-  ;(async () => {
-    try {
-      const db = createAdminClient()
-      await db.from('usage_events').insert({
-        tenant_id: tenantId,
-        kind: 'llm',
-        provider: 'anthropic',
-        model,
-        units: inTok + outTok,
-        unit_type: 'tokens',
-        cost_usd: llmCost(model, inTok, outTok),
-      })
-    } catch {
-      /* best-effort */
-    }
-  })()
+  meterUsage({
+    tenantId,
+    category: 'ai',
+    provider: 'anthropic',
+    metric: 'token',
+    quantity: inTok + outTok,
+    providerCostUsd: llmCost(model, inTok, outTok),
+    resourceId: opts?.resourceId || `llm:${randomUUID()}`, // real completion id when passed → deterministic dedup
+    customerId: opts?.customerId ?? null,
+    model,
+    kind: 'llm', // legacy kind kept for the existing admin COGS view
+  })
 }

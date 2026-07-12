@@ -328,7 +328,7 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       messages: chatMessages,
     })
     aiResponse = response.content[0].type === 'text' ? response.content[0].text : ''
-    trackLlm(input.tenantId, model, response.usage) // COGS: exact tokens → cost
+    trackLlm(input.tenantId, model, response.usage, { resourceId: response.id, customerId: contact?.id ?? null }) // COGS + WL billing
   }
 
   const now = new Date().toISOString()
@@ -378,7 +378,7 @@ async function runTextToolTurn(
   const plainReply = async (): Promise<string> => {
     try {
       const r = await anthropic.messages.create({ model: MODEL, max_tokens: 500, system: systemPrompt, messages: chatMessages })
-      trackLlm(tenantId, MODEL, r.usage) // COGS
+      trackLlm(tenantId, MODEL, r.usage, { resourceId: r.id }) // COGS + WL billing
       return r.content[0]?.type === 'text' ? r.content[0].text : ''
     } catch { return '' }
   }
@@ -403,7 +403,7 @@ async function runTextToolTurn(
         messages,
         tools,
       })
-      trackLlm(tenantId, MODEL, response.usage) // COGS
+      trackLlm(tenantId, MODEL, response.usage, { resourceId: response.id }) // COGS + WL billing
 
       const textBlocks = response.content.filter((c): c is Anthropic.TextBlock => c.type === 'text')
       if (textBlocks.length) text = textBlocks.map((b) => b.text).join(' ').trim()
@@ -454,7 +454,7 @@ async function generateConversationSummary(conversationId: string, tenantId: str
     }],
   })
 
-  trackLlm(tenantId, MODEL, summary.usage) // COGS
+  trackLlm(tenantId, MODEL, summary.usage, { resourceId: summary.id }) // COGS + WL billing
   const summaryText = summary.content[0].type === 'text' ? summary.content[0].text : ''
 
   await supabase
