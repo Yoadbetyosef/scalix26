@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import MarkupEditor from '@/components/admin/markup-editor'
 
 interface Billing {
   plan: { mrr: number; arr: number; payingCustomers: number; trials: number }
@@ -40,6 +41,9 @@ export default function AdminBillingPage() {
       <p className="text-sm text-subtle mb-6">Revenue from plans, plus live Stripe status.</p>
 
       {err && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{err}</div>}
+
+      <h2 className="mb-2 text-sm font-semibold text-ink">White Label pricing</h2>
+      <div className="mb-6"><MarkupEditor /></div>
 
       {loading || !b ? <p className="text-sm text-muted">Loading…</p> : (
         <>
