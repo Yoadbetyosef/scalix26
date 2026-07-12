@@ -1,18 +1,34 @@
 import { Resend } from 'resend'
+import { meterUsage } from '@/lib/billing/meter'
+import { RATE_RESEND_EMAIL } from '@/lib/cost/rates'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = 'Scalix <noreply@mylocksmithai.com>'
 
-export async function sendEmail(to: string, subject: string, html: string) {
+// Optional billing context — when a tenant is in scope, the send is metered (Resend id = the
+// deterministic resource id, quantity = 1 message).
+export interface EmailMeta { tenantId?: string; customerId?: string | null }
+
+function meterEmail(id: string | undefined, meta?: EmailMeta) {
+  if (!meta?.tenantId || !id) return
+  meterUsage({
+    tenantId: meta.tenantId, customerId: meta.customerId ?? null,
+    category: 'email', provider: 'resend', metric: 'email',
+    quantity: 1, providerCostUsd: RATE_RESEND_EMAIL, resourceId: id, kind: 'email',
+  })
+}
+
+export async function sendEmail(to: string, subject: string, html: string, meta?: EmailMeta) {
   if (!process.env.RESEND_API_KEY) {
     console.warn('[email] RESEND_API_KEY not set, skipping email')
     return { success: false, error: 'RESEND_API_KEY not set' }
   }
-  const { error } = await resend.emails.send({ from: FROM, to, subject, html })
+  const { data, error } = await resend.emails.send({ from: FROM, to, subject, html })
   if (error) {
     console.error('[email] send error:', error)
     return { success: false, error: error.message }
   }
+  meterEmail(data?.id, meta)
   return { success: true }
 }
 
@@ -21,7 +37,7 @@ const INBOUND_FROM = 'noreply@mail.mylocksmithai.com'
 // Send an AI reply to an inbound email. `from` is the agent's reply-from address
 // (its domain must be verified in Resend); we also set it as Reply-To and fall
 // back to the verified inbound domain so sends never break on an unverified From.
-export async function sendEmailReply(to: string, from: string | null | undefined, subject: string, body: string, messageId?: string) {
+export async function sendEmailReply(to: string, from: string | null | undefined, subject: string, body: string, messageId?: string, meta?: EmailMeta) {
   if (!process.env.RESEND_API_KEY) {
     console.warn('[email] RESEND_API_KEY not set, skipping reply')
     return { success: false, error: 'RESEND_API_KEY not set' }
@@ -30,7 +46,7 @@ export async function sendEmailReply(to: string, from: string | null | undefined
   const re = subject?.toLowerCase().startsWith('re:') ? subject : `Re: ${subject || 'your message'}`
   // Threading: reference the inbound Message-ID so replies thread in the client.
   const headers = messageId ? { 'In-Reply-To': messageId, References: messageId } : undefined
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: fromAddr,
     to,
     replyTo: from || undefined,
@@ -42,10 +58,11 @@ export async function sendEmailReply(to: string, from: string | null | undefined
     console.error('[email] reply send error:', error)
     if (from && from !== INBOUND_FROM) {
       const retry = await resend.emails.send({ from: INBOUND_FROM, to, replyTo: from, subject: re, text: body, headers })
-      if (!retry.error) return { success: true }
+      if (!retry.error) { meterEmail(retry.data?.id, meta); return { success: true } }
     }
     return { success: false, error: error.message }
   }
+  meterEmail(data?.id, meta)
   return { success: true }
 }
 

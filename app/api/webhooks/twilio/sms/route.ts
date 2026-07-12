@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     // Send SMS response (unless a human has taken over this conversation)
     if (!result.skipped && result.response) {
       try {
-        const msg = await sendSMS(From, result.response, To)
+        const msg = await sendSMS(From, result.response, To, { tenantId: channel.tenant_id })
         console.log('[SMS] Sent successfully. SID:', msg.sid)
         // A2: link the Twilio SID to the assistant message runAIPipeline just wrote,
         // so the sms-status callback can flip its delivery_status. Best-effort.

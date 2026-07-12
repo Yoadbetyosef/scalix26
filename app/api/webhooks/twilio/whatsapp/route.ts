@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // Skip the AI reply when a human has taken over this conversation
     if (!result.skipped && result.response) {
-      await sendSMS(`whatsapp:${fromNumber}`, result.response, `whatsapp:${toNumber}`)
+      await sendSMS(`whatsapp:${fromNumber}`, result.response, `whatsapp:${toNumber}`, { tenantId: channel.tenant_id })
     }
     await completeEvent(claim, channel.tenant_id)
   } catch (err) {

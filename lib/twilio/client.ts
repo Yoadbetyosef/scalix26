@@ -1,6 +1,12 @@
 import twilio from 'twilio'
 import { stripMarkdown } from '@/lib/utils'
 import { createAdminClient } from '@/lib/supabase/server'
+import { meterUsage } from '@/lib/billing/meter'
+import { RATE_TWILIO_SMS_PER_SEGMENT } from '@/lib/cost/rates'
+
+// Optional billing context — when a tenant is in scope, the send is metered (message SID = the
+// deterministic resource id, Twilio's num_segments = the quantity).
+export interface SendMeta { tenantId?: string; customerId?: string | null }
 
 function getTwilioClient() {
   return twilio(
@@ -83,7 +89,7 @@ export function validateTwilioSignature(
   )
 }
 
-export async function sendSMS(to: string, body: string, from?: string) {
+export async function sendSMS(to: string, body: string, from?: string, meta?: SendMeta) {
   const client = getTwilioClient()
 
   // WhatsApp must stay on the from-based path (the Messaging Service is SMS/MMS
@@ -125,5 +131,16 @@ export async function sendSMS(to: string, body: string, from?: string) {
   // Confirm per-tenant identity in logs: which sender + which service each send used.
   console.log(`[sendSMS] from=${params.from ?? '(pool-selected)'} service=${params.messagingServiceSid ?? '(none)'}${isWhatsApp ? ' channel=whatsapp' : ''}`)
 
-  return client.messages.create(params)
+  const msg = await client.messages.create(params)
+  // Meter the send (deterministic: message SID + Twilio's num_segments). Only when a tenant is known.
+  if (meta?.tenantId && msg?.sid) {
+    const segments = Math.max(1, parseInt(String(msg.numSegments || '1'), 10) || 1)
+    meterUsage({
+      tenantId: meta.tenantId, customerId: meta.customerId ?? null,
+      category: 'messaging', provider: 'twilio', metric: 'sms_segment',
+      quantity: segments, providerCostUsd: segments * RATE_TWILIO_SMS_PER_SEGMENT,
+      resourceId: msg.sid, kind: isWhatsApp ? 'whatsapp' : 'sms',
+    })
+  }
+  return msg
 }

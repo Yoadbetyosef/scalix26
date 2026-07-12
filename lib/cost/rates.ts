@@ -32,3 +32,8 @@ export const RATE_TWILIO_VOICE_PER_MIN = 0.0085 // Twilio US local inbound voice
 // ~$1.38 of LLM cost over ~116–146 real voice minutes → ≈ $0.011/min. Re-derive if your call
 // mix changes, or replace with exact per-token logging (voice-LLM proxy) if you add it.
 export const RATE_VOICE_LLM_PER_MIN = 0.011
+
+// Transactional email (Resend), per message. Placeholder list rate — mirror your contract.
+export const RATE_RESEND_EMAIL = 0.001
+// Blended voice minute (Twilio inbound + Deepgram voice agent + voice-LLM) — what the voice meter bills.
+export const RATE_VOICE_PER_MIN = RATE_TWILIO_VOICE_PER_MIN + RATE_DEEPGRAM_VOICE_PER_MIN + RATE_VOICE_LLM_PER_MIN

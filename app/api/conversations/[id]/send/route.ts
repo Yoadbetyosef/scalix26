@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           .from('channels').select('twilio_number')
           .eq('tenant_id', conv.tenant_id).eq('type', 'sms').not('twilio_number', 'is', null)
           .limit(1).maybeSingle()
-        await sendSMS(contactPhone, text, ch?.twilio_number || undefined)
+        await sendSMS(contactPhone, text, ch?.twilio_number || undefined, { tenantId: conv.tenant_id })
         delivered = true
         if (channel === 'voice') note = 'Sent as SMS to the customer (voice calls have no text channel).'
       } else {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const { data: ch } = await service
           .from('channels').select('twilio_number')
           .eq('tenant_id', conv.tenant_id).eq('type', 'whatsapp').limit(1).maybeSingle()
-        await sendSMS(`whatsapp:${contactPhone}`, text, ch?.twilio_number ? `whatsapp:${ch.twilio_number}` : undefined)
+        await sendSMS(`whatsapp:${contactPhone}`, text, ch?.twilio_number ? `whatsapp:${ch.twilio_number}` : undefined, { tenantId: conv.tenant_id })
         delivered = true
       } else {
         note = 'No WhatsApp number on file — saved to the thread but not delivered.'
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           // Fall back to the existing Resend reply path (with threading).
           const { data: agent } = await service.from('ai_employees').select('reply_from_email').eq('id', conv.ai_employee_id).maybeSingle()
           console.log(`[send] email via resend to ${contactEmail}`)
-          const sent = await sendEmailReply(contactEmail, agent?.reply_from_email, subject, text, inReplyTo || undefined)
+          const sent = await sendEmailReply(contactEmail, agent?.reply_from_email, subject, text, inReplyTo || undefined, { tenantId: conv.tenant_id })
           if (sent.success) delivered = true
           else note = `Email send failed: ${sent.error}`
         }

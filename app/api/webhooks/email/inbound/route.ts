@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
         tenantId: tenant.id, agent, tenantBusinessName: tenant.business_name, emailText: text || '', subject,
       })
       console.log('[email-inbound] reply generated, length', reply.length)
-      const sent = await sendEmailReply(fromEmail, agent.reply_from_email, subject, reply, inboundMessageId)
+      const sent = await sendEmailReply(fromEmail, agent.reply_from_email, subject, reply, inboundMessageId, { tenantId: tenant.id })
       if (sent.success) {
         console.log('[email-inbound] reply SENT to', fromEmail)
         await supabase.from('messages').insert({ conversation_id: convId, tenant_id: tenant.id, role: 'assistant', content: reply, channel: 'email' })

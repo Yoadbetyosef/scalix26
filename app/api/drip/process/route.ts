@@ -69,7 +69,7 @@ async function handle(req: NextRequest) {
     const n = c.messages_sent || 0
     const text = dripMessage(n, c.contact_name, c.business_name || 'us', c.issue)
     try {
-      await sendSMS(c.contact_phone, text, c.from_number || undefined)
+      await sendSMS(c.contact_phone, text, c.from_number || undefined, { tenantId: c.tenant_id })
     } catch (err) {
       console.error('[drip] send failed', c.id, err instanceof Error ? err.message : err)
       continue // leave the campaign as-is; retried next hour
