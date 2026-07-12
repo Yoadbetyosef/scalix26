@@ -9,20 +9,14 @@ import { PartnerNotifications } from '@/components/partner/partner-notifications
 import { CompanyNav } from '@/components/partner/company-nav'
 import { resolveBrandForPartner, strongColor } from '@/lib/partner/brand'
 import { BrandProvider } from '@/components/brand/brand-provider'
-import { getActiveWorkspace } from '@/lib/workspace'
+import { resolveRootDestination } from '@/lib/routing'
 
-// Guards the authenticated partner portal. A signed-in user who is not yet a partner is sent to
-// the partner signup; a signed-out user is already bounced to /partner/login by middleware.
+// Guards the authenticated partner portal. A signed-in user who is NOT a partner is routed to their
+// real destination via the shared resolver (business owners → /dashboard, signed-out → login) — NEVER
+// auto-shown the partner signup. "Become a Partner" is entered explicitly via /partner/signup.
 export default async function PartnerAppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getPartnerContext()
-  if (!ctx) {
-    // A White Label CLIENT (owns a business under a partner) must never see any partner surface —
-    // not even the partner signup. Send them to their own business. Normal Scalix customers who aren't
-    // partners can still reach the partner signup (they may want to become one).
-    const ws = await getActiveWorkspace()
-    if (ws.whiteLabelPartnerId) redirect('/dashboard')
-    redirect('/partner/signup')
-  }
+  if (!ctx) redirect(await resolveRootDestination())
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
