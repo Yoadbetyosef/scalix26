@@ -3,11 +3,14 @@ import { stripe } from '@/lib/stripe/client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { syncConnectFromAccount } from '@/lib/stripe/connect'
 import { syncPartnerConnectFromAccount, handlePartnerTransferFailure } from '@/lib/partner/connect'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 // SEPARATE Connect webhook (its own STRIPE_CONNECT_WEBHOOK_SECRET) — the platform
 // billing webhook (/api/webhooks/stripe + STRIPE_WEBHOOK_SECRET) is untouched.
 // Connected-account events arrive with event.account = acct_…
 export async function POST(req: NextRequest) {
+  const flood = await enforce('webhook_stripe', `stripe-connect:${clientIp(req)}`)
+  if (flood) return flood
   const body = await req.text()
   const signature = req.headers.get('stripe-signature')
 

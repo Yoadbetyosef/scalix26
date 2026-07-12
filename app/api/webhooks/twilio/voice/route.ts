@@ -8,6 +8,7 @@ import { requestBaseUrl } from '@/lib/request-url'
 import { getBusinessTimezone } from '@/lib/timezone'
 import { currentDateContext } from '@/lib/appointments'
 import { catalogPromptLine } from '@/lib/stripe/connect'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 // How long the owner's phone rings before the AI receptionist takes over.
 // ~12s ≈ 2-3 rings — short enough to take over before voicemail typically grabs the
@@ -60,6 +61,8 @@ function voiceLangConfig(lang: string | null | undefined, agentVoice: string | n
 }
 
 export async function POST(req: NextRequest) {
+  const flood = await enforce('webhook', `twilio:${clientIp(req)}`)
+  if (flood) return flood
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
 

@@ -5,6 +5,7 @@ import { canCreateDemos } from '@/lib/partner/roles'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { sendSMS } from '@/lib/twilio/client'
 import { awardXp, XP } from '@/lib/partner/xp'
+import { enforce } from '@/lib/ratelimit'
 
 const PARTNER_APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'
 
@@ -13,6 +14,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ctx = await authenticatePartnerRequest(req)
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!canCreateDemos(ctx)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const limited = await enforce('demo_generate', `partner:${ctx.partnerId}`)
+  if (limited) return limited
   const { id } = await params
   const { email, phone } = await req.json().catch(() => ({}))
   if (!email && !phone) return NextResponse.json({ error: 'Provide an email or phone.' }, { status: 400 })

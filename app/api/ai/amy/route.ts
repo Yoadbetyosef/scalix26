@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { answerAsAmy } from '@/lib/amy/answer'
+import { enforce } from '@/lib/ratelimit'
 
 // Amy as Chief of Staff — answers from THIS business's real data via the Business Context Layer.
 // The tenant is the validated ACTIVE workspace (owner tenant, or the client tenant a White Label
@@ -9,6 +10,8 @@ import { answerAsAmy } from '@/lib/amy/answer'
 export async function POST(req: NextRequest) {
   const bctx = await requireActiveBusinessContext()
   if (!bctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const limited = await enforce('ai_amy', `tenant:${bctx.tenantId}`)
+  if (limited) return limited
 
   const admin = createAdminClient()
   const { data: tenant } = await admin

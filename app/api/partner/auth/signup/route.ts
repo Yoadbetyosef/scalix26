@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { createPartner } from '@/lib/partner/create'
 import type { PartnerType } from '@/lib/partner/rbac'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 // Brand-new partner signup: creates an auth user + a partner org (NO tenant). This is the key
 // departure from /api/auth/signup, which always creates a tenant. Public route.
 export async function POST(req: NextRequest) {
+  const limited = await enforce('auth_signup', `ip:${clientIp(req)}`)
+  if (limited) return limited
   const { email, password, companyName, contactPhone, partnerType } = await req.json()
   if (!email || !password) return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 })
 

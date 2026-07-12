@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
+import { enforce } from '@/lib/ratelimit'
 
 // Streaming Claude Haiku reply for the in-dashboard "Talk to your agent" demo.
 // Streams raw text deltas so the client can start TTS on the first sentence
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const limited = await enforce('ai_chat', `user:${user.id}`)
+  if (limited) return limited
 
   const body = (await req.json().catch(() => ({}))) as { message?: unknown; system_prompt?: unknown }
   const message = typeof body.message === 'string' ? body.message.trim() : ''

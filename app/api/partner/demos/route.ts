@@ -6,6 +6,7 @@ import { canCreateDemos, canWriteVia } from '@/lib/partner/rbac'
 import { scrapeBranding, buildBriefing } from '@/lib/partner/demo'
 import { logPartnerAction } from '@/lib/partner/audit'
 import { awardXp, XP } from '@/lib/partner/xp'
+import { enforce } from '@/lib/ratelimit'
 
 function slugify(name: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'demo'
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
   const ctx = await authenticatePartnerRequest(req)
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!canCreateDemos(ctx) || !canWriteVia(ctx)) return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 })
+  const limited = await enforce('demo_generate', `partner:${ctx.partnerId}`)
+  if (limited) return limited
   const body = await req.json().catch(() => ({}))
   if (!body.prospectName) return NextResponse.json({ error: 'Business name is required.' }, { status: 400 })
 

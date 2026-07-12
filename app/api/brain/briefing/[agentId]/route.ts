@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { authAgent, isAuthError } from '@/lib/playbook/data'
 import { loadBrainView } from '@/lib/brain/view'
 import { briefingSegments, briefingText, BUSINESS_BRAIN_COO_VOICE_ID } from '@/lib/brain/present'
+import { enforce } from '@/lib/ratelimit'
 
 export const maxDuration = 30
 
@@ -15,6 +16,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ ag
   const ctx = await authAgent(agentId)
   if (isAuthError(ctx)) return NextResponse.json({ error: ctx.error }, { status: ctx.status })
   const { admin, tenantId } = ctx
+  const limited = await enforce('brain_read', `tenant:${tenantId}`)
+  if (limited) return limited
 
   const view = await loadBrainView(admin, tenantId, agentId)
   const segments = briefingSegments(view)

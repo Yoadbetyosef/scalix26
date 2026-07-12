@@ -4,10 +4,13 @@ import { runAIPipeline } from '@/lib/anthropic/pipeline'
 import { sendSMS } from '@/lib/twilio/client'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, failEvent, fingerprint } from '@/lib/webhooks/idempotency'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 const emptyTwiml = () => new NextResponse('<?xml version="1.0"?><Response></Response>', { headers: { 'Content-Type': 'text/xml' } })
 
 export async function POST(req: NextRequest) {
+  const flood = await enforce('webhook', `twilio:${clientIp(req)}`)
+  if (flood) return flood
   const body = await req.text()
   const params = Object.fromEntries(new URLSearchParams(body))
 

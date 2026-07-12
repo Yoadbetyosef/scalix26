@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { enforce } from '@/lib/ratelimit'
 
 // ElevenLabs voice IDs — available on free tier
 const VOICE_MAP: Record<string, { voiceId: string; stability: number; similarity: number }> = {
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limited = await enforce('ai_voice', `user:${user.id}`)
+  if (limited) return limited
 
   const { voiceId: voiceKey } = await req.json()
   const apiKey = process.env.ELEVENLABS_API_KEY

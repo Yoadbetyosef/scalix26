@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authAgent, isAuthError } from '@/lib/playbook/data'
 import { loadBrainView } from '@/lib/brain/view'
+import { enforce } from '@/lib/ratelimit'
 
 // Read the Business Brain for one AI employee: DNA, understandings, recommendations,
 // pattern summary. Read-only.
@@ -9,6 +10,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ age
   const ctx = await authAgent(agentId)
   if (isAuthError(ctx)) return NextResponse.json({ error: ctx.error }, { status: ctx.status })
   const { admin, tenantId } = ctx
+  const limited = await enforce('brain_read', `tenant:${tenantId}`)
+  if (limited) return limited
 
   try {
     const view = await loadBrainView(admin, tenantId, agentId)

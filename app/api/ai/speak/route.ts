@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
+import { enforce } from '@/lib/ratelimit'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limited = await enforce('ai_voice', `user:${user.id}`)
+  if (limited) return limited
 
   const { text, voice } = await req.json()
   if (!text?.trim()) return NextResponse.json({ error: 'Text required' }, { status: 400 })

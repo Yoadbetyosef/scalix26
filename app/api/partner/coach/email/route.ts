@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticatePartnerRequest } from '@/lib/partner/api-auth'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
+import { enforce } from '@/lib/ratelimit'
 
 // The AI Sales Coach writes a personalized outreach message for a niche. Cheap, on-demand.
 export async function POST(req: NextRequest) {
   const ctx = await authenticatePartnerRequest(req)
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limited = await enforce('coach_email', `partner:${ctx.partnerId}`)
+  if (limited) return limited
   const { niche, channel, city } = await req.json().catch(() => ({}))
   const kind = channel === 'sms' ? 'a short SMS (under 320 chars)' : 'a concise cold email (subject + 90-130 words)'
   const target = [niche || 'local service businesses', city ? `in ${city}` : ''].filter(Boolean).join(' ')

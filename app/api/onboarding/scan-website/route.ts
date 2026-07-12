@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient } from '@/lib/supabase/server'
 import { browserScrapeHeaders } from '@/lib/scrape-headers'
+import { enforceAll, clientIp } from '@/lib/ratelimit'
 
 function extractText(html: string): string {
   const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() || ''
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limited = await enforceAll([
+    { policy: 'scan_website', id: `user:${user.id}` },
+    { policy: 'scan_website', id: `ip:${clientIp(req)}` },
+  ])
+  if (limited) return limited
 
   const { url } = await req.json()
   if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 })

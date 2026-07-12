@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getInviteByToken } from '@/lib/partner/invites'
 import { logPartnerAction } from '@/lib/partner/audit'
+import { enforceAll, clientIp } from '@/lib/ratelimit'
 
 // PUBLIC. The invited business owner accepts: they set a password, we create their auth user and LINK
 // it to their business (tenants.user_id = the new user) — reusing the single-owner model so the whole
@@ -13,6 +14,12 @@ export async function POST(req: NextRequest) {
   if (!token || typeof password !== 'string' || password.length < 8) {
     return NextResponse.json({ error: 'A password of at least 8 characters is required.' }, { status: 400 })
   }
+  // Unauthenticated token endpoint → guard brute-force by IP and by the token itself.
+  const limited = await enforceAll([
+    { policy: 'invite_accept', id: `ip:${clientIp(req)}` },
+    { policy: 'invite_accept', id: `token:${token}` },
+  ])
+  if (limited) return limited
 
   const found = await getInviteByToken(token)
   if (!found) return NextResponse.json({ error: 'This invitation is invalid.' }, { status: 404 })

@@ -3,6 +3,7 @@ import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { browserScrapeHeaders, SCRAPER_ACCEPT_HTML } from '@/lib/scrape-headers'
+import { enforceAll, clientIp } from '@/lib/ratelimit'
 
 // Crawl can take a while (many fetches + 1 AI call). Allow up to 60s.
 export const maxDuration = 60
@@ -188,6 +189,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limited = await enforceAll([
+    { policy: 'scan_website', id: `user:${user.id}` },
+    { policy: 'scan_website', id: `ip:${clientIp(req)}` },
+  ])
+  if (limited) return limited
 
   const { url } = await req.json()
   if (!url || !String(url).trim()) return NextResponse.json({ added: 0, message: 'No website URL provided.' })

@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { insertTenantWithUniqueSlug } from '@/lib/tenants'
 import { DEFAULT_ENABLED_MODULES } from '@/lib/modules'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 const FRIENDLY_ERROR = "Couldn't create your account — please try again."
 
 export async function POST(req: NextRequest) {
+  const limited = await enforce('auth_signup', `ip:${clientIp(req)}`)
+  if (limited) return limited
   const { businessName, industry, userId, email } = await req.json()
 
   const supabase = await createServiceClient()

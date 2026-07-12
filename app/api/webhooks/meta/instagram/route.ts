@@ -4,6 +4,7 @@ import { runAIPipeline } from '@/lib/anthropic/pipeline'
 import { transcribeAudioUrl } from '@/lib/deepgram/transcribe'
 import { verifyMetaSignature, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, fingerprint, type Claim } from '@/lib/webhooks/idempotency'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 // The inbound customer text — from a normal text message, or (voice notes) transcribed from
 // an audio attachment via Deepgram. Returns '' when there's nothing we can act on.
@@ -65,6 +66,8 @@ async function sendFacebookReply(recipientId: string, text: string, accessToken:
 }
 
 export async function POST(req: NextRequest) {
+  const flood = await enforce('webhook', `meta:${clientIp(req)}`)
+  if (flood) return flood
   // Verify X-Hub-Signature-256 over the RAW body (never re-serialize) before parsing — a forged Meta
   // event is never processed or persisted. Signature verification is the primary security layer.
   const raw = await req.text()

@@ -4,8 +4,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 import { insertTenantWithUniqueSlug } from '@/lib/tenants'
 import { readAttributionCookies, resolveAttribution } from '@/lib/partner/attribution'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 export async function POST(req: NextRequest) {
+  const signupLimited = await enforce('auth_signup', `ip:${clientIp(req)}`)
+  if (signupLimited) return signupLimited
   const { email, password, businessName, industry } = await req.json()
 
   const supabase = await createClient()

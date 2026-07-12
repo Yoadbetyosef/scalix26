@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -26,6 +27,13 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const { pathname } = request.nextUrl
+
+  // Brute-force cap on the PUBLIC invite-token page (`/invite/[token]`) — it has no route handler to
+  // guard it. `/api/invite/accept` (different prefix) has its own tighter in-route limit.
+  if (pathname.startsWith('/invite/')) {
+    const limited = await enforce('invite_page', `ip:${clientIp(request)}`)
+    if (limited) return limited
+  }
 
   // Exit operator mode (clear the active_ws cookie) ONLY when the session is gone (sign-out).
   //

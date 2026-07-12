@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { sendSMS } from '@/lib/twilio/client'
+import { enforce } from '@/lib/ratelimit'
 import { sendEmailReply } from '@/lib/email/send'
 import { getProvider } from '@/lib/mailbox'
 import { getValidAccount, type AccountRow } from '@/lib/mailbox/account'
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const authed = await createClient()
   const { data: { user } } = await authed.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const limited = await enforce('convo_send', `user:${user.id}`)
+  if (limited) return limited
 
   const { content } = await req.json().catch(() => ({ content: undefined }))
   if (!content || typeof content !== 'string' || !content.trim()) {

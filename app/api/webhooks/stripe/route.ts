@@ -6,6 +6,7 @@ import { releaseTenantNumbers } from '@/lib/twilio/release'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
 import { recordBillingEvent } from '@/lib/partner/economics'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mylocksmithai.com'
 
@@ -19,6 +20,8 @@ async function getTenantByCustomer(supabase: Awaited<ReturnType<typeof createSer
 }
 
 export async function POST(req: NextRequest) {
+  const flood = await enforce('webhook_stripe', `stripe:${clientIp(req)}`)
+  if (flood) return flood
   const body = await req.text()
   const signature = req.headers.get('stripe-signature')!
 

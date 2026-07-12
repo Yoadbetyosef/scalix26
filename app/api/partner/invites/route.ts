@@ -7,6 +7,7 @@ import { resolveBrandForPartner, resolveBrandData } from '@/lib/partner/brand'
 import { getInviteForTenant, upsertInvite, newInviteToken } from '@/lib/partner/invites'
 import { sendInviteEmail } from '@/lib/partner/invite-email'
 import { requestBaseUrl } from '@/lib/request-url'
+import { enforce } from '@/lib/ratelimit'
 
 // Manage the owner invitation for one client business. Every request re-validates that THIS partner
 // owns the tenant (server-side) — a browser-supplied tenant_id is never trusted. All actions audited.
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const ctx = await getPartnerContext()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const manageLimited = await enforce('invite_manage', `partner:${ctx.partnerId}`)
+  if (manageLimited) return manageLimited
   const b = await req.json().catch(() => ({}))
   const tenantId = b.tenant_id as string
   const action = b.action as string
@@ -58,6 +61,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'send' || action === 'resend') {
+    const emailLimited = await enforce('invite_email', `partner:${ctx.partnerId}`)
+    if (emailLimited) return emailLimited
     const brand = (await resolveBrandForPartner(ctx.partnerId)) || (await resolveBrandData(req.headers.get('host')))
     const { data: t } = await db.from('tenants').select('business_name').eq('id', tenantId).maybeSingle()
     const res = await sendInviteEmail({ brand, to: email, businessName: t?.business_name || 'your business', firstName: invite.first_name, acceptUrl })

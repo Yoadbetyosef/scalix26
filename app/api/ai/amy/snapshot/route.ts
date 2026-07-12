@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { buildSnapshot } from '@/lib/amy/registry'
 import { getBusinessSnapshot } from '@/lib/amy/snapshot'
+import { enforce } from '@/lib/ratelimit'
 
 // A broad, tenant-scoped business snapshot for grounding the realtime voice agent (which can't call
 // tools mid-conversation). Tenant = the validated ACTIVE workspace (owner tenant, or the operated
@@ -10,6 +11,8 @@ import { getBusinessSnapshot } from '@/lib/amy/snapshot'
 export async function GET() {
   const bctx = await requireActiveBusinessContext()
   if (!bctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const limited = await enforce('ai_amy', `tenant:${bctx.tenantId}`)
+  if (limited) return limited
 
   const admin = createAdminClient()
   const { data: tenant } = await admin

@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { logDemoEvent, updateDemoEngagement } from '@/lib/partner/demo'
+import { enforceAll, clientIp } from '@/lib/ratelimit'
 
 // Public demo chat: the prospect talks to their would-be AI receptionist. Uses the precomputed
 // briefing as the system prompt. Rate-limited by message length + short history. No auth.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
+  // Unauthenticated LLM = the biggest cost-abuse surface → cap per-IP AND per-demo; fail CLOSED.
+  const limited = await enforceAll([
+    { policy: 'demo_public_ip', id: `ip:${clientIp(req)}` },
+    { policy: 'demo_public_slug', id: `slug:${slug}` },
+  ])
+  if (limited) return limited
   const body = await req.json().catch(() => ({ messages: [] }))
   const messages = body.messages
   if (!Array.isArray(messages) || messages.length === 0) return NextResponse.json({ error: 'No messages' }, { status: 400 })

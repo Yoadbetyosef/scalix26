@@ -5,6 +5,7 @@ import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
 import { isNonCustomerEmail, domainsFromEmails } from '@/lib/email/is-non-customer'
 import { claimEvent, completeEvent, fingerprint } from '@/lib/webhooks/idempotency'
+import { enforce, clientIp } from '@/lib/ratelimit'
 
 const SECRET = process.env.RESEND_WEBHOOK_SECRET || process.env.RESEND_INBOUND_SECRET || ''
 
@@ -44,6 +45,8 @@ async function fetchBody(emailId: string): Promise<{ from?: string; to?: unknown
 }
 
 export async function POST(req: NextRequest) {
+  const flood = await enforce('webhook', `resend:${clientIp(req)}`)
+  if (flood) return flood
   const raw = await req.text()
   if (!verify(raw, req.headers)) return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
 
