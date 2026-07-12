@@ -99,6 +99,13 @@ export interface PriceUsageInput {
   quantity?: number
 }
 
+// Resolve the effective markup % for a partner (partner override → global → fallback). Exposed so the
+// billing cron can resolve it ONCE per partner instead of per event.
+export async function resolveMarkupPct(partnerId: string | null | undefined, currency = 'usd'): Promise<number> {
+  const rows = await source.loadMarkupRows(partnerId, currency)
+  return pickMarkupPct(rows, partnerId, currency)
+}
+
 export async function priceUsage(input: PriceUsageInput): Promise<PricedUsage> {
   const currency = input.currency || 'usd'
 
