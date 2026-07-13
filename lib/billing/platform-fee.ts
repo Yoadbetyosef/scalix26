@@ -114,7 +114,12 @@ const dbDeps: PlatformDeps = {
       items: [{ price, quantity }],
       metadata: { kind: 'wl_platform_fee', partner_id: partnerId },
       ...(bal?.stripe_payment_method_id ? { default_payment_method: bal.stripe_payment_method_id } : {}),
-    }, { idempotencyKey: `wl_platform_sub:${partnerId}` })
+      // Idempotency key includes the quantity: a retry with the SAME count is still deduped (prevents a
+      // double subscription if a create response is lost), but a retry after a changed active-client count
+      // is a distinct request rather than a rejected key reuse. (Note: Stripe still caches a hard client
+      // error under a given key for 24h, so a same-count retry after fixing the underlying cause — e.g. a
+      // newly added card — may need a fresh window; see createSubscription no-payment-method handling.)
+    }, { idempotencyKey: `wl_platform_sub:${partnerId}:${quantity}` })
     const cpe = (sub as unknown as { current_period_end?: number }).current_period_end
     return {
       subscriptionId: sub.id,
