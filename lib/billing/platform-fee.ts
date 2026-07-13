@@ -24,6 +24,18 @@ export function platformPriceId(): string | undefined {
   return process.env.STRIPE_WL_PLATFORM_PRICE_ID || undefined
 }
 
+// Gate for the ADMIN manual per-partner force-sync (app/api/admin/wl-billing/partners/[id]/sync). This is
+// a deliberately narrow capability used to drive/verify a SINGLE partner without the global cron. It is
+// allowed ONLY when the platform fee is enabled AND we're in a Preview deployment — so a production
+// force-sync can never be exposed by accident. A future prod rollout must set WL_PLATFORM_ADMIN_SYNC_PROD
+// explicitly. NOTE: this only controls the manual trigger; the actual billing engine is unchanged.
+export function platformAdminSyncAllowed(): boolean {
+  if (!platformFeeEnabled()) return false
+  if (process.env.VERCEL_ENV === 'preview') return true
+  if (process.env.WL_PLATFORM_ADMIN_SYNC_PROD === 'true') return true
+  return false
+}
+
 export type PlatformStatus = 'none' | 'active' | 'past_due' | 'payment_required' | 'canceled'
 export type PlatformEventType =
   | 'created' | 'quantity_changed' | 'invoice_paid' | 'invoice_failed'

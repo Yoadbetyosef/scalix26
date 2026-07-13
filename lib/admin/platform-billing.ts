@@ -11,6 +11,7 @@ export interface PartnerFinancials {
   partnerId: string
   name: string
   activeClients: number
+  billedQuantity: number           // last-synced Stripe subscription quantity (platform_active_qty)
   platformStatus: string
   walletBalanceCents: number
   walletReloadsCents: number      // Σ top-ups + auto-reloads (money in)
@@ -43,7 +44,7 @@ export function computeProfitability(f: PartnerFinancials): Profitability {
 
 interface Txn { partner_id: string; transaction_type: string; amount_cents: number | null; provider_cost_cents: number | null; partner_charge_cents: number | null }
 interface PlatEvt { partner_id: string; event_type: string; amount_cents: number | null }
-interface Bal { partner_id: string; balance_cents: number | null; platform_fee_status: string | null }
+interface Bal { partner_id: string; balance_cents: number | null; platform_fee_status: string | null; platform_active_qty: number | null }
 
 export async function getPartnerProfitability(): Promise<Profitability[]> {
   const { createAdminClient } = await import('@/lib/supabase/server')
@@ -53,7 +54,7 @@ export async function getPartnerProfitability(): Promise<Profitability[]> {
     db.from('partners').select('id, company_name'),
     db.from('partner_balance_transactions').select('partner_id, transaction_type, amount_cents, provider_cost_cents, partner_charge_cents'),
     db.from('platform_subscription_events').select('partner_id, event_type, amount_cents').eq('event_type', 'invoice_paid'),
-    db.from('partner_balances').select('partner_id, balance_cents, platform_fee_status'),
+    db.from('partner_balances').select('partner_id, balance_cents, platform_fee_status, platform_active_qty'),
     db.from('tenants').select('white_label_partner_id').not('white_label_partner_id', 'is', null),
   ])
 
@@ -85,6 +86,7 @@ export async function getPartnerProfitability(): Promise<Profitability[]> {
       partnerId: p.id,
       name: p.company_name || p.id.slice(0, 8),
       activeClients,
+      billedQuantity: Number(bal?.platform_active_qty ?? 0),
       platformStatus: bal?.platform_fee_status || 'none',
       walletBalanceCents: Number(bal?.balance_cents ?? 0),
       walletReloadsCents: a.reloads,

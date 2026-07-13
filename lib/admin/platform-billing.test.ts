@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { computeProfitability, type PartnerFinancials } from './platform-billing'
 
 const base: PartnerFinancials = {
-  partnerId: 'p1', name: 'Acme', activeClients: 3, platformStatus: 'active',
+  partnerId: 'p1', name: 'Acme', activeClients: 3, billedQuantity: 3, platformStatus: 'active',
   walletBalanceCents: 50000, walletReloadsCents: 200000,
   usageRevenueCents: 12500, providerCostCents: 10000, platformRevenueCents: 29100,
 }

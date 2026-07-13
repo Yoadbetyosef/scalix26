@@ -1,12 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   syncPlatformQuantity, onPlatformInvoicePaid, onPlatformInvoiceFailed,
-  expirePlatformGraceIfDue, onPlatformSubscriptionCanceled,
+  expirePlatformGraceIfDue, onPlatformSubscriptionCanceled, platformAdminSyncAllowed,
   __setPlatformDepsForTests, type PlatformDeps, type PlatformState, type PlatformEvent,
 } from './platform-fee'
 
 beforeEach(() => { vi.stubEnv('WL_PLATFORM_FEE_ENABLED', 'true'); vi.stubEnv('WL_PLATFORM_GRACE_DAYS', '7') })
 afterEach(() => { __setPlatformDepsForTests(null); vi.unstubAllEnvs() })
+
+describe('platformAdminSyncAllowed — Preview-gated manual sync capability', () => {
+  it('is off when the platform fee is disabled, even on Preview', () => {
+    vi.stubEnv('WL_PLATFORM_FEE_ENABLED', 'false'); vi.stubEnv('VERCEL_ENV', 'preview')
+    expect(platformAdminSyncAllowed()).toBe(false)
+  })
+  it('is ON when enabled AND deployment is Preview', () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    expect(platformAdminSyncAllowed()).toBe(true)
+  })
+  it('is OFF on production unless the explicit prod flag is set', () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    expect(platformAdminSyncAllowed()).toBe(false)
+    vi.stubEnv('WL_PLATFORM_ADMIN_SYNC_PROD', 'true')
+    expect(platformAdminSyncAllowed()).toBe(true)
+  })
+})
 
 function fake(initial: Partial<PlatformState> = {}, activeCount = 0) {
   const state: PlatformState = {

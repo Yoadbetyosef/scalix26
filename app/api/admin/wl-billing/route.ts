@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getAdminContext } from '@/lib/admin/rbac'
+import { getAdminContext, canManageSecurity } from '@/lib/admin/rbac'
 import { getPartnerProfitability } from '@/lib/admin/platform-billing'
+import { platformAdminSyncAllowed } from '@/lib/billing/platform-fee'
 
 // GET /api/admin/wl-billing — internal White Label P&L per partner: active clients, MRR, wallet balance
 // + reloads, provider cost, markup revenue, platform revenue, gross profit, net provider spend,
@@ -20,5 +21,8 @@ export async function GET() {
     outstandingCents: t.outstandingCents + p.outstandingCents,
   }), { activeClients: 0, mrrCents: 0, platformRevenueCents: 0, usageRevenueCents: 0, providerCostCents: 0, grossProfitCents: 0, outstandingCents: 0 })
 
-  return NextResponse.json({ partners, totals })
+  // Manual per-partner sync is offered in the UI only to a super-admin on a Preview deployment.
+  const canSync = canManageSecurity(ctx.role) && platformAdminSyncAllowed()
+
+  return NextResponse.json({ partners, totals, capabilities: { canSync } })
 }

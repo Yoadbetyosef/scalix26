@@ -43,6 +43,8 @@ export const POLICIES = {
   // PUBLIC unauthenticated LLM — highest cost risk → fail CLOSED.
   demo_public_ip:  { limit: 15,  window: '1 m',  fail: 'closed' },
   demo_public_slug:{ limit: 40,  window: '1 h',  fail: 'closed' },
+  // Admin manual WL platform-fee force-sync (super-admin, Preview-gated) — low volume, fail CLOSED.
+  admin_platform_sync: { limit: 20, window: '1 m', fail: 'closed' },
   // Webhooks: signature stays primary; this only caps floods. Generous so provider retries pass.
   webhook:         { limit: 240, window: '1 m',  fail: 'open' },
   webhook_stripe:  { limit: 600, window: '1 m',  fail: 'open' },
