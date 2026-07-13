@@ -73,6 +73,7 @@ export interface PlatformDeps {
   createSubscription(a: { partnerId: string; customerId: string; quantity: number }):
     Promise<{ subscriptionId: string; itemId: string; currentPeriodEnd: string | null; status: string }>
   updateQuantity(a: { subscriptionId: string; itemId: string; quantity: number }): Promise<void>
+  cancelSubscription(a: { subscriptionId: string }): Promise<void>
   saveState(partnerId: string, patch: Partial<Omit<PlatformState, 'partnerId'>>): Promise<void>
   // Append to platform_subscription_events; returns false when idempotency_key already existed (duplicate).
   recordEvent(e: PlatformEvent): Promise<boolean>
@@ -128,6 +129,10 @@ const dbDeps: PlatformDeps = {
       items: [{ id: itemId, quantity }],
       proration_behavior: 'create_prorations',
     })
+  },
+  async cancelSubscription({ subscriptionId }) {
+    const { stripe } = await import('@/lib/stripe/client')
+    await stripe.subscriptions.cancel(subscriptionId)
   },
   async saveState(partnerId, patch) {
     const { createAdminClient } = await import('@/lib/supabase/server')
@@ -242,6 +247,18 @@ export async function expirePlatformGraceIfDue(partnerId: string, nowMs: number)
   await deps.saveState(partnerId, { status: 'payment_required' })
   await deps.recordEvent({ partnerId, eventType: 'payment_required', previousStatus: 'past_due', newStatus: 'payment_required', idempotencyKey: `payment_required:${partnerId}:${s.graceUntil}` })
   return { transitioned: true }
+}
+
+// Admin teardown: cancel the partner's platform subscription IN Stripe, then record the terminal canceled
+// state via the existing onPlatformSubscriptionCanceled (idempotent — a later customer.subscription.deleted
+// webhook can't double-apply). This is the reverse of syncPlatformQuantity's create; it adds no billing
+// logic beyond the single Stripe cancel call. Used for partner churn and to clean up test subscriptions.
+export async function cancelPlatformSubscription(partnerId: string): Promise<{ canceled: boolean; subscriptionId: string | null }> {
+  const state = await deps.loadState(partnerId)
+  if (!state.subscriptionId) return { canceled: false, subscriptionId: null }
+  await deps.cancelSubscription({ subscriptionId: state.subscriptionId })
+  await onPlatformSubscriptionCanceled(partnerId, { subscriptionId: state.subscriptionId })
+  return { canceled: true, subscriptionId: state.subscriptionId }
 }
 
 // Subscription canceled (in Stripe) → terminal canceled state.

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   syncPlatformQuantity, onPlatformInvoicePaid, onPlatformInvoiceFailed,
-  expirePlatformGraceIfDue, onPlatformSubscriptionCanceled, platformAdminSyncAllowed,
+  expirePlatformGraceIfDue, onPlatformSubscriptionCanceled, cancelPlatformSubscription, platformAdminSyncAllowed,
   __setPlatformDepsForTests, type PlatformDeps, type PlatformState, type PlatformEvent,
 } from './platform-fee'
 
@@ -33,13 +33,14 @@ function fake(initial: Partial<PlatformState> = {}, activeCount = 0) {
   let active = activeCount
   const events: PlatformEvent[] = []
   const seen = new Set<string>()
-  const stripe = { created: 0, updates: [] as number[] }
+  const stripe = { created: 0, updates: [] as number[], canceled: 0 }
   const d: PlatformDeps = {
     countActive: async () => active,
     loadState: async () => ({ ...state }),
     ensureCustomer: async () => 'cus_1',
     createSubscription: async ({ quantity }) => { stripe.created++; return { subscriptionId: 'sub_1', itemId: 'si_1', currentPeriodEnd: '2026-08-01T00:00:00Z', status: 'active' } },
     updateQuantity: async ({ quantity }) => { stripe.updates.push(quantity) },
+    cancelSubscription: async () => { stripe.canceled++ },
     saveState: async (_p, patch) => { Object.assign(state, patch) },
     recordEvent: async (e) => { if (seen.has(e.idempotencyKey)) return false; seen.add(e.idempotencyKey); events.push(e); return true },
   }
@@ -177,5 +178,20 @@ describe('separation + reproducible history', () => {
     expect((await onPlatformSubscriptionCanceled('p1', { subscriptionId: 'sub_1' })).applied).toBe(true)
     expect(f.state.status).toBe('canceled')
     expect((await onPlatformSubscriptionCanceled('p1', { subscriptionId: 'sub_1' })).applied).toBe(false)
+  })
+
+  it('cancelPlatformSubscription → cancels in Stripe once + records terminal canceled state', async () => {
+    const f = fake({ subscriptionId: 'sub_1', status: 'active', activeQty: 2 }, 2)
+    const r = await cancelPlatformSubscription('p1')
+    expect(r).toEqual({ canceled: true, subscriptionId: 'sub_1' })
+    expect(f.stripe.canceled).toBe(1)
+    expect(f.state.status).toBe('canceled')
+    expect(f.typeCount('canceled')).toBe(1)
+  })
+
+  it('cancelPlatformSubscription → no-op when the partner has no subscription', async () => {
+    const f = fake({ subscriptionId: null }, 0)
+    expect(await cancelPlatformSubscription('p1')).toEqual({ canceled: false, subscriptionId: null })
+    expect(f.stripe.canceled).toBe(0)
   })
 })
