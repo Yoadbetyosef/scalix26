@@ -53,12 +53,16 @@ describe('assertPartnerActive — block signals', () => {
     deps({ loadGateRow: vi.fn(async () => row({ balance_cents: 500, pending_charge_cents: 500 })) })
     expect(await assertPartnerActive({ partnerId: 'p1' })).toMatchObject({ ok: false, reason: 'depleted' })
   })
-  it('blocks when the platform subscription is past_due', async () => {
+  it('does NOT block on platform past_due (Phase 7 grace window — service continues)', async () => {
     deps({ loadGateRow: vi.fn(async () => row({ platform_fee_status: 'past_due' })) })
+    expect((await assertPartnerActive({ partnerId: 'p1' })).ok).toBe(true)
+  })
+  it('blocks when the platform subscription is payment_required (grace expired)', async () => {
+    deps({ loadGateRow: vi.fn(async () => row({ platform_fee_status: 'payment_required' })) })
     expect(await assertPartnerActive({ partnerId: 'p1' })).toMatchObject({ ok: false, reason: 'platform_unpaid' })
   })
   it('platform lapse takes precedence over a healthy balance', async () => {
-    deps({ loadGateRow: vi.fn(async () => row({ platform_fee_status: 'unpaid', balance_cents: 999999 })) })
+    deps({ loadGateRow: vi.fn(async () => row({ platform_fee_status: 'canceled', balance_cents: 999999 })) })
     expect((await assertPartnerActive({ partnerId: 'p1' })).reason).toBe('platform_unpaid')
   })
 })

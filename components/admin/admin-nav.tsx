@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { LayoutDashboard, Building2, ToggleRight, Flag, ScrollText, Users, Search, DollarSign, Activity, Coins, Handshake, Gift } from 'lucide-react'
+import { LayoutDashboard, Building2, ToggleRight, Flag, ScrollText, Users, Search, DollarSign, Activity, Coins, Handshake, Gift, Layers } from 'lucide-react'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/admin/feature-flags', label: 'Feature Flags', icon: Flag },
   { href: '/admin/billing', label: 'Billing', icon: DollarSign },
   { href: '/admin/cost', label: 'Cost & Margin', icon: Coins },
+  { href: '/admin/wl-billing', label: 'WL Billing', icon: Layers },
   { href: '/admin/health', label: 'Health', icon: Activity },
   { href: '/admin/team', label: 'Team', icon: Users },
   { href: '/admin/audit', label: 'Audit Log', icon: ScrollText },

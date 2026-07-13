@@ -84,9 +84,11 @@ const DIRECT_TENANT = 'b45e6276-0998-4a95-a8cc-7d828304302e' // no white_label_p
     await seed(A, { balance_cents: 0, status: 'active' })
     expect((await assertPartnerActive({ partnerId: A })).reason).toBe('depleted')
   })
-  it('platform past_due blocked', async () => {
+  it('platform past_due is allowed (grace), payment_required is blocked', async () => {
     await seed(A, { balance_cents: 100000, status: 'active', platform_fee_status: 'past_due' })
-    expect((await assertPartnerActive({ partnerId: A })).reason).toBe('platform_unpaid')
+    expect((await assertPartnerActive({ partnerId: A })).ok).toBe(true) // grace window — still served
+    await setBal(A, { platform_fee_status: 'payment_required' })
+    expect((await assertPartnerActive({ partnerId: A })).reason).toBe('platform_unpaid') // grace expired
   })
   it('direct Scalix tenant unaffected', async () => {
     expect((await assertPartnerActive({ tenantId: DIRECT_TENANT })).ok).toBe(true)
