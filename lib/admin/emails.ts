@@ -19,3 +19,10 @@ export const ADMIN_EMAILS: string[] = Array.from(
 export function isAdminEmail(email?: string | null): boolean {
   return !!email && ADMIN_EMAILS.includes(email.toLowerCase())
 }
+
+// The FOUNDER allow-list — a strict subset of admins (SUPER_ADMINS only, NOT support/sales/dev roles).
+// This is the single source of truth for the CEO Command Center's founder-confidential surface.
+export const FOUNDER_EMAILS: string[] = SUPER_ADMINS.map((e) => e.toLowerCase())
+export function isFounderEmail(email?: string | null): boolean {
+  return !!email && FOUNDER_EMAILS.includes(email.toLowerCase())
+}

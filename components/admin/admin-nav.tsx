@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { LayoutDashboard, Building2, ToggleRight, Flag, ScrollText, Users, Search, DollarSign, Activity, Coins, Handshake, Gift, Layers } from 'lucide-react'
+import { LayoutDashboard, Building2, ToggleRight, Flag, ScrollText, Users, Search, DollarSign, Activity, Coins, Handshake, Gift, Layers, Gauge } from 'lucide-react'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -24,18 +24,20 @@ const roleLabel: Record<string, string> = {
   super_admin: 'Super Admin', support: 'Support', sales: 'Sales', developer: 'Developer', read_only: 'Read Only',
 }
 
-export function AdminNav({ email, role }: { email: string; role: string }) {
+export function AdminNav({ email, role, showCommandCenter }: { email: string; role: string; showCommandCenter?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const [q, setQ] = useState('')
   const active = (href: string, exact?: boolean) => (exact ? pathname === href : pathname === href || pathname.startsWith(href + '/'))
   const search = () => { if (q.trim()) router.push(`/admin/businesses?search=${encodeURIComponent(q.trim())}`) }
+  // Founder-only Command Center entry (server decides visibility via showCommandCenter).
+  const items = showCommandCenter ? [{ href: '/admin/command-center', label: 'Command Center', icon: Gauge }, ...NAV] : NAV
 
   return (
     <nav className="sticky top-0 z-30 bg-gray-900 text-white">
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-1 gap-y-1 px-3 py-2 sm:px-6">
         <span className="mr-3 font-bold">Scalix Admin</span>
-        {NAV.map(({ href, label, icon: Icon, exact }) => (
+        {items.map(({ href, label, icon: Icon, exact }) => (
           <Link
             key={href}
             href={href}

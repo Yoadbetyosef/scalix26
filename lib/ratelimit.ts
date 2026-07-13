@@ -45,6 +45,8 @@ export const POLICIES = {
   demo_public_slug:{ limit: 40,  window: '1 h',  fail: 'closed' },
   // Admin manual WL platform-fee force-sync (super-admin, Preview-gated) — low volume, fail CLOSED.
   admin_platform_sync: { limit: 20, window: '1 m', fail: 'closed' },
+  // CEO Command Center (founder-only) mutations — low volume, fail CLOSED.
+  command_center: { limit: 60, window: '1 m', fail: 'closed' },
   // Webhooks: signature stays primary; this only caps floods. Generous so provider retries pass.
   webhook:         { limit: 240, window: '1 m',  fail: 'open' },
   webhook_stripe:  { limit: 600, window: '1 m',  fail: 'open' },
