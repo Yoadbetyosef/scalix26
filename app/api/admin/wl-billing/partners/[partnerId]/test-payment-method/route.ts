@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logAdminAction } from '@/lib/admin/audit'
 import { requirePlatformAdmin } from '@/lib/admin/platform-admin-guard'
-import { attachTestPaymentMethod, type TestCardScenario } from '@/lib/billing/platform-test-support'
+import { attachTestPaymentMethod, deleteTestCustomer, type TestCardScenario } from '@/lib/billing/platform-test-support'
 
 // ⚠️ TEST-ONLY endpoint — remove before production promotion.
 // POST /api/admin/wl-billing/partners/[partnerId]/test-payment-method  { scenario?: 'ok' | 'declined' }
@@ -30,5 +30,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ par
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'Attach failed', detail: message }, { status: 502 })
+  }
+}
+
+// DELETE — test teardown: delete the partner's Stripe TEST customer (cancels its subscriptions too).
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ partnerId: string }> }) {
+  const { partnerId } = await params
+  const guard = await requirePlatformAdmin(partnerId)
+  if (guard instanceof NextResponse) return guard
+  const { ctx, partner } = guard
+  try {
+    const r = await deleteTestCustomer(partnerId)
+    await logAdminAction(ctx.email, {
+      action: 'wl_platform_test_pm_delete', targetType: 'partner', targetId: partnerId,
+      targetLabel: partner.company_name, after: r,
+    })
+    return NextResponse.json({ ok: true, partnerId, ...r })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'Teardown failed', detail: message }, { status: 502 })
   }
 }
