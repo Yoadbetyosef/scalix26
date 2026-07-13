@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { getActuals } from '@/lib/command-center/actuals'
 import { runForecast } from '@/lib/command-center/engine'
 import { loadActiveAssumptions } from '@/lib/command-center/active'
@@ -11,9 +12,10 @@ export const dynamic = 'force-dynamic'
 // be derived are shown as Manual (never faked). Where a forecast exists, we pair Actual vs Forecast vs
 // Variance; deeper Forecast/Target coverage grows as actuals coverage grows.
 export default async function CommandCenterActuals() {
-  const asOf = new Date().toISOString()
   const founder = await getFounderContext()
-  const { assumptions } = await loadActiveAssumptions(founder?.email ?? 'system')
+  if (!founder) notFound() // self-guard before any DB side effect (RSC renders page before layout gate)
+  const asOf = new Date().toISOString()
+  const { assumptions } = await loadActiveAssumptions(founder.email)
   const metrics = await getActuals(asOf)
   const ns = northStar(runForecast(assumptions, 60), 11)
   const forecast: Record<string, number> = {

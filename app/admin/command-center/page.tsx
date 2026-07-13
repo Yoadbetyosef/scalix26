@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { runForecast } from '@/lib/command-center/engine'
 import { loadActiveAssumptions } from '@/lib/command-center/active'
 import { getFounderContext } from '@/lib/command-center/guard'
@@ -23,8 +24,11 @@ function Question({ q, a }: { q: string; a: string }) {
 // and each engine card links to its playbook. Phase 1/2 render the BASE forecast (persisted scenarios +
 // live actuals arrive in Phase 2b), clearly labeled as a forecast — never mixed with booked results.
 export default async function CommandCenterOverview() {
+  // Self-guard: RSC renders the page body before the layout's gate, so guard here too — otherwise a
+  // non-founder (who still gets a 404 from the layout) would trigger config creation as a side effect.
   const founder = await getFounderContext()
-  const { assumptions, persisted } = await loadActiveAssumptions(founder?.email ?? 'system')
+  if (!founder) notFound()
+  const { assumptions, persisted } = await loadActiveAssumptions(founder.email)
   const forecast = runForecast(assumptions, 60)
   const idx = HEADLINE_MONTH - 1
   const brief = buildCeoBrief(forecast, idx)
