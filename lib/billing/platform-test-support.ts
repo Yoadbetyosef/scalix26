@@ -8,9 +8,10 @@
 
 export type TestCardScenario = 'ok' | 'declined'
 
-// Stripe's built-in test PaymentMethods: pm_card_visa always succeeds; pm_card_chargeDeclined always
-// declines on charge (drives invoice.payment_failed → dunning).
-const TEST_PM: Record<TestCardScenario, string> = { ok: 'pm_card_visa', declined: 'pm_card_chargeDeclined' }
+// Stripe's built-in test PaymentMethods: pm_card_visa always succeeds; pm_card_chargeCustomerFail attaches
+// cleanly but FAILS when charged (drives invoice.payment_failed → dunning). Note pm_card_chargeDeclined is
+// rejected at attach time, so it can't be used to reach the invoice-charge failure path.
+const TEST_PM: Record<TestCardScenario, string> = { ok: 'pm_card_visa', declined: 'pm_card_chargeCustomerFail' }
 
 export async function attachTestPaymentMethod(partnerId: string, scenario: TestCardScenario) {
   const { stripe } = await import('@/lib/stripe/client')
