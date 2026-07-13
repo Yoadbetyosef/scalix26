@@ -8,7 +8,8 @@
 //   • Block signals (all read from partner_balances, no computation on the hot path):
 //       - status === 'paused'                          → funds exhausted, reload already failed
 //       - available (balance − pending) <= 0           → depleted this instant, even if not yet flipped
-//       - platform_fee_status past_due/unpaid/canceled → $97 platform subscription lapsed (Phase 7)
+//       - platform_fee_status payment_required/canceled → $97 platform subscription lapsed past its
+//         grace window (Phase 7). NOTE: plain 'past_due' does NOT block — it is inside the grace window.
 //   • Only WL-client tenants are gated. Direct Scalix tenants (no white_label_partner_id) always pass.
 //   • Entirely inert until WL_BILLING_ENABLED === 'true' — same kill-switch as the meter/cron.
 //
@@ -59,8 +60,13 @@ const dbDeps: GateDeps = {
 let deps: GateDeps = dbDeps
 export function __setGateDepsForTests(d: GateDeps | null) { deps = d ?? dbDeps }
 
-// Platform-subscription states that must stop new billable work (Phase 7 dunning writes these).
-const PLATFORM_BLOCKED = new Set(['past_due', 'unpaid', 'canceled'])
+// Platform-subscription states that must stop new billable work. NOTE (Phase 7): 'past_due' is
+// intentionally NOT here — a failed $97 invoice opens a configurable GRACE window during which service
+// continues. Only after grace expires does the dunning sweep flip the partner to 'payment_required'
+// (see lib/billing/platform-fee.ts::expirePlatformGraceIfDue); that terminal state — with 'canceled' —
+// is what gates here. 'payment_method_required' (partner owes the fee but has no saved card) is also
+// intentionally NOT here — it's a prompt to add a card, not a service cutoff.
+const PLATFORM_BLOCKED = new Set(['payment_required', 'canceled'])
 
 export function billingGateEnabled(): boolean {
   return process.env.WL_BILLING_ENABLED === 'true'

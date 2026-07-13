@@ -8,6 +8,7 @@ import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
 import { recordBillingEvent } from '@/lib/partner/economics'
 import { enforce, clientIp } from '@/lib/ratelimit'
 import { handleBalanceStripeEvent } from '@/lib/billing/stripe-events'
+import { handlePlatformStripeEvent } from '@/lib/billing/platform-events'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.mylocksmithai.com'
 
@@ -36,6 +37,10 @@ export async function POST(req: NextRequest) {
   // Prepaid wallet events (partner balance top-ups / auto-reload / saved cards) are handled here and
   // short-circuit — they're a separate money flow from the tenant subscription switch below.
   if (await handleBalanceStripeEvent(event)) return NextResponse.json({ received: true })
+
+  // WL PLATFORM subscription events ($97/mo per active client) — a THIRD, separate money flow from both
+  // the wallet and tenant plans. Identified by subscription metadata kind='wl_platform_fee'.
+  if (await handlePlatformStripeEvent(event, Date.now())) return NextResponse.json({ received: true })
 
   const supabase = await createServiceClient()
 
