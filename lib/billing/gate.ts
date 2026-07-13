@@ -64,7 +64,8 @@ export function __setGateDepsForTests(d: GateDeps | null) { deps = d ?? dbDeps }
 // intentionally NOT here — a failed $97 invoice opens a configurable GRACE window during which service
 // continues. Only after grace expires does the dunning sweep flip the partner to 'payment_required'
 // (see lib/billing/platform-fee.ts::expirePlatformGraceIfDue); that terminal state — with 'canceled' —
-// is what gates here.
+// is what gates here. 'payment_method_required' (partner owes the fee but has no saved card) is also
+// intentionally NOT here — it's a prompt to add a card, not a service cutoff.
 const PLATFORM_BLOCKED = new Set(['payment_required', 'canceled'])
 
 export function billingGateEnabled(): boolean {

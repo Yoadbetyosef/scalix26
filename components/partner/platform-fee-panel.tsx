@@ -9,6 +9,7 @@ const STATUS_LABEL: Record<PlatformFeeSummary['status'], { text: string; tone: s
   active: { text: 'Active', tone: 'text-emerald-600' },
   past_due: { text: 'Payment retrying', tone: 'text-amber-600' },
   payment_required: { text: 'Action required', tone: 'text-red-600' },
+  payment_method_required: { text: 'Add a payment method', tone: 'text-amber-600' },
   canceled: { text: 'Canceled', tone: 'text-subtle' },
 }
 
@@ -29,6 +30,13 @@ export function PlatformFeePanel({ summary }: { summary: PlatformFeeSummary }) {
         <StatCard label="Next Invoice" value={fmtDate(s.nextInvoiceDate)} hint={s.hasSubscription ? 'auto-renews' : 'no subscription yet'} />
         <StatCard label="Subscription" value={<span className={status.tone}>{status.text}</span>} hint={s.graceUntil && s.status === 'past_due' ? `grace until ${fmtDate(s.graceUntil)}` : `qty ${s.billedQuantity}`} />
       </div>
+
+      {s.status === 'payment_method_required' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Add a payment method to start your platform subscription ({money(s.perClientCents)}/month per
+          active client). Your clients keep running in the meantime — billing begins once a card is on file.
+        </div>
+      )}
 
       {s.status === 'payment_required' && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

@@ -25,12 +25,14 @@ describe('platformAdminSyncAllowed — Preview-gated manual sync capability', ()
   })
 })
 
-function fake(initial: Partial<PlatformState> = {}, activeCount = 0) {
+function fake(initial: Partial<PlatformState> = {}, activeCount = 0, hasPM = true) {
   const state: PlatformState = {
     partnerId: 'p1', subscriptionId: null, itemId: null, activeQty: 0, status: 'none',
     graceUntil: null, currentPeriodEnd: null, customerId: 'cus_1', ...initial,
   }
   let active = activeCount
+  let pm = hasPM
+  let notifyCount = 0
   const events: PlatformEvent[] = []
   const seen = new Set<string>()
   const stripe = { created: 0, updates: [] as number[], canceled: 0 }
@@ -43,11 +45,14 @@ function fake(initial: Partial<PlatformState> = {}, activeCount = 0) {
     cancelSubscription: async () => { stripe.canceled++ },
     saveState: async (_p, patch) => { Object.assign(state, patch) },
     recordEvent: async (e) => { if (seen.has(e.idempotencyKey)) return false; seen.add(e.idempotencyKey); events.push(e); return true },
+    hasPaymentMethod: async () => pm,
+    notifyPaymentMethodRequired: async () => { notifyCount++ },
   }
   __setPlatformDepsForTests(d)
   const setActive = (n: number) => { active = n }
+  const setPM = (v: boolean) => { pm = v }
   const typeCount = (t: string) => events.filter((e) => e.eventType === t).length
-  return { state, events, stripe, setActive, typeCount }
+  return { state, events, stripe, setActive, setPM, typeCount, notifyCount: () => notifyCount }
 }
 
 describe('safety: inert unless enabled', () => {
@@ -86,6 +91,37 @@ describe('one subscription, dynamic quantity', () => {
     f.setActive(2)
     expect(await syncPlatformQuantity('p1')).toEqual({ action: 'decreased', quantity: 2 })
     expect(f.stripe.updates).toEqual([2])
+  })
+
+  it('NO payment method → never throws, no subscription, records ONE event, notifies ONCE (idempotent)', async () => {
+    const f = fake({}, 2, /* hasPM */ false)
+    // First run: transition into payment_method_required, one event, one notice.
+    expect(await syncPlatformQuantity('p1')).toEqual({ action: 'no_payment_method', quantity: 2 })
+    expect(f.stripe.created).toBe(0)                 // never touched Stripe
+    expect(f.state.status).toBe('payment_method_required')
+    expect(f.typeCount('no_payment_method')).toBe(1)
+    expect(f.notifyCount()).toBe(1)
+    // Repeat cron runs: no new subscription, no duplicate event, no notification spam.
+    expect((await syncPlatformQuantity('p1')).action).toBe('no_payment_method')
+    expect((await syncPlatformQuantity('p1')).action).toBe('no_payment_method')
+    expect(f.typeCount('no_payment_method')).toBe(1)
+    expect(f.notifyCount()).toBe(1)
+    expect(f.stripe.created).toBe(0)
+  })
+
+  it('payment method added later → subscription is created (recovers from payment_method_required)', async () => {
+    const f = fake({}, 1, false)
+    expect((await syncPlatformQuantity('p1')).action).toBe('no_payment_method')
+    f.setPM(true)
+    expect((await syncPlatformQuantity('p1')).action).toBe('created')
+    expect(f.stripe.created).toBe(1)
+    expect(f.state.status).toBe('active')
+  })
+
+  it('active clients drop to zero while payment_method_required → status cleared, no throw', async () => {
+    const f = fake({ status: 'payment_method_required', activeQty: 1 }, 0, false)
+    expect((await syncPlatformQuantity('p1')).action).toBe('no_subscription')
+    expect(f.state.status).toBe('none')
   })
 
   it('DUPLICATE sync (same active count) → no duplicate quantity update or event', async () => {

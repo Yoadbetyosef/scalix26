@@ -36,10 +36,12 @@ export function platformAdminSyncAllowed(): boolean {
   return false
 }
 
-export type PlatformStatus = 'none' | 'active' | 'past_due' | 'payment_required' | 'canceled'
+// 'payment_method_required' — partner owes the fee (has active clients) but has no saved card, so no
+// subscription could be created. NON-blocking (service continues); the gate does NOT stop these partners.
+export type PlatformStatus = 'none' | 'active' | 'past_due' | 'payment_required' | 'canceled' | 'payment_method_required'
 export type PlatformEventType =
   | 'created' | 'quantity_changed' | 'invoice_paid' | 'invoice_failed'
-  | 'grace_started' | 'payment_required' | 'restored' | 'canceled'
+  | 'grace_started' | 'payment_required' | 'restored' | 'canceled' | 'no_payment_method'
 
 export interface PlatformState {
   partnerId: string
@@ -77,6 +79,10 @@ export interface PlatformDeps {
   saveState(partnerId: string, patch: Partial<Omit<PlatformState, 'partnerId'>>): Promise<void>
   // Append to platform_subscription_events; returns false when idempotency_key already existed (duplicate).
   recordEvent(e: PlatformEvent): Promise<boolean>
+  // Does the partner have a saved card we can bill the platform fee to?
+  hasPaymentMethod(partnerId: string): Promise<boolean>
+  // Partner-facing "add a payment method" notice (bell + email). Called at most once per episode.
+  notifyPaymentMethodRequired(partnerId: string): Promise<void>
 }
 
 // ── Real deps (lazy-imported so unit tests never load Stripe or next/headers) ────────────────────────
@@ -162,12 +168,28 @@ const dbDeps: PlatformDeps = {
     if (error) { if (error.code === '23505') return false; throw new Error(`recordEvent failed: ${error.message}`) }
     return true
   },
+  async hasPaymentMethod(partnerId) {
+    const { createAdminClient } = await import('@/lib/supabase/server')
+    const { data } = await createAdminClient().from('partner_balances')
+      .select('stripe_payment_method_id').eq('partner_id', partnerId).maybeSingle()
+    return !!data?.stripe_payment_method_id
+  },
+  async notifyPaymentMethodRequired(partnerId) {
+    const { createAdminClient } = await import('@/lib/supabase/server')
+    await createAdminClient().from('partner_notifications').insert({
+      partner_id: partnerId,
+      kind: 'platform_payment_method_required',
+      title: 'Payment method required',
+      body: 'Add a card to start your $97/month-per-active-client platform subscription. Your clients keep running in the meantime.',
+      link: '/partner/balance',
+    })
+  },
 }
 
 let deps: PlatformDeps = dbDeps
 export function __setPlatformDepsForTests(d: PlatformDeps | null) { deps = d ?? dbDeps }
 
-export type SyncAction = 'skipped' | 'no_subscription' | 'created' | 'increased' | 'decreased' | 'unchanged'
+export type SyncAction = 'skipped' | 'no_subscription' | 'no_payment_method' | 'created' | 'increased' | 'decreased' | 'unchanged'
 export interface SyncResult { action: SyncAction; quantity: number }
 
 // Idempotent quantity synchronization: recompute the active-client count and set the subscription
@@ -180,7 +202,26 @@ export async function syncPlatformQuantity(partnerId: string): Promise<SyncResul
   const state = await deps.loadState(partnerId)
 
   if (!state.subscriptionId) {
-    if (qty < 1) return { action: 'no_subscription', quantity: qty } // nothing to bill yet
+    if (qty < 1) {
+      // No active clients → nothing to bill. Clear a stale "payment method required" flag if set.
+      if (state.status === 'payment_method_required') await deps.saveState(partnerId, { status: 'none', activeQty: 0 })
+      return { action: 'no_subscription', quantity: qty }
+    }
+    // Partner owes the fee but has no saved card → we CANNOT create a subscription. Never throw, never touch
+    // Stripe. Mark the partner, record ONE deterministic event, and notify ONCE — all guarded by the status
+    // so repeated cron runs are no-ops. The cron keeps processing every other partner.
+    if (!(await deps.hasPaymentMethod(partnerId))) {
+      if (state.status !== 'payment_method_required') {
+        await deps.saveState(partnerId, { status: 'payment_method_required', activeQty: qty })
+        const fresh = await deps.recordEvent({
+          partnerId, eventType: 'no_payment_method', quantity: qty,
+          previousStatus: state.status, newStatus: 'payment_method_required',
+          idempotencyKey: `no_payment_method:${partnerId}`,
+        })
+        if (fresh) { try { await deps.notifyPaymentMethodRequired(partnerId) } catch { /* notice is best-effort */ } }
+      }
+      return { action: 'no_payment_method', quantity: qty }
+    }
     const customerId = state.customerId ?? (await deps.ensureCustomer(partnerId))
     const sub = await deps.createSubscription({ partnerId, customerId, quantity: qty })
     await deps.saveState(partnerId, {
