@@ -16,8 +16,9 @@ const TABS: { label: string; href?: string }[] = [
   { label: 'Team', href: '/admin/command-center/team' },
   { label: 'Mission', href: '/admin/command-center/mission' },
   { label: 'War Room', href: '/admin/command-center/war-room' },
+  { label: 'Growth Engines', href: '/admin/command-center/growth-engines' },
   { label: 'Forecast' },
-  { label: 'Growth Engines' }, { label: 'Revenue' }, { label: 'Costs' }, { label: 'Unit Economics' }, { label: 'Scenarios' },
+  { label: 'Revenue' }, { label: 'Costs' }, { label: 'Unit Economics' }, { label: 'Scenarios' },
 ]
 
 export function Subnav() {
