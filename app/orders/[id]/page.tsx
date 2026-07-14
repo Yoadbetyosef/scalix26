@@ -4,6 +4,8 @@ import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
 import { STAGE_LABELS, isProtectedStage } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
+import { AttachmentsPanel } from '@/components/orders/attachments-panel'
+import { ApprovalActions } from '@/components/orders/approval-actions'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -25,6 +27,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <span className="mt-1 inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}{isProtectedStage(o.stage) && ' 🔒'}</span>
         </div>
         <StageControl orderId={o.id} stage={o.stage} />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900">Approval workflow</h3>
+        <ApprovalActions orderId={o.id} stage={o.stage} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -64,6 +71,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {o.publicNotes && <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm"><h3 className="mb-1 text-sm font-semibold text-gray-900">Public notes</h3><p className="text-gray-600">{o.publicNotes}</p></div>}
           {o.internalNotes && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm"><h3 className="mb-1 text-sm font-semibold text-amber-900">Internal notes (never shared)</h3><p className="text-amber-800">{o.internalNotes}</p></div>}
         </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900">Attachments</h3>
+        <AttachmentsPanel orderId={o.id} />
       </div>
 
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">

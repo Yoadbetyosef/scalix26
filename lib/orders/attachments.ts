@@ -1,0 +1,67 @@
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireActiveBusinessContext } from '@/lib/workspace'
+import { addEvent } from './store'
+
+// Private order attachments. The bucket is never public; files are reached only via short-lived signed URLs
+// generated server-side. Metadata is RLS tenant-scoped; storage paths are prefixed by tenant + order.
+
+export const ORDER_BUCKET = 'order-attachments'
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+export const ALLOWED_MIME: Record<string, string> = {
+  'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+  'application/pdf': 'pdf',
+}
+export type Visibility = 'internal' | 'public'
+export interface OrderAttachment { id: string; orderId: string; storagePath: string; fileName: string; mimeType: string; fileSize: number; visibility: Visibility; uploadedBy: string | null; createdAt: string }
+
+const row = (r: Record<string, unknown>): OrderAttachment => ({ id: r.id as string, orderId: r.order_id as string, storagePath: r.storage_path as string, fileName: r.file_name as string, mimeType: r.mime_type as string, fileSize: Number(r.file_size ?? 0), visibility: r.visibility as Visibility, uploadedBy: (r.uploaded_by as string) ?? null, createdAt: r.created_at as string })
+
+export async function listAttachments(orderId: string): Promise<OrderAttachment[]> {
+  const c = await requireActiveBusinessContext(); if (!c) return []
+  const sb = await createClient()
+  const { data } = await sb.from('order_attachments').select('*').eq('tenant_id', c.tenantId).eq('order_id', orderId).order('created_at')
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map(row)
+}
+
+// Short-lived signed URL (default 5 min). Server-side only; the bucket stays private.
+export async function signedUrlFor(storagePath: string, expiresIn = 300): Promise<string | null> {
+  const { data } = await createAdminClient().storage.from(ORDER_BUCKET).createSignedUrl(storagePath, expiresIn)
+  return data?.signedUrl ?? null
+}
+
+export async function uploadAttachment(orderId: string, file: File): Promise<{ ok: boolean; error?: string; attachment?: OrderAttachment }> {
+  const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
+  const ext = ALLOWED_MIME[file.type]
+  if (!ext) return { ok: false, error: `Unsupported file type (${file.type || 'unknown'}). Use PNG, JPG, WEBP, GIF or PDF.` }
+  if (file.size > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'File too large (max 20MB).' }
+  // Confirm the order belongs to this tenant before writing anything.
+  const sb = await createClient()
+  const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
+  if (!order) return { ok: false, error: 'not found' }
+
+  const path = `${c.tenantId}/${orderId}/${crypto.randomUUID()}.${ext}`
+  const buf = Buffer.from(await file.arrayBuffer())
+  const up = await createAdminClient().storage.from(ORDER_BUCKET).upload(path, buf, { contentType: file.type, upsert: false })
+  if (up.error) return { ok: false, error: up.error.message }
+  const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: file.type, file_size: file.size, uploaded_by: c.actorUserId, visibility: 'internal' }).select('*').single()
+  if (error) { await createAdminClient().storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: error.message } }
+  await addEvent(orderId, 'attachment_added', { fileName: file.name })
+  return { ok: true, attachment: row(data as Record<string, unknown>) }
+}
+
+export async function setAttachmentVisibility(id: string, visibility: Visibility): Promise<boolean> {
+  const c = await requireActiveBusinessContext(); if (!c) return false
+  const sb = await createClient()
+  const { error } = await sb.from('order_attachments').update({ visibility }).eq('tenant_id', c.tenantId).eq('id', id)
+  return !error
+}
+
+export async function deleteAttachment(id: string): Promise<boolean> {
+  const c = await requireActiveBusinessContext(); if (!c) return false
+  const sb = await createClient()
+  const { data } = await sb.from('order_attachments').select('storage_path, order_id').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+  if (!data) return false
+  await createAdminClient().storage.from(ORDER_BUCKET).remove([data.storage_path as string])
+  await sb.from('order_attachments').delete().eq('tenant_id', c.tenantId).eq('id', id)
+  return true
+}
