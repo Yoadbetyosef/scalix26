@@ -202,6 +202,69 @@ export async function getTrialConversion(rules: ExclusionRules = DEFAULT_EXCLUSI
   return trialConversion(tm, PAID_OPPORTUNITY_CENTS)
 }
 
+// ── Reality snapshot (Overview) ──────────────────────────────────────────────────────────────────────
+// The Overview must be a MIRROR OF REALITY, never a simulation. Every field here is Actual or Derived
+// Actual — computed from live customer/subscription data. NOTHING here comes from forecast assumptions,
+// targets, or scenarios. Where we have no actual source (cash, burn, CAC, LTV, valuation…) we do NOT
+// substitute a projection — the Overview page renders "Waiting for Data" for those instead.
+export interface EngineReality { engine: Engine; total: number; paying: number; activeTrials: number; mrrCents: number }
+export interface RealitySnapshot {
+  currentMrrCents: MetricValue      // Derived Actual — sum of paying customers' plan list price
+  runRateArrCents: MetricValue      // Derived Actual — current MRR × 12 (run-rate, NOT a forecast)
+  arpuCents: MetricValue            // Derived Actual — current MRR ÷ paying customers
+  payingCustomers: MetricValue      // Derived Actual
+  activeTrials: MetricValue         // Derived Actual
+  totalCustomers: MetricValue       // Derived Actual (countable = excludes internal/test/free)
+  trialConversionRate: MetricValue  // Derived Actual — paying ÷ all, from current subscription state
+  activationRate: MetricValue       // Derived Actual
+  adoptionRate: MetricValue         // Derived Actual
+  revenueAtRiskCents: MetricValue   // Estimate — at-risk paying MRR at list price
+  byEngine: EngineReality[]
+  healthDistribution: Record<HealthBucket, number>
+  atRisk: LifecycleOverview['atRisk']
+  freshnessAt: string
+}
+
+// PURE. Only Actual / Derived Actual — assumptions are structurally unreachable from here.
+export function realitySnapshot(models: CustomerModel[], nowIso: string): RealitySnapshot {
+  const total = models.length
+  const paying = models.filter((m) => m.converted).length
+  const activeTrials = models.filter((m) => m.isTrial && !m.expired).length
+  const activated = models.filter((m) => m.activated).length
+  const adopted = models.filter((m) => m.adopted).length
+  const mrrOf = (ms: CustomerModel[]) => ms.reduce((s, m) => s + (m.converted ? m.planPriceCents : 0), 0)
+  const currentMrr = mrrOf(models)
+  const dist: Record<HealthBucket, number> = { healthy: 0, watch: 0, at_risk: 0, critical: 0 }
+  for (const m of models) dist[m.healthBucket]++
+  const atRisk = models.filter((m) => m.healthBucket === 'at_risk' || m.healthBucket === 'critical')
+    .sort((a, b) => a.healthOverall - b.healthOverall)
+    .map((m) => ({ id: m.id, name: m.name, bucket: m.healthBucket, engine: m.engine, mrrCents: m.planPriceCents }))
+  const revenueAtRisk = atRisk.reduce((s, r) => s + r.mrrCents, 0)
+  const byEngine: EngineReality[] = (['direct', 'affiliate', 'whiteLabel'] as Engine[]).map((e) => {
+    const es = models.filter((m) => m.engine === e)
+    return { engine: e, total: es.length, paying: es.filter((m) => m.converted).length, activeTrials: es.filter((m) => m.isTrial && !m.expired).length, mrrCents: mrrOf(es) }
+  })
+  const cov = (n: number) => (total > 0 ? n / total : 0)
+  const priceCaveat = 'Derived from real customer plans × standard list price — not Stripe invoice amounts.'
+  return {
+    currentMrrCents: metric(currentMrr, 'derived_actual', { coverage: 1, freshnessAt: nowIso, caveat: priceCaveat }),
+    runRateArrCents: metric(currentMrr * 12, 'derived_actual', { coverage: 1, freshnessAt: nowIso, caveat: `Current MRR annualized (run-rate) — not a forecast. ${priceCaveat}` }),
+    arpuCents: metric(paying > 0 ? Math.round(currentMrr / paying) : null, 'derived_actual', { coverage: cov(paying), freshnessAt: nowIso, caveat: 'Current MRR ÷ paying customers.' }),
+    payingCustomers: metric(paying, 'derived_actual', { coverage: 1, freshnessAt: nowIso }),
+    activeTrials: metric(activeTrials, 'derived_actual', { coverage: 1, freshnessAt: nowIso }),
+    totalCustomers: metric(total, 'derived_actual', { coverage: 1, freshnessAt: nowIso }),
+    trialConversionRate: metric(total > 0 ? paying / total : null, 'derived_actual', { coverage: cov(total), freshnessAt: nowIso, caveat: 'Paying ÷ all customers, from current subscription state.' }),
+    activationRate: metric(total > 0 ? activated / total : null, 'derived_actual', { coverage: cov(total), freshnessAt: nowIso }),
+    adoptionRate: metric(total > 0 ? adopted / total : null, 'derived_actual', { coverage: cov(total), freshnessAt: nowIso }),
+    revenueAtRiskCents: metric(revenueAtRisk, 'estimate', { coverage: cov(total), freshnessAt: nowIso, caveat: 'At-risk paying MRR at list price. A trial-heavy base means most early risk is trial→paid, not booked MRR.' }),
+    byEngine, healthDistribution: dist, atRisk, freshnessAt: nowIso,
+  }
+}
+
+export async function getRealitySnapshot(rules: ExclusionRules = DEFAULT_EXCLUSIONS): Promise<RealitySnapshot> {
+  return realitySnapshot(await getCustomerModels(rules), new Date().toISOString())
+}
+
 // Onboarding operational cases (still-progressing customers) merged with the manual overlay. The observed
 // stage is derived; the overlay never mutates it.
 export function buildOnboardingCases(models: CustomerModel[], overlays: OnboardingOverlay[]): OnboardingCase[] {

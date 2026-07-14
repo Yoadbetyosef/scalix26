@@ -1,136 +1,112 @@
 import { notFound } from 'next/navigation'
-import { runForecast } from '@/lib/command-center/engine'
-import { loadActiveAssumptions } from '@/lib/command-center/active'
 import { getFounderContext } from '@/lib/command-center/guard'
-import { northStar } from '@/lib/command-center/metrics'
-import { assembleEngines } from '@/lib/command-center/engines'
-import { computePriorities } from '@/lib/command-center/priorities'
-import { buildCeoBrief } from '@/lib/command-center/brief'
-import { playbookFor } from '@/lib/command-center/playbooks'
-import { capacityPlan } from '@/lib/command-center/capacity'
-import { compactMoney, pctText, num, KpiCard, EngineCard, Section } from '@/components/command-center/ui'
+import { getRealitySnapshot, getTrialConversion } from '@/lib/command-center/adapters'
+import { compactMoney, pctText, num, Section } from '@/components/command-center/ui'
+import { MetricStat, HealthPill } from '@/components/command-center/metric-ui'
 
 export const dynamic = 'force-dynamic'
+const ENGINE_LABEL = { direct: 'Direct', affiliate: 'Affiliate', whiteLabel: 'White Label' } as const
 
-const PRIORITY_TONE = { critical: 'bg-red-100 text-red-700', high: 'bg-amber-100 text-amber-700', medium: 'bg-sky-100 text-sky-700', low: 'bg-gray-100 text-gray-600' } as const
-const HEADLINE_MONTH = 12 // Year-1 snapshot of the Base forecast
+// Metrics we cannot yet source from ACTUAL data. The Overview shows reality only — so instead of
+// substituting a forecast, we render "Waiting for Data" with what's needed and where projections live.
+const WAITING: { label: string; needs: string }[] = [
+  { label: 'Cash & Runway', needs: 'Connect a bank / finance source (actual cash balance & burn).' },
+  { label: 'Net Profit / Burn', needs: 'Wire actual monthly costs (payroll, infra, COGS).' },
+  { label: 'Gross Margin', needs: 'Needs actual revenue and cost of delivery.' },
+  { label: 'CAC (blended)', needs: 'Wire actual acquisition spend per channel.' },
+  { label: 'LTV', needs: 'Needs realized retention + margin history.' },
+  { label: 'NRR / Churn', needs: 'Event-sourced from 2026-07-14 (billing events).' },
+  { label: 'Valuation', needs: 'Simulation only — lives in Scenarios, never on the Overview.' },
+]
 
-function Question({ q, a }: { q: string; a: string }) {
-  return <div><div className="text-xs font-semibold uppercase tracking-wide text-subtle">{q}</div><div className="mt-0.5 text-sm text-ink">{a}</div></div>
+function WaitingCard({ label, needs }: { label: string; needs: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-hairline-strong bg-sunken/40 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-subtle">{label}</span>
+        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">No source</span>
+      </div>
+      <div className="mt-1 text-lg font-semibold text-subtle">Waiting for Data</div>
+      <div className="mt-1 text-[11px] leading-tight text-subtle">{needs}</div>
+    </div>
+  )
 }
 
-// Home / Overview — the CEO operating system. Every section drives a decision: the CEO Brief answers the
-// four questions, Priorities rank the biggest problems with $ impact + a recommended action + a playbook,
-// and each engine card links to its playbook. Phase 1/2 render the BASE forecast (persisted scenarios +
-// live actuals arrive in Phase 2b), clearly labeled as a forecast — never mixed with booked results.
+// Home / Overview — a MIRROR OF REALITY. Only Actual and Derived-Actual metrics from live customer and
+// subscription data appear here. Forecasts, targets, and scenario outputs are structurally excluded:
+// forecasts live on the Forecast page, targets on Mission, simulations on Scenarios. Reality always wins —
+// where there is no actual source, we show "Waiting for Data", never an assumption.
 export default async function CommandCenterOverview() {
-  // Self-guard: RSC renders the page body before the layout's gate, so guard here too — otherwise a
-  // non-founder (who still gets a 404 from the layout) would trigger config creation as a side effect.
+  // Self-guard: RSC renders the page body before the layout's gate.
   const founder = await getFounderContext()
   if (!founder) notFound()
-  const { assumptions, persisted } = await loadActiveAssumptions(founder.email)
-  const forecast = runForecast(assumptions, 60)
-  const idx = HEADLINE_MONTH - 1
-  const brief = buildCeoBrief(forecast, idx)
-  const ns = northStar(forecast, idx)
-  const engines = assembleEngines(forecast, idx)
-  const priorities = computePriorities(forecast, idx)
-  const capacity = capacityPlan(ns.customers).filter((c) => c.required > 0 || c.nextHireAtCustomers <= ns.customers * 3)
-  const runwayText = ns.runwayMonths === null ? 'Profitable' : `${ns.runwayMonths.toFixed(1)} mo`
+
+  const [r, tc] = await Promise.all([getRealitySnapshot(), getTrialConversion()])
 
   return (
     <div>
-      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-        {persisted
-          ? `Persisted operating model · Month ${HEADLINE_MONTH} (Year 1) forecast. Live actuals integrate next — figures here are a forecast, not booked results.`
-          : '⚠ Persistence unavailable — showing seed defaults. Run the Command Center migrations to persist and edit assumptions.'}
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-800">
+        <span className="font-semibold">Reality only.</span> Every number below is Actual or Derived-Actual from live product &amp; customer data.
+        Forecasts live on <span className="font-medium">Forecast</span>, targets on <span className="font-medium">Mission</span>, simulations on <span className="font-medium">Scenarios</span> — never here.
       </div>
 
-      {/* CEO Brief — the four questions every screen must answer. */}
-      <div className="mt-4 grid gap-4 rounded-xl border border-hairline-strong bg-white p-5 md:grid-cols-2">
-        <Question q="Where are we?" a={brief.whereAreWe} />
-        <Question q="Where are we going?" a={brief.whereGoing} />
-        <Question q="What is stopping us?" a={brief.whatStopping} />
-        <Question q="What should I do next?" a={brief.whatNext} />
-      </div>
-
-      <Section title="North Star" subtitle="Are we winning?">
+      <Section title="Business reality" subtitle="Current run-rate from real customers &amp; subscriptions — not a projection.">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <KpiCard label="MRR" value={compactMoney(ns.mrrCents)} sub={`${pctText(ns.monthlyGrowthPct, 1)} MoM`} />
-          <KpiCard label="ARR" value={compactMoney(ns.arrCents)} sub={`Target ${compactMoney(ns.targetArrCents)}`} />
-          <KpiCard label="Gap to Target ARR" value={compactMoney(ns.arrGapCents)} />
-          <KpiCard label="Customers" value={num(ns.customers)} sub={`${num(ns.directCustomers)} direct · ${num(ns.affiliateCustomers)} affiliate · ${num(ns.whiteLabelCustomers)} WL`} />
-          <KpiCard label="Valuation (sim.)" value={compactMoney(ns.valuationCents)} sub={`Target ${compactMoney(ns.targetValuationCents)}`} />
-          <KpiCard label="Progress to $1B" value={pctText(ns.progressToTargetPct, 2)} tone="text-emerald-600" />
-          <KpiCard label="Cash" value={compactMoney(ns.cashCents)} />
-          <KpiCard label="Runway" value={runwayText} tone={ns.runwayMonths !== null && ns.runwayMonths < 6 ? 'text-red-600' : 'text-ink'} />
-          <KpiCard label="Net Profit / mo" value={compactMoney(ns.netProfitCents)} tone={ns.netProfitCents < 0 ? 'text-red-600' : 'text-emerald-600'} />
-          <KpiCard label="Gross Margin" value={pctText(ns.grossMargin)} />
-          <KpiCard label="ARPU" value={compactMoney(ns.arpuCents)} />
-          <KpiCard label="NRR" value={pctText(ns.nrr)} />
-          <KpiCard label="LTV" value={compactMoney(ns.ltvCents)} />
-          <KpiCard label="CAC (blended)" value={compactMoney(ns.cacCents)} />
-          <KpiCard label="Expansion %" value={pctText(ns.expansionPct)} />
-          <KpiCard label="Payback" value={forecast.months[idx].cacPaybackMonths === null ? '—' : `${forecast.months[idx].cacPaybackMonths!.toFixed(1)} mo`} />
+          <MetricStat label="Current MRR" m={r.currentMrrCents} format={(v) => compactMoney(v)} />
+          <MetricStat label="Run-rate ARR" m={r.runRateArrCents} format={(v) => compactMoney(v)} />
+          <MetricStat label="Paying customers" m={r.payingCustomers} format={(v) => num(v)} />
+          <MetricStat label="ARPU" m={r.arpuCents} format={(v) => compactMoney(v)} />
+          <MetricStat label="Active trials" m={r.activeTrials} format={(v) => num(v)} />
+          <MetricStat label="Trial → Paid" m={r.trialConversionRate} format={(v) => pctText(v)} />
+          <MetricStat label="Activation" m={r.activationRate} format={(v) => pctText(v)} />
+          <MetricStat label="Total customers" m={r.totalCustomers} format={(v) => num(v)} />
+        </div>
+        {r.payingCustomers.value === 0 && (
+          <p className="mt-2 text-xs text-amber-700">Pre-revenue: no paying customers yet, so MRR/ARR/ARPU are real zeros — the live bottleneck is trial→paid conversion.</p>
+        )}
+      </Section>
+
+      <Section title="Growth engines (live)" subtitle="Real customers &amp; MRR per engine — Derived Actual, not forecast contribution.">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {r.byEngine.map((e) => (
+            <div key={e.engine} className="rounded-xl border border-hairline-strong bg-white p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-subtle">{ENGINE_LABEL[e.engine]}</div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-ink">{compactMoney(e.mrrCents)}</div>
+              <div className="mt-0.5 text-xs text-subtle">{num(e.paying)} paying · {num(e.activeTrials)} active trials · {num(e.total)} total</div>
+            </div>
+          ))}
         </div>
       </Section>
 
-      <Section title="Growth Engines" subtitle="Four independent engines — output, contribution, health and the playbook to fix each.">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {engines.map((e) => {
-            const pb = playbookFor(e.playbookKey)
-            return (
-              <EngineCard key={e.key} label={e.label} health={e.health}
-                primary={compactMoney(e.currentMrrCents)}
-                secondary={e.key === 'expansion' ? 'expansion MRR' : `${num(e.customers)} customers · +${num(e.addsPerMonth)}/mo`}
-                contributionPct={e.contributionPct} trend={e.trend}
-                action={pb ? <span className="text-subtle">Open <span className="font-medium text-ink">{pb.title}</span> <span className="rounded bg-sunken px-1 text-[10px]">soon</span></span> : null} />
-            )
-          })}
+      <Section title="Needs attention (live)" subtitle="Derived from real customer state — the actual risks right now.">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <MetricStat label="Revenue at risk" m={r.revenueAtRiskCents} format={(v) => compactMoney(v)} />
+          <MetricStat label="Activated, not paid" m={{ value: tc.activatedNotPaid, source: 'derived_actual', coverage: 1, confidence: 'high', freshnessAt: r.freshnessAt, caveat: 'Trials that reached product value — warmest conversion targets.' }} format={(v) => num(v)} />
+          <MetricStat label="Critical accounts" m={{ value: r.healthDistribution.critical, source: 'derived_actual', coverage: 1, confidence: 'high', freshnessAt: r.freshnessAt }} format={(v) => num(v)} />
+          <MetricStat label="At-risk accounts" m={{ value: r.atRisk.length, source: 'derived_actual', coverage: 1, confidence: 'high', freshnessAt: r.freshnessAt }} format={(v) => num(v)} />
         </div>
-      </Section>
-
-      <Section title="CEO Priorities" subtitle="The biggest problems right now — ranked, with estimated impact and the next action.">
-        {priorities.length === 0 ? (
-          <div className="rounded-xl border border-hairline-strong bg-white p-4 text-sm text-subtle">No priorities flagged at this snapshot.</div>
-        ) : (
-          <div className="space-y-3">
-            {priorities.slice(0, 5).map((p, i) => (
-              <div key={p.id} className="rounded-xl border border-hairline-strong bg-white p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-bold text-subtle">#{i + 1}</span>
-                  <span className={`rounded px-2 py-0.5 text-[11px] font-semibold uppercase ${PRIORITY_TONE[p.priority]}`}>{p.priority}</span>
-                  <span className="font-semibold text-ink">{p.title}</span>
-                  {p.estimatedArrImpactCents > 0 && <span className="ml-auto text-sm font-semibold text-red-600">−{compactMoney(p.estimatedArrImpactCents)} ARR</span>}
-                </div>
-                <div className="mt-1 text-sm text-subtle">{p.detail}</div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="text-ink">→ {p.recommendedAction}</span>
-                  {playbookFor(p.playbookKey) && <span className="text-subtle">· {playbookFor(p.playbookKey)!.title} <span className="rounded bg-sunken px-1 text-[10px]">soon</span></span>}
-                </div>
-              </div>
-            ))}
+        {r.atRisk.length > 0 && (
+          <div className="mt-3 overflow-x-auto rounded-xl border border-hairline-strong">
+            <table className="min-w-full text-sm">
+              <thead className="bg-sunken text-subtle"><tr>{['Customer', 'Engine', 'Health', 'MRR (est.)'].map((h) => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr></thead>
+              <tbody className="divide-y divide-hairline">
+                {r.atRisk.slice(0, 10).map((a) => (
+                  <tr key={a.id}>
+                    <td className="px-3 py-2 font-medium text-ink">{a.name}</td>
+                    <td className="px-3 py-2 text-subtle">{ENGINE_LABEL[a.engine]}</td>
+                    <td className="px-3 py-2"><HealthPill bucket={a.bucket} /></td>
+                    <td className="px-3 py-2 tabular-nums">{compactMoney(a.mrrCents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Section>
 
-      <Section title="Capacity Planner" subtitle={`Staffing needs at ~${num(ns.customers)} customers.`}>
-        <div className="overflow-x-auto rounded-xl border border-hairline-strong">
-          <table className="min-w-full text-sm">
-            <thead className="bg-sunken text-subtle">
-              <tr>{['Role', 'Department', 'Required now', 'Next hire at'].map((h) => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {capacity.map((c) => (
-                <tr key={c.role}>
-                  <td className="px-3 py-2 font-medium text-ink">{c.role}</td>
-                  <td className="px-3 py-2 text-subtle">{c.department}</td>
-                  <td className="px-3 py-2 tabular-nums">{c.required}</td>
-                  <td className="px-3 py-2 tabular-nums text-subtle">{num(c.nextHireAtCustomers)} customers</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Section title="Waiting for data" subtitle="Not yet sourced from actuals. We leave these empty on purpose — the Overview never fills a gap with an assumption.">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {WAITING.map((w) => <WaitingCard key={w.label} {...w} />)}
         </div>
       </Section>
     </div>

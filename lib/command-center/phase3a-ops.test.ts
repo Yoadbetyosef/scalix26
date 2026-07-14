@@ -5,6 +5,7 @@ import {
 } from './onboarding-overlay'
 import { __setLifecycleDepsForTests, recordLifecycleEvent, classifySubscriptionChange, type LifecycleDeps } from './lifecycle-events'
 import { trialConversion, type TrialModel } from './trial-conversion'
+import { realitySnapshot, type CustomerModel } from './adapters'
 
 afterEach(() => { __setOverlayDepsForTests(null); __setLifecycleDepsForTests(null) })
 
@@ -124,5 +125,58 @@ describe('Trial conversion (first-class while trial-heavy)', () => {
     expect(t.adoptedNotPaid).toBe(1)
     expect(t.trialMrrOpportunityCents).toBe(2 * 39700)
     expect(t.byEngine.direct.conversionRate).toBeCloseTo(0.5, 6) // 1 of 2 direct converted
+  })
+})
+
+describe('Reality snapshot (Overview = reality only, never assumptions)', () => {
+  const cm = (o: Partial<CustomerModel>): CustomerModel => ({
+    id: 'x', name: 'X', engine: 'direct', planPriceCents: 0, lifecycle: 'onboarding',
+    activated: false, adopted: false, setupComplete: false, healthOverall: 70, healthBucket: 'healthy',
+    onboarding: {}, observedStage: 'signed_up', outcomes30d: 0, daysSinceSignup: 3,
+    isTrial: true, converted: false, expired: false, ...o,
+  })
+  const NOW = '2026-07-13T00:00:00.000Z'
+
+  it('current MRR/ARR/ARPU come only from PAYING customers at real plan price', () => {
+    const models = [
+      cm({ converted: true, isTrial: false, planPriceCents: 39700, activated: true, engine: 'direct' }),
+      cm({ converted: true, isTrial: false, planPriceCents: 29700, activated: true, engine: 'affiliate' }),
+      cm({ engine: 'direct' }),                      // active trial → contributes 0 MRR
+      cm({ isTrial: true, expired: true, engine: 'whiteLabel' }), // expired trial
+    ]
+    const r = realitySnapshot(models, NOW)
+    expect(r.currentMrrCents.value).toBe(69400)           // 39700 + 29700 only
+    expect(r.currentMrrCents.source).toBe('derived_actual')
+    expect(r.runRateArrCents.value).toBe(69400 * 12)      // run-rate, not a forecast
+    expect(r.payingCustomers.value).toBe(2)
+    expect(r.activeTrials.value).toBe(1)                  // expired trial excluded
+    expect(r.totalCustomers.value).toBe(4)
+    expect(r.arpuCents.value).toBe(34700)                // 69400 / 2
+    expect(r.trialConversionRate.value).toBeCloseTo(0.5, 6) // 2 paying / 4
+  })
+
+  it('with zero paying customers, financial reality is empty (never a projection)', () => {
+    const models = [cm({}), cm({ activated: true })]  // all trials
+    const r = realitySnapshot(models, NOW)
+    expect(r.currentMrrCents.value).toBe(0)
+    expect(r.runRateArrCents.value).toBe(0)
+    expect(r.arpuCents.value).toBeNull()               // no paying customers → no ARPU, not a guess
+    expect(r.payingCustomers.value).toBe(0)
+    // every returned metric is Actual/Derived-Actual/Estimate — never forecast/target/scenario
+    const srcs = [r.currentMrrCents, r.runRateArrCents, r.arpuCents, r.payingCustomers, r.activeTrials,
+      r.totalCustomers, r.trialConversionRate, r.activationRate, r.adoptionRate, r.revenueAtRiskCents].map((m) => m.source)
+    expect(srcs.every((s) => s === 'derived_actual' || s === 'actual' || s === 'estimate')).toBe(true)
+  })
+
+  it('per-engine reality only counts real paying/trial customers', () => {
+    const models = [
+      cm({ converted: true, isTrial: false, planPriceCents: 39700, engine: 'whiteLabel' }),
+      cm({ engine: 'whiteLabel' }),
+      cm({ engine: 'direct' }),
+    ]
+    const r = realitySnapshot(models, NOW)
+    const wl = r.byEngine.find((e) => e.engine === 'whiteLabel')!
+    expect(wl.total).toBe(2); expect(wl.paying).toBe(1); expect(wl.activeTrials).toBe(1); expect(wl.mrrCents).toBe(39700)
+    expect(r.byEngine.find((e) => e.engine === 'affiliate')!.total).toBe(0)
   })
 })
