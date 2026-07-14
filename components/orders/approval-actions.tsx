@@ -39,7 +39,7 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const revoke = async (id: string) => { if (!confirm('Revoke this approval link? It will stop working.')) return; await fetch(`/api/orders/${orderId}/approvals/${id}`, { method: 'DELETE' }); router.refresh(); void load() }
-  const toProduction = async () => { if (!confirm('Send this order to production?')) return; setBusy(true); try { const r = await fetch(`/api/orders/${orderId}/production`, { method: 'POST' }); if (!r.ok) throw new Error((await r.json()).error || 'Failed'); router.refresh() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) } }
+  const toProduction = async () => { if (!confirm(stage === 'factory_approved' ? 'Send straight to production, skipping customer approval?' : 'Send this order to production?')) return; setBusy(true); try { const r = await fetch(`/api/orders/${orderId}/production`, { method: 'POST' }); if (!r.ok) throw new Error((await r.json()).error || 'Failed'); router.refresh() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) } }
 
   const canFactory = canSendForApproval(stage, 'factory')
   const canCustomer = canSendForApproval(stage, 'customer')

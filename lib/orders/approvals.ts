@@ -3,7 +3,7 @@ import { requireActiveBusinessContext } from '@/lib/workspace'
 import { sendEmail } from '@/lib/email/send'
 import { generateApprovalToken, hashToken, looksLikeToken } from './approval-token'
 import { signedUrlFor } from './attachments'
-import { canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
+import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
 import { approvalEmailHtml } from './approval-email'
 import type { PublicOrderView } from './types'
 
@@ -199,7 +199,7 @@ export async function sendToProduction(orderId: string): Promise<{ ok: boolean; 
   const sb = await createClient()
   const { data } = await sb.from('orders').select('stage').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
   if (!data) return { ok: false, error: 'not found' }
-  if ((data.stage as string) !== 'customer_approved') return { ok: false, error: 'Order must be Customer Approved before production.' }
+  if (!canSendToProduction(data.stage as OrderStage)) return { ok: false, error: 'Order must be Factory Approved or Customer Approved before production.' }
   const now = new Date().toISOString()
   await sb.from('orders').update({ stage: 'production', updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
   await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'sent_to_production', actor: c.actorUserId, payload: null })

@@ -41,10 +41,12 @@ describe('Order stage state machine', () => {
     expect(respondableStage('customer')).toBe('waiting_customer_approval')
   })
 
-  it('production is never automatic — only from customer_approved via the explicit action', () => {
+  it('production is never automatic — only via the explicit action, from customer OR factory approved', () => {
     expect(canSendToProduction('customer_approved')).toBe(true)
+    expect(canSendToProduction('factory_approved')).toBe(true) // may skip customer approval
     expect(canSendToProduction('customer_changes_requested')).toBe(false)
-    expect(canSendToProduction('factory_approved')).toBe(false)
+    expect(canSendToProduction('new')).toBe(false)
+    expect(canSendToProduction('waiting_factory_approval')).toBe(false)
     expect(canManualTransition('customer_approved', 'production')).toBe(false) // not via drag
   })
 })

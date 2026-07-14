@@ -54,4 +54,6 @@ export function stageAfterResponse(type: ApprovalType, decision: ApprovalDecisio
 // The stage an approval response is only valid FROM (guards against stale/duplicate responses).
 export const respondableStage = (type: ApprovalType): OrderStage => (type === 'factory' ? 'waiting_factory_approval' : 'waiting_customer_approval')
 
-export const canSendToProduction = (stage: OrderStage): boolean => stage === 'customer_approved'
+// Production can start once the CUSTOMER has approved, OR straight after the FACTORY approves when the
+// order skips customer approval entirely (repeat/trade orders, or the customer already agreed offline).
+export const canSendToProduction = (stage: OrderStage): boolean => stage === 'customer_approved' || stage === 'factory_approved'
