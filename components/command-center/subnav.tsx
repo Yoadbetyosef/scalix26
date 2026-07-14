@@ -20,7 +20,8 @@ const TABS: { label: string; href?: string }[] = [
   { label: 'Revenue', href: '/admin/command-center/revenue' },
   { label: 'Costs', href: '/admin/command-center/costs' },
   { label: 'Unit Economics', href: '/admin/command-center/unit-economics' },
-  { label: 'Forecast' }, { label: 'Scenarios' },
+  { label: 'Forecast', href: '/admin/command-center/forecast' },
+  { label: 'Scenarios', href: '/admin/command-center/scenarios' },
 ]
 
 export function Subnav() {
