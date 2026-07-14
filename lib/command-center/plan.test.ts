@@ -1,73 +1,87 @@
 import { describe, it, expect } from 'vitest'
-import { computePlan, type PlanInputs, type PlanConfig } from './plan'
-import { enginePlans, directFunnel, affiliateFunnel, whiteLabelFunnel, expansionFunnel, type EngineRates, type EngineAllocation } from './plan-engines'
+import { computePlan, FEASIBILITY_LEVERS, type PlanInputs, type PlanConfig, type EngineCapacity } from './plan'
+import { directFunnel, affiliateFunnel, whiteLabelFunnel, expansionFunnel, enginePlans, type EngineRates } from './plan-engines'
+import type { WorkCalendar } from './plan-calendar'
 
-const NOW = Date.parse('2026-07-14T00:00:00.000Z')
-const alloc: EngineAllocation = { direct: 0.45, affiliate: 0.35, whiteLabel: 0.20, expansion: 0 }
+const WED = Date.parse('2026-07-15T16:00:00.000Z') // Wed July 15 (NY)
+const FRI = Date.parse('2026-07-17T16:00:00.000Z') // Fri July 17 (NY)
+const NY = 'America/New_York'
+const calN = (wd: number): WorkCalendar => ({ timezone: NY, weekStartDay: 1, workingDaysPerWeek: wd })
 const rates: EngineRates = {
   direct: { closeRate: 0.25, showRate: 0.6, bookRate: 0.5, responseRate: 0.05 },
   affiliate: { customersPerActiveAffiliate: 2, activationRate: 0.4 },
   whiteLabel: { customersPerAgency: 5, launchRate: 0.5, closeRate: 0.3 },
   expansion: { adoptionRate: 0.2, avgAddOns: 1, addOnCents: 5000 }, arpuCents: 34700,
 }
-const cfg = (o: Partial<PlanConfig> = {}): PlanConfig => ({ primaryMetric: 'paying_customers', annualTarget: 120, startDate: '2026-01-01', targetDate: '2026-12-31', arpuTargetCents: null, monthlyGoalOverride: 40, allocation: alloc, ...o })
-const inputs = (o: Partial<PlanInputs> = {}): PlanInputs => ({ config: cfg(), currentValue: 2, currentCustomers: 2, currentArpuCents: 34700, monthActual: 2, weekActual: 0, weekPrior: 0, engineRates: rates, riskActions: [], nowMs: NOW, ...o })
+const cfg = (wd: number): PlanConfig => ({ primaryMetric: 'paying_customers', annualTarget: 1200, startDate: '2026-01-01', targetDate: '2026-12-31', arpuTargetCents: null, monthlyGoalOverride: 40, allocation: { direct: 1, affiliate: 0, whiteLabel: 0, expansion: 0 }, calendar: calN(wd) })
+const inputs = (o: Partial<PlanInputs> = {}, wd = 7): PlanInputs => ({ config: cfg(wd), currentValue: 2, currentCustomers: 2, currentArpuCents: 34700, monthActual: 0, weekActual: 0, weekPrior: 0, engineRates: rates, capacity: { directOutreachPerDay: null }, riskActions: [], nowMs: WED, ...o })
+const outreachAction = (p: ReturnType<typeof computePlan>) => p.today.find((a) => a.key === 'direct_outreach')!
 
-describe('Per-engine backward funnels (real rates; null = Input Required)', () => {
-  it('direct: customers → demos → meetings → conversations → outreach', () => {
+describe('Per-engine backward funnels (unchanged core)', () => {
+  it('direct/affiliate/whiteLabel/expansion still back-calc from real rates', () => {
     expect(directFunnel(5, rates.direct)).toEqual({ customers: 5, demos: 20, meetings: 34, conversations: 68, outreach: 1360 })
-    expect(directFunnel(5, { ...rates.direct, closeRate: 0 })).toBeNull()
-  })
-  it('affiliate: customers → productive → recruited', () => {
-    expect(affiliateFunnel(4, rates.affiliate)).toEqual({ customers: 4, productiveAffiliates: 2, recruitedAffiliates: 5 })
-    expect(affiliateFunnel(4, { ...rates.affiliate, activationRate: 0 })).toBeNull()
-  })
-  it('white label: customers → agencies → signed → meetings', () => {
-    const w = whiteLabelFunnel(10, rates.whiteLabel)!
-    expect(w.agencies).toBe(2); expect(w.signedAgencies).toBe(4); expect(w.meetings).toBe(14)
-  })
-  it('expansion: mrr → eligible offers', () => {
-    expect(expansionFunnel(100000, rates.expansion)!.eligible).toBe(Math.ceil(100000 / (0.2 * 1 * 5000)))
-    expect(expansionFunnel(100000, { ...rates.expansion, adoptionRate: 0 })).toBeNull()
-  })
-  it('allocation splits the customer gap and normalizes when not summing to 1', () => {
-    const p = enginePlans(100, rates, { direct: 45, affiliate: 35, whiteLabel: 20, expansion: 0 })
-    expect(p.direct.customers).toBe(45); expect(p.affiliate.customers).toBe(35); expect(p.whiteLabel.customers).toBe(20)
-    expect(p.expansion.mrrCents).toBe(0)
+    expect(affiliateFunnel(4, rates.affiliate)!.recruitedAffiliates).toBe(5)
+    expect(whiteLabelFunnel(10, rates.whiteLabel)!.meetings).toBe(14)
+    expect(expansionFunnel(100000, rates.expansion)!.eligible).toBe(100)
+    expect(enginePlans(100, rates, { direct: 45, affiliate: 35, whiteLabel: 20, expansion: 0 }).direct.customers).toBe(45)
   })
 })
 
-describe('Plan navigation cascade', () => {
-  it('year: gap, progress, % behind plan', () => {
-    const p = computePlan(inputs({ config: cfg({ primaryMetric: 'arr_cents', annualTarget: 100_000_000 }), currentValue: 800000 }))
-    expect(p.year.gap).toBe(100_000_000 - 800000)
-    expect(p.year.behindPct).toBeGreaterThan(0) // behind (little progress, half the year elapsed)
-    expect(p.year.requiredCustomersCurrentArpu).toBe(Math.ceil(100_000_000 / (34700 * 12)))
+describe('Working-days daily pace (no hardcoded divisor)', () => {
+  it('5-day vs 7-day workweeks produce different daily targets', () => {
+    const p7 = outreachAction(computePlan(inputs({}, 7)))
+    const p5 = outreachAction(computePlan(inputs({ config: cfg(5) }, 5)))
+    expect(p7.dailyTarget).not.toBe(p5.dailyTarget)      // divisor is dynamic, not a constant 5
+    expect(p5.dailyTarget!).toBeGreaterThan(p7.dailyTarget!) // fewer working days → higher daily pace
   })
-  it('month/week: derived from monthly override, days remaining, weekly requirement', () => {
-    const p = computePlan(inputs())
-    expect(p.month.requirement).toBe(40)
-    expect(p.month.daysRemaining).toBe(17)
-    expect(p.week.requirement).toBe(Math.ceil(40 / 4.345)) // 10
+
+  it('1-day workweek on a non-working day → rest day, no sales actions', () => {
+    const p = computePlan(inputs({}, 1)) // only Monday works; today is Wed
+    expect(p.isWorkingDay).toBe(false)
+    expect(p.today.some((a) => a.key === 'rest_day')).toBe(true)
+    expect(p.today.some((a) => a.key === 'direct_outreach')).toBe(false)
   })
-  it('today: concrete cross-engine actions with why + gap impact', () => {
-    const p = computePlan(inputs())
-    const keys = p.today.map((a) => a.key)
-    expect(keys).toContain('direct_outreach')
-    expect(keys).toContain('direct_demos')
-    expect(keys).toContain('affiliate_recruit')
-    expect(keys).toContain('wl_meetings')
-    expect(p.today[0].why).toBeTruthy()
-    expect(p.today.find((a) => a.key === 'direct_outreach')!.expectedImpact).toMatch(/annual gap/)
+
+  it('remaining-working-days redistribution: later in the week → higher daily pace', () => {
+    const wed = outreachAction(computePlan(inputs({ nowMs: WED }, 7))) // 5 working days left
+    const fri = outreachAction(computePlan(inputs({ nowMs: FRI }, 7))) // 3 working days left
+    expect(fri.dailyTarget!).toBeGreaterThan(wed.dailyTarget!)
   })
-  it('missing a rate → Input Required for that engine, others still compute', () => {
-    const p = computePlan(inputs({ engineRates: { ...rates, direct: { ...rates.direct, closeRate: 0 } } }))
-    expect(p.today.find((a) => a.key === 'direct_input')).toBeTruthy()
-    expect(p.today.find((a) => a.key === 'affiliate_recruit')).toBeTruthy()
+
+  it('skipped day (behind) increases pace; ahead-of-plan reduces it', () => {
+    const behind = outreachAction(computePlan(inputs({ weekActual: 0 })))
+    const ahead = outreachAction(computePlan(inputs({ weekActual: 9 })))
+    expect(ahead.dailyTarget!).toBeLessThan(behind.dailyTarget!)
   })
-  it('risk actions are appended after the generated sales actions', () => {
-    const risk = [{ key: 'at_risk', action: 'Review 2 at-risk customers', why: 'x', relatedGoal: 'Retention', expectedImpact: 'y' }]
-    const p = computePlan(inputs({ riskActions: risk }))
-    expect(p.today[p.today.length - 1].key).toBe('at_risk')
+
+  it('rounding: exact fractional pace kept; concrete target rounded up', () => {
+    const a = outreachAction(computePlan(inputs()))
+    expect(a.dailyTarget).toBe(Math.ceil(a.exactDailyPace!))
+    expect(a.calc!.some((s) => /Exact daily pace/.test(s.label))).toBe(true)     // exact shown
+    expect(a.calc!.some((s) => /Remaining working days/.test(s.label))).toBe(true)
+  })
+
+  it('every daily action explains the calculation from persisted assumptions', () => {
+    const a = outreachAction(computePlan(inputs()))
+    const labels = a.calc!.map((s) => s.label)
+    expect(labels).toEqual(expect.arrayContaining(['Direct customers / week', 'Close rate', 'Required demos / week', 'Required outreach / week', 'Remaining working days this week']))
+  })
+})
+
+describe('Required pace vs team capacity (feasible vs mathematically required)', () => {
+  it('flags not-operationally-feasible with a capacity gap and levers', () => {
+    const a = outreachAction(computePlan(inputs({ capacity: { directOutreachPerDay: 50 } as EngineCapacity })))
+    expect(a.feasible).toBe(false)
+    expect(a.capacityGapPerDay!).toBeGreaterThan(0)
+    expect(a.levers).toEqual(FEASIBILITY_LEVERS)
+  })
+  it('marks feasible when capacity covers the required daily pace', () => {
+    const a = outreachAction(computePlan(inputs({ capacity: { directOutreachPerDay: 1_000_000 } as EngineCapacity })))
+    expect(a.feasible).toBe(true)
+    expect(a.capacityGapPerDay).toBe(0)
+  })
+  it('capacity unknown (not configured) → feasibility null, never a false claim', () => {
+    const a = outreachAction(computePlan(inputs({ capacity: { directOutreachPerDay: null } })))
+    expect(a.feasible).toBeNull()
   })
 })

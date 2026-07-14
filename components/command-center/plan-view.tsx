@@ -49,9 +49,22 @@ export function PlanView({ nav }: { nav: PlanNavigation }) {
           {c.today.map((a) => (
             <div key={a.key} className={`flex flex-wrap items-start gap-3 rounded-xl border p-3 ${done.has(a.key) ? 'border-hairline bg-sunken/40 opacity-60' : 'border-hairline-strong bg-white'}`}>
               <div className="min-w-0 flex-1">
-                <div className={`text-sm font-medium text-ink ${done.has(a.key) ? 'line-through' : ''}`}>{a.action}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-sm font-medium text-ink ${done.has(a.key) ? 'line-through' : ''}`}>{a.action}</span>
+                  {a.exactDailyPace != null && <span className="text-[11px] text-subtle">exact {a.exactDailyPace}/day</span>}
+                  {a.feasible === false && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">Not operationally feasible</span>}
+                  {a.feasible === true && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Feasible</span>}
+                </div>
                 <div className="text-xs text-subtle">{a.why}</div>
                 <div className="mt-0.5 text-[11px] text-subtle">→ {a.relatedGoal} · {a.expectedImpact}</div>
+                {a.feasible === false && a.capacityPerDay != null && (
+                  <div className="mt-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-900">Required {a.dailyTarget?.toLocaleString()}/day vs capacity {a.capacityPerDay.toLocaleString()}/day · gap {a.capacityGapPerDay?.toLocaleString()}/day. Levers: {(a.levers ?? []).join(' · ')}</div>
+                )}
+                {a.calc && a.calc.length > 0 && (
+                  <details className="mt-1"><summary className="cursor-pointer text-[11px] text-ink underline">How was this calculated?</summary>
+                    <table className="mt-1 text-[11px]"><tbody>{a.calc.map((s, idx) => <tr key={idx}><td className="pr-3 text-subtle">{s.label}</td><td className="tabular-nums text-ink">{s.value}</td></tr>)}</tbody></table>
+                  </details>
+                )}
               </div>
               {!done.has(a.key) && a.key !== 'input_required' && a.key !== 'set_destination' && !a.key.endsWith('_input') && (
                 <div className="flex gap-2">
@@ -76,8 +89,8 @@ export function PlanView({ nav }: { nav: PlanNavigation }) {
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-hairline-strong bg-white p-4">
           <div className="mb-1 text-sm font-semibold text-ink">This Month</div>
-          <div className="text-sm text-subtle">Goal <span className="font-medium text-ink">{c.month.requirement}</span> new customers · done <span className="font-medium text-ink">{c.month.actual}</span> · <span className="font-medium text-ink">{c.month.remaining}</span> left · {c.month.daysRemaining} days</div>
-          <div className="text-xs text-subtle">Required pace {c.month.requiredDailyPace.toFixed(2)}/day · forecast month-end {c.month.forecastMonthEnd} · <span className={STATUS_TONE[c.month.status]}>{c.month.status.replace('_', ' ')}</span></div>
+          <div className="text-sm text-subtle">Goal <span className="font-medium text-ink">{c.month.requirement}</span> new customers · done <span className="font-medium text-ink">{c.month.actual}</span> · <span className="font-medium text-ink">{c.month.remaining}</span> left · {c.month.workingDaysRemaining}/{c.month.workingDaysTotal} working days</div>
+          <div className="text-xs text-subtle">Required pace {c.month.requiredDailyPace.toFixed(2)}/working-day · forecast month-end {c.month.forecastMonthEnd} · <span className={STATUS_TONE[c.month.status]}>{c.month.status.replace('_', ' ')}</span></div>
           {c.year.requiredCustomersCurrentArpu != null && <div className="mt-1 text-[11px] text-subtle">Total required customers: {c.year.requiredCustomersCurrentArpu.toLocaleString()} at current ARPU{c.year.requiredCustomersTargetArpu != null ? ` · ${c.year.requiredCustomersTargetArpu.toLocaleString()} at target ARPU` : ''}</div>}
         </div>
         <div className="rounded-xl border border-hairline-strong bg-white p-4">
@@ -110,6 +123,7 @@ function DestinationEditor({ nav, onSaved }: { nav: PlanNavigation; onSaved: () 
   const [start, setStart] = useState(c.startDate)
   const [date, setDate] = useState(c.targetDate ?? '')
   const [arpuTarget, setArpuTarget] = useState(c.arpuTargetCents ? String(c.arpuTargetCents / 100) : '')
+  const [workDays, setWorkDays] = useState(String(c.calendar.workingDaysPerWeek))
   const [alloc, setAlloc] = useState({ direct: String(Math.round(c.allocation.direct * 100)), affiliate: String(Math.round(c.allocation.affiliate * 100)), whiteLabel: String(Math.round(c.allocation.whiteLabel * 100)), expansion: String(Math.round(c.allocation.expansion * 100)) })
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
   const moneyMetric = MONEY_METRICS.has(metric)
@@ -121,6 +135,7 @@ function DestinationEditor({ nav, onSaved }: { nav: PlanNavigation; onSaved: () 
       const body = {
         primaryMetric: metric, annualTarget: moneyMetric ? Math.round(t * 100) : t, startDate: start, targetDate: date || null,
         arpuTargetCents: arpuTarget ? Math.round(parseFloat(arpuTarget) * 100) : null,
+        workingDaysPerWeek: Math.min(7, Math.max(1, parseInt(workDays) || 7)),
         allocation: { direct: parseFloat(alloc.direct) || 0, affiliate: parseFloat(alloc.affiliate) || 0, whiteLabel: parseFloat(alloc.whiteLabel) || 0, expansion: parseFloat(alloc.expansion) || 0 },
         status: 'active' as const,
       }
@@ -143,6 +158,7 @@ function DestinationEditor({ nav, onSaved }: { nav: PlanNavigation; onSaved: () 
         <label className="block text-xs text-subtle">Start date<input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="mt-0.5 w-full rounded border border-hairline-strong px-2 py-1 text-sm" /></label>
         <label className="block text-xs text-subtle">Target date<input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-0.5 w-full rounded border border-hairline-strong px-2 py-1 text-sm" /></label>
         <label className="block text-xs text-subtle">Target ARPU ($, optional)<input value={arpuTarget} onChange={(e) => setArpuTarget(e.target.value)} className="mt-0.5 w-full rounded border border-hairline-strong px-2 py-1 text-sm" /></label>
+        <label className="block text-xs text-subtle">Working days / week (1-7)<input value={workDays} onChange={(e) => setWorkDays(e.target.value)} className="mt-0.5 w-full rounded border border-hairline-strong px-2 py-1 text-sm" /></label>
         {A('direct', 'Direct')}{A('affiliate', 'Affiliate')}{A('whiteLabel', 'White Label')}{A('expansion', 'Expansion')}
       </div>
       <div className="mt-1 text-xs">Allocation total: <span className={allocOk ? 'text-emerald-600' : 'text-red-600'}>{allocTotal.toFixed(0)}%</span>{!allocOk && ' — must equal 100%'}{!dateOk && <span className="ml-2 text-red-600">Target date must be on/after start date</span>}</div>

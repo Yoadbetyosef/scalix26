@@ -2,7 +2,8 @@ import { type ExclusionRules, DEFAULT_EXCLUSIONS } from './exclusions'
 import { getRealitySnapshot, getTrialConversion } from './adapters'
 import { loadActiveAssumptions } from './active'
 import { getActivePlan, type PlanRow } from './plan-store'
-import { computePlan, type PlanConfig, type PlanCascade, type DailyAction, type PrimaryMetric } from './plan'
+import { computePlan, type PlanConfig, type PlanCascade, type DailyAction, type PrimaryMetric, type EngineCapacity } from './plan'
+import { DEFAULT_CALENDAR } from './plan-calendar'
 import type { EngineRates } from './plan-engines'
 
 // Founder-only Plan navigation adapter. The founder sets only the destination; everything else is calculated
@@ -29,7 +30,7 @@ export function __setPlanDataDepsForTests(d: PlanDataDeps | null) { deps = d ?? 
 
 const DEFAULT_CONFIG = (arrTarget: number): PlanConfig => ({
   primaryMetric: 'arr_cents', annualTarget: arrTarget, startDate: new Date().toISOString().slice(0, 10),
-  targetDate: null, arpuTargetCents: null, monthlyGoalOverride: null, allocation: { direct: 0.45, affiliate: 0.35, whiteLabel: 0.20, expansion: 0 },
+  targetDate: null, arpuTargetCents: null, monthlyGoalOverride: null, allocation: { direct: 0.45, affiliate: 0.35, whiteLabel: 0.20, expansion: 0 }, calendar: DEFAULT_CALENDAR,
 })
 
 function currentForMetric(metric: PrimaryMetric, r: Awaited<ReturnType<typeof getRealitySnapshot>>): number {
@@ -57,7 +58,7 @@ export async function getPlanNavigation(rules: ExclusionRules = DEFAULT_EXCLUSIO
   const a = active.assumptions
   const arpu = r.arpuCents.value ?? 0
   const config: PlanConfig = planRow
-    ? { primaryMetric: planRow.primaryMetric, annualTarget: planRow.annualTarget, startDate: planRow.startDate, targetDate: planRow.targetDate, arpuTargetCents: planRow.arpuTargetCents, monthlyGoalOverride: planRow.monthlyGoalOverride, allocation: planRow.allocation }
+    ? { primaryMetric: planRow.primaryMetric, annualTarget: planRow.annualTarget, startDate: planRow.startDate, targetDate: planRow.targetDate, arpuTargetCents: planRow.arpuTargetCents, monthlyGoalOverride: planRow.monthlyGoalOverride, allocation: planRow.allocation, calendar: { timezone: planRow.timezone, weekStartDay: planRow.weekStartDay, workingDaysPerWeek: planRow.workingDaysPerWeek } }
     : DEFAULT_CONFIG(a.targets.targetArrCents)
 
   const engineRates: EngineRates = {
@@ -73,9 +74,11 @@ export async function getPlanNavigation(rules: ExclusionRules = DEFAULT_EXCLUSIO
   if (tc.activatedNotPaid > 0) risk.push({ key: 'trial_followup', action: `Follow up with ${tc.activatedNotPaid} trial${tc.activatedNotPaid > 1 ? 's' : ''}`, why: 'Activated but not paying — the warmest conversions.', relatedGoal: 'Trial conversion', expectedImpact: 'Convert trials to paid', engine: 'risk' })
   if (failed > 0) risk.push({ key: 'failed_pay', action: `Recover ${failed} failed payment${failed > 1 ? 's' : ''}`, why: 'Failed payments this week — recover before involuntary churn.', relatedGoal: 'Revenue protection', expectedImpact: 'Recover at-risk MRR', engine: 'risk' })
 
+  // Available team outreach capacity/day (Derived from assumptions: reps × emails/rep/day). null = not configured.
+  const capacity: EngineCapacity = { directOutreachPerDay: a.direct.reps > 0 && a.direct.emailsPerRepPerDay > 0 ? a.direct.reps * a.direct.emailsPerRepPerDay : null }
   const cascade = computePlan({
     config, currentValue: currentForMetric(config.primaryMetric, r), currentCustomers: r.payingCustomers.value ?? 0, currentArpuCents: arpu,
-    monthActual: monthConv, weekActual: weekConv, weekPrior: Math.max(0, priorWeekConv - weekConv), engineRates, riskActions: risk, nowMs,
+    monthActual: monthConv, weekActual: weekConv, weekPrior: Math.max(0, priorWeekConv - weekConv), engineRates, capacity, riskActions: risk, nowMs,
   })
   return { configured: !!planRow, plan: planRow, config, cascade, freshnessAt: new Date(nowMs).toISOString() }
 }

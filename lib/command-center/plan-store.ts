@@ -7,6 +7,7 @@ import type { EngineAllocation } from './plan-engines'
 export interface PlanRow {
   id: string; primaryMetric: PrimaryMetric; annualTarget: number; startDate: string; targetDate: string | null
   arpuTargetCents: number | null; monthlyGoalOverride: number | null; allocation: EngineAllocation
+  workingDaysPerWeek: number; weekStartDay: number; timezone: string
   mode: 'simple' | 'advanced'; status: 'draft' | 'active'; updatedBy: string | null; updatedAt: string | null
 }
 export type PlanPatch = Partial<Omit<PlanRow, 'id' | 'updatedBy' | 'updatedAt'>>
@@ -18,7 +19,7 @@ export interface PlanStoreDeps {
 }
 
 function fromRow(r: Record<string, unknown>): PlanRow {
-  return { id: r.id as string, primaryMetric: r.primary_metric as PrimaryMetric, annualTarget: Number(r.annual_target ?? 0), startDate: r.start_date as string, targetDate: (r.target_date as string) ?? null, arpuTargetCents: r.arpu_target_cents == null ? null : Number(r.arpu_target_cents), monthlyGoalOverride: r.monthly_goal_override == null ? null : Number(r.monthly_goal_override), allocation: { direct: Number(r.alloc_direct ?? 0), affiliate: Number(r.alloc_affiliate ?? 0), whiteLabel: Number(r.alloc_whitelabel ?? 0), expansion: Number(r.alloc_expansion ?? 0) }, mode: r.mode as 'simple' | 'advanced', status: r.status as 'draft' | 'active', updatedBy: (r.updated_by as string) ?? null, updatedAt: (r.updated_at as string) ?? null }
+  return { id: r.id as string, primaryMetric: r.primary_metric as PrimaryMetric, annualTarget: Number(r.annual_target ?? 0), startDate: r.start_date as string, targetDate: (r.target_date as string) ?? null, arpuTargetCents: r.arpu_target_cents == null ? null : Number(r.arpu_target_cents), monthlyGoalOverride: r.monthly_goal_override == null ? null : Number(r.monthly_goal_override), allocation: { direct: Number(r.alloc_direct ?? 0), affiliate: Number(r.alloc_affiliate ?? 0), whiteLabel: Number(r.alloc_whitelabel ?? 0), expansion: Number(r.alloc_expansion ?? 0) }, workingDaysPerWeek: Number(r.working_days_per_week ?? 7), weekStartDay: Number(r.week_start_day ?? 1), timezone: (r.timezone as string) ?? 'America/New_York', mode: r.mode as 'simple' | 'advanced', status: r.status as 'draft' | 'active', updatedBy: (r.updated_by as string) ?? null, updatedAt: (r.updated_at as string) ?? null }
 }
 function toRow(p: PlanPatch): Record<string, unknown> {
   const m: Record<string, unknown> = {}
@@ -30,6 +31,9 @@ function toRow(p: PlanPatch): Record<string, unknown> {
   if ('monthlyGoalOverride' in p) m.monthly_goal_override = p.monthlyGoalOverride
   if ('mode' in p) m.mode = p.mode
   if ('status' in p) m.status = p.status
+  if ('workingDaysPerWeek' in p) m.working_days_per_week = p.workingDaysPerWeek
+  if ('weekStartDay' in p) m.week_start_day = p.weekStartDay
+  if ('timezone' in p) m.timezone = p.timezone
   if (p.allocation) { m.alloc_direct = p.allocation.direct; m.alloc_affiliate = p.allocation.affiliate; m.alloc_whitelabel = p.allocation.whiteLabel; m.alloc_expansion = p.allocation.expansion }
   return m
 }

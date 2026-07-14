@@ -14,6 +14,9 @@ const schema = z.object({
   arpuTargetCents: z.number().int().min(0).nullable().optional(),
   monthlyGoalOverride: z.number().min(0).nullable().optional(),
   allocation: z.object({ direct: z.number().min(0), affiliate: z.number().min(0), whiteLabel: z.number().min(0), expansion: z.number().min(0) }).optional(),
+  workingDaysPerWeek: z.number().int().min(1).max(7).optional(),
+  weekStartDay: z.number().int().min(0).max(6).optional(),
+  timezone: z.string().max(64).optional(),
   mode: z.enum(['simple', 'advanced']).optional(),
   status: z.enum(['draft', 'active']).optional(),
 })
