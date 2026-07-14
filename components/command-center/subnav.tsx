@@ -12,8 +12,10 @@ const TABS: { label: string; href?: string }[] = [
   { label: 'Actuals', href: '/admin/command-center/actuals' },
   { label: 'Scoreboard', href: '/admin/command-center/scoreboard' },
   { label: 'Settings', href: '/admin/command-center/settings' },
-  { label: 'Mission' }, { label: 'War Room' }, { label: 'Support & Ops' }, { label: 'Forecast' },
-  { label: 'Growth Engines' }, { label: 'Revenue' }, { label: 'Costs' }, { label: 'Team' }, { label: 'Unit Economics' }, { label: 'Scenarios' },
+  { label: 'Support & Ops', href: '/admin/command-center/support-ops' },
+  { label: 'Team', href: '/admin/command-center/team' },
+  { label: 'Mission' }, { label: 'War Room' }, { label: 'Forecast' },
+  { label: 'Growth Engines' }, { label: 'Revenue' }, { label: 'Costs' }, { label: 'Unit Economics' }, { label: 'Scenarios' },
 ]
 
 export function Subnav() {
