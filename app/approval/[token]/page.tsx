@@ -1,5 +1,6 @@
 import { getApprovalByToken } from '@/lib/orders/approvals'
 import { PublicApprovalForm } from '@/components/orders/public-approval'
+import { FactoryDelivery } from '@/components/orders/factory-delivery'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,10 +50,20 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
 
           {view.attachments.length > 0 && <><h2 style={{ fontSize: 14, margin: '18px 0 6px', color: '#111827' }}>Attachments</h2><ul style={{ margin: 0, paddingLeft: 18 }}>{view.attachments.map((a, i) => <li key={i} style={{ fontSize: 13 }}>{a.url ? <a href={a.url} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>{a.fileName}</a> : a.fileName}</li>)}</ul></>}
 
-          {responded && <div style={{ marginTop: 18, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 13, color: '#166534' }}>Your response was recorded: <strong>{view.status.replace('_', ' ')}</strong>.{view.existingResponse?.comment ? ` "${view.existingResponse.comment}"` : ''} You can update it below if needed.</div>}
-
-          <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }}>Your decision</h2>
-          {view.canRespond ? <PublicApprovalForm token={token} approvalType={view.approvalType} /> : <p style={{ fontSize: 13, color: '#9ca3af' }}>This request is no longer open for responses.</p>}
+          {view.canSubmitDelivery ? (
+            <>
+              <h2 style={{ fontSize: 14, margin: '22px 0 8px', color: '#111827' }}>Mark ready & upload invoice</h2>
+              <FactoryDelivery token={token} />
+            </>
+          ) : view.deliverySubmitted ? (
+            <div style={{ marginTop: 20, padding: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 14, color: '#166534' }}>This order is marked <strong>ready</strong> and your invoice was received. Thank you — nothing further is needed.</div>
+          ) : (
+            <>
+              {responded && <div style={{ marginTop: 18, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 13, color: '#166534' }}>Your response was recorded: <strong>{view.status.replace('_', ' ')}</strong>.{view.existingResponse?.comment ? ` "${view.existingResponse.comment}"` : ''} You can update it below if needed.</div>}
+              <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }}>Your decision</h2>
+              {view.canRespond ? <PublicApprovalForm token={token} approvalType={view.approvalType} /> : <p style={{ fontSize: 13, color: '#9ca3af' }}>This request is no longer open for responses.</p>}
+            </>
+          )}
         </div>
         <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: '14px 0 0' }}>Secure approval link · {view.businessName}</p>
       </div>

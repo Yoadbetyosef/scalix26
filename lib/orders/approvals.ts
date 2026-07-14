@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { sendEmail } from '@/lib/email/send'
 import { generateApprovalToken, hashToken, looksLikeToken } from './approval-token'
-import { signedUrlFor } from './attachments'
+import { signedUrlFor, ALLOWED_MIME, MAX_ATTACHMENT_BYTES, ORDER_BUCKET } from './attachments'
 import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
 import { approvalEmailHtml } from './approval-email'
 import type { PublicOrderView } from './types'
@@ -104,6 +104,9 @@ export interface PublicApprovalView {
   deadline: string | null; canRespond: boolean; order: PublicOrderView
   attachments: Array<{ fileName: string; mimeType: string; url: string | null }>
   existingResponse: { comment: string | null; estimatedCompletionDate: string | null } | null
+  // Factory-only production hand-off: once the order is in production, the same link lets the factory
+  // upload an invoice and mark the item ready. Set only for factory tokens.
+  canSubmitDelivery: boolean; deliverySubmitted: boolean
 }
 
 async function findByToken(rawToken: string) {
@@ -133,7 +136,7 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     r.status = 'opened'
   }
 
-  const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes').eq('id', r.order_id as string).maybeSingle()
+  const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes, stage').eq('id', r.order_id as string).maybeSingle()
   const { data: lines } = await sb.from('order_line_items').select('product_name, description, quantity, measurements, color, material, custom_spec').eq('order_id', r.order_id as string).order('display_order')
   const { data: tenant } = await sb.from('tenants').select('business_name').eq('id', r.tenant_id as string).maybeSingle()
   const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
@@ -150,12 +153,17 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     lineItems: ((lines as Array<Record<string, unknown>>) ?? []).map((l) => ({ productName: l.product_name as string, description: (l.description as string) ?? null, quantity: Number(l.quantity ?? 1), measurements: (l.measurements as string) ?? null, color: (l.color as string) ?? null, material: (l.material as string) ?? null, customSpec: (l.custom_spec as string) ?? null })),
   }
   const responded = ['approved', 'changes_requested', 'rejected'].includes(r.status as string)
+  const orderStage = (order?.stage as OrderStage) ?? 'new'
+  const isFactory = (r.approval_type as ApprovalType) === 'factory'
   return {
     businessName: (tenant?.business_name as string) || 'Our team', approvalType: r.approval_type as ApprovalType, status: r.status as string, recipientName: (r.recipient_name as string) ?? null,
     // Can respond (or change a prior response) while not revoked/expired. Reopening the link is allowed.
     deadline: (r.expires_at as string) ?? null, canRespond: !isExpired(r) && !['revoked', 'draft', 'expired'].includes(r.status as string),
     order: publicOrder, attachments,
     existingResponse: responded ? { comment: (r.response_comment as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null } : null,
+    // Same factory link becomes a "ready + invoice" hand-off once the order reaches production.
+    canSubmitDelivery: isFactory && orderStage === 'production',
+    deliverySubmitted: isFactory && ['ready', 'delivered', 'completed'].includes(orderStage),
   }
 }
 
@@ -189,6 +197,44 @@ export async function recordApprovalResponse(rawToken: string, decision: Approva
     const { data: tenant } = await sb.from('tenants').select('email, business_name').eq('id', r.tenant_id as string).maybeSingle()
     const { data: ord } = await sb.from('orders').select('order_number').eq('id', r.order_id as string).maybeSingle()
     if (tenant?.email) await sendEmail(tenant.email as string, `${type === 'factory' ? 'Factory' : 'Customer'} responded — order ${ord?.order_number}`, `<p>The ${type} responded to order <strong>${ord?.order_number}</strong>: <strong>${decision.replace('_', ' ')}</strong>.</p>${comment ? `<p>Comment: ${comment.replace(/[<>]/g, '')}</p>` : ''}${estCompletionDate ? `<p>Estimated completion: ${estCompletionDate}</p>` : ''}`, { tenantId: r.tenant_id as string })
+  } catch { /* ignore notification failure */ }
+  return { ok: true }
+}
+
+// PUBLIC factory hand-off: the factory (no account — the token is the only credential) uploads an invoice
+// and marks the item ready once the order is in production. Moves production → ready, stores the invoice as
+// an INTERNAL attachment (never shown on the approval page), logs the timeline, and notifies the tenant.
+export async function submitFactoryDelivery(rawToken: string, file: File): Promise<{ ok: boolean; error?: string }> {
+  const r = await findByToken(rawToken)
+  if (!r) return { ok: false, error: 'This link is invalid or has expired.' }
+  if (['revoked', 'draft'].includes(r.status as string) || isExpired(r)) return { ok: false, error: 'This link is no longer available.' }
+  if ((r.approval_type as ApprovalType) !== 'factory') return { ok: false, error: 'This action is not available.' }
+  const ext = ALLOWED_MIME[file.type]
+  if (!ext) return { ok: false, error: `Unsupported file type (${file.type || 'unknown'}). Use PNG, JPG, WEBP, GIF or PDF.` }
+  if (file.size > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'File too large (max 20MB).' }
+
+  const sb = createAdminClient()
+  const tenantId = r.tenant_id as string, orderId = r.order_id as string
+  const { data: order } = await sb.from('orders').select('stage, order_number').eq('id', orderId).maybeSingle()
+  if (!order) return { ok: false, error: 'not found' }
+  if ((order.stage as string) !== 'production') return { ok: false, error: 'This order is not currently awaiting a ready confirmation.' }
+
+  // Store the invoice in the private bucket (same path convention as tenant-side uploads).
+  const path = `${tenantId}/${orderId}/${crypto.randomUUID()}.${ext}`
+  const buf = Buffer.from(await file.arrayBuffer())
+  const up = await sb.storage.from(ORDER_BUCKET).upload(path, buf, { contentType: file.type, upsert: false })
+  if (up.error) return { ok: false, error: up.error.message }
+  const { error: insErr } = await sb.from('order_attachments').insert({ tenant_id: tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: file.type, file_size: file.size, uploaded_by: 'factory', visibility: 'internal' })
+  if (insErr) { await sb.storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: insErr.message } }
+
+  const now = new Date().toISOString()
+  await sb.from('orders').update({ stage: 'ready', updated_at: now }).eq('id', orderId)
+  await sb.from('order_events').insert({ tenant_id: tenantId, order_id: orderId, type: 'factory_ready', actor: 'factory', payload: { fileName: file.name.slice(0, 200) } })
+
+  // Notify the tenant. Best-effort — never blocks the factory's submission.
+  try {
+    const { data: tenant } = await sb.from('tenants').select('email').eq('id', tenantId).maybeSingle()
+    if (tenant?.email) await sendEmail(tenant.email as string, `Factory marked ready — order ${order.order_number}`, `<p>The factory marked order <strong>${order.order_number}</strong> as <strong>ready</strong> and uploaded an invoice. The order has moved to the Ready stage; the invoice is attached to the order (internal).</p>`, { tenantId })
   } catch { /* ignore notification failure */ }
   return { ok: true }
 }
