@@ -29,22 +29,24 @@ export default async function OrdersPage() {
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">No orders yet. Create your first order.</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500"><tr>{['Order', 'Customer', 'Stage', 'Factory', 'Total', 'Requested', ''].map((h) => <th key={h} className="px-4 py-2.5 text-left font-medium">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-100">
+          <div className="min-w-[720px] text-sm">
+            <div className="grid grid-cols-[1.4fr_1.6fr_1fr_1fr_0.8fr_1fr_auto] gap-x-4 bg-gray-50 px-4 py-2.5 font-medium text-gray-500">
+              {['Order', 'Customer', 'Stage', 'Factory', 'Total', 'Requested', ''].map((h, i) => <div key={i}>{h}</div>)}
+            </div>
+            <div className="divide-y divide-gray-100">
               {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-mono text-xs font-medium text-gray-900">{o.orderNumber}</td>
-                  <td className="px-4 py-2.5 text-gray-800">{o.customerName ?? '—'}</td>
-                  <td className="px-4 py-2.5"><span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}</span></td>
-                  <td className="px-4 py-2.5 text-gray-600">{o.factoryName ?? '—'}</td>
-                  <td className="px-4 py-2.5 tabular-nums text-gray-800">{money(o.subtotalCents, o.currency)}</td>
-                  <td className="px-4 py-2.5 text-gray-600">{o.requestedCompletionDate ?? '—'}</td>
-                  <td className="px-4 py-2.5"><Link href={`/orders/${o.id}`} className="text-sm font-medium text-blue-600 hover:underline">Open</Link></td>
-                </tr>
+                <Link key={o.id} href={`/orders/${o.id}`} className="grid grid-cols-[1.4fr_1.6fr_1fr_1fr_0.8fr_1fr_auto] items-center gap-x-4 px-4 py-2.5 hover:bg-gray-50">
+                  <div className="font-mono text-xs font-medium text-gray-900">{o.orderNumber}</div>
+                  <div className="text-gray-800">{o.customerName ?? '—'}</div>
+                  <div><span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}</span></div>
+                  <div className="text-gray-600">{o.factoryName ?? '—'}</div>
+                  <div className="tabular-nums text-gray-800">{money(o.subtotalCents, o.currency)}</div>
+                  <div className="text-gray-600">{o.requestedCompletionDate ?? '—'}</div>
+                  <div className="text-sm font-medium text-blue-600">Open</div>
+                </Link>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       )}
     </div>

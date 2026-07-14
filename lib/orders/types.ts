@@ -22,6 +22,7 @@ export interface LineItemInput {
   measurements?: string | null; color?: string | null; material?: string | null; customSpec?: string | null; productRef?: string | null
 }
 export interface OrderInput {
+  orderNumber?: string | null
   contactId?: string | null; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null
   factoryName?: string | null; factoryContactName?: string | null; factoryEmail?: string | null; assignedEmployee?: string | null
   orderDate?: string | null; requestedCompletionDate?: string | null; estimatedCompletionDate?: string | null

@@ -5,6 +5,7 @@ import { getOrder } from '@/lib/orders/store'
 import { STAGE_LABELS, isProtectedStage, isTerminalStage } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
 import { OrderEdit } from '@/components/orders/order-edit'
+import { DeleteOrderButton } from '@/components/orders/delete-order'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
 
@@ -30,6 +31,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <div className="flex items-center gap-2">
           {!isTerminalStage(o.stage) && (
             <OrderEdit orderId={o.id} initial={{
+              orderNumber: o.orderNumber,
               customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
               factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
               assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
@@ -38,6 +40,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             }} />
           )}
           <StageControl orderId={o.id} stage={o.stage} />
+          <DeleteOrderButton orderId={o.id} orderNumber={o.orderNumber} />
         </div>
       </div>
 

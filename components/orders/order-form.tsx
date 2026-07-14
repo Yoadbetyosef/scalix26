@@ -9,7 +9,7 @@ const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-
 
 export function OrderForm() {
   const router = useRouter()
-  const [f, setF] = useState({ customerName: '', customerEmail: '', customerPhone: '', factoryName: '', factoryContactName: '', factoryEmail: '', assignedEmployee: '', orderDate: '', requestedCompletionDate: '', depositDollars: '0', internalNotes: '', publicNotes: '' })
+  const [f, setF] = useState({ orderNumber: '', customerName: '', customerEmail: '', customerPhone: '', factoryName: '', factoryContactName: '', factoryEmail: '', assignedEmployee: '', orderDate: '', requestedCompletionDate: '', depositDollars: '0', internalNotes: '', publicNotes: '' })
   const [lines, setLines] = useState<Line[]>([emptyLine()])
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }))
@@ -20,6 +20,7 @@ export function OrderForm() {
     setBusy(true); setErr(null)
     try {
       const body = {
+        orderNumber: f.orderNumber.trim() || undefined,
         customerName: f.customerName || null, customerEmail: f.customerEmail || null, customerPhone: f.customerPhone || null,
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
@@ -35,6 +36,10 @@ export function OrderForm() {
   return (
     <div className="space-y-6">
       {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+      <section>
+        <h3 className="mb-2 text-sm font-semibold text-gray-900">Order number</h3>
+        <label className="block max-w-sm text-xs text-gray-500">Optional — leave blank to auto-generate<input value={f.orderNumber} onChange={set('orderNumber')} placeholder="e.g. 1024 or ORD-2026-014" className={inp} /></label>
+      </section>
       <section>
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Customer</h3>
         <div className="grid gap-3 sm:grid-cols-3">

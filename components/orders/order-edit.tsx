@@ -8,6 +8,7 @@ const emptyLine = (): Line => ({ productName: '', description: '', sku: '', quan
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 
 export interface OrderEditInitial {
+  orderNumber: string
   customerName: string | null; customerEmail: string | null; customerPhone: string | null
   factoryName: string | null; factoryContactName: string | null; factoryEmail: string | null
   assignedEmployee: string | null; orderDate: string | null; requestedCompletionDate: string | null
@@ -23,6 +24,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
   const [f, setF] = useState({
+    orderNumber: initial.orderNumber ?? '',
     customerName: initial.customerName ?? '', customerEmail: initial.customerEmail ?? '', customerPhone: initial.customerPhone ?? '',
     factoryName: initial.factoryName ?? '', factoryContactName: initial.factoryContactName ?? '', factoryEmail: initial.factoryEmail ?? '',
     assignedEmployee: initial.assignedEmployee ?? '', orderDate: initial.orderDate ?? '', requestedCompletionDate: initial.requestedCompletionDate ?? '',
@@ -42,6 +44,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
     setBusy(true); setErr(null)
     try {
       const body = {
+        orderNumber: f.orderNumber.trim() || undefined,
         customerName: f.customerName || null, customerEmail: f.customerEmail || null, customerPhone: f.customerPhone || null,
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
@@ -64,6 +67,10 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
             <p className="mt-0.5 text-xs text-gray-500">Update pricing, line items, and details before sending for approval.</p>
 
             <div className="mt-4 space-y-5">
+              <section>
+                <h4 className="mb-2 text-sm font-semibold text-gray-900">Order number</h4>
+                <label className="block max-w-xs text-xs text-gray-500">Order number<input value={f.orderNumber} onChange={set('orderNumber')} className={inp} /></label>
+              </section>
               <section>
                 <h4 className="mb-2 text-sm font-semibold text-gray-900">Customer</h4>
                 <div className="grid gap-3 sm:grid-cols-3">

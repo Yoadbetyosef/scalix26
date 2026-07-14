@@ -11,6 +11,7 @@ const lineItem = z.object({
   customSpec: z.string().max(2000).nullable().optional(), productRef: z.string().uuid().nullable().optional(),
 })
 const orderSchema = z.object({
+  orderNumber: z.string().trim().max(50).optional(),
   contactId: z.string().uuid().nullable().optional(),
   customerName: z.string().max(300).nullable().optional(), customerEmail: z.string().email().max(320).nullable().optional(), customerPhone: z.string().max(50).nullable().optional(),
   factoryName: z.string().max(300).nullable().optional(), factoryContactName: z.string().max(300).nullable().optional(), factoryEmail: z.string().email().max(320).nullable().optional(),
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest) {
   if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const parsed = orderSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })
-  const order = await createOrder(parsed.data)
-  return NextResponse.json({ ok: true, order })
+  try {
+    const order = await createOrder(parsed.data)
+    return NextResponse.json({ ok: true, order })
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message || 'Failed to create order' }, { status: 400 })
+  }
 }

@@ -1,5 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
+import { ORDER_BUCKET } from './attachments'
 import { generateOrderNumber } from './order-number'
 import { canManualTransition, type OrderStage } from './stages'
 import type { Order, OrderLineItem, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
@@ -64,7 +65,7 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   const totals = lineTotals(items)
   const subtotal = totals.reduce((s, n) => s + n, 0)
   const deposit = input.depositCents ?? 0
-  const orderNumber = generateOrderNumber()
+  const orderNumber = (input.orderNumber && input.orderNumber.trim()) || generateOrderNumber()
   const { data, error } = await sb.from('orders').insert({
     tenant_id: c.tenantId, order_number: orderNumber, contact_id: input.contactId ?? null,
     customer_name: input.customerName ?? null, customer_email: input.customerEmail ?? null, customer_phone: input.customerPhone ?? null,
@@ -73,7 +74,7 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
     subtotal_cents: subtotal, deposit_cents: deposit, balance_cents: subtotal - deposit, currency: input.currency ?? 'usd',
     internal_notes: input.internalNotes ?? null, public_notes: input.publicNotes ?? null, created_by: c.actor,
   }).select('*').single()
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
   const order = orderRow(data as Record<string, unknown>)
   if (items.length) {
     await sb.from('order_line_items').insert(items.map((i, idx) => ({ tenant_id: c.tenantId, order_id: order.id, product_name: i.productName, description: i.description ?? null, sku: i.sku ?? null, quantity: i.quantity ?? 1, unit_price_cents: i.unitPriceCents ?? 0, measurements: i.measurements ?? null, color: i.color ?? null, material: i.material ?? null, custom_spec: i.customSpec ?? null, product_ref: i.productRef ?? null, line_total_cents: totals[idx], display_order: idx })))
@@ -86,8 +87,10 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   const c = await ctx(); if (!c) return null
   const sb = await createClient()
   const m: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  const map: Record<string, string> = { contactId: 'contact_id', customerName: 'customer_name', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', internalNotes: 'internal_notes', publicNotes: 'public_notes' }
+  const map: Record<string, string> = { orderNumber: 'order_number', contactId: 'contact_id', customerName: 'customer_name', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', internalNotes: 'internal_notes', publicNotes: 'public_notes' }
   for (const [k, col] of Object.entries(map)) if (k in patch) m[col] = (patch as Record<string, unknown>)[k]
+  // Never blank out the (NOT NULL, unique) order number — ignore an empty edit.
+  if (typeof m.order_number === 'string') { const t = m.order_number.trim(); if (t) m.order_number = t; else delete m.order_number }
   // Re-price if line items are replaced.
   if (patch.lineItems) {
     const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0)
@@ -96,7 +99,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
     if (patch.lineItems.length) await sb.from('order_line_items').insert(patch.lineItems.map((i, idx) => ({ tenant_id: c.tenantId, order_id: id, product_name: i.productName, description: i.description ?? null, sku: i.sku ?? null, quantity: i.quantity ?? 1, unit_price_cents: i.unitPriceCents ?? 0, measurements: i.measurements ?? null, color: i.color ?? null, material: i.material ?? null, custom_spec: i.customSpec ?? null, product_ref: i.productRef ?? null, line_total_cents: totals[idx], display_order: idx })))
   }
   const { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
-  if (error) throw new Error(error.message)
+  if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
   await addEvent(id, 'updated', null)
   return orderRow(data as Record<string, unknown>)
 }
@@ -112,4 +115,18 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
   await sb.from('orders').update({ stage: to, updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', id)
   await addEvent(id, 'stage_changed', { from, to, manual: true })
   return { ok: true }
+}
+
+// Permanently delete an order. Removes its private storage files first (not FK-cascaded), then deletes the
+// order row — line items, events, attachments rows, and approval requests are removed by ON DELETE CASCADE.
+export async function deleteOrder(id: string): Promise<boolean> {
+  const c = await ctx(); if (!c) return false
+  const sb = await createClient()
+  const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+  if (!order) return false
+  const { data: atts } = await sb.from('order_attachments').select('storage_path').eq('tenant_id', c.tenantId).eq('order_id', id)
+  const paths = ((atts as Array<Record<string, unknown>> | null) ?? []).map((a) => a.storage_path as string).filter(Boolean)
+  if (paths.length) await createAdminClient().storage.from(ORDER_BUCKET).remove(paths)
+  const { error } = await sb.from('orders').delete().eq('tenant_id', c.tenantId).eq('id', id)
+  return !error
 }
