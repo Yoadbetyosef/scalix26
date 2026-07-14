@@ -1,0 +1,35 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { requireOrdersAccess } from '@/lib/orders/guard'
+import { createOrder, listOrders } from '@/lib/orders/store'
+
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const lineItem = z.object({
+  productName: z.string().min(1).max(300), description: z.string().max(2000).nullable().optional(), sku: z.string().max(100).nullable().optional(),
+  quantity: z.number().min(0).max(100000).optional(), unitPriceCents: z.number().int().min(0).optional(),
+  measurements: z.string().max(500).nullable().optional(), color: z.string().max(200).nullable().optional(), material: z.string().max(200).nullable().optional(),
+  customSpec: z.string().max(2000).nullable().optional(), productRef: z.string().uuid().nullable().optional(),
+})
+const orderSchema = z.object({
+  contactId: z.string().uuid().nullable().optional(),
+  customerName: z.string().max(300).nullable().optional(), customerEmail: z.string().email().max(320).nullable().optional(), customerPhone: z.string().max(50).nullable().optional(),
+  factoryName: z.string().max(300).nullable().optional(), factoryContactName: z.string().max(300).nullable().optional(), factoryEmail: z.string().email().max(320).nullable().optional(),
+  assignedEmployee: z.string().max(300).nullable().optional(), orderDate: date.nullable().optional(), requestedCompletionDate: date.nullable().optional(), estimatedCompletionDate: date.nullable().optional(),
+  depositCents: z.number().int().min(0).optional(), currency: z.string().max(8).optional(), internalNotes: z.string().max(5000).nullable().optional(), publicNotes: z.string().max(5000).nullable().optional(),
+  lineItems: z.array(lineItem).max(200).optional(),
+})
+
+export async function GET() {
+  const a = await requireOrdersAccess()
+  if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json({ orders: await listOrders() })
+}
+
+export async function POST(req: NextRequest) {
+  const a = await requireOrdersAccess()
+  if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const parsed = orderSchema.safeParse(await req.json().catch(() => ({})))
+  if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })
+  const order = await createOrder(parsed.data)
+  return NextResponse.json({ ok: true, order })
+}

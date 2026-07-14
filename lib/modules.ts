@@ -19,6 +19,7 @@ export const MODULES = [
   { key: 'analytics', label: 'Analytics', description: 'Reports & analytics' },
   { key: 'business_brain', label: 'Business Brain', description: 'AI business understanding' },
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
+  { key: 'orders', label: 'Orders', description: 'Orders & external factory/customer approvals' },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]['key']
@@ -80,6 +81,7 @@ const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/analytics', module: 'analytics' },
   { prefix: '/invoices', module: 'invoices' },
   { prefix: '/payments', module: 'payments' },
+  { prefix: '/orders', module: 'orders' },
 ]
 
 /**

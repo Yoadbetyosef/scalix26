@@ -1,0 +1,115 @@
+import { createClient } from '@/lib/supabase/server'
+import { requireActiveBusinessContext } from '@/lib/workspace'
+import { generateOrderNumber } from './order-number'
+import { canManualTransition, type OrderStage } from './stages'
+import type { Order, OrderLineItem, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
+
+// Server-only Orders data access. Every call resolves the validated active tenant (requireActiveBusinessContext)
+// and queries through the RLS-scoped authenticated client, so a tenant can only ever touch its own orders.
+// The Orders module must be enabled for the tenant (route guards + API handlers check that separately).
+
+export interface OrderCtx { tenantId: string; actor: string }
+async function ctx(): Promise<OrderCtx | null> {
+  const c = await requireActiveBusinessContext()
+  if (!c) return null
+  return { tenantId: c.tenantId, actor: c.actorUserId }
+}
+
+const orderRow = (r: Record<string, unknown>): Order => ({
+  id: r.id as string, tenantId: r.tenant_id as string, orderNumber: r.order_number as string, contactId: (r.contact_id as string) ?? null,
+  customerName: (r.customer_name as string) ?? null, customerEmail: (r.customer_email as string) ?? null, customerPhone: (r.customer_phone as string) ?? null,
+  stage: r.stage as OrderStage, factoryName: (r.factory_name as string) ?? null, factoryContactName: (r.factory_contact_name as string) ?? null, factoryEmail: (r.factory_email as string) ?? null,
+  assignedEmployee: (r.assigned_employee as string) ?? null, orderDate: (r.order_date as string) ?? null, requestedCompletionDate: (r.requested_completion_date as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null,
+  subtotalCents: Number(r.subtotal_cents ?? 0), depositCents: Number(r.deposit_cents ?? 0), balanceCents: Number(r.balance_cents ?? 0), currency: (r.currency as string) ?? 'usd',
+  internalNotes: (r.internal_notes as string) ?? null, publicNotes: (r.public_notes as string) ?? null, createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+})
+const lineRow = (r: Record<string, unknown>): OrderLineItem => ({
+  id: r.id as string, orderId: r.order_id as string, productName: r.product_name as string, description: (r.description as string) ?? null, sku: (r.sku as string) ?? null,
+  quantity: Number(r.quantity ?? 1), unitPriceCents: Number(r.unit_price_cents ?? 0), measurements: (r.measurements as string) ?? null, color: (r.color as string) ?? null, material: (r.material as string) ?? null,
+  customSpec: (r.custom_spec as string) ?? null, productRef: (r.product_ref as string) ?? null, lineTotalCents: Number(r.line_total_cents ?? 0), displayOrder: Number(r.display_order ?? 0),
+})
+const eventRow = (r: Record<string, unknown>): OrderEvent => ({ id: r.id as string, orderId: r.order_id as string, type: r.type as string, actor: (r.actor as string) ?? null, payload: (r.payload as Record<string, unknown>) ?? null, createdAt: r.created_at as string })
+
+export async function listOrders(): Promise<Order[]> {
+  const c = await ctx(); if (!c) return []
+  const sb = await createClient()
+  const { data } = await sb.from('orders').select('*').eq('tenant_id', c.tenantId).order('created_at', { ascending: false })
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map(orderRow)
+}
+
+export async function getOrder(id: string): Promise<OrderWithDetails | null> {
+  const c = await ctx(); if (!c) return null
+  const sb = await createClient()
+  const { data } = await sb.from('orders').select('*').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+  if (!data) return null
+  const [items, events] = await Promise.all([
+    sb.from('order_line_items').select('*').eq('order_id', id).order('display_order'),
+    sb.from('order_events').select('*').eq('order_id', id).order('created_at', { ascending: false }),
+  ])
+  return { ...orderRow(data as Record<string, unknown>), lineItems: ((items.data as Array<Record<string, unknown>>) ?? []).map(lineRow), events: ((events.data as Array<Record<string, unknown>>) ?? []).map(eventRow) }
+}
+
+const lineTotals = (items: LineItemInput[]) => items.map((i) => Math.round((i.quantity ?? 1) * (i.unitPriceCents ?? 0)))
+
+export async function addEvent(orderId: string, type: string, payload: Record<string, unknown> | null, actor?: string): Promise<void> {
+  const c = await ctx(); if (!c) return
+  const sb = await createClient()
+  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type, actor: actor ?? c.actor, payload })
+}
+
+export async function createOrder(input: OrderInput): Promise<Order | null> {
+  const c = await ctx(); if (!c) return null
+  const sb = await createClient()
+  const items = input.lineItems ?? []
+  const totals = lineTotals(items)
+  const subtotal = totals.reduce((s, n) => s + n, 0)
+  const deposit = input.depositCents ?? 0
+  const orderNumber = generateOrderNumber()
+  const { data, error } = await sb.from('orders').insert({
+    tenant_id: c.tenantId, order_number: orderNumber, contact_id: input.contactId ?? null,
+    customer_name: input.customerName ?? null, customer_email: input.customerEmail ?? null, customer_phone: input.customerPhone ?? null,
+    stage: 'new', factory_name: input.factoryName ?? null, factory_contact_name: input.factoryContactName ?? null, factory_email: input.factoryEmail ?? null,
+    assigned_employee: input.assignedEmployee ?? null, order_date: input.orderDate ?? null, requested_completion_date: input.requestedCompletionDate ?? null, estimated_completion_date: input.estimatedCompletionDate ?? null,
+    subtotal_cents: subtotal, deposit_cents: deposit, balance_cents: subtotal - deposit, currency: input.currency ?? 'usd',
+    internal_notes: input.internalNotes ?? null, public_notes: input.publicNotes ?? null, created_by: c.actor,
+  }).select('*').single()
+  if (error) throw new Error(error.message)
+  const order = orderRow(data as Record<string, unknown>)
+  if (items.length) {
+    await sb.from('order_line_items').insert(items.map((i, idx) => ({ tenant_id: c.tenantId, order_id: order.id, product_name: i.productName, description: i.description ?? null, sku: i.sku ?? null, quantity: i.quantity ?? 1, unit_price_cents: i.unitPriceCents ?? 0, measurements: i.measurements ?? null, color: i.color ?? null, material: i.material ?? null, custom_spec: i.customSpec ?? null, product_ref: i.productRef ?? null, line_total_cents: totals[idx], display_order: idx })))
+  }
+  await addEvent(order.id, 'created', { orderNumber })
+  return order
+}
+
+export async function updateOrder(id: string, patch: OrderInput): Promise<Order | null> {
+  const c = await ctx(); if (!c) return null
+  const sb = await createClient()
+  const m: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  const map: Record<string, string> = { contactId: 'contact_id', customerName: 'customer_name', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', internalNotes: 'internal_notes', publicNotes: 'public_notes' }
+  for (const [k, col] of Object.entries(map)) if (k in patch) m[col] = (patch as Record<string, unknown>)[k]
+  // Re-price if line items are replaced.
+  if (patch.lineItems) {
+    const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0)
+    m.subtotal_cents = subtotal; m.balance_cents = subtotal - (patch.depositCents ?? 0)
+    await sb.from('order_line_items').delete().eq('order_id', id)
+    if (patch.lineItems.length) await sb.from('order_line_items').insert(patch.lineItems.map((i, idx) => ({ tenant_id: c.tenantId, order_id: id, product_name: i.productName, description: i.description ?? null, sku: i.sku ?? null, quantity: i.quantity ?? 1, unit_price_cents: i.unitPriceCents ?? 0, measurements: i.measurements ?? null, color: i.color ?? null, material: i.material ?? null, custom_spec: i.customSpec ?? null, product_ref: i.productRef ?? null, line_total_cents: totals[idx], display_order: idx })))
+  }
+  const { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
+  if (error) throw new Error(error.message)
+  await addEvent(id, 'updated', null)
+  return orderRow(data as Record<string, unknown>)
+}
+
+// Manual stage change (drag / explicit set) — approval stages are rejected here; use the workflow actions.
+export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: boolean; error?: string }> {
+  const c = await ctx(); if (!c) return { ok: false, error: 'unauthorized' }
+  const sb = await createClient()
+  const { data } = await sb.from('orders').select('stage').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+  if (!data) return { ok: false, error: 'not found' }
+  const from = data.stage as OrderStage
+  if (!canManualTransition(from, to)) return { ok: false, error: `Transition ${from} → ${to} is not allowed (approval stages change via workflow actions only)` }
+  await sb.from('orders').update({ stage: to, updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', id)
+  await addEvent(id, 'stage_changed', { from, to, manual: true })
+  return { ok: true }
+}

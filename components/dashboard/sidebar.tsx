@@ -19,6 +19,7 @@ import {
   X,
   Handshake,
   Shield,
+  ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/dashboard?tab=leads', icon: TrendingUp, label: 'Leads' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
   { href: '/contacts', icon: Users, label: 'Contacts' },
+  { href: '/orders', icon: ClipboardList, label: 'Orders' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
   { href: '/ai-employees', icon: Bot, label: 'AI Employees' },
   { href: '/test-ai', icon: FlaskConical, label: 'Test AI' },
