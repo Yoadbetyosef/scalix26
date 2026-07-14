@@ -3,39 +3,40 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-// Implemented tabs are links; the rest are placeholders (later phases) — no broken routes.
-const TABS: { label: string; href?: string }[] = [
-  { label: 'Overview', href: '/admin/command-center' },
-  { label: 'Customer Lifecycle', href: '/admin/command-center/customer-lifecycle' },
-  { label: 'Retention', href: '/admin/command-center/retention' },
-  { label: 'Onboarding', href: '/admin/command-center/onboarding' },
-  { label: 'Actuals', href: '/admin/command-center/actuals' },
-  { label: 'Scoreboard', href: '/admin/command-center/scoreboard' },
-  { label: 'Settings', href: '/admin/command-center/settings' },
-  { label: 'Support & Ops', href: '/admin/command-center/support-ops' },
-  { label: 'Team', href: '/admin/command-center/team' },
-  { label: 'Mission', href: '/admin/command-center/mission' },
-  { label: 'War Room', href: '/admin/command-center/war-room' },
-  { label: 'Growth Engines', href: '/admin/command-center/growth-engines' },
-  { label: 'Revenue', href: '/admin/command-center/revenue' },
-  { label: 'Costs', href: '/admin/command-center/costs' },
-  { label: 'Unit Economics', href: '/admin/command-center/unit-economics' },
-  { label: 'Forecast', href: '/admin/command-center/forecast' },
-  { label: 'Scenarios', href: '/admin/command-center/scenarios' },
+// Grouped navigation — the founder sees 8 primary groups, not 17 flat tabs. Each group reveals its sub-pages
+// only when active. Deeper planning surfaces (Mission / War Room / Scoreboard) live under Plan as advanced.
+const BASE = '/admin/command-center'
+interface Group { label: string; href: string; subs: { label: string; href: string }[] }
+const NAV: Group[] = [
+  { label: 'Overview', href: BASE, subs: [] },
+  { label: 'Plan', href: `${BASE}/plan`, subs: [{ label: 'Plan', href: `${BASE}/plan` }, { label: 'Mission', href: `${BASE}/mission` }, { label: 'War Room', href: `${BASE}/war-room` }, { label: 'Scoreboard', href: `${BASE}/scoreboard` }] },
+  { label: 'Growth', href: `${BASE}/growth-engines`, subs: [{ label: 'Growth Engines', href: `${BASE}/growth-engines` }] },
+  { label: 'Customers', href: `${BASE}/customer-lifecycle`, subs: [{ label: 'Lifecycle', href: `${BASE}/customer-lifecycle` }, { label: 'Onboarding', href: `${BASE}/onboarding` }, { label: 'Retention', href: `${BASE}/retention` }] },
+  { label: 'Operations', href: `${BASE}/support-ops`, subs: [{ label: 'Support', href: `${BASE}/support-ops` }, { label: 'Team', href: `${BASE}/team` }] },
+  { label: 'Financials', href: `${BASE}/revenue`, subs: [{ label: 'Revenue', href: `${BASE}/revenue` }, { label: 'Costs', href: `${BASE}/costs` }, { label: 'Unit Economics', href: `${BASE}/unit-economics` }, { label: 'Forecast', href: `${BASE}/forecast` }] },
+  { label: 'Scenarios', href: `${BASE}/scenarios`, subs: [{ label: 'Scenarios', href: `${BASE}/scenarios` }] },
+  { label: 'Settings', href: `${BASE}/settings`, subs: [{ label: 'Settings', href: `${BASE}/settings` }, { label: 'Actuals', href: `${BASE}/actuals` }] },
 ]
 
 export function Subnav() {
   const p = usePathname()
+  const activeGroup = NAV.find((g) => g.subs.some((s) => p === s.href || (s.href !== BASE && p.startsWith(s.href)))) ?? NAV.find((g) => (g.href === BASE ? p === BASE : p.startsWith(g.href))) ?? NAV[0]
   return (
-    <div className="mb-6 flex flex-wrap gap-x-1 border-b border-hairline">
-      {TABS.map((t) => {
-        const active = !!t.href && (t.href === '/admin/command-center' ? p === t.href : p.startsWith(t.href))
-        return t.href ? (
-          <Link key={t.label} href={t.href} className={`px-3 py-2 text-sm ${active ? 'border-b-2 border-ink font-medium text-ink' : 'text-subtle hover:text-ink'}`}>{t.label}</Link>
-        ) : (
-          <span key={t.label} className="px-3 py-2 text-sm text-subtle">{t.label}<span className="ml-1 rounded bg-sunken px-1 text-[10px]">soon</span></span>
-        )
-      })}
+    <div className="mb-6">
+      <div className="flex flex-wrap gap-x-1 border-b border-hairline">
+        {NAV.map((g) => {
+          const active = g.label === activeGroup.label
+          return <Link key={g.label} href={g.href} className={`px-3 py-2 text-sm ${active ? 'border-b-2 border-ink font-medium text-ink' : 'text-subtle hover:text-ink'}`}>{g.label}</Link>
+        })}
+      </div>
+      {activeGroup.subs.length > 1 && (
+        <div className="mt-2 flex flex-wrap gap-x-1">
+          {activeGroup.subs.map((s) => {
+            const active = p === s.href || (s.href !== BASE && p.startsWith(s.href))
+            return <Link key={s.href} href={s.href} className={`rounded-full px-3 py-1 text-xs ${active ? 'bg-ink text-white' : 'text-subtle hover:text-ink'}`}>{s.label}</Link>
+          })}
+        </div>
+      )}
     </div>
   )
 }

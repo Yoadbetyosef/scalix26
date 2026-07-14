@@ -61,9 +61,9 @@ export function __setWarRoomDepsForTests(d: WarRoomDeps | null) { deps = d ?? db
 
 export const getWarRoomTasks = (): Promise<WarRoomTask[]> => deps.getAll()
 
-export async function acceptGap(gap: WarRoomGap, actor: string): Promise<WarRoomTask> {
+export async function acceptGap(gap: WarRoomGap, actor: string, status: TaskStatus = 'open', dismissReason: string | null = null): Promise<WarRoomTask> {
   const at = new Date().toISOString()
-  const created = await deps.insert({ scope: gap.scope, title: gap.title, category: gap.category, requiredResult: gap.requiredResult, actual: null, priority: gap.priority, expectedImpactCents: gap.expectedImpactCents, playbook: gap.playbook, status: 'open', source: 'generated', gapKey: gap.gapKey }, actor, at)
+  const created = await deps.insert({ scope: gap.scope, title: gap.title, category: gap.category, requiredResult: gap.requiredResult, actual: null, priority: gap.priority, expectedImpactCents: gap.expectedImpactCents, playbook: gap.playbook, status, dismissReason, source: 'generated', gapKey: gap.gapKey }, actor, at)
   await deps.addChange(created.id, null, created, actor, at)
   return created
 }

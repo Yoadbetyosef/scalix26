@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
   if (b.action !== 'accept_gap') return NextResponse.json({ error: 'action=accept_gap required' }, { status: 400 })
   const parsed = gapSchema.safeParse(b.gap)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid gap', detail: parsed.error.issues[0]?.message }, { status: 400 })
+  const status = ['open', 'in_progress', 'done', 'dismissed'].includes(b.status) ? b.status : 'open'
   try {
-    const task = await acceptGap(parsed.data, f.email)
+    const task = await acceptGap(parsed.data, f.email, status, typeof b.dismissReason === 'string' ? b.dismissReason : null)
     return NextResponse.json({ ok: true, task })
   } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
 }

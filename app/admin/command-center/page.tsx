@@ -1,8 +1,13 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getFounderContext } from '@/lib/command-center/guard'
 import { getRealitySnapshot, getTrialConversion } from '@/lib/command-center/adapters'
+import { getPlanNavigation } from '@/lib/command-center/plan-adapter'
 import { compactMoney, pctText, num, Section } from '@/components/command-center/ui'
 import { MetricStat, HealthPill } from '@/components/command-center/metric-ui'
+
+const MONEY_METRICS = new Set(['arr_cents', 'mrr_cents', 'revenue', 'profit'])
+const fmtGoal = (metric: string, v: number) => (MONEY_METRICS.has(metric) ? compactMoney(v) : `${Math.round(v).toLocaleString()} cust`)
 
 export const dynamic = 'force-dynamic'
 const ENGINE_LABEL = { direct: 'Direct', affiliate: 'Affiliate', whiteLabel: 'White Label' } as const
@@ -41,10 +46,32 @@ export default async function CommandCenterOverview() {
   const founder = await getFounderContext()
   if (!founder) notFound()
 
-  const [r, tc] = await Promise.all([getRealitySnapshot(), getTrialConversion()])
+  const [r, tc, nav] = await Promise.all([getRealitySnapshot(), getTrialConversion(), getPlanNavigation()])
+  const y = nav.cascade.year, behind = y.behindPct
 
   return (
     <div>
+      {/* Plan card — Goal → Reality → Gap → Today, one glance. */}
+      <div className="mb-4 rounded-2xl border border-hairline-strong bg-white p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold text-ink">My Plan</span>
+          <span className={`text-xs font-semibold ${behind > 0.05 ? 'text-red-600' : behind < -0.05 ? 'text-emerald-600' : 'text-subtle'}`}>{y.status === 'no_data' ? 'set a target date' : behind > 0.05 ? `${behind.toFixed(1)}% behind` : behind < -0.05 ? `${(-behind).toFixed(1)}% ahead` : 'on plan'}</span>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div><div className="text-[10px] uppercase text-subtle">Goal</div><div className="text-base font-bold text-ink">{fmtGoal(nav.config.primaryMetric, y.target)}</div></div>
+          <div><div className="text-[10px] uppercase text-subtle">Current</div><div className="text-base font-bold text-ink">{fmtGoal(nav.config.primaryMetric, y.current)}</div></div>
+          <div><div className="text-[10px] uppercase text-subtle">Gap</div><div className="text-base font-bold text-ink">{fmtGoal(nav.config.primaryMetric, y.gap)}</div></div>
+          <div><div className="text-[10px] uppercase text-subtle">Progress</div><div className="text-base font-bold text-ink">{(y.progressPct * 100).toFixed(1)}%</div></div>
+        </div>
+        <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-subtle sm:grid-cols-3">
+          <div>This Month: <span className="text-ink">{nav.cascade.month.actual}/{nav.cascade.month.requirement}</span> · {nav.cascade.month.remaining} left</div>
+          <div>This Week: <span className="text-ink">{nav.cascade.week.actual}/{nav.cascade.week.requirement}</span> · {nav.cascade.week.remaining} left</div>
+          <div>Today: <span className="text-ink">{nav.cascade.today.length}</span> priority action{nav.cascade.today.length === 1 ? '' : 's'}</div>
+        </div>
+        {nav.cascade.today.length > 0 && <ul className="mt-1 list-disc pl-5 text-xs text-ink">{nav.cascade.today.slice(0, 3).map((a) => <li key={a.key}>{a.action}</li>)}</ul>}
+        <Link href="/admin/command-center/plan" className="mt-3 inline-block rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white">Open Plan</Link>
+      </div>
+
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-800">
         <span className="font-semibold">Reality only.</span> Every number below is Actual or Derived-Actual from live product &amp; customer data.
         Forecasts live on <span className="font-medium">Forecast</span>, targets on <span className="font-medium">Mission</span>, simulations on <span className="font-medium">Scenarios</span> — never here.
