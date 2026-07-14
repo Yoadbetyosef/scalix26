@@ -10,7 +10,7 @@ import { ApprovalActions } from '@/components/orders/approval-actions'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', sent_to_production: 'Sent to production', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
+const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', sent_to_production: 'Sent to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const a = await requireOrdersAccess()

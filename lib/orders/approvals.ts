@@ -4,7 +4,7 @@ import { sendEmail } from '@/lib/email/send'
 import { generateApprovalToken, hashToken, looksLikeToken } from './approval-token'
 import { signedUrlFor, ALLOWED_MIME, MAX_ATTACHMENT_BYTES, ORDER_BUCKET } from './attachments'
 import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
-import { approvalEmailHtml } from './approval-email'
+import { approvalEmailHtml, deliveryRequestEmailHtml } from './approval-email'
 import type { PublicOrderView } from './types'
 
 // External approval primitive. Tatiana-side ops go through the RLS client; the PUBLIC token route uses the
@@ -239,15 +239,30 @@ export async function submitFactoryDelivery(rawToken: string, file: File): Promi
   return { ok: true }
 }
 
-// Explicit, founder-only "Send to Production" (never automatic).
-export async function sendToProduction(orderId: string): Promise<{ ok: boolean; error?: string }> {
+// Explicit, founder-only "Send to Production" (never automatic). If a factory approval exists, notify the
+// factory that the order is confirmed and they can upload an invoice + mark it ready — via a FRESH link
+// (we never stored the original raw token, so the delivery link is a rotated token on the same request row).
+export async function sendToProduction(orderId: string, baseUrl?: string): Promise<{ ok: boolean; error?: string }> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
   const sb = await createClient()
-  const { data } = await sb.from('orders').select('stage').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
+  const { data } = await sb.from('orders').select('stage, order_number').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
   if (!data) return { ok: false, error: 'not found' }
   if (!canSendToProduction(data.stage as OrderStage)) return { ok: false, error: 'Order must be Factory Approved or Customer Approved before production.' }
   const now = new Date().toISOString()
   await sb.from('orders').update({ stage: 'production', updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
   await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'sent_to_production', actor: c.actorUserId, payload: null })
+
+  // Notify the factory (best-effort) with a fresh delivery link. Never blocks the production transition.
+  try {
+    const { data: fr } = await sb.from('order_approval_requests').select('id, recipient_email').eq('tenant_id', c.tenantId).eq('order_id', orderId).eq('approval_type', 'factory').eq('status', 'approved').order('version', { ascending: false }).limit(1).maybeSingle()
+    if (fr?.recipient_email && baseUrl) {
+      const { token, hash } = generateApprovalToken()
+      await sb.from('order_approval_requests').update({ token_hash: hash, updated_at: now }).eq('tenant_id', c.tenantId).eq('id', fr.id as string)
+      const { data: tenant } = await sb.from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
+      const html = deliveryRequestEmailHtml({ businessName: (tenant?.business_name as string) || 'Our team', orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null })
+      await sendEmail(fr.recipient_email as string, `Order ${data.order_number} confirmed — upload invoice when ready`, html, { tenantId: c.tenantId })
+      await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'delivery_requested', actor: c.actorUserId, payload: null })
+    }
+  } catch { /* ignore notification failure */ }
   return { ok: true }
 }
