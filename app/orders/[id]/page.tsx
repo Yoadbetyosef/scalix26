@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
-import { STAGE_LABELS, isProtectedStage } from '@/lib/orders/stages'
+import { STAGE_LABELS, isProtectedStage, isTerminalStage } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
+import { OrderEdit } from '@/components/orders/order-edit'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
 
@@ -26,7 +27,18 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <h1 className="text-2xl font-semibold text-gray-900">{o.customerName ?? 'Order'}</h1>
           <span className="mt-1 inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}{isProtectedStage(o.stage) && ' 🔒'}</span>
         </div>
-        <StageControl orderId={o.id} stage={o.stage} />
+        <div className="flex items-center gap-2">
+          {!isTerminalStage(o.stage) && (
+            <OrderEdit orderId={o.id} initial={{
+              customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
+              factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
+              assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
+              depositCents: o.depositCents, currency: o.currency, internalNotes: o.internalNotes, publicNotes: o.publicNotes,
+              lineItems: o.lineItems.map((l) => ({ productName: l.productName, description: l.description, sku: l.sku, quantity: l.quantity, unitPriceCents: l.unitPriceCents, measurements: l.measurements, color: l.color, material: l.material, customSpec: l.customSpec })),
+            }} />
+          )}
+          <StageControl orderId={o.id} stage={o.stage} />
+        </div>
       </div>
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
