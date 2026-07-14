@@ -1,5 +1,5 @@
 import { type MetricValue, metric } from './sources'
-import { demandHours as demandHoursOf, availableHours as availableHoursOf, utilization as utilOf, type SupportCapacityInputs } from './support'
+import { demandHours as demandHoursOf, utilization as utilOf } from './support'
 
 // Operational Support Proxy — NOT a ticket system (there is none). Every signal here is derived from real
 // operational metadata (conversation status/human-takeover, message delivery failures, channel health).
@@ -47,14 +47,16 @@ export function severityOf(s: SupportSignal, mrrCents: number): Severity {
   return 'low'
 }
 
-export interface SupportParams { avgHandlingMinutes: number; capacity: SupportCapacityInputs; nowMs: number; nowIso: string; slaHours: number }
+// weeklyCapacityHours: productive support hours available per WEEK (from the support role × capacity model,
+// normalized to a week). Utilization compares a weekly demand RATE to this weekly capacity — same period.
+export interface SupportParams { avgHandlingMinutes: number; weeklyCapacityHours: number; nowMs: number; nowIso: string; slaHours: number }
 
 export interface SupportOps {
   openConversationLoad: MetricValue // product-usage signal (tenant end-customer volume) — NOT support demand
   humanTakeoverLoad: MetricValue; messageFailureLoad: MetricValue; channelDownLoad: MetricValue; provisioningLoad: MetricValue
   actionableDemand: MetricValue
   newToday: MetricValue; new7d: MetricValue; new30d: MetricValue
-  demandHours: MetricValue; availableHours: MetricValue; utilization: MetricValue
+  demandHours: MetricValue; weeklyDemandHours: MetricValue; availableHours: MetricValue; utilization: MetricValue
   slaAtRisk: MetricValue
   customersAffected: MetricValue; payingMrrAffectedCents: MetricValue; trialsAffected: MetricValue
   byChannel: Array<{ channel: string; count: number }>
@@ -69,8 +71,10 @@ export function summarizeSupport(signals: SupportSignal[], tenants: Map<string, 
   const countKind = (k: SignalKind) => signals.filter((s) => s.kind === k).length
   const inWindow = (createdAt: string, ms: number) => p.nowMs - new Date(createdAt).getTime() <= ms
   const DAY = 86_400_000
-  const dHours = demandHoursOf({ requests: actionable.length, avgHandlingMinutes: p.avgHandlingMinutes })
-  const aHours = availableHoursOf(p.capacity)
+  const backlogHours = demandHoursOf({ requests: actionable.length, avgHandlingMinutes: p.avgHandlingMinutes }) // current open-incident hours (stock)
+  const weeklyIncidents = actionable.filter((s) => inWindow(s.createdAt, 7 * DAY)).length
+  const weeklyDemandHours = demandHoursOf({ requests: weeklyIncidents, avgHandlingMinutes: p.avgHandlingMinutes }) // incident hours per WEEK (rate)
+  const aHours = p.weeklyCapacityHours
   const affectedIds = new Set(actionable.map((s) => s.tenantId))
   let mrr = 0, trials = 0
   for (const id of affectedIds) { const t = tenants.get(id); if (!t) continue; if (t.isTrial) trials++; else mrr += t.mrrCents }
@@ -89,9 +93,10 @@ export function summarizeSupport(signals: SupportSignal[], tenants: Map<string, 
     newToday: D(actionable.filter((s) => inWindow(s.createdAt, DAY)).length),
     new7d: D(actionable.filter((s) => inWindow(s.createdAt, 7 * DAY)).length),
     new30d: D(actionable.filter((s) => inWindow(s.createdAt, 30 * DAY)).length),
-    demandHours: metric(dHours, 'derived_actual', { coverage: 1, freshnessAt: iso, caveat: `Actionable demand × ${p.avgHandlingMinutes} min avg handling (Manual assumption).` }),
-    availableHours: metric(aHours, 'manual', { coverage: aHours > 0 ? 1 : 0, freshnessAt: iso, caveat: 'From support headcount × productive hours × target utilization (Manual capacity).' }),
-    utilization: metric(aHours > 0 ? utilOf(dHours, aHours) : null, aHours > 0 ? 'derived_actual' : 'manual', { coverage: aHours > 0 ? 1 : 0, freshnessAt: iso, caveat: aHours > 0 ? undefined : 'Add support capacity in Team to compute utilization.' }),
+    demandHours: metric(backlogHours, 'derived_actual', { coverage: 1, freshnessAt: iso, caveat: `Current open-incident backlog × ${p.avgHandlingMinutes} min avg handling (Manual assumption).` }),
+    weeklyDemandHours: metric(weeklyDemandHours, 'derived_actual', { coverage: 1, freshnessAt: iso, caveat: `Incident hours arriving per week (last 7d × ${p.avgHandlingMinutes} min handling).` }),
+    availableHours: metric(aHours, 'manual', { coverage: aHours > 0 ? 1 : 0, freshnessAt: iso, caveat: 'Weekly productive support hours from the support role × capacity model (Manual capacity).' }),
+    utilization: metric(aHours > 0 ? utilOf(weeklyDemandHours, aHours) : null, aHours > 0 ? 'derived_actual' : 'manual', { coverage: aHours > 0 ? 1 : 0, freshnessAt: iso, caveat: aHours > 0 ? 'Weekly incident demand ÷ weekly support capacity.' : 'Add a Support role (with a capacity model) in Team to compute utilization.' }),
     slaAtRisk: metric(actionable.filter((s) => s.ageHours > p.slaHours).length, 'estimate', { coverage: 1, freshnessAt: iso, caveat: `Open >${p.slaHours}h. Estimate — no true ticket SLA source yet.` }),
     customersAffected: D(affectedIds.size),
     payingMrrAffectedCents: metric(mrr, 'estimate', { coverage: 1, freshnessAt: iso, caveat: 'Paying MRR (list price) of tenants with an actionable operational signal.' }),

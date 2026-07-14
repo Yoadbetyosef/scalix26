@@ -2,8 +2,10 @@ import { type ExclusionRules, DEFAULT_EXCLUSIONS } from './exclusions'
 import { getCustomerModels, type CustomerModel } from './adapters'
 import { summarizeSupport, buildSupportQueue, type SupportSignal, type AffectedTenant, type SupportOps, type SupportQueueRow } from './support-ops'
 import { getSupportOverlays } from './support-store'
-import { getTeamRoles } from './team-store'
-import { roleWorkload, capacityDistribution, fullyLoadedMonthlyCents, type RoleWorkload, type CapacityDriver, type CapacityDistribution } from './capacity-v2'
+import { getTeamReality } from './team-reality-store'
+import { getHiringPlan } from './hiring-plan-store'
+import { getCapacityModels } from './capacity-model-store'
+import { roleWorkload, capacityDistribution, headcountView, normalizePeriod, DRIVER_KIND, type RoleWorkload, type CapacityDriver, type CapacityDistribution, type CapacityModel, type TeamRealityRole, type HiringPlanRole, type HeadcountView, type DemandInput, type CapacityPeriod } from './capacity-v2'
 
 // Founder-only server adapters that turn REAL operational metadata into the Support & Ops and Team & Capacity
 // views. Reads conversation/message/channel STATUS only — never content. Excluded (internal/test/free)
@@ -63,62 +65,77 @@ function tenantMap(models: CustomerModel[]): Map<string, AffectedTenant> {
   return new Map(models.map((m) => [m.id, { name: m.name, plan: m.isTrial ? 'trial' : 'paid', mrrCents: m.planPriceCents, isTrial: m.isTrial, healthBucket: m.healthBucket, lifecycle: m.lifecycle }]))
 }
 
-async function supportCapacity() {
-  const roles = await getTeamRoles()
-  const support = roles.filter((r) => r.department === 'support')
-  const headcount = support.reduce((s, r) => s + r.currentHeadcount, 0)
-  const productiveHoursEachPerPeriod = support.length > 0 ? Math.max(...support.map((r) => r.capacityPerEmployee)) : 0
-  const utilizationTarget = support.length > 0 ? support[0].targetUtilization : 0.8
-  return { headcount, productiveHoursEachPerPeriod, utilizationTarget }
+// Weekly productive support hours from active Support-driver reality roles × their capacity model (normalized
+// to a week). Reality only — never planned hires.
+function weeklySupportCapacityHours(reality: TeamRealityRole[], modelById: Map<string, CapacityModel>): number {
+  let hours = 0
+  for (const r of reality) {
+    const m = r.capacityModelId ? modelById.get(r.capacityModelId) : undefined
+    if (!m || m.capacityDriver !== 'support_hours') continue
+    hours += r.currentHeadcount * normalizePeriod(m.capacityPerEmployee, m.capacityPeriod, 'week')
+  }
+  return hours
 }
 
-export interface SupportOpsResult { ops: SupportOps; queue: SupportQueueRow[]; actionableDemandHours: number; agencies: number; affiliates: number }
+export interface SupportOpsResult { ops: SupportOps; queue: SupportQueueRow[]; weeklySupportHours: number; agencies: number; affiliates: number }
 
 export async function getSupportOps(rules: ExclusionRules = DEFAULT_EXCLUSIONS): Promise<SupportOpsResult> {
   const models = await getCustomerModels(rules)
   const ids = models.map((m) => m.id)
-  const [raw, overlays, capacity] = await Promise.all([deps.loadOps(ids), getSupportOverlays(), supportCapacity()])
+  const [raw, overlays, reality, capModels] = await Promise.all([deps.loadOps(ids), getSupportOverlays(), getTeamReality(), getCapacityModels()])
   const nowMs = Date.now()
   const idSet = new Set(ids)
   const signals = buildSupportSignals(raw, nowMs).filter((s) => idSet.has(s.tenantId))
   const tenants = tenantMap(models)
-  const ops = summarizeSupport(signals, tenants, { avgHandlingMinutes: DEFAULT_HANDLING_MIN, capacity, nowMs, nowIso: new Date(nowMs).toISOString(), slaHours: DEFAULT_SLA_HOURS })
+  const modelById = new Map(capModels.map((m) => [m.id, m]))
+  const weeklyCapacityHours = weeklySupportCapacityHours(reality, modelById)
+  const ops = summarizeSupport(signals, tenants, { avgHandlingMinutes: DEFAULT_HANDLING_MIN, weeklyCapacityHours, nowMs, nowIso: new Date(nowMs).toISOString(), slaHours: DEFAULT_SLA_HOURS })
   const queue = buildSupportQueue(signals, tenants, new Map(overlays.map((o) => [o.signalId, o])))
   return {
-    ops, queue, actionableDemandHours: ops.demandHours.value ?? 0,
+    ops, queue, weeklySupportHours: ops.weeklyDemandHours.value ?? 0,
     agencies: raw.partners.filter((p) => p.partner_type === 'white_label' && p.status === 'active').length,
     affiliates: raw.partners.filter((p) => p.partner_type === 'affiliate' && p.status === 'active').length,
   }
 }
 
-// ── Team & Capacity V2 ───────────────────────────────────────────────────────────────────────────────
+// ── Team & Capacity V2 (Reality / Plan / Config) ───────────────────────────────────────────────────────
 export interface TeamCapacity {
   workloads: RoleWorkload[]
   distribution: CapacityDistribution
-  totalFullyLoadedMonthlyCents: number
+  headcount: HeadcountView            // reality vs planned vs projected — always separated
   recommendedHires: RoleWorkload[]
-  drivers: Record<CapacityDriver, number | null>
+  models: CapacityModel[]
+  reality: TeamRealityRole[]
+  plan: HiringPlanRole[]
+  drivers: Record<CapacityDriver, DemandInput>
   freshnessAt: string
 }
 
 export async function getTeamCapacity(rules: ExclusionRules = DEFAULT_EXCLUSIONS): Promise<TeamCapacity> {
-  const [roles, models, support] = await Promise.all([getTeamRoles(), getCustomerModels(rules), getSupportOps(rules)])
-  const drivers: Record<CapacityDriver, number | null> = {
-    support_hours: support.actionableDemandHours,
-    onboarding_accounts: models.filter((m) => !m.adopted).length,
-    cs_customers: models.filter((m) => m.activated).length,
-    producing_agencies: support.agencies,   // active white-label partners
-    active_affiliates: support.affiliates,   // active affiliate partners (0 today)
-    sales_opportunities: null, // no Scalix sales-pipeline source of truth yet → Manual/Waiting
-    manual: null,
+  const [reality, plan, models, customerModels, support] = await Promise.all([getTeamReality(), getHiringPlan(), getCapacityModels(), getCustomerModels(rules), getSupportOps(rules)])
+  const drivers: Record<CapacityDriver, DemandInput> = {
+    support_hours: { value: support.weeklySupportHours, period: 'week' as CapacityPeriod },
+    onboarding_accounts: { value: customerModels.filter((m) => !m.adopted).length },
+    cs_customers: { value: customerModels.filter((m) => m.activated).length },
+    producing_agencies: { value: support.agencies },
+    active_affiliates: { value: support.affiliates },
+    sales_opportunities: { value: null }, // no Scalix sales-pipeline source of truth yet → Waiting for Data
+    manual: { value: null },
   }
-  const workloads = roles.map((r) => roleWorkload(r, drivers[r.capacityDriver]))
+  const modelById = new Map(models.map((m) => [m.id, m]))
+  const workloads = reality.map((r) => {
+    const model = r.capacityModelId ? modelById.get(r.capacityModelId) ?? null : null
+    const demand = model ? drivers[model.capacityDriver] : { value: null }
+    return roleWorkload(r, model, demand)
+  })
+  // reference DRIVER_KIND so its export is exercised and the driver map stays exhaustive
+  void DRIVER_KIND
   return {
     workloads,
     distribution: capacityDistribution(workloads),
-    totalFullyLoadedMonthlyCents: roles.reduce((s, r) => s + fullyLoadedMonthlyCents(r), 0),
+    headcount: headcountView(reality, plan),
     recommendedHires: workloads.filter((w) => w.recommendation !== null),
-    drivers,
+    models, reality, plan, drivers,
     freshnessAt: new Date().toISOString(),
   }
 }

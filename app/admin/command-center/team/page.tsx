@@ -1,13 +1,13 @@
 import { notFound } from 'next/navigation'
 import { getFounderContext } from '@/lib/command-center/guard'
 import { getTeamCapacity } from '@/lib/command-center/ops-adapters'
-import { compactMoney, num, Section } from '@/components/command-center/ui'
-import { TeamRoster } from '@/components/command-center/team-roster'
+import { num, Section } from '@/components/command-center/ui'
+import { TeamTabs } from '@/components/command-center/team-tabs'
 
 export const dynamic = 'force-dynamic'
 
 const DRIVER_ROWS: { key: 'support_hours' | 'onboarding_accounts' | 'cs_customers' | 'producing_agencies' | 'active_affiliates' | 'sales_opportunities'; label: string; fmt?: (v: number) => string }[] = [
-  { key: 'support_hours', label: 'Support demand hours', fmt: (v) => `${v.toFixed(1)}h` },
+  { key: 'support_hours', label: 'Support incident hours / week', fmt: (v) => `${v.toFixed(1)}h` },
   { key: 'onboarding_accounts', label: 'Accounts in onboarding' },
   { key: 'cs_customers', label: 'Activated customers' },
   { key: 'producing_agencies', label: 'Active agencies' },
@@ -15,40 +15,28 @@ const DRIVER_ROWS: { key: 'support_hours' | 'onboarding_accounts' | 'cs_customer
   { key: 'sales_opportunities', label: 'Sales opportunities' },
 ]
 
-// Team & Capacity V2 — workload-based planning. Capacity is measured against REAL demand drivers (support
-// hours, onboarding accounts, activated customers, agencies, affiliates), never raw customer count. A hire is
-// only recommended when a real driver exceeds target-utilization capacity.
+// Team & Capacity V2 — three strictly-separated layers: Team Reality (today's org), Hiring Plan (future
+// hires), and Capacity Model (config). Current headcount/payroll are reality-only and never include planned
+// or simulated hires. Capacity is measured against REAL, period-normalized demand — never customer count.
 export default async function TeamPage() {
   const founder = await getFounderContext()
   if (!founder) notFound()
   const t = await getTeamCapacity()
-  const d = t.distribution
 
   return (
     <div>
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-ink">Team &amp; Capacity</h2>
-        <p className="text-sm text-subtle">Workload-based capacity planning. Demand comes from live operations; hires are recommended only from real capacity gaps — never from customer count alone.</p>
+        <p className="text-sm text-subtle">Reality · Plan · Config, kept strictly separate. Hires are recommended only from real capacity gaps; demand and capacity are normalized to the same period before utilization.</p>
       </div>
 
-      <Section title="Capacity health" subtitle={`${num(t.workloads.length)} roles · ${compactMoney(t.totalFullyLoadedMonthlyCents)}/mo fully loaded · ${num(t.recommendedHires.length)} hire(s) recommended`}>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          {([['under', 'Under capacity', 'text-sky-600'], ['healthy', 'Healthy', 'text-emerald-600'], ['near', 'Near capacity', 'text-amber-600'], ['overloaded', 'Overloaded', 'text-red-600'], ['unknown', 'No demand data', 'text-subtle']] as const).map(([k, label, tone]) => (
-            <div key={k} className="rounded-xl border border-hairline-strong bg-white p-4">
-              <div className={`text-2xl font-bold tabular-nums ${tone}`}>{d[k]}</div>
-              <div className="text-xs text-subtle">{label}</div>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      <Section title="Live demand drivers" subtitle="Derived Actual from real operations. Sales pipeline has no source of truth yet — Manual / Waiting for Data.">
+      <Section title="Live demand drivers" subtitle="Derived Actual from real operations. Sales pipeline has no source of truth yet — Waiting for Data.">
         <div className="overflow-x-auto rounded-xl border border-hairline-strong">
           <table className="min-w-full text-sm">
             <thead className="bg-sunken text-subtle"><tr>{['Driver', 'Current demand', 'Source'].map((h) => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-hairline">
               {DRIVER_ROWS.map((r) => {
-                const v = t.drivers[r.key]
+                const v = t.drivers[r.key]?.value ?? null
                 return (
                   <tr key={r.key}>
                     <td className="px-3 py-2 text-ink">{r.label}</td>
@@ -62,8 +50,8 @@ export default async function TeamPage() {
         </div>
       </Section>
 
-      <Section title="Roster & workload" subtitle="Add roles with a capacity driver and per-employee capacity; utilization and hiring needs compute against live demand.">
-        <TeamRoster workloads={t.workloads} />
+      <Section title="Organization" subtitle="Team Reality is today's org; Hiring Plan is future only; Capacity Model holds the assumptions. They never mix.">
+        <TeamTabs workloads={t.workloads} headcount={t.headcount} plan={t.plan} models={t.models} />
       </Section>
     </div>
   )
