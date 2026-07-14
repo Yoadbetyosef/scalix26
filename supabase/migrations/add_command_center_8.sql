@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS cc_plan (
 -- At most one active plan.
 CREATE UNIQUE INDEX IF NOT EXISTS cc_plan_single_active ON cc_plan (is_active) WHERE is_active;
 
+-- Engine allocation is stored as fractions that MUST total exactly 1 (the app normalizes % → fractions).
+ALTER TABLE cc_plan DROP CONSTRAINT IF EXISTS cc_plan_allocations_total_check;
+ALTER TABLE cc_plan ADD CONSTRAINT cc_plan_allocations_total_check
+  CHECK (abs(alloc_direct + alloc_affiliate + alloc_whitelabel + alloc_expansion - 1) < 0.000001);
+
 ALTER TABLE cc_plan ENABLE ROW LEVEL SECURITY;
 
 -- ── Reverse (down) ───────────────────────────────────────────────────────────────────────────────────

@@ -25,6 +25,19 @@ export async function PATCH(req: NextRequest) {
   if (flood) return flood
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })
-  const plan = await savePlan(parsed.data, f.email)
+  const p = { ...parsed.data }
+
+  // Target date must be on/after the start date.
+  if (p.startDate && p.targetDate && p.targetDate < p.startDate) return NextResponse.json({ error: 'Target date must be on or after the start date' }, { status: 400 })
+
+  // Allocation is entered as PERCENTAGES that must total 100%; we store normalized fractions summing to 1
+  // (matches the DB constraint). We never silently accept a total that isn't 100%.
+  if (p.allocation) {
+    const sum = p.allocation.direct + p.allocation.affiliate + p.allocation.whiteLabel + p.allocation.expansion
+    if (sum <= 0) return NextResponse.json({ error: 'Allocation is required' }, { status: 400 })
+    if (Math.abs(sum - 100) > 0.5) return NextResponse.json({ error: `Allocation must total 100% (got ${sum.toFixed(1)}%)` }, { status: 400 })
+    p.allocation = { direct: p.allocation.direct / sum, affiliate: p.allocation.affiliate / sum, whiteLabel: p.allocation.whiteLabel / sum, expansion: p.allocation.expansion / sum }
+  }
+  const plan = await savePlan(p, f.email)
   return NextResponse.json({ ok: true, plan })
 }

@@ -129,6 +129,9 @@ function DestinationEditor({ nav, onSaved }: { nav: PlanNavigation; onSaved: () 
       onSaved()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
+  const allocTotal = (parseFloat(alloc.direct) || 0) + (parseFloat(alloc.affiliate) || 0) + (parseFloat(alloc.whiteLabel) || 0) + (parseFloat(alloc.expansion) || 0)
+  const allocOk = Math.abs(allocTotal - 100) <= 0.5
+  const dateOk = !date || !start || date >= start
   const A = (k: keyof typeof alloc, label: string) => <label className="block text-xs text-subtle">{label} %<input value={alloc[k]} onChange={(e) => setAlloc((p) => ({ ...p, [k]: e.target.value }))} className="mt-0.5 w-full rounded border border-hairline-strong px-2 py-1 text-sm" /></label>
 
   return (
@@ -142,7 +145,8 @@ function DestinationEditor({ nav, onSaved }: { nav: PlanNavigation; onSaved: () 
         <label className="block text-xs text-subtle">Target ARPU ($, optional)<input value={arpuTarget} onChange={(e) => setArpuTarget(e.target.value)} className="mt-0.5 w-full rounded border border-hairline-strong px-2 py-1 text-sm" /></label>
         {A('direct', 'Direct')}{A('affiliate', 'Affiliate')}{A('whiteLabel', 'White Label')}{A('expansion', 'Expansion')}
       </div>
-      <div className="mt-2"><button onClick={save} disabled={busy} className="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">Activate plan</button></div>
+      <div className="mt-1 text-xs">Allocation total: <span className={allocOk ? 'text-emerald-600' : 'text-red-600'}>{allocTotal.toFixed(0)}%</span>{!allocOk && ' — must equal 100%'}{!dateOk && <span className="ml-2 text-red-600">Target date must be on/after start date</span>}</div>
+      <div className="mt-2"><button onClick={save} disabled={busy || !allocOk || !dateOk} className="rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">Activate plan</button></div>
     </div>
   )
 }
