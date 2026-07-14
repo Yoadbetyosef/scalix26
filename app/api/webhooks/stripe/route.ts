@@ -6,6 +6,7 @@ import { releaseTenantNumbers } from '@/lib/twilio/release'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
 import { notifyAdminPaymentFailed } from '@/lib/admin/notify'
 import { recordBillingEvent } from '@/lib/partner/economics'
+import { recordLifecycleEvent } from '@/lib/command-center/lifecycle-events'
 import { enforce, clientIp } from '@/lib/ratelimit'
 import { handleBalanceStripeEvent } from '@/lib/billing/stripe-events'
 import { handlePlatformStripeEvent } from '@/lib/billing/platform-events'
@@ -60,6 +61,18 @@ export async function POST(req: NextRequest) {
         .from('tenants')
         .update({ plan, stripe_subscription_id: sub.id })
         .eq('stripe_customer_id', sub.customer)
+
+      // Command Center lifecycle instrumentation (best-effort). We do NOT infer upgrade/downgrade — the
+      // price→plan map defaults unknown prices to 'starter', so it's unreliable; classify as
+      // subscription_changed (or created/pause/reactivation) and keep the raw price id in metadata.
+      const subTenant = await getTenantByCustomer(supabase, sub.customer as string)
+      const occurredAt = new Date(event.created * 1000).toISOString()
+      const prev = (event.data as { previous_attributes?: { pause_collection?: unknown } }).previous_attributes
+      const kind = event.type === 'customer.subscription.created' ? 'subscription_created'
+        : sub.pause_collection ? 'pause'
+        : prev && 'pause_collection' in prev && !sub.pause_collection ? 'reactivation'
+        : 'subscription_changed'
+      await recordLifecycleEvent({ tenantId: subTenant?.id ?? null, kind, sourceEventId: event.id, occurredAt, newState: sub.status, metadata: { priceId, plan } })
       break
     }
 
@@ -70,6 +83,8 @@ export async function POST(req: NextRequest) {
       if (tenant) {
         // Economics: emit a 'cancelled' billing event (→ churn + clawback via the processor).
         await recordBillingEvent({ tenantId: tenant.id, type: 'cancelled', source: 'stripe', sourceRef: sub.id, idempotencyKey: `be:cancel:${sub.id}` })
+        // Command Center: event-source the cancellation (best-effort; never breaks the webhook).
+        await recordLifecycleEvent({ tenantId: tenant.id, kind: 'cancellation', sourceEventId: event.id, occurredAt: new Date(event.created * 1000).toISOString() })
 
         const tmpl = emailTemplates.subscriptionCancelled(tenant.business_name)
         await sendEmail(tenant.email, tmpl.subject, tmpl.html)
@@ -124,6 +139,10 @@ export async function POST(req: NextRequest) {
       const reason = invoice.billing_reason || ''
       const evType = reason === 'subscription_create' ? 'converted_paid' : reason === 'subscription_update' ? 'plan_upgraded' : 'renewed'
       await recordBillingEvent({ tenantId: tenant.id, type: evType, amountCents: invoice.amount_paid || 0, currency: invoice.currency || 'usd', source: 'stripe', sourceRef: invoice.id, idempotencyKey: `be:${evType}:${invoice.id}`, props: { billing_reason: reason } })
+      // Command Center: a succeeded invoice after a prior failure is a payment recovery.
+      if (((invoice as { attempt_count?: number }).attempt_count ?? 1) > 1) {
+        await recordLifecycleEvent({ tenantId: tenant.id, kind: 'recovery', sourceEventId: event.id, occurredAt: new Date(event.created * 1000).toISOString(), mrrCents: invoice.amount_paid || 0 })
+      }
       break
     }
 
@@ -140,6 +159,8 @@ export async function POST(req: NextRequest) {
 
       const updateUrl = portalSession?.url || `${APP_URL}/settings`
       const amount = invoice.amount_due || 0
+      // Command Center: event-source the failed payment (best-effort; never breaks the webhook).
+      await recordLifecycleEvent({ tenantId: tenant.id, kind: 'failed_payment', mrrCents: amount, sourceEventId: event.id, occurredAt: new Date(event.created * 1000).toISOString() })
 
       // Email customer
       const customerTmpl = emailTemplates.paymentFailed(tenant.business_name, updateUrl)
@@ -179,6 +200,7 @@ export async function POST(req: NextRequest) {
       const tenant = await getTenantByCustomer(supabase, charge.customer as string)
       if (!tenant) break
       await recordBillingEvent({ tenantId: tenant.id, type: 'refunded', amountCents: charge.amount_refunded || 0, currency: charge.currency || 'usd', source: 'stripe', sourceRef: charge.id, idempotencyKey: `be:refund:${charge.id}` })
+      await recordLifecycleEvent({ tenantId: tenant.id, kind: 'refund', sourceEventId: event.id, occurredAt: new Date(event.created * 1000).toISOString(), mrrCents: charge.amount_refunded || 0 })
       break
     }
 
@@ -193,8 +215,25 @@ export async function POST(req: NextRequest) {
         const tenant = await getTenantByCustomer(supabase, charge.customer as string)
         if (!tenant) break
         await recordBillingEvent({ tenantId: tenant.id, type: 'chargeback', amountCents: dispute.amount || 0, currency: dispute.currency || 'usd', source: 'stripe', sourceRef: dispute.id, idempotencyKey: `be:chargeback:${dispute.id}` })
+        await recordLifecycleEvent({ tenantId: tenant.id, kind: 'chargeback', sourceEventId: event.id, occurredAt: new Date(event.created * 1000).toISOString(), mrrCents: dispute.amount || 0 })
       } catch (e) {
         console.error('[stripe] chargeback handling failed:', e instanceof Error ? e.message : e)
+      }
+      break
+    }
+
+    case 'charge.dispute.closed': {
+      // Command Center: a dispute resolved in our favour is a chargeback reversal.
+      const dispute = event.data.object
+      if (dispute.status !== 'won') break
+      try {
+        const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id
+        if (!chargeId) break
+        const charge = await stripe.charges.retrieve(chargeId)
+        const tenant = charge.customer ? await getTenantByCustomer(supabase, charge.customer as string) : null
+        await recordLifecycleEvent({ tenantId: tenant?.id ?? null, kind: 'chargeback_reversed', sourceEventId: event.id, occurredAt: new Date(event.created * 1000).toISOString(), mrrCents: dispute.amount || 0 })
+      } catch (e) {
+        console.error('[stripe] dispute.closed handling failed:', e instanceof Error ? e.message : e)
       }
       break
     }
