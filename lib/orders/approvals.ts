@@ -118,10 +118,13 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const r = await findByToken(rawToken)
   if (!r) return null
   const status = r.status as string
-  if (['revoked'].includes(status)) return null
+  if (status === 'revoked' || status === 'draft') return null
   const sb = createAdminClient()
-  if (isExpired(r) && status !== 'expired') { await sb.from('order_approval_requests').update({ status: 'expired' }).eq('id', r.id as string); r.status = 'expired' }
-  if (r.status === 'draft') return null
+  // Expired (either already marked, or past its deadline) → mark + show the generic unavailable page.
+  if (status === 'expired' || isExpired(r)) {
+    if (status !== 'expired') await sb.from('order_approval_requests').update({ status: 'expired' }).eq('id', r.id as string)
+    return null
+  }
 
   // Mark opened on first view.
   if (r.status === 'sent') {
