@@ -3,6 +3,9 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { buildSnapshot } from '@/lib/amy/registry'
 import { getBusinessSnapshot } from '@/lib/amy/snapshot'
+import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
+import { currentDateContext } from '@/lib/appointments'
+import { getBusinessTimezone } from '@/lib/timezone'
 import { enforce } from '@/lib/ratelimit'
 
 // A broad, tenant-scoped business snapshot for grounding the realtime voice agent (which can't call
@@ -19,8 +22,21 @@ export async function GET() {
     .from('tenants').select('id').eq('id', bctx.tenantId).maybeSingle()
   if (!tenant) return NextResponse.json({ error: 'no_tenant' }, { status: 404 })
 
-  // Live business state (Layer 2) up top, then the detailed recent context for voice.
+  // Grounding for the realtime voice agent (it can't call tools mid-conversation):
+  //   • the REAL current date/time (so it never guesses a stale day),
+  //   • the live Business Context (catalog/products/prices/stock + business hours/location) so it can
+  //     actually READ the catalog and answer product questions,
+  //   • the live business state (Layer 2) and detailed recent context.
   const ctx = { tenantId: tenant.id, db: admin }
-  const [live, detail] = await Promise.all([getBusinessSnapshot(ctx), buildSnapshot(ctx)])
-  return NextResponse.json({ snapshot: `${live.text}\n\n${detail}` })
+  const [live, detail, tz, bizContext] = await Promise.all([
+    getBusinessSnapshot(ctx),
+    buildSnapshot(ctx),
+    getBusinessTimezone(tenant.id),
+    assembleBusinessContext(
+      { tenantId: tenant.id, agentId: null, channel: 'voice', query: '', essentialsOnly: true, contactId: null },
+      { include: ['catalog'] }, // force catalog + always-on business hours/location into the grounding
+    ).catch(() => ''),
+  ])
+  const snapshot = [currentDateContext(tz), live.text, bizContext, detail].filter(Boolean).join('\n\n')
+  return NextResponse.json({ snapshot })
 }

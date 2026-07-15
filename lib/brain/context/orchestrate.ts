@@ -15,11 +15,13 @@ export function detectProviders(
   query: string,
   essentialsOnly: boolean,
   providers: ContextProvider[] = PROVIDERS,
+  include: string[] = [], // provider keys to force-include regardless of query (e.g. voice grounding)
 ): ContextProvider[] {
-  if (essentialsOnly) return providers.filter((p) => p.alwaysOn)
+  const forced = (p: ContextProvider) => p.alwaysOn || include.includes(p.key)
+  if (essentialsOnly) return providers.filter(forced)
   const q = (query || '').toLowerCase()
-  if (!q.trim()) return providers.filter((p) => p.alwaysOn)
-  return providers.filter((p) => p.alwaysOn || p.keywords.some((k) => q.includes(k)))
+  if (!q.trim()) return providers.filter(forced)
+  return providers.filter((p) => forced(p) || p.keywords.some((k) => q.includes(k)))
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -31,10 +33,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 // relevant (so callers can inject unconditionally).
 export async function assembleBusinessContext(
   req: ContextRequest & { essentialsOnly?: boolean },
-  opts: { providers?: ContextProvider[]; db?: SupabaseClient } = {},
+  opts: { providers?: ContextProvider[]; db?: SupabaseClient; include?: string[] } = {},
 ): Promise<string> {
   const providers = opts.providers ?? PROVIDERS
-  const matched = detectProviders(req.query, !!req.essentialsOnly, providers)
+  const matched = detectProviders(req.query, !!req.essentialsOnly, providers, opts.include ?? [])
   if (!matched.length) return ''
   const db = opts.db ?? createAdminClient()
   const results = await Promise.all(

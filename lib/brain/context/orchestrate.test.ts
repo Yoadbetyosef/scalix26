@@ -26,6 +26,11 @@ describe('Business Context — detection', () => {
   it('empty query returns only alwaysOn providers', () => {
     expect(detectProviders('', false, fake).map((p) => p.key)).toEqual(['ess'])
   })
+  it('include[] force-adds providers even with no query (voice grounding)', () => {
+    // essentialsOnly + no query would normally be alwaysOn only; include adds the named provider.
+    expect(detectProviders('', true, fake, ['alpha']).map((p) => p.key).sort()).toEqual(['alpha', 'ess'])
+    expect(detectProviders('', false, fake, ['beta']).map((p) => p.key).sort()).toEqual(['beta', 'ess'])
+  })
   it('real registry: order questions pull the orders provider; catalog questions the catalog provider', () => {
     expect(detectProviders('where is my order ORD-7ENTQWCN', false, PROVIDERS).map((p) => p.key)).toContain('orders')
     expect(detectProviders('how much does the gold ring cost', false, PROVIDERS).map((p) => p.key)).toContain('catalog')
