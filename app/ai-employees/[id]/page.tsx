@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
+import { agentKnowledgeOrFilter } from '@/lib/knowledge/scope'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Brain } from 'lucide-react'
@@ -42,11 +43,13 @@ export default async function AIEmployeeEditPage({
 
   if (!employee) notFound()
 
+  // Business Knowledge is tenant-owned: return tenant-wide (ai_employee_id IS NULL) PLUS this
+  // agent's own rows. See lib/knowledge/scope.
   const { data: kbRows } = await serviceSupabase
     .from('knowledge_base')
-    .select('id, title, content, source')
+    .select('id, title, content, source, ai_employee_id')
     .eq('tenant_id', tenant.id)
-    .eq('ai_employee_id', id)
+    .or(agentKnowledgeOrFilter(id))
     .order('created_at', { ascending: true })
 
   // Connected OAuth mailbox (Gmail/Workspace) for this agent, if any. Uses the
@@ -62,10 +65,10 @@ export default async function AIEmployeeEditPage({
   // The 3 fixed Business-Details fields vs everything else (free-form KB).
   const BUSINESS_TITLES = ['Pricing', 'Service Areas', "What We Don't Do"]
   const businessDetails: Record<string, string> = {}
-  const knowledgeBase: { id: string; title: string; content: string }[] = []
+  const knowledgeBase: { id: string; title: string; content: string; shared: boolean }[] = []
   for (const r of kbRows || []) {
     if (r.source === 'template' && BUSINESS_TITLES.includes(r.title)) businessDetails[r.title] = r.content
-    else knowledgeBase.push({ id: r.id, title: r.title, content: r.content })
+    else knowledgeBase.push({ id: r.id, title: r.title, content: r.content, shared: r.ai_employee_id === null })
   }
 
   return (

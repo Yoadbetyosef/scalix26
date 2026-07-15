@@ -341,9 +341,10 @@ ${corpus}`,
   }
 
   // Idempotent re-scan: replace website-sourced rows only; manual/template KB untouched.
-  await admin.from('knowledge_base').delete().eq('ai_employee_id', agentId).eq('source', WEBSITE_SOURCE)
+  // Website content is business-wide → SHARED tenant knowledge (ai_employee_id NULL), scoped by tenant.
+  await admin.from('knowledge_base').delete().eq('tenant_id', agent.tenant_id).eq('source', WEBSITE_SOURCE)
   const { error } = await admin.from('knowledge_base').insert(
-    items.map((it) => ({ tenant_id: agent.tenant_id, ai_employee_id: agentId, title: it.title, content: it.content, source: WEBSITE_SOURCE })),
+    items.map((it) => ({ tenant_id: agent.tenant_id, ai_employee_id: null, origin_ai_employee_id: agentId, title: it.title, content: it.content, source: WEBSITE_SOURCE })),
   )
   if (error) {
     console.error('[scan] KB insert failed:', error.message)

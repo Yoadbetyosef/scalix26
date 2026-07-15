@@ -49,11 +49,15 @@ export async function POST(req: NextRequest) {
 
   // Link the user to their business (single-owner model → RLS get_tenant_id() resolves for them).
   const now = new Date().toISOString()
-  const { error: linkErr } = await admin.from('tenants').update({ user_id: userId, first_login_at: now, last_login_at: now }).eq('id', invite.tenant_id).is('user_id', null)
-  if (linkErr) {
-    // Roll back the auth user so the invite can be retried cleanly.
+  const { data: linked, error: linkErr } = await admin.from('tenants').update({ user_id: userId, first_login_at: now, last_login_at: now }).eq('id', invite.tenant_id).is('user_id', null).select('id')
+  if (linkErr || !linked || linked.length === 0) {
+    // Either a write error, OR a concurrent accept already claimed the business (0 rows matched the
+    // `user_id IS NULL` guard). Roll back the auth user we just created so it isn't orphaned, and
+    // surface the truthful outcome instead of a false success.
     await admin.auth.admin.deleteUser(userId).catch(() => {})
-    return NextResponse.json({ error: 'Could not activate your business — please try again.' }, { status: 400 })
+    return linkErr
+      ? NextResponse.json({ error: 'Could not activate your business — please try again.' }, { status: 400 })
+      : NextResponse.json({ error: 'This business already has an owner.' }, { status: 409 })
   }
 
   await admin.from('business_invites').update({ status: 'accepted', accepted_at: now, accepted_user_id: userId, updated_at: now }).eq('id', invite.id)

@@ -11,15 +11,16 @@ import { resolveBrandForPartner, strongColor } from '@/lib/partner/brand'
 import { BrandProvider } from '@/components/brand/brand-provider'
 import { resolveRootDestination } from '@/lib/routing'
 
-// Guards the authenticated partner portal. A signed-in user who is NOT a partner is routed to their
-// real destination via the shared resolver (business owners → /dashboard, signed-out → login) — NEVER
-// auto-shown the partner signup. "Become a Partner" is entered explicitly via /partner/signup.
+// Guards the authenticated partner portal.
+//  - Existing partner   → portal renders.
+//  - Signed-in non-partner → the "Join Partner Program" onboarding at /partner/signup (NEVER a silent
+//    bounce to /dashboard — clicking "Partner Program" must always open the partner area or the join flow).
+//  - Signed-out         → the shared resolver (→ login).
 export default async function PartnerAppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getPartnerContext()
-  if (!ctx) redirect(await resolveRootDestination())
-
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!ctx) redirect(user ? '/partner/signup' : await resolveRootDestination())
 
   const enabledModules = enabledPartnerModules({ enabled_modules: ctx.enabledModulesRaw })
   // Billing mode decides the whole product surface. One cheap lookup.

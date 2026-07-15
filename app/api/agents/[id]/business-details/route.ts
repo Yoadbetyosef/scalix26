@@ -17,13 +17,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { details } = await req.json().catch(() => ({}))
   if (!details || typeof details !== 'object') return NextResponse.json({ error: 'details required' }, { status: 400 })
 
+  // Pricing / Service Areas / What We Don't Do are business-wide → stored as SHARED tenant knowledge
+  // (ai_employee_id NULL). Replace by (tenant, source, title) so any prior row (shared or legacy
+  // agent-bound) for that field is superseded.
   for (const [title, raw] of Object.entries(details as Record<string, string>)) {
     await admin.from('knowledge_base').delete()
-      .eq('tenant_id', ctx.tenantId).eq('ai_employee_id', agentId).eq('source', 'template').eq('title', title)
+      .eq('tenant_id', ctx.tenantId).eq('source', 'template').eq('title', title)
     const content = (raw || '').trim()
     if (content) {
       const { error } = await admin.from('knowledge_base')
-        .insert({ tenant_id: ctx.tenantId, ai_employee_id: agentId, title, content, source: 'template' })
+        .insert({ tenant_id: ctx.tenantId, ai_employee_id: null, origin_ai_employee_id: agentId, title, content, source: 'template' })
       if (error) return NextResponse.json({ error: 'Failed to save' }, { status: 400 })
     }
   }
