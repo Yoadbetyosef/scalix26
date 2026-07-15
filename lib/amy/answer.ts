@@ -3,6 +3,9 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { amyTools, runTool } from './registry'
 import { getBusinessSnapshot } from './snapshot'
 import type { SourceContext } from './types'
+import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
+import { currentDateContext } from '@/lib/appointments'
+import { getBusinessTimezone } from '@/lib/timezone'
 
 // Stronger model for the Chief-of-Staff text path (Haiku fallback). Realtime voice stays Haiku.
 const AMY_MODEL = 'claude-sonnet-4-6'
@@ -44,7 +47,15 @@ export async function answerAsAmy(opts: {
   // daily questions ("what happened today?", "anything urgent?", "who needs follow-up?")
   // are answered straight from this — the planner calls `finish` with no deep search.
   // Only specific/historical questions fall through to the Layer-3 deep-search tools.
-  const snapshot = await getBusinessSnapshot(ctx)
+  // Fetch the snapshot, the real current date/timezone, and the unified Business Context block (catalog,
+// orders, business hours, etc. — the modules Amy's own tools don't cover) in parallel.
+  const [snapshot, tz, bizContext] = await Promise.all([
+    getBusinessSnapshot(ctx),
+    getBusinessTimezone(opts.tenantId),
+    assembleBusinessContext({ tenantId: opts.tenantId, agentId: null, channel: 'chat', query: opts.question, contactId: null }).catch(() => ''),
+  ])
+  const dateContext = currentDateContext(tz) // authoritative "today" — Amy had no date anchor before
+  const bizBlock = bizContext ? `\nLIVE BUSINESS DATA (products/pricing/stock, orders, business hours, payments): answer these directly from here; if a detail isn't shown, say it's not available — never invent it.\n${bizContext}\n` : ''
 
   let model = AMY_MODEL
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,8 +74,10 @@ export async function answerAsAmy(opts: {
   // ── 1+2. PLANNER + EXECUTE — gather ALL data first (forced tool use, no prose) ──
   const plannerSystem = [
     `You are the retrieval planner for ${name}, the AI Chief of Staff for ${biz}. Your ONLY job is to gather every piece of data needed to fully answer the owner's question. You do NOT write any answer, explanation, or commentary.`,
-    `You ALREADY have ${name}'s live business memory below. If the owner's question is about today, this week, current follow-ups, channels, top topics, or "anything urgent / what should I focus on", the answer is ALREADY in this snapshot — call the finish tool IMMEDIATELY with no other tool. Do NOT deep-search for things the snapshot already covers.`,
+    dateContext,
+    `You ALREADY have ${name}'s live business memory below, PLUS a LIVE BUSINESS DATA block (products/pricing/stock, orders, business hours). If the owner's question is about today, this week, follow-ups, channels, top topics, "anything urgent", OR about products/prices/stock/an order/business hours, the answer is ALREADY provided below — call the finish tool IMMEDIATELY with no other tool. Do NOT deep-search for things already provided.`,
     `\n${snapshot.text}\n`,
+    bizBlock,
     `Only call the deep-search tools when the question needs something NOT in the snapshot: a specific customer, a historical period (e.g. "in March", "4 months ago"), full transcripts, "find everyone who mentioned X", or a calculation/breakdown. For a historical period, pass the appropriate time_range (or from/to) to analyze/search_everything. Emit MULTIPLE tool calls at once when independent (e.g. "this week vs last week" = analyze for both periods in one step). Tools: analyze, search_everything, get_conversation_transcript, search_conversations, lookup_contact, get_appointments, get_leads, search_knowledge.`,
     `Gather thoroughly — if a question needs scanning many records, retrieve them. Only AFTER you have everything (or immediately, if the snapshot suffices), call the finish tool. Never produce prose.`,
     `ACTIONS: If the owner asks you to DO something external (send/reply email, reply on Instagram/Facebook, send SMS/WhatsApp, create an estimate, send an invoice or payment link, create a task, update a lead, book an appointment, update the catalog), call the request_action tool with the action_type, target (recipient) if known, and body (your draft). Do this instead of finishing blindly — it checks feasibility and drafts the action. Never assume an action can be done.`,
@@ -94,7 +107,9 @@ export async function answerAsAmy(opts: {
   // ── 3. RESPONDER — answer from gathered data ONLY (no tools → cannot promise) ──
   const answerSystem = [
     `You are ${name}, the AI Chief of Staff for ${biz} — an executive advisor speaking to the owner. Answer now, using your live business memory and any data already retrieved above.`,
+    dateContext,
     `Your live business memory:\n${snapshot.text}`,
+    bizBlock,
     `ABSOLUTELY FORBIDDEN: "I'll check", "I'll look into", "I'll analyze", "I can compare", "let me…", "I don't know", or any promise of future action. The data is already in front of you — answer from it directly.`,
     `If the data has no records for the request, say exactly what was searched and that nothing was found (e.g. "I searched every conversation and found no one asking about catering" or, for a historical period, "I searched that period and found no matching business activity"). If something truly can't be computed because a data source isn't connected yet (e.g. revenue by service, because payments aren't connected), say which source is missing and why — never pretend, never invent.`,
     `The ONE exception to "never ask": if the question's time range is genuinely ambiguous and you could not resolve it, you may ask ONE short clarifying question instead of guessing.`,
