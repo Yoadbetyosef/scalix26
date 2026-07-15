@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
@@ -68,15 +70,26 @@ export default function LoginPage() {
               Forgot password?
             </Link>
           </div>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className={inputClass}
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className={`${inputClass} pr-12`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              title={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute inset-y-0 right-0 flex items-center px-4 text-muted transition-colors hover:text-ink"
+            >
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
 
         <Button

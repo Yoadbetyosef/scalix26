@@ -25,6 +25,7 @@ export interface Policy { limit: number; window: `${number} ${'s' | 'm' | 'h'}`;
 export const POLICIES = {
   // Auth-adjacent server routes (client-side Supabase auth is limited by Supabase itself).
   auth_signup:     { limit: 5,   window: '10 m', fail: 'open' },
+  password_reset:  { limit: 5,   window: '15 m', fail: 'open' },
   invite_accept:   { limit: 10,  window: '10 m', fail: 'open' },
   invite_page:     { limit: 30,  window: '10 m', fail: 'open' },
   // Invitation management (partner-authed).

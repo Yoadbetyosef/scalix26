@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -14,12 +15,39 @@ export default function UpdatePasswordPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)   // a recovery session is active → the form is usable
+  const [linkError, setLinkError] = useState(false) // no valid session → the link is invalid/expired
   const router = useRouter()
   const supabase = createClient()
 
+  // The reset link lands here carrying the recovery session (Supabase parses the token in the URL).
+  // We must CONFIRM that session exists before allowing updateUser — otherwise the update silently
+  // fails with "Auth session missing", which is why resets "didn't work". Enable the form only once a
+  // recovery session is live; if none appears, show a clear "request a new link" message.
   useEffect(() => {
     setBrand(detectBrand())
-  }, [])
+    let mounted = true
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || session) setReady(true)
+    })
+    ;(async () => {
+      // PKCE fallback: if the link used a ?code=, exchange it for a session.
+      try {
+        const code = new URLSearchParams(window.location.search).get('code')
+        if (code) await supabase.auth.exchangeCodeForSession(code)
+      } catch { /* the session check below decides the outcome */ }
+      const { data } = await supabase.auth.getSession()
+      if (!mounted) return
+      if (data.session) { setReady(true); return }
+      // Give detectSessionInUrl a beat to parse the URL hash, then decide it's invalid/expired.
+      setTimeout(async () => {
+        const { data: d2 } = await supabase.auth.getSession()
+        if (mounted && !d2.session) setLinkError(true)
+      }, 1800)
+    })()
+    return () => { mounted = false; sub.subscription.unsubscribe() }
+  }, [supabase])
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault()
@@ -53,6 +81,21 @@ export default function UpdatePasswordPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-hairline p-8">
+          {linkError ? (
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-ink mb-2">Link expired</h1>
+              <p className="text-subtle mb-6">This password reset link is invalid or has expired. Request a new one and we&apos;ll email it right over.</p>
+              <Link href="/auth/forgot-password">
+                <Button className="w-full">Request a new link</Button>
+              </Link>
+            </div>
+          ) : !ready ? (
+            <div className="text-center py-6">
+              <h1 className="text-2xl font-bold text-ink mb-2">Set new password</h1>
+              <p className="text-subtle">Validating your reset link…</p>
+            </div>
+          ) : (
+          <>
           <h1 className="text-2xl font-bold text-ink mb-2">Set new password</h1>
           <p className="text-subtle mb-6">Choose a strong password for your account</p>
 
@@ -83,6 +126,8 @@ export default function UpdatePasswordPage() {
               Update Password
             </Button>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>

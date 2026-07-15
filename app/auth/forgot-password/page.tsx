@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,7 +14,6 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
-  const supabase = createClient()
 
   useEffect(() => {
     setBrand(detectBrand())
@@ -25,13 +23,16 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/update-password`,
+      // The server always responds ok (never reveals whether the account exists) and sends the reset
+      // link via our verified Resend domain. Show the confirmation regardless.
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       })
-      if (error) throw error
       setSent(true)
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send reset email')
+    } catch {
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
