@@ -1,6 +1,7 @@
 import { anthropic, MODEL } from '@/lib/anthropic/client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { stripMarkdown } from '@/lib/utils'
+import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
 
 type Agent = {
   id: string
@@ -30,7 +31,7 @@ export async function generateEmailReply(opts: {
   const name = opts.agent.name || 'the team'
   const business = opts.agent.business_name || opts.tenantBusinessName || 'our company'
 
-  const system = `${opts.agent.system_prompt || ''}
+  let system = `${opts.agent.system_prompt || ''}
 
 CRITICAL FOR EMAIL:
 - Write a professional email reply only.
@@ -39,6 +40,14 @@ CRITICAL FOR EMAIL:
 - Sign off as ${name} from ${business}.
 - Keep the reply concise and helpful.
 - Never reveal you are an AI unless directly asked.${kb ? `\n\nKNOWLEDGE BASE:\n${kb}` : ''}`
+
+  // Unified Business Context: inject live module data relevant to the email (catalog, orders, hours…),
+  // with the same no-hallucination contract. Best-effort. No contact identity resolved here → customer-scoped
+  // providers safely report "unavailable" rather than guessing.
+  try {
+    const bizContext = await assembleBusinessContext({ tenantId: opts.tenantId, agentId: opts.agent.id ?? null, channel: 'email', query: opts.emailText, contactId: null })
+    if (bizContext) system += `\n\n${bizContext}`
+  } catch { /* best-effort */ }
 
   console.log('[email-reply] calling Claude', MODEL, 'kb-entries', kbRows?.length || 0)
   const res = await anthropic.messages.create({

@@ -10,6 +10,7 @@ import { catalogPromptLine } from '@/lib/stripe/connect'
 import { normalizePaymentSettings } from '@/lib/stripe/payment-collection'
 import { getRecognitionContext, recognitionPromptBlock } from '@/lib/customer/recognition'
 import { enabledModulesOf } from '@/lib/modules'
+import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
 import { trackLlm } from '@/lib/cost/track'
 import { assertPartnerActive } from '@/lib/billing/gate'
 import type { AIEmployee, Message, Skill, KnowledgeBase, Tenant, BusinessHours } from '@/types'
@@ -311,6 +312,23 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
       if (recBlock) systemPrompt += `\n\n${recBlock}`
     } catch { /* ignore — recognition is best-effort */ }
   }
+
+  // Unified Business Context — the AI Context Provider registry (the Business Brain's orchestration layer).
+  // Detects which modules the customer is asking about (orders, catalog, appointments, payments, hours…),
+  // fetches ONLY those, live and tenant-scoped, and injects a delimited block that forbids inventing anything
+  // not present. Customer-scoped data (orders/payments/appointments) is keyed to the identified contact so it
+  // never leaks across customers. Best-effort: any failure degrades to nothing and never blocks the reply.
+  try {
+    const bizContext = await assembleBusinessContext({
+      tenantId: input.tenantId,
+      agentId: employee.id,
+      channel: input.channelType,
+      query: input.messageContent,
+      contactId: contact?.id ?? null,
+      essentialsOnly: isVoice, // voice-gather: only the small always-on essentials (hours/location)
+    })
+    if (bizContext) systemPrompt += `\n\n${bizContext}`
+  } catch { /* best-effort — never block the reply */ }
 
   // VOICE is UNCHANGED (single call, no tools — it books via the voice-server).
   // Non-booking text conversations are also unchanged. Only text channels that are

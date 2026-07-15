@@ -8,6 +8,7 @@ import { requestBaseUrl } from '@/lib/request-url'
 import { getBusinessTimezone } from '@/lib/timezone'
 import { currentDateContext } from '@/lib/appointments'
 import { catalogPromptLine } from '@/lib/stripe/connect'
+import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
 import { enforce, clientIp } from '@/lib/ratelimit'
 import { assertPartnerActive, PAUSED_VOICE_MESSAGE } from '@/lib/billing/gate'
 
@@ -296,6 +297,13 @@ export async function POST(req: NextRequest) {
       // Stripe product catalog (cached) so the agent can offer real products and pass the
       // exact price_id to send_payment_link. No-op if the business hasn't connected Stripe.
       try { const payLine = await catalogPromptLine(channel.tenant_id); if (payLine) voiceSystemPrompt += `\n\n${payLine}` } catch { /* fail-safe */ }
+
+      // Unified Business Context — realtime voice has no transcript at prompt-build time, so inject only the
+      // small always-on essentials (business hours + location). Keeps the voice payload tight. Best-effort.
+      try {
+        const bizContext = await assembleBusinessContext({ tenantId: channel.tenant_id, agentId: agent?.id ?? null, channel: 'voice', query: '', contactId: null, essentialsOnly: true })
+        if (bizContext) voiceSystemPrompt += `\n\n${bizContext}`
+      } catch { /* fail-safe */ }
 
       const sp = escapeXml(voiceSystemPrompt)
       ownerPhone = ownerPhone || agent?.forward_to_phone || ''
