@@ -74,12 +74,12 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
 
   // Send FIRST; only advance the stage if the email actually succeeds (sendEmail RETURNS {success}, not throws).
   const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: input.deadline ?? expiresAt.slice(0, 10), link, supportEmail: (tenant?.email as string) ?? null })
-  const sendResult = await sendEmail(input.recipientEmail, input.subject || `Approval requested — order ${order.order_number}`, html, { tenantId: c.tenantId }).catch((e) => ({ success: false as const, error: (e as Error).message }))
+  const sendResult = await sendEmail(input.recipientEmail, input.subject || `Approval requested — order ${order.order_number}`, html, { tenantId: c.tenantId, fromName: businessName, replyTo: (tenant?.email as string) ?? undefined }).catch((e) => ({ success: false as const, error: (e as Error).message }))
   if (!sendResult.success) {
     // Email failed → keep the request as draft, DO NOT advance the order stage.
     return { ok: false, error: `Email failed to send${'error' in sendResult && sendResult.error ? ` (${sendResult.error})` : ''}; the order stage was not changed.`, requestId }
   }
-  if (input.sendCopyToSelf && tenant?.email) await sendEmail(tenant.email as string, `[Copy] Approval sent — order ${order.order_number}`, html, { tenantId: c.tenantId }).catch(() => {})
+  if (input.sendCopyToSelf && tenant?.email) await sendEmail(tenant.email as string, `[Copy] Approval sent — order ${order.order_number}`, html, { tenantId: c.tenantId, fromName: businessName }).catch(() => {})
 
   const now = new Date().toISOString()
   await sb.from('order_approval_requests').update({ status: 'sent', sent_at: now, updated_at: now }).eq('id', requestId)
@@ -196,7 +196,7 @@ export async function recordApprovalResponse(rawToken: string, decision: Approva
   try {
     const { data: tenant } = await sb.from('tenants').select('email, business_name').eq('id', r.tenant_id as string).maybeSingle()
     const { data: ord } = await sb.from('orders').select('order_number').eq('id', r.order_id as string).maybeSingle()
-    if (tenant?.email) await sendEmail(tenant.email as string, `${type === 'factory' ? 'Factory' : 'Customer'} responded — order ${ord?.order_number}`, `<p>The ${type} responded to order <strong>${ord?.order_number}</strong>: <strong>${decision.replace('_', ' ')}</strong>.</p>${comment ? `<p>Comment: ${comment.replace(/[<>]/g, '')}</p>` : ''}${estCompletionDate ? `<p>Estimated completion: ${estCompletionDate}</p>` : ''}`, { tenantId: r.tenant_id as string })
+    if (tenant?.email) await sendEmail(tenant.email as string, `${type === 'factory' ? 'Factory' : 'Customer'} responded — order ${ord?.order_number}`, `<p>The ${type} responded to order <strong>${ord?.order_number}</strong>: <strong>${decision.replace('_', ' ')}</strong>.</p>${comment ? `<p>Comment: ${comment.replace(/[<>]/g, '')}</p>` : ''}${estCompletionDate ? `<p>Estimated completion: ${estCompletionDate}</p>` : ''}`, { tenantId: r.tenant_id as string, fromName: (tenant?.business_name as string) || undefined })
   } catch { /* ignore notification failure */ }
   return { ok: true }
 }
@@ -233,8 +233,8 @@ export async function submitFactoryDelivery(rawToken: string, file: File): Promi
 
   // Notify the tenant. Best-effort — never blocks the factory's submission.
   try {
-    const { data: tenant } = await sb.from('tenants').select('email').eq('id', tenantId).maybeSingle()
-    if (tenant?.email) await sendEmail(tenant.email as string, `Factory marked ready — order ${order.order_number}`, `<p>The factory marked order <strong>${order.order_number}</strong> as <strong>ready</strong> and uploaded an invoice. The order has moved to the Ready stage; the invoice is attached to the order (internal).</p>`, { tenantId })
+    const { data: tenant } = await sb.from('tenants').select('email, business_name').eq('id', tenantId).maybeSingle()
+    if (tenant?.email) await sendEmail(tenant.email as string, `Factory marked ready — order ${order.order_number}`, `<p>The factory marked order <strong>${order.order_number}</strong> as <strong>ready</strong> and uploaded an invoice. The order has moved to the Ready stage; the invoice is attached to the order (internal).</p>`, { tenantId, fromName: (tenant?.business_name as string) || undefined })
   } catch { /* ignore notification failure */ }
   return { ok: true }
 }
@@ -259,8 +259,9 @@ export async function sendToProduction(orderId: string, baseUrl?: string): Promi
       const { token, hash } = generateApprovalToken()
       await sb.from('order_approval_requests').update({ token_hash: hash, updated_at: now }).eq('tenant_id', c.tenantId).eq('id', fr.id as string)
       const { data: tenant } = await sb.from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
-      const html = deliveryRequestEmailHtml({ businessName: (tenant?.business_name as string) || 'Our team', orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null })
-      await sendEmail(fr.recipient_email as string, `Order ${data.order_number} confirmed — upload invoice when ready`, html, { tenantId: c.tenantId })
+      const bizName = (tenant?.business_name as string) || 'Our team'
+      const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null })
+      await sendEmail(fr.recipient_email as string, `Order ${data.order_number} confirmed — upload invoice when ready`, html, { tenantId: c.tenantId, fromName: bizName, replyTo: (tenant?.email as string) ?? undefined })
       await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'delivery_requested', actor: c.actorUserId, payload: null })
     }
   } catch { /* ignore notification failure */ }

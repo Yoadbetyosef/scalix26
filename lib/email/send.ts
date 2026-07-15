@@ -3,11 +3,14 @@ import { meterUsage } from '@/lib/billing/meter'
 import { RATE_RESEND_EMAIL } from '@/lib/cost/rates'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM = 'Scalix <noreply@mylocksmithai.com>'
+const FROM_ADDRESS = 'noreply@mylocksmithai.com' // verified Resend sending domain
+const FROM = `Scalix <${FROM_ADDRESS}>`
 
 // Optional billing context — when a tenant is in scope, the send is metered (Resend id = the
 // deterministic resource id, quantity = 1 message).
-export interface EmailMeta { tenantId?: string; customerId?: string | null }
+// fromName/replyTo let a caller brand the send as the business (display name) and route replies to the
+// business's own inbox, WITHOUT changing the verified From address (which must stay on FROM_ADDRESS).
+export interface EmailMeta { tenantId?: string; customerId?: string | null; fromName?: string; replyTo?: string }
 
 function meterEmail(id: string | undefined, meta?: EmailMeta) {
   if (!meta?.tenantId || !id) return
@@ -23,7 +26,10 @@ export async function sendEmail(to: string, subject: string, html: string, meta?
     console.warn('[email] RESEND_API_KEY not set, skipping email')
     return { success: false, error: 'RESEND_API_KEY not set' }
   }
-  const { data, error } = await resend.emails.send({ from: FROM, to, subject, html })
+  const cleanName = meta?.fromName?.replace(/["<>\r\n]/g, '').trim()
+  const from = cleanName ? `"${cleanName}" <${FROM_ADDRESS}>` : FROM
+  const replyTo = meta?.replyTo?.trim() || undefined
+  const { data, error } = await resend.emails.send({ from, to, subject, html, ...(replyTo ? { replyTo } : {}) })
   if (error) {
     console.error('[email] send error:', error)
     return { success: false, error: error.message }
