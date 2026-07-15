@@ -3,7 +3,7 @@ import { meterUsage } from '@/lib/billing/meter'
 import { RATE_RESEND_EMAIL } from '@/lib/cost/rates'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM_ADDRESS = 'noreply@mylocksmithai.com' // verified Resend sending domain
+const FROM_ADDRESS = 'noreply@scalix26.com' // verified Resend sending domain
 const FROM = `Scalix <${FROM_ADDRESS}>`
 
 // Optional billing context — when a tenant is in scope, the send is metered (Resend id = the
