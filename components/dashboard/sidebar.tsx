@@ -154,9 +154,9 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   return (
     <>
       {/* Desktop Sidebar — calm, light, premium */}
-      <aside className="hidden md:flex flex-col w-16 xl:w-56 bg-white border-r border-hairline min-h-screen fixed left-0 top-0 bottom-0 z-40">
-        {/* Logo — partner brand on their domain, Scalix otherwise */}
-        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-hairline">
+      <aside className="hidden md:flex flex-col w-16 xl:w-56 bg-white border-r border-hairline h-screen fixed left-0 top-0 bottom-0 z-40 overflow-hidden">
+        {/* Logo — partner brand on their domain, Scalix otherwise. flex-shrink-0: header stays fixed. */}
+        <div className="flex flex-shrink-0 items-center gap-2.5 px-4 py-5 border-b border-hairline">
           {pb?.isPartnerBrand && pb.logoUrl
             ? <img src={pb.logoUrl} alt={pb.name} className="h-6 w-auto max-w-[130px] object-contain flex-shrink-0" />
             : <ScalixLogo size={26} className="flex-shrink-0" />}
@@ -165,6 +165,12 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
           </span>
         </div>
 
+        {/* Scrollable region: nav + plan card + Partner Program + Admin + Sign Out.
+            flex-1 min-h-0 lets this region shrink below its content, so overflow-y-auto scrolls it on
+            short viewports / high browser zoom — Sign Out is always reachable by scrolling. The header
+            above stays fixed (flex-shrink-0), and the aside is overflow-hidden so nothing scrolls
+            horizontally. Grows automatically as more nav items/modules are added (no fixed height). */}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-1">
           {visibleNav.map(({ href, icon: Icon, label }) => {
@@ -226,6 +232,7 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
             <span className="hidden xl:block">Sign Out</span>
           </button>
           {pb?.isPartnerBrand && pb.poweredByScalix && <div className="hidden xl:block px-3 pt-2 text-[10px] text-muted">Powered by Scalix</div>}
+        </div>
         </div>
       </aside>
 
