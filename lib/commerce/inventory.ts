@@ -26,6 +26,14 @@ const levelRow = (r: Record<string, unknown>): InventoryLevel => ({
   floorDisplay: Number(r.floor_display ?? 0), expectedArrivalDate: (r.expected_arrival_date as string) ?? null,
 })
 
+export async function createLocation(input: { name: string; type: string }): Promise<{ ok: true; location: CommerceLocation } | { ok: false; error: string }> {
+  const c = await requireCommerceAccess(); if (!c) return { ok: false, error: 'unauthorized' }
+  const sb = await createClient()
+  const { data, error } = await sb.from('commerce_locations').insert({ tenant_id: c.tenantId, name: input.name.trim(), type: input.type }).select('id,name,type,is_default,is_active').single()
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, location: { id: data.id as string, name: data.name as string, type: data.type as CommerceLocation['type'], isDefault: !!data.is_default, isActive: !!data.is_active } }
+}
+
 export async function listLocations(): Promise<CommerceLocation[]> {
   const c = await requireCommerceAccess(); if (!c) return []
   const sb = await createClient()
