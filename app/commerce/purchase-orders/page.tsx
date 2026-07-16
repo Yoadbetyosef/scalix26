@@ -12,8 +12,11 @@ export default async function PurchaseOrdersPage() {
   const pos = await listPOs()
   return (
     <div className="mx-auto max-w-5xl px-6 pb-10">
-      <h1 className="mb-1 text-2xl font-semibold text-gray-900">Purchase Orders</h1>
-      <p className="mb-5 text-sm text-gray-500">{pos.length} PO{pos.length === 1 ? '' : 's'} · create one from a customer order’s missing items.</p>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-gray-900">Purchase Orders</h1>
+        <Link href="/commerce/purchase-orders/new" className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800">+ New PO</Link>
+      </div>
+      <p className="mb-5 text-sm text-gray-500">{pos.length} PO{pos.length === 1 ? '' : 's'} · create one here, or from a customer order’s missing items.</p>
       {pos.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">No purchase orders yet.</div>
       ) : (

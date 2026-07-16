@@ -66,6 +66,20 @@ try {
   lv = await level(pId, locId)
   const finalStatus = (await (await rest(`commerce_purchase_orders?id=eq.${poId}&select=status`)).json())[0]
   ok('after full receipt: on_hand 2, incoming 0, PO status received', lv.on_hand === 2 && lv.incoming === 0 && finalStatus.status === 'received')
+
+  // ── damaged goods (Phase 4.1): a fresh product + PO, qty 2, receive 1 accepted + 1 damaged ──
+  const [p2] = await (await rest('commerce_products', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, name: `${TAG} chair`, product_type: 'simple_product' }) })).json()
+  await rest('commerce_inventory_levels', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, item_kind: 'product', item_id: p2.id, location_id: locId, on_hand: 0, reserved: 0, incoming: 0 }) })
+  const [po2] = await (await rest('commerce_purchase_orders', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, po_number: `${TAG}-PO2`, status: 'sent_to_supplier' }) })).json()
+  const [poi2] = await (await rest('commerce_po_items', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, po_id: po2.id, product_id: p2.id, quantity: 2, unit_cost_cents: 100000 }) })).json()
+  await rpc('mark_po_incoming', { p_tenant: tenantId, p_po_id: po2.id, p_location_id: locId, p_by: 'verify' })
+  await rpc('receive_po_items', { p_tenant: tenantId, p_po_id: po2.id, p_location_id: locId, p_lines: [{ po_item_id: poi2.id, accepted: 1, damaged: 1 }], p_received_by: 'verify', p_idempotency_key: `${TAG}-dmg` })
+  const lv2 = await level(p2.id, locId)
+  const dmgLevel = (await (await rest(`commerce_inventory_levels?item_id=eq.${p2.id}&location_id=eq.${locId}&select=on_hand,incoming,damaged`)).json())[0]
+  ok('damaged receipt: on_hand=1 (accepted only), incoming=0 (both cleared), damaged=1', lv2.on_hand === 1 && dmgLevel.incoming === 0 && Number(dmgLevel.damaged) === 1)
+  const poi2After = (await (await rest(`commerce_po_items?id=eq.${poi2.id}&select=received_quantity`)).json())[0]
+  const po2Status = (await (await rest(`commerce_purchase_orders?id=eq.${po2.id}&select=status`)).json())[0]
+  ok('damaged does NOT count as received: received_quantity=1, PO stays partially_received (line open for replacement)', Number(poi2After.received_quantity) === 1 && po2Status.status === 'partially_received')
 } catch (e) {
   console.error('ERROR:', e.message); fail++
 } finally {
