@@ -12,5 +12,6 @@ function randomCode(len: number): string {
 
 export const generateDraftNumber = (): string => `DRAFT-${randomCode(8)}`
 export const generateProjectNumber = (): string => `PROJ-${randomCode(8)}`
+export const generateOrderNumber = (): string => `SO-${randomCode(8)}` // Sales Order (distinct from the legacy ORD- module)
 export const reservationIdempotencyKey = (draftId: string, itemKind: string, itemId: string, locationId: string): string =>
   `res:${draftId}:${itemKind}:${itemId}:${locationId}`

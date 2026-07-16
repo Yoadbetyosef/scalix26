@@ -23,7 +23,20 @@ export function DraftEditor({ draftId, initial, initialItems, locations, product
   const [locId, setLocId] = useState(locations[0]?.id ?? '')
   const [busy, setBusy] = useState(false)
   const [reserveMsg, setReserveMsg] = useState<Record<string, string>>({})
+  const [converting, setConverting] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const converted = initial.status === 'converted'
+
+  const convert = async () => {
+    if (!confirm('Convert this draft to a customer order? Reservations transfer to the order.')) return
+    setConverting(true)
+    try {
+      const r = await fetch(`/api/commerce/drafts/${draftId}/convert`, { method: 'POST' })
+      const j = await r.json()
+      if (r.ok && j.orderId) router.push(`/commerce/orders/${j.orderId}`)
+      else { setConverting(false); alert(j.error || 'Could not convert') }
+    } catch { setConverting(false) }
+  }
 
   // Version-checked autosave (never reports "saved" before the server confirms).
   const autosave = (patch: Record<string, unknown>) => {
@@ -67,6 +80,11 @@ export function DraftEditor({ draftId, initial, initialItems, locations, product
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div><div className="font-mono text-xs text-gray-500">{initial.draft_number as string}</div><h1 className="text-2xl font-semibold text-gray-900">{customerName || 'New draft'}</h1></div>
         <span className={`ml-auto text-xs ${save === 'failed' || save === 'conflict' ? 'text-red-600' : 'text-gray-400'}`}>{SAVE_LABEL[save]}{save === 'conflict' && <button onClick={() => router.refresh()} className="ml-2 underline">Reload</button>}</span>
+        {converted && initial.converted_order_id ? (
+          <button onClick={() => router.push(`/commerce/orders/${initial.converted_order_id}`)} className="rounded-lg border border-emerald-300 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50">View order →</button>
+        ) : initialItems.length > 0 ? (
+          <button onClick={convert} disabled={converting} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">{converting ? 'Converting…' : 'Convert to Order'}</button>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

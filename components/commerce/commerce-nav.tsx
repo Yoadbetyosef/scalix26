@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 const SECTIONS = [
   { href: '/commerce/projects', label: 'Projects' },
   { href: '/commerce/drafts', label: 'Drafts' },
+  { href: '/commerce/orders', label: 'Customer Orders' },
   { href: '/commerce/catalog', label: 'Catalog' },
   { href: '/commerce/inventory', label: 'Inventory' },
 ]
