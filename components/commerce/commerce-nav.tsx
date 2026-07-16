@@ -14,6 +14,7 @@ const SECTIONS = [
   { href: '/commerce/suppliers', label: 'Suppliers' },
   { href: '/commerce/catalog', label: 'Catalog' },
   { href: '/commerce/inventory', label: 'Inventory' },
+  { href: '/commerce/settings', label: 'Settings' },
 ]
 
 export function CommerceNav() {
