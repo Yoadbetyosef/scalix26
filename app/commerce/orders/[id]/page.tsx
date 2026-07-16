@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireCommerceAccess } from '@/lib/commerce/guard'
 import { getOrder, lineCoverage } from '@/lib/commerce/orders'
+import { listSuppliers } from '@/lib/commerce/suppliers'
+import { OrderPoButton } from '@/components/commerce/order-po-button'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -13,6 +15,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const o = d.order as Record<string, unknown>
   const items = d.items as Record<string, unknown>[]
   const totalMissing = items.reduce((s, i) => s + lineCoverage(i as never).missing, 0)
+  const suppliers = totalMissing > 0 ? await listSuppliers() : []
 
   return (
     <div className="mx-auto max-w-4xl px-6 pb-16">
@@ -30,7 +33,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {totalMissing > 0 && (
-        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{totalMissing} unit{totalMissing === 1 ? '' : 's'} not yet allocated — these need purchasing (Purchase Orders arrive in the next phase).</div>
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          {totalMissing} unit{totalMissing === 1 ? '' : 's'} not yet allocated — these need purchasing.
+          <OrderPoButton orderId={o.id as string} suppliers={suppliers.map((s) => ({ id: s.id as string, company_name: s.company_name as string }))} />
+        </div>
       )}
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">

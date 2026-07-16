@@ -10,6 +10,8 @@ const SECTIONS = [
   { href: '/commerce/projects', label: 'Projects' },
   { href: '/commerce/drafts', label: 'Drafts' },
   { href: '/commerce/orders', label: 'Customer Orders' },
+  { href: '/commerce/purchase-orders', label: 'Purchase Orders' },
+  { href: '/commerce/suppliers', label: 'Suppliers' },
   { href: '/commerce/catalog', label: 'Catalog' },
   { href: '/commerce/inventory', label: 'Inventory' },
 ]

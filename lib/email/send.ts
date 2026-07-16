@@ -35,7 +35,7 @@ export async function sendEmail(to: string, subject: string, html: string, meta?
     return { success: false, error: error.message }
   }
   meterEmail(data?.id, meta)
-  return { success: true }
+  return { success: true, id: data?.id ?? null }
 }
 
 const INBOUND_FROM = 'noreply@mail.mylocksmithai.com'
@@ -69,7 +69,7 @@ export async function sendEmailReply(to: string, from: string | null | undefined
     return { success: false, error: error.message }
   }
   meterEmail(data?.id, meta)
-  return { success: true }
+  return { success: true, id: data?.id ?? null }
 }
 
 export const emailTemplates = {
