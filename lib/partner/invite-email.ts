@@ -1,10 +1,10 @@
 import { Resend } from 'resend'
 import type { BrandData } from '@/lib/partner/brand'
+import { FROM_ADDRESS as SENDER_DOMAIN } from '@/lib/email/send'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-// The verified sending domain stays constant; the visible FROM NAME is the partner's brand, so the
-// recipient never sees "Scalix". (Custom From domains are a future custom-domain concern.)
-const SENDER_DOMAIN = 'noreply@scalix26.com'
+// The verified sending domain (shared, env-overridable via EMAIL_FROM_ADDRESS) stays constant; the
+// visible FROM NAME is the partner's brand, so the recipient never sees "Scalix".
 
 // A clean, self-contained branded invitation. Uses the partner's logo, name, colors, and support
 // details. Never references Scalix, the partner portal, commissions, or wholesale. "Powered by" only

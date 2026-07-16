@@ -3,7 +3,9 @@ import { meterUsage } from '@/lib/billing/meter'
 import { RATE_RESEND_EMAIL } from '@/lib/cost/rates'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const FROM_ADDRESS = 'noreply@scalix26.com' // verified Resend sending domain
+// Verified Resend sending domain. Defaults to scalix26.com, but can be overridden per-environment via
+// EMAIL_FROM_ADDRESS (e.g. point at a domain verified in the active Resend account) with no code change.
+export const FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS?.trim() || 'noreply@scalix26.com'
 const FROM = `Scalix <${FROM_ADDRESS}>`
 
 // Optional billing context — when a tenant is in scope, the send is metered (Resend id = the
