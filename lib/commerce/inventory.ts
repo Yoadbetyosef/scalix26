@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireCommerceAccess } from './guard'
 import type { Availability, BundleAvailability, CommerceLocation, InventoryLevel, ItemKind, MovementType } from './types'
 
@@ -60,7 +60,10 @@ export async function recordMovement(input: {
 }): Promise<{ ok: true; before: number; after: number } | { ok: false; error: string }> {
   const c = await requireCommerceAccess(); if (!c) return { ok: false, error: 'unauthorized' }
   const field = input.field ?? 'on_hand'
-  const sb = await createClient()
+  // Approved server path: write via the service role (authenticated/anon clients have NO write privilege
+  // on the inventory tables — see add_commerce_3_inventory_lockdown.sql). Tenant is already validated;
+  // every query below is explicitly scoped by tenant_id since the admin client bypasses RLS.
+  const sb = createAdminClient()
   // Ensure the level row exists.
   const { data: existing } = await sb.from('commerce_inventory_levels').select('*').eq('tenant_id', c.tenantId).eq('item_kind', input.itemKind).eq('item_id', input.itemId).eq('location_id', input.locationId).maybeSingle()
   const before = existing ? Number((existing as Record<string, unknown>)[field] ?? 0) : 0
