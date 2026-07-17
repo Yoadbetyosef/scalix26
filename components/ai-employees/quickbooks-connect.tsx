@@ -19,7 +19,7 @@ export function QuickbooksConnect({ agentId }: { agentId: string }) {
     else if (qb === 'not_configured') toast.error('QuickBooks isn’t enabled on this account yet. Please contact support.')
     else if (qb === 'error') toast.error('Could not connect QuickBooks. Please try again.')
     let on = true
-    fetch('/api/commerce/quickbooks/status')
+    fetch('/api/quickbooks/status')
       .then((r) => (r.ok ? r.json() : { connected: false }))
       .then((d) => { if (on) setStatus(d) })
       .catch(() => { if (on) setStatus({ connected: false }) })
@@ -30,7 +30,7 @@ export function QuickbooksConnect({ agentId }: { agentId: string }) {
     if (!confirm('Disconnect QuickBooks?')) return
     setBusy(true)
     try {
-      const res = await fetch('/api/commerce/quickbooks/disconnect', { method: 'POST' })
+      const res = await fetch('/api/quickbooks/disconnect', { method: 'POST' })
       if (!res.ok) throw new Error()
       setStatus({ connected: false })
       toast.success('QuickBooks disconnected')
@@ -58,7 +58,7 @@ export function QuickbooksConnect({ agentId }: { agentId: string }) {
       ) : !status.connected ? (
         <div className="mt-2">
           <p className="text-xs text-gray-500 mb-3">Connect your QuickBooks Online account to link your accounting. Optional.</p>
-          <Button type="button" variant="outline" size="sm" onClick={() => { window.location.href = `/api/commerce/quickbooks/connect?agentId=${encodeURIComponent(agentId)}` }}>
+          <Button type="button" variant="outline" size="sm" onClick={() => { window.location.href = `/api/quickbooks/connect?agentId=${encodeURIComponent(agentId)}` }}>
             Connect QuickBooks
           </Button>
         </div>

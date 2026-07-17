@@ -19,10 +19,6 @@
     {
       "path": "/api/cron/webhook-events",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/commerce-reservations",
-      "schedule": "0 4 * * *"
     }
   ]
 }
