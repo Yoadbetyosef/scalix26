@@ -45,6 +45,23 @@ export interface CatalogProduct {
   updated_at: string
 }
 
+// A part/piece of a product (e.g. a panel of a sofa). Its qr_code_token opens a public /q/<token> page.
+export interface CatalogPart {
+  id: string
+  tenant_id: string
+  product_id: string
+  name: string
+  image_url: string | null
+  price: number | null
+  availability_status: AvailabilityStatus
+  quantity: number
+  sort_order: number
+  notes: string | null
+  qr_code_token: string
+  created_at: string
+  updated_at: string
+}
+
 export interface CatalogMovement {
   id: string
   tenant_id: string

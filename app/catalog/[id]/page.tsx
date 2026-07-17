@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { Package, Download } from 'lucide-react'
 import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, type CatalogProduct, type AvailabilityStatus, type MovementType } from '@/lib/catalog/types'
 import { ProductForm } from '@/components/catalog/product-form'
+import { PartsManager } from '@/components/catalog/parts-manager'
 import { useToast } from '@/components/admin/toast'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -180,6 +181,9 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Parts / pieces of this product */}
+      <PartsManager productId={id} />
     </div>
   )
 }
