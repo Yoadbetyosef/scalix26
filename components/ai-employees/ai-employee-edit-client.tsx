@@ -23,6 +23,7 @@ import { PaymentCollection } from '@/components/ai-employees/payment-collection'
 import { AvailabilityClient } from '@/components/settings/availability-client'
 import { CalendarConnect } from '@/components/ai-employees/calendar-connect'
 import { StripeConnect } from '@/components/ai-employees/stripe-connect'
+import { QuickbooksConnect } from '@/components/ai-employees/quickbooks-connect'
 import { slotsToHours, businessHoursToDayHours, dayHoursToBusinessHours, type DayHours } from '@/lib/appointments'
 import { Sparkles } from 'lucide-react'
 
@@ -1003,6 +1004,7 @@ export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessD
           <WeeklyHoursGrid hours={appointmentHours} onUpdate={updateAppointmentHours} />
           <CalendarConnect agentId={employee.id} />
           <StripeConnect agentId={employee.id} />
+          <QuickbooksConnect agentId={employee.id} />
         </CardContent>
       </Card>
 

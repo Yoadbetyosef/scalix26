@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCommerceAccess } from '@/lib/commerce/guard'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 import { verifyState } from '@/lib/commerce/quickbooks/state'
 import { completeConnection } from '@/lib/commerce/quickbooks/connection'
 
-// OAuth redirect target. Verifies the signed state against the authenticated tenant (so a connection can
-// only ever be bound to the tenant that started it), exchanges the code, and stores the encrypted tokens.
-// Always lands back on the commerce settings page with a ?qb= result the UI turns into a banner.
+// OAuth redirect target. Verifies the signed state against the authenticated tenant, exchanges the code,
+// stores the encrypted tokens, and returns the user to where they started (onboarding agent page, or the
+// commerce settings page) with a ?qb= result.
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
-  const back = new URL('/commerce/settings', req.url)
+  const st = verifyState(url.searchParams.get('state'), Date.now())
+  const agentId = st?.ret || ''
+  const back = new URL(agentId ? `/ai-employees/${agentId}` : '/commerce/settings', req.url)
   const finish = (result: string) => { back.searchParams.set('qb', result); return NextResponse.redirect(back) }
 
-  const c = await requireCommerceAccess()
-  if (!c) return finish('error')
+  const c = await requireActiveBusinessContext()
+  if (!c?.tenantId) return finish('error')
   if (url.searchParams.get('error')) return finish('denied') // user declined consent
 
   const code = url.searchParams.get('code')
   const realmId = url.searchParams.get('realmId')
-  const stateTenant = verifyState(url.searchParams.get('state'), Date.now())
-  if (!code || !realmId || !stateTenant || stateTenant !== c.tenantId) return finish('error')
+  if (!code || !realmId || !st || st.tenantId !== c.tenantId) return finish('error')
 
-  const r = await completeConnection(c.tenantId, realmId, code, c.actor)
+  const r = await completeConnection(c.tenantId, realmId, code, c.actorUserId)
   return finish(r.ok ? 'connected' : 'error')
 }

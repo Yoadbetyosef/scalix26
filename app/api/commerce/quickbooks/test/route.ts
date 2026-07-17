@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { requireCommercePermission } from '@/lib/commerce/guard'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 import { testConnection } from '@/lib/commerce/quickbooks/connection'
 
-// Health check from the settings card — refreshes the token if needed and reads CompanyInfo.
+// Health check — refreshes the token if needed and reads CompanyInfo.
 export async function POST() {
-  const c = await requireCommercePermission('module.settings_manage')
-  if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const c = await requireActiveBusinessContext()
+  if (!c?.tenantId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const r = await testConnection(c.tenantId)
   return NextResponse.json(r, { status: r.ok ? 200 : 400 })
 }

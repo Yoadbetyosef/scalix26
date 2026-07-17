@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireCommercePermission } from '@/lib/commerce/guard'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 import { qboConfigured } from '@/lib/commerce/quickbooks/config'
 import { authorizeUrl } from '@/lib/commerce/quickbooks/oauth'
 import { signState } from '@/lib/commerce/quickbooks/state'
 
-// Kick off the QuickBooks OAuth handshake: redirect the owner to Intuit's consent screen with a signed,
-// tenant-bound `state`. Intuit redirects back to /api/commerce/quickbooks/callback.
+// Start the QuickBooks OAuth handshake. A general per-tenant business integration (like Stripe/Calendar) —
+// tenant-gated, not commerce-gated — so it works from onboarding. Carries the agent id so the callback
+// returns to the page the user started from.
 export async function GET(req: NextRequest) {
-  const c = await requireCommercePermission('module.settings_manage')
-  if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const c = await requireActiveBusinessContext()
+  if (!c?.tenantId) return NextResponse.redirect(new URL('/auth/login', req.url))
+  const agentId = req.nextUrl.searchParams.get('agentId') || ''
+  const back = agentId ? `/ai-employees/${agentId}` : '/commerce/settings'
   if (!qboConfigured()) {
-    const back = new URL('/commerce/settings', req.url); back.searchParams.set('qb', 'not_configured')
-    return NextResponse.redirect(back)
+    const u = new URL(back, req.url); u.searchParams.set('qb', 'not_configured')
+    return NextResponse.redirect(u)
   }
-  return NextResponse.redirect(authorizeUrl(signState(c.tenantId, Date.now())))
+  return NextResponse.redirect(authorizeUrl(signState(c.tenantId, Date.now(), agentId)))
 }

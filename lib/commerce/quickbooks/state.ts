@@ -16,21 +16,23 @@ function key(): Buffer {
 const b64url = (b: Buffer) => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const sign = (body: string) => b64url(createHmac('sha256', key()).update(body).update('qbo-oauth-state').digest())
 
-export function signState(tenantId: string, nowMs: number): string {
-  const body = b64url(Buffer.from(JSON.stringify({ t: tenantId, ts: nowMs })))
+// `ret` is an optional return target (the agent id) so the callback can send the user back to the page
+// they started from (onboarding) instead of a fixed page.
+export function signState(tenantId: string, nowMs: number, ret = ''): string {
+  const body = b64url(Buffer.from(JSON.stringify({ t: tenantId, ts: nowMs, r: ret })))
   return `${body}.${sign(body)}`
 }
 
-// Returns the embedded tenantId if the signature is valid and unexpired, else null.
-export function verifyState(state: string | null | undefined, nowMs: number): string | null {
+// Returns { tenantId, ret } if the signature is valid and unexpired, else null.
+export function verifyState(state: string | null | undefined, nowMs: number): { tenantId: string; ret: string } | null {
   if (!state || !state.includes('.')) return null
   const [body, sig] = state.split('.')
   const expected = sign(body)
   if (sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null
   try {
-    const { t, ts } = JSON.parse(Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'))
+    const { t, ts, r } = JSON.parse(Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'))
     if (typeof t !== 'string' || typeof ts !== 'number') return null
     if (nowMs - ts > STATE_TTL_MS || nowMs - ts < -60_000) return null // expired or clock-skewed future
-    return t
+    return { tenantId: t, ret: typeof r === 'string' ? r : '' }
   } catch { return null }
 }
