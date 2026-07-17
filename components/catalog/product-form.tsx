@@ -12,7 +12,7 @@ const input = 'h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm
 
 export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Partial<CatalogProduct>; onSubmit: (p: Record<string, unknown>) => Promise<void>; submitLabel: string }) {
   const [f, setF] = useState<ProductInput>({
-    name: '', sku: '', category: '', brand: '', description: '', price: null, status: 'active', availability_status: 'in_stock',
+    name: '', sku: '', category: '', brand: '', description: '', measurements: '', fabric: '', price: null, status: 'active', availability_status: 'in_stock',
     showroom_quantity: 0, warehouse_quantity: 0, storage_quantity: 0, incoming_quantity: 0, expected_arrival_date: '',
     location_notes: '', ai_notes: '', internal_notes: '', image_url: '',
     ...initial,
@@ -28,6 +28,7 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
     try {
       await onSubmit({
         name: f.name, sku: f.sku, category: f.category, brand: f.brand, description: f.description,
+        measurements: f.measurements, fabric: f.fabric,
         price: f.price === null || f.price === undefined || (f.price as unknown as string) === '' ? null : Number(f.price),
         status: f.status, availability_status: f.availability_status,
         showroom_quantity: Number(f.showroom_quantity) || 0, warehouse_quantity: Number(f.warehouse_quantity) || 0,
@@ -53,6 +54,10 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
           <Field label="Price"><input className={input} type="number" step="0.01" value={f.price ?? ''} onChange={(e) => set('price', e.target.value)} /></Field>
         </div>
         <Field label="Description"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={f.description || ''} onChange={(e) => set('description', e.target.value)} /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Measurements"><input className={input} value={f.measurements || ''} onChange={(e) => set('measurements', e.target.value)} placeholder="e.g. W220 × D95 × H85 cm" /></Field>
+          <Field label="Fabric"><input className={input} value={f.fabric || ''} onChange={(e) => set('fabric', e.target.value)} placeholder="e.g. Velvet · grey" /></Field>
+        </div>
         <div>
           <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Photo (image URL)</span>
           <div className="flex items-center gap-3">

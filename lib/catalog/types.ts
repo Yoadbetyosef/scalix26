@@ -27,6 +27,8 @@ export interface CatalogProduct {
   category: string | null
   brand: string | null
   description: string | null
+  measurements: string | null
+  fabric: string | null
   price: number | null
   status: ProductStatus
   availability_status: AvailabilityStatus

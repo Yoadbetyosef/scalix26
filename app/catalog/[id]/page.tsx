@@ -39,6 +39,7 @@ export default function ProductDetailPage() {
       setProduct(d.product); setMovements(d.movements || []); setQr(d.qr)
     } catch (e) { show((e as Error).message, 'err') } finally { setLoading(false) }
   }, [id, show])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- load-on-mount
   useEffect(() => { load() }, [load])
 
   async function saveEdit(payload: Record<string, unknown>) {
@@ -109,6 +110,12 @@ export default function ProductDetailPage() {
           </div>
         </div>
         {product.description && <p className="mt-3 text-sm text-muted">{product.description}</p>}
+        {(product.measurements || product.fabric) && (
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {product.measurements && <div><span className="text-subtle">Measurements: </span><span className="text-ink">{product.measurements}</span></div>}
+            {product.fabric && <div><span className="text-subtle">Fabric: </span><span className="text-ink">{product.fabric}</span></div>}
+          </div>
+        )}
       </div>
 
       {/* Quantities */}
