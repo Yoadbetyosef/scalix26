@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Info, Layers, Boxes, SlidersHorizontal, Image as ImageIcon, Warehouse, Activity, Package, Wrench } from 'lucide-react'
+import { ArrowLeft, Info, Layers, Boxes, SlidersHorizontal, Image as ImageIcon, Warehouse, Activity, Package } from 'lucide-react'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -13,6 +13,7 @@ import { ProductComponents } from '@/components/commerce/product-components'
 import { ProductAttributes } from '@/components/commerce/product-attributes'
 import { ProductInventory } from '@/components/commerce/product-inventory'
 import { ProductActivity } from '@/components/commerce/product-activity'
+import { ProductMedia } from '@/components/commerce/product-media'
 import { toast } from 'sonner'
 
 interface Product { id: string; name: string; sku: string | null; status: string; image_url: string | null; [k: string]: unknown }
@@ -46,6 +47,12 @@ export function ProductDetail({ productId }: { productId: string }) {
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.ok) { setProduct(d.product); toast.success('Product saved.'); return { ok: true } }
     return { ok: false, error: d.error }
+  }
+
+  async function setPrimary(url: string) {
+    const res = await fetch(`/api/core/products/${productId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image_url: url }) })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.ok) { setProduct(d.product); toast.success('Primary image set.') } else toast.error('Could not set the primary image.')
   }
 
   if (product === 'notfound') return (
@@ -89,11 +96,9 @@ export function ProductDetail({ productId }: { productId: string }) {
       {tab === 'attributes' && <ProductAttributes productId={productId} />}
       {tab === 'inventory' && <ProductInventory productId={productId} />}
       {tab === 'activity' && <ProductActivity productId={productId} />}
-      {tab === 'media' && <ComingSoon name="Media" />}
+      {tab === 'media' && (product
+        ? <ProductMedia productId={productId} primaryUrl={typeof product.image_url === 'string' ? product.image_url : null} onSetPrimary={setPrimary} />
+        : <Skeleton className="h-40 w-full" />)}
     </div>
   )
-}
-
-function ComingSoon({ name }: { name: string }) {
-  return <EmptyState icon={Wrench} title={`${name} — coming soon`}>This tab is part of the Core UI build and lands in an upcoming step.</EmptyState>
 }
