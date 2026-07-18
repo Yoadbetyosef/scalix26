@@ -20,6 +20,7 @@ import {
   Handshake,
   Shield,
   ClipboardList,
+  Store,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -39,6 +40,7 @@ const navItems = [
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/orders', icon: ClipboardList, label: 'Orders' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
+  { href: '/commerce/catalog', icon: Store, label: 'Commerce' },
   { href: '/ai-employees', icon: Bot, label: 'AI Employees' },
   { href: '/test-ai', icon: FlaskConical, label: 'Test AI' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },

@@ -20,6 +20,7 @@ export const MODULES = [
   { key: 'business_brain', label: 'Business Brain', description: 'AI business understanding' },
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
   { key: 'orders', label: 'Orders', description: 'Orders & external factory/customer approvals' },
+  { key: 'commerce', label: 'Commerce', description: 'Products, sales documents & configuration (Core UI)' },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]['key']
@@ -37,6 +38,11 @@ export const MODULE_STATES: { key: ModuleState; label: string; hint: string }[] 
 export const DEFAULT_MODULE_STATE: ModuleState = 'enabled'
 
 export const ALL_MODULES: ModuleKey[] = MODULES.map((m) => m.key)
+
+// Additive, opt-in surfaces (the new Commerce/Core UI). Unlike every existing module, these are NOT
+// turned on by the null=all back-compat fallback below — a legacy tenant with no enabled_modules array
+// does NOT silently gain them. They must be enabled EXPLICITLY (admin toggle), so they stay off by default.
+export const EXPLICIT_OPT_IN_MODULES: ModuleKey[] = ['commerce']
 
 // New businesses start with the core modules ON; everything else is opt-in per business,
 // toggled by a platform admin. Keep this in sync with the DB column default (migration).
@@ -58,7 +64,9 @@ type TenantModules = { enabled_modules?: string[] | null } | null | undefined
  */
 export function enabledModulesOf(tenant: TenantModules): ModuleKey[] {
   const raw = tenant?.enabled_modules
-  if (raw === null || raw === undefined || !Array.isArray(raw)) return [...ALL_MODULES]
+  // null/absent column = a pre-migration tenant → all EXISTING modules on (never lose features), but
+  // opt-in surfaces stay off until explicitly enabled.
+  if (raw === null || raw === undefined || !Array.isArray(raw)) return ALL_MODULES.filter((m) => !EXPLICIT_OPT_IN_MODULES.includes(m))
   return raw.filter(isModuleKey)
 }
 
@@ -82,6 +90,7 @@ const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/invoices', module: 'invoices' },
   { prefix: '/payments', module: 'payments' },
   { prefix: '/orders', module: 'orders' },
+  { prefix: '/commerce', module: 'commerce' },
 ]
 
 /**
