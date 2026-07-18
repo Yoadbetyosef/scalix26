@@ -8,6 +8,8 @@ import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProductGeneralForm } from '@/components/commerce/product-general-form'
+import { ProductVariants } from '@/components/commerce/product-variants'
+import { ProductComponents } from '@/components/commerce/product-components'
 import { toast } from 'sonner'
 
 interface Product { id: string; name: string; sku: string | null; status: string; image_url: string | null; [k: string]: unknown }
@@ -79,7 +81,9 @@ export function ProductDetail({ productId }: { productId: string }) {
         product === null ? <div className="max-w-2xl space-y-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-11 w-full" />)}</div>
           : <ProductGeneralForm initial={product} submitLabel="Save changes" onSubmit={saveGeneral} />
       )}
-      {tab !== 'general' && <ComingSoon name={TABS.find((t) => t.key === tab)?.label ?? ''} />}
+      {tab === 'variants' && <ProductVariants productId={productId} />}
+      {tab === 'components' && <ProductComponents productId={productId} />}
+      {['attributes', 'media', 'inventory', 'activity'].includes(tab) && <ComingSoon name={TABS.find((t) => t.key === tab)?.label ?? ''} />}
     </div>
   )
 }
