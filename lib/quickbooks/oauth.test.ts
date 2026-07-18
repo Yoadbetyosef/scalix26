@@ -8,7 +8,7 @@ describe('quickbooks oauth state (CSRF)', () => {
     const { signState, verifyState } = await import('./state')
     const now = 1_000_000
     const s = signState('tenant-123', now)
-    expect(verifyState(s, now + 5_000)).toBe('tenant-123')
+    expect(verifyState(s, now + 5_000)?.tenantId).toBe('tenant-123')
   })
 
   it('rejects a tampered payload', async () => {
