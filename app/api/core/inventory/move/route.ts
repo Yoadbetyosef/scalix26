@@ -11,7 +11,7 @@ const schema = z.object({
   quantity: z.number(), refType: z.string().max(40).nullable().optional(), refId: z.string().uuid().nullable().optional(), idempotencyKey: z.string().max(200).nullable().optional(),
 })
 export async function POST(req: NextRequest) {
-  const c = await requireCoreTenant('inventory')
+  const c = await requireCoreTenant('commerce')
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
