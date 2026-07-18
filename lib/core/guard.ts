@@ -14,3 +14,11 @@ export async function requireCoreTenant(module: ModuleKey = 'contacts'): Promise
   if (!data || !enabledModulesOf(data).includes(module)) return null
   return { tenantId: data.id as string, actor: c.actorUserId }
 }
+
+// Active-tenant gate without a specific module requirement — for cross-cutting Core surfaces (sales
+// lifecycle, config) that aren't tied to one product module.
+export async function requireCore(): Promise<CoreCtx | null> {
+  const c = await requireActiveBusinessContext()
+  if (!c?.tenantId) return null
+  return { tenantId: c.tenantId, actor: c.actorUserId }
+}
