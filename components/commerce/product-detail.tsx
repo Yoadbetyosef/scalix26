@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ProductGeneralForm } from '@/components/commerce/product-general-form'
 import { ProductVariants } from '@/components/commerce/product-variants'
 import { ProductComponents } from '@/components/commerce/product-components'
+import { ProductAttributes } from '@/components/commerce/product-attributes'
 import { toast } from 'sonner'
 
 interface Product { id: string; name: string; sku: string | null; status: string; image_url: string | null; [k: string]: unknown }
@@ -83,7 +84,8 @@ export function ProductDetail({ productId }: { productId: string }) {
       )}
       {tab === 'variants' && <ProductVariants productId={productId} />}
       {tab === 'components' && <ProductComponents productId={productId} />}
-      {['attributes', 'media', 'inventory', 'activity'].includes(tab) && <ComingSoon name={TABS.find((t) => t.key === tab)?.label ?? ''} />}
+      {tab === 'attributes' && <ProductAttributes productId={productId} />}
+      {['media', 'inventory', 'activity'].includes(tab) && <ComingSoon name={TABS.find((t) => t.key === tab)?.label ?? ''} />}
     </div>
   )
 }

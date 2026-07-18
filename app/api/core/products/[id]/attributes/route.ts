@@ -6,7 +6,7 @@ import { listDefinitions, getFieldValues, setFieldValue } from '@/lib/core/field
 // The product's attribute schema (tenant/vertical-defined) + current values. Furniture fabric/dimensions,
 // jewelry carat, etc. live here — never as Core columns.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const c = await requireCoreTenant('inventory')
+  const c = await requireCoreTenant('commerce')
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const id = (await params).id
   const [definitions, values] = await Promise.all([listDefinitions(c.tenantId, 'product'), getFieldValues(c.tenantId, 'product', id)])
@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 const schema = z.object({ values: z.record(z.string(), z.unknown()) })
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const c = await requireCoreTenant('inventory')
+  const c = await requireCoreTenant('commerce')
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
