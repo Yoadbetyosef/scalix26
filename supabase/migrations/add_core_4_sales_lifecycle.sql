@@ -108,12 +108,12 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'unsupported_conversion');
   END IF;
   -- idempotency: a target of this type already created from this source+key?
-  EXECUTE format('SELECT id FROM %I WHERE tenant_id=$1 AND conversion_key=$2', p_target_type) INTO v_existing USING p_tenant, p_key;
+  EXECUTE format('SELECT id FROM %I WHERE tenant_id=$1 AND conversion_key=$2', p_target_type || 's') INTO v_existing USING p_tenant, p_key;
   IF v_existing IS NOT NULL THEN RETURN jsonb_build_object('ok', true, 'idempotent', true, 'target_type', p_target_type, 'target_id', v_existing); END IF;
 
   -- read the source header (estimates/quotes/invoices share columns; orders handled minimally)
   IF p_source_type IN ('estimate','quote','invoice') THEN
-    EXECUTE format('SELECT contact_id, company_id, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes FROM %I WHERE id=$1 AND tenant_id=$2', p_source_type)
+    EXECUTE format('SELECT contact_id, company_id, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes FROM %I WHERE id=$1 AND tenant_id=$2', p_source_type || 's')
       INTO v_hdr USING p_source_id, p_tenant;
   ELSE
     -- alias every column so the record's fields resolve by name (matches the estimates/quotes/invoices branch)
@@ -125,7 +125,7 @@ BEGIN
   IF v_hdr IS NULL THEN RETURN jsonb_build_object('ok', false, 'error', 'source_not_found'); END IF;
 
   v_num := core_next_document_number(p_tenant, p_target_type);
-  EXECUTE format('INSERT INTO %I (tenant_id, number, contact_id, company_id, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes, source_document_type, source_document_id, conversion_key, created_by) VALUES ($1,$2,$3,$4,''draft'',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id', p_target_type)
+  EXECUTE format('INSERT INTO %I (tenant_id, number, contact_id, company_id, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes, source_document_type, source_document_id, conversion_key, created_by) VALUES ($1,$2,$3,$4,''draft'',$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id', p_target_type || 's')
     INTO v_new USING p_tenant, v_num, v_hdr.contact_id, v_hdr.company_id, v_hdr.currency, v_hdr.subtotal_cents, v_hdr.discount_cents, v_hdr.tax_cents, v_hdr.total_cents, v_hdr.notes, p_source_type, p_source_id, p_key, p_actor;
 
   -- copy lines (product/variant links + custom attributes + amounts preserved)

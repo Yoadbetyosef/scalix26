@@ -32,8 +32,8 @@ try {
   const contact = await ins('contacts', { tenant_id: tA, name: 'Buyer' })
   const est = await ins('estimates', { tenant_id: tA, number: await rpc('core_next_document_number', { p_tenant: tA, p_doc_type: 'estimate' }), contact_id: contact.id, currency: 'usd', subtotal_cents: 37500, total_cents: 37500 })
   const prod = await ins('catalog_products', { tenant_id: tA, name: `${TAG} item` })
-  await ins('sales_document_lines', { tenant_id: tA, document_type: 'estimate', document_id: est.id, product_id: prod.id, description: 'Sofa', quantity: 3, unit_price_cents: 12500, line_total_cents: 37500, custom_attributes: JSON.stringify({ fabric: 'velvet' }) })
-  await ins('sales_document_lines', { tenant_id: tA, document_type: 'estimate', document_id: est.id, description: 'Delivery', quantity: 1, unit_price_cents: 5000, line_total_cents: 5000 })
+  await ins('sales_document_lines', { tenant_id: tA, document_type: 'estimate', document_id: est.id, product_id: prod.id, description: 'Sofa', quantity: 3, unit_price_cents: 12500, line_total_cents: 37500, custom_attributes: { fabric: 'velvet' }, sort_order: 0 })
+  await ins('sales_document_lines', { tenant_id: tA, document_type: 'estimate', document_id: est.id, description: 'Delivery', quantity: 1, unit_price_cents: 5000, line_total_cents: 5000, sort_order: 1 })
 
   // CONVERT estimate → quote
   const conv = await rpc('core_convert_document', { p_tenant: tA, p_source_type: 'estimate', p_source_id: est.id, p_target_type: 'quote', p_key: `${TAG}-k1`, p_actor: null })

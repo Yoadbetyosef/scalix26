@@ -13,7 +13,7 @@ const TAG = 'COREP2-' + Date.now()
 let pass = 0, fail = 0
 const ok = (d, c) => { console.log(`  ${c ? 'PASS' : 'FAIL'}: ${d}`); c ? pass++ : fail++ }
 const rest = (p, o = {}) => fetch(`${U}/rest/v1/${p}`, { headers: H, ...o })
-const ins = async (t, b) => (await (await rest(t, { method: 'POST', body: JSON.stringify(b) })).json())
+const ins = async (t, b) => (await (await rest(t, { method: 'POST', body: JSON.stringify(b) })).json())[0]
 const rpc = (fn, args) => fetch(`${U}/rest/v1/rpc/${fn}`, { method: 'POST', headers: H, body: JSON.stringify(args) }).then((r) => r.json())
 const one = async (p) => (await (await rest(p)).json())[0]
 
@@ -42,7 +42,7 @@ try {
   await ins('contact_companies', { tenant_id: tA, contact_id: loser.id, company_id: company.id })
   await ins('activities', { tenant_id: tA, contact_id: loser.id, type: 'note', body: 'on loser' })
   await ins('channel_identities', { tenant_id: tA, contact_id: loser.id, channel: 'sms', external_id: '+14155552671' })
-  await ins('leads', { tenant_id: tA, contact_id: loser.id, source: 'other', status: 'new' })
+  await ins('leads', { tenant_id: tA, contact_id: loser.id, source: 'other', status: 'new', phone: '+14155552671' })
 
   // archive keeps the row
   await rest(`contacts?id=eq.${loser.id}`, { method: 'PATCH', body: JSON.stringify({ archived_at: new Date().toISOString() }) })

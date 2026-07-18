@@ -24,10 +24,11 @@ try {
   }
 
   const def = await one('workflow_definitions', { tenant_id: t, key: 'job', name: 'Job', record_type: 'order' })
+  // PostgREST bulk insert requires every object to share the same keys — spell out all flags on each.
   const stages = await ins('workflow_stages', [
-    { tenant_id: t, workflow_definition_id: def.id, key: 'new', label: 'New', sort_order: 0, is_initial: true },
-    { tenant_id: t, workflow_definition_id: def.id, key: 'in_progress', label: 'In progress', sort_order: 1 },
-    { tenant_id: t, workflow_definition_id: def.id, key: 'done', label: 'Done', sort_order: 2, is_terminal: true, is_success: true },
+    { tenant_id: t, workflow_definition_id: def.id, key: 'new', label: 'New', sort_order: 0, is_initial: true, is_terminal: false, is_success: false },
+    { tenant_id: t, workflow_definition_id: def.id, key: 'in_progress', label: 'In progress', sort_order: 1, is_initial: false, is_terminal: false, is_success: false },
+    { tenant_id: t, workflow_definition_id: def.id, key: 'done', label: 'Done', sort_order: 2, is_initial: false, is_terminal: true, is_success: true },
   ])
   const id = Object.fromEntries(stages.map((s) => [s.key, s.id]))
   await ins('workflow_transitions', [
