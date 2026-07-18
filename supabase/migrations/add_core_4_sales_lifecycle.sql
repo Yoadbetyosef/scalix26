@@ -116,7 +116,10 @@ BEGIN
     EXECUTE format('SELECT contact_id, company_id, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes FROM %I WHERE id=$1 AND tenant_id=$2', p_source_type)
       INTO v_hdr USING p_source_id, p_tenant;
   ELSE
-    SELECT contact_id, NULL::uuid, currency, subtotal_cents, 0, 0, subtotal_cents, internal_notes
+    -- alias every column so the record's fields resolve by name (matches the estimates/quotes/invoices branch)
+    SELECT contact_id AS contact_id, NULL::uuid AS company_id, currency AS currency,
+           subtotal_cents AS subtotal_cents, 0::bigint AS discount_cents, 0::bigint AS tax_cents,
+           subtotal_cents AS total_cents, internal_notes AS notes
       INTO v_hdr FROM orders WHERE id = p_source_id AND tenant_id = p_tenant;
   END IF;
   IF v_hdr IS NULL THEN RETURN jsonb_build_object('ok', false, 'error', 'source_not_found'); END IF;
