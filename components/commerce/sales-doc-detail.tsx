@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer } from '@/components/ui/drawer'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { formatCents, inputToCents } from '@/lib/core/money-format'
+import { formatCents, inputToCents, centsToInput } from '@/lib/core/money-format'
 import type { DocType } from '@/lib/core/documents'
 import { toast } from 'sonner'
 
@@ -162,24 +162,76 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   return <div className="flex items-center justify-between py-0.5"><span className="text-muted">{label}</span><span className={strong ? 'font-semibold text-ink' : 'text-ink'}>{value}</span></div>
 }
 
+interface PickProduct { id: string; name: string; sku: string | null; price: number | null }
+interface PickVariant { id: string; name: string; sku: string | null; price_override_cents: number | null }
+
 function LineForm({ type, id, onClose, onDone }: { type: DocType; id: string; onClose: () => void; onDone: () => void }) {
+  const [products, setProducts] = useState<PickProduct[] | null>(null)
+  const [q, setQ] = useState('')
+  const [product, setProduct] = useState<PickProduct | null>(null)
+  const [variants, setVariants] = useState<PickVariant[]>([])
+  const [variantId, setVariantId] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [price, setPrice] = useState('')
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => { fetch('/api/core/products').then((r) => r.json()).then((d) => setProducts(d.products ?? [])).catch(() => setProducts([])) }, [])
+  const matches = (products ?? []).filter((p) => { const s = q.trim().toLowerCase(); return s ? [p.name, p.sku].some((v) => v?.toLowerCase().includes(s)) : true }).slice(0, 8)
+
+  function pickProduct(p: PickProduct) {
+    setProduct(p); setQ(''); setVariantId(null)
+    setDescription(p.name); setPrice(p.price != null ? String(p.price) : '')
+    fetch(`/api/core/products/${p.id}/variants`).then((r) => r.json()).then((d) => setVariants((d.variants ?? []).filter((v: { status: string }) => v.status !== 'discontinued'))).catch(() => setVariants([]))
+  }
+  function pickVariant(vid: string) {
+    setVariantId(vid || null)
+    const v = variants.find((x) => x.id === vid)
+    if (v) { setDescription(`${product?.name ?? ''} — ${v.name}`.trim()); if (v.price_override_cents != null) setPrice(centsToInput(v.price_override_cents)) }
+  }
+  function clearProduct() { setProduct(null); setVariants([]); setVariantId(null) }
+
   async function save() {
     const qty = Number(quantity); const cents = inputToCents(price)
     if (!Number.isFinite(qty) || qty < 0) { toast.error('Enter a valid quantity.'); return }
     if (cents == null || Number.isNaN(cents)) { toast.error('Enter a valid unit price.'); return }
     setSaving(true)
-    const res = await fetch(`/api/core/documents/${type}/${id}/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description: description.trim() || null, quantity: qty, unit_price_cents: cents }) })
+    const res = await fetch(`/api/core/documents/${type}/${id}/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ productId: product?.id ?? null, variantId, description: description.trim() || null, quantity: qty, unit_price_cents: cents }) })
     const d = await res.json().catch(() => ({}))
     setSaving(false)
     if (res.ok && d.ok) { toast.success('Line added.'); onDone() } else toast.error(d.error || 'Could not add the line.')
   }
+
   return (
     <Drawer open onClose={onClose} title="Add line item" footer={<div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" loading={saving} onClick={save}>Add</Button></div>}>
       <div className="space-y-4">
+        {/* Catalog picker (optional) */}
+        {product ? (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm">
+            <span className="min-w-0"><span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-strong">Catalog</span> <span className="font-medium text-ink">{product.name}</span>{product.sku && <span className="text-muted"> · {product.sku}</span>}</span>
+            <button onClick={clearProduct} className="shrink-0 text-xs text-subtle hover:text-ink">Clear</button>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label>Catalog product (optional)</Label>
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products, or leave blank for a custom line" />
+            {q.trim() && (
+              <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-hairline p-1">
+                {products == null ? <li className="px-2 py-1 text-xs text-muted">Loading…</li>
+                  : matches.length === 0 ? <li className="px-2 py-1 text-xs text-muted">No products match.</li>
+                  : matches.map((p) => <li key={p.id}><button onClick={() => pickProduct(p)} className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-sunken"><span className="min-w-0 truncate text-ink">{p.name}{p.sku && <span className="text-muted"> · {p.sku}</span>}</span><span className="shrink-0 text-xs text-muted">{p.price != null ? `$${p.price}` : ''}</span></button></li>)}
+              </ul>
+            )}
+          </div>
+        )}
+        {product && variants.length > 0 && (
+          <div className="space-y-1.5"><Label>Variant (optional)</Label>
+            <select value={variantId ?? ''} onChange={(e) => pickVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none">
+              <option value="">— none —</option>
+              {variants.map((v) => <option key={v.id} value={v.id}>{v.name}{v.sku ? ` · ${v.sku}` : ''}</option>)}
+            </select>
+          </div>
+        )}
         <div className="space-y-1.5"><Label>Description</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Item description" maxLength={1000} /></div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5"><Label>Quantity</Label><Input value={quantity} onChange={(e) => setQuantity(e.target.value)} type="number" min="0" step="1" inputMode="decimal" /></div>
