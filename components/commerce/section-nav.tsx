@@ -14,6 +14,7 @@ const LINKS = [
   { href: '/commerce/customers', label: 'Customers' },
   { href: '/commerce/companies', label: 'Companies' },
   { href: '/commerce/workflows', label: 'Workflows' },
+  { href: '/commerce/settings', label: 'Settings' },
 ]
 
 export function SectionNav() {

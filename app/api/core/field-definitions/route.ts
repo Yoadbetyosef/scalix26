@@ -8,7 +8,7 @@ import { listDefinitions, createDefinition } from '@/lib/core/fields'
 const FIELD_TYPES = ['text', 'long_text', 'integer', 'decimal', 'money', 'boolean', 'date', 'datetime', 'select', 'multi_select', 'file', 'image', 'contact_relation', 'company_relation', 'product_relation', 'variant_relation', 'user_relation', 'record_relation'] as const
 
 export async function GET(req: NextRequest) {
-  const c = await requireCoreTenant('inventory')
+  const c = await requireCoreTenant('commerce')
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const entityType = new URL(req.url).searchParams.get('entity_type') || 'product'
   return NextResponse.json({ definitions: await listDefinitions(c.tenantId, entityType) })
@@ -22,7 +22,7 @@ const schema = z.object({
   options: z.array(z.object({ value: z.string().min(1).max(200), label: z.string().min(1).max(200) })).optional(),
 })
 export async function POST(req: NextRequest) {
-  const c = await requireCoreTenant('inventory')
+  const c = await requireCoreTenant('commerce')
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
