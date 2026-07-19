@@ -2,6 +2,10 @@
 
 import { useState } from 'react'
 import { AVAILABILITY_STATUSES, AVAILABILITY_LABELS, PRODUCT_STATUSES, type CatalogProduct } from '@/lib/catalog/types'
+import { CategorySelect } from '@/components/commerce/category-select'
+import { ImageField } from '@/components/commerce/image-field'
+
+const labelCls = 'mb-1 block text-xs font-medium uppercase tracking-wide text-subtle'
 
 export type ProductInput = Partial<CatalogProduct> & { tagsText?: string }
 
@@ -48,20 +52,14 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
         <Field label="Name"><input className={input} required value={f.name || ''} onChange={(e) => set('name', e.target.value)} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="SKU"><input className={input} value={f.sku || ''} onChange={(e) => set('sku', e.target.value)} /></Field>
-          <Field label="Category"><input className={input} value={f.category || ''} onChange={(e) => set('category', e.target.value)} /></Field>
+          <div><span className={labelCls}>Category</span><CategorySelect value={f.category || ''} onChange={(name) => set('category', name)} /></div>
           <Field label="Brand"><input className={input} value={f.brand || ''} onChange={(e) => set('brand', e.target.value)} /></Field>
           <Field label="Price"><input className={input} type="number" step="0.01" value={f.price ?? ''} onChange={(e) => set('price', e.target.value)} /></Field>
         </div>
         <Field label="Description"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={f.description || ''} onChange={(e) => set('description', e.target.value)} /></Field>
         <div>
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Photo (image URL)</span>
-          <div className="flex items-center gap-3">
-            {f.image_url
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={f.image_url} alt="" className="h-16 w-16 flex-shrink-0 rounded-lg border border-hairline object-cover" />
-              : <span className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-xs text-muted">No photo</span>}
-            <input className={input} value={f.image_url || ''} onChange={(e) => set('image_url', e.target.value)} placeholder="Paste a direct image URL (…jpg / …png)" />
-          </div>
+          <span className={labelCls}>Photo</span>
+          <ImageField value={f.image_url || ''} onChange={(url) => set('image_url', url)} uploadEndpoint="/api/catalog/upload" />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Status"><select className={input} value={f.status} onChange={(e) => set('status', e.target.value)}>{PRODUCT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>

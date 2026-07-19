@@ -15,12 +15,18 @@ interface Location { id: string; name: string; kind: string }
 const MOVEMENTS = ['receive', 'reserve', 'release', 'allocate', 'ship', 'return', 'adjust'] as const
 
 export function ProductInventory({ productId }: { productId: string }) {
+  return <InventoryPanel itemKind="product" itemId={productId} />
+}
+
+// Generic Core inventory panel for any item kind (product / variant / component). Every change goes through
+// the atomic core_inventory_move RPC; counts are never written directly.
+export function InventoryPanel({ itemKind, itemId }: { itemKind: 'product' | 'variant' | 'component'; itemId: string }) {
   const [data, setData] = useState<{ levels: Level[]; locations: Location[] } | null>(null)
   const [moving, setMoving] = useState(false)
   const [addingLocation, setAddingLocation] = useState(false)
 
-  const load = () => fetch(`/api/core/inventory/levels?itemKind=product&itemId=${productId}`).then((r) => r.json()).then(setData).catch(() => setData({ levels: [], locations: [] }))
-  useEffect(() => { load() }, [productId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const load = () => fetch(`/api/core/inventory/levels?itemKind=${itemKind}&itemId=${itemId}`).then((r) => r.json()).then(setData).catch(() => setData({ levels: [], locations: [] }))
+  useEffect(() => { load() }, [itemKind, itemId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!data) return <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
 
@@ -34,7 +40,7 @@ export function ProductInventory({ productId }: { productId: string }) {
       </div>
       <div className="mb-4 flex items-start gap-2 rounded-card border border-info/20 bg-info/5 px-3 py-2 text-xs text-subtle">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
-        <p>New here? Core inventory starts empty and fills up as you record movements. Any stock from your earlier catalog isn’t shown yet — nothing was changed. Record a movement to begin tracking this product.</p>
+        <p>New here? Core inventory starts empty and fills up as you record movements. Any stock from your earlier catalog isn’t shown yet — nothing was changed. Record a movement to begin tracking.</p>
       </div>
 
       {data.locations.length === 0 ? (
@@ -67,13 +73,13 @@ export function ProductInventory({ productId }: { productId: string }) {
         </div>
       )}
 
-      {moving && <MoveForm productId={productId} locations={data.locations} onClose={() => setMoving(false)} onDone={() => { setMoving(false); load() }} />}
+      {moving && <MoveForm itemKind={itemKind} itemId={itemId} locations={data.locations} onClose={() => setMoving(false)} onDone={() => { setMoving(false); load() }} />}
       {addingLocation && <AddLocationForm onClose={() => setAddingLocation(false)} onDone={() => { setAddingLocation(false); load() }} />}
     </div>
   )
 }
 
-function MoveForm({ productId, locations, onClose, onDone }: { productId: string; locations: Location[]; onClose: () => void; onDone: () => void }) {
+function MoveForm({ itemKind, itemId, locations, onClose, onDone }: { itemKind: string; itemId: string; locations: Location[]; onClose: () => void; onDone: () => void }) {
   const [locationId, setLocationId] = useState(locations[0]?.id ?? '')
   const [movement, setMovement] = useState<string>('receive')
   const [quantity, setQuantity] = useState('1')
@@ -84,7 +90,7 @@ function MoveForm({ productId, locations, onClose, onDone }: { productId: string
     if (!Number.isFinite(qty) || (movement !== 'adjust' && qty <= 0) || qty < 0) { toast.error('Enter a valid quantity.'); return }
     if (!locationId) { toast.error('Choose a location.'); return }
     setSaving(true)
-    const res = await fetch('/api/core/inventory/move', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemKind: 'product', itemId: productId, locationId, movement, quantity: qty }) })
+    const res = await fetch('/api/core/inventory/move', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ itemKind, itemId, locationId, movement, quantity: qty }) })
     const d = await res.json().catch(() => ({}))
     setSaving(false)
     if (res.ok && d.ok) { toast.success(`Available: ${d.available ?? '—'}`); onDone() } else toast.error(errorLabel(d.error) || 'Movement failed.')

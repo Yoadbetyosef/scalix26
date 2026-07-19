@@ -11,9 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Menu, type MenuItem } from '@/components/ui/menu'
-import { AttributeEditor } from '@/components/commerce/attribute-editor'
-import { ComponentCatalog } from '@/components/commerce/component-catalog'
-import { ComponentImages, ComponentQR } from '@/components/commerce/component-images'
+import { ComponentDetail } from '@/components/commerce/component-detail'
 import { formatCents, centsToInput, inputToCents } from '@/lib/core/money-format'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -24,10 +22,9 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active'
 export function ProductComponents({ productId }: { productId: string }) {
   const [components, setComponents] = useState<Component[] | null>(null)
   const [editing, setEditing] = useState<Component | 'new' | null>(null)
-  const [attrsFor, setAttrsFor] = useState<Component | null>(null)
-  const [catalogFor, setCatalogFor] = useState<Component | null>(null)
-  const [imagesFor, setImagesFor] = useState<Component | null>(null)
-  const [qrFor, setQrFor] = useState<Component | null>(null)
+  const [detailFor, setDetailFor] = useState<Component | null>(null)
+  const [detailTab, setDetailTab] = useState('general')
+  const openDetail = (cmp: Component, tab: string) => { setDetailTab(tab); setDetailFor(cmp) }
 
   const load = () => fetch(`/api/core/products/${productId}/components`).then((r) => r.json()).then((d) => setComponents(d.components ?? [])).catch(() => setComponents([]))
   useEffect(() => { load() }, [productId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -53,41 +50,39 @@ export function ProductComponents({ productId }: { productId: string }) {
       ) : (
         <ul className="space-y-2">
           {components.map((cmp) => (
-            <li key={cmp.id} className={cn('flex items-center gap-3 rounded-card border border-hairline bg-surface p-3 shadow-e1', cmp.status === 'discontinued' && 'opacity-60')}>
+            <li key={cmp.id}
+              role="button" tabIndex={0}
+              onClick={() => openDetail(cmp, 'general')}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(cmp, 'general') } }}
+              aria-label={`Open ${cmp.name}`}
+              className={cn('flex cursor-pointer items-center gap-3 rounded-card border border-hairline bg-surface p-3 shadow-e1 transition-colors hover:bg-sunken/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ink/15', cmp.status === 'discontinued' && 'opacity-60')}>
               <ComponentThumb url={cmp.image_url} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-ink">{cmp.name}</p>
                 <p className="truncate text-xs text-muted">{[`×${cmp.quantity}`, cmp.sku, cmp.price_cents != null ? formatCents(cmp.price_cents, cmp.currency) : null].filter(Boolean).join(' · ')}</p>
               </div>
               <Badge variant={STATUS_VARIANT[cmp.status] ?? 'neutral'}>{cmp.status}</Badge>
-              <Menu ariaLabel="Component actions" buttonClassName="flex h-9 w-9 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" items={([
-                { label: 'View QR', icon: QrCode, onClick: () => setQrFor(cmp) },
-                { label: 'Manage images', icon: ImageIcon, onClick: () => setImagesFor(cmp) },
-                { label: 'Manage variants', icon: Layers, onClick: () => setCatalogFor(cmp) },
-                { label: 'Edit attributes', icon: SlidersHorizontal, onClick: () => setAttrsFor(cmp) },
-                { label: 'Edit component', icon: Pencil, onClick: () => setEditing(cmp) },
-                cmp.status === 'discontinued'
-                  ? { label: 'Restore', icon: RotateCcw, onClick: () => setStatus(cmp, 'active') }
-                  : { label: 'Archive', icon: Archive, onClick: () => setStatus(cmp, 'discontinued') },
-              ]) as MenuItem[]} />
+              <span onClick={(e) => e.stopPropagation()}>
+                <Menu ariaLabel="Component quick actions" buttonClassName="flex h-9 w-9 items-center justify-center rounded-lg text-subtle hover:bg-white hover:text-ink" items={([
+                  { label: 'View QR', icon: QrCode, onClick: () => openDetail(cmp, 'qr') },
+                  { label: 'Manage images', icon: ImageIcon, onClick: () => openDetail(cmp, 'images') },
+                  { label: 'Manage variants', icon: Layers, onClick: () => openDetail(cmp, 'variants') },
+                  { label: 'Edit attributes', icon: SlidersHorizontal, onClick: () => openDetail(cmp, 'attributes') },
+                  { label: 'Edit component', icon: Pencil, onClick: () => openDetail(cmp, 'general') },
+                  cmp.status === 'discontinued'
+                    ? { label: 'Restore', icon: RotateCcw, onClick: () => setStatus(cmp, 'active') }
+                    : { label: 'Archive', icon: Archive, onClick: () => setStatus(cmp, 'discontinued') },
+                ]) as MenuItem[]} />
+              </span>
             </li>
           ))}
         </ul>
       )}
 
       {editing && <ComponentForm productId={productId} component={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
-      {attrsFor && (
-        <Drawer open onClose={() => setAttrsFor(null)} title={`Attributes — ${attrsFor.name}`}>
-          <AttributeEditor endpoint={`/api/core/components/${attrsFor.id}/attributes`} emptyHint="No component attributes defined yet. Add component fields in Settings → Custom fields." />
-        </Drawer>
-      )}
-      {catalogFor && <ComponentCatalog componentId={catalogFor.id} componentName={catalogFor.name} onClose={() => setCatalogFor(null)} />}
-      {imagesFor && (() => { const live = components?.find((c) => c.id === imagesFor.id) ?? imagesFor; return (
-        <Drawer open onClose={() => setImagesFor(null)} title={`Images — ${live.name}`}>
-          <ComponentImages componentId={live.id} primaryUrl={live.image_url} onChanged={load} />
-        </Drawer>
+      {detailFor && (() => { const live = components?.find((c) => c.id === detailFor.id) ?? detailFor; return (
+        <ComponentDetail component={live} initialTab={detailTab} onClose={() => setDetailFor(null)} onChanged={load} />
       ) })()}
-      {qrFor && <Drawer open onClose={() => setQrFor(null)} title={`QR code — ${qrFor.name}`}><ComponentQR componentId={qrFor.id} /></Drawer>}
     </div>
   )
 }

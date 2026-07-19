@@ -25,7 +25,7 @@ export function ComponentCatalog({ componentId, componentName, onClose }: { comp
   )
 }
 
-function ComponentVariants({ componentId }: { componentId: string }) {
+export function ComponentVariants({ componentId }: { componentId: string }) {
   const [variants, setVariants] = useState<Variant[] | null>(null)
   const [editing, setEditing] = useState<Variant | 'new' | null>(null)
   const load = () => fetch(`/api/core/components/${componentId}/variants`).then((r) => r.json()).then((d) => setVariants(d.variants ?? [])).catch(() => setVariants([]))

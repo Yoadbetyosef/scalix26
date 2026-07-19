@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { PRODUCT_STATUSES } from '@/lib/core/product-input'
 import { CategorySelect } from '@/components/commerce/category-select'
+import { ImageField } from '@/components/commerce/image-field'
 import { toast } from 'sonner'
 
 // Typed Core product fields only — NO vertical fields here (those render on the Attributes tab from
@@ -58,8 +59,8 @@ export function ProductGeneralForm({ initial, submitLabel, onSubmit }: {
             {PRODUCT_STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
           </select>
         </Field>
-        <Field label="Image URL"><Input value={v.image_url} onChange={(e) => set('image_url', e.target.value)} placeholder="https://…" maxLength={2000} /></Field>
       </div>
+      <Field label="Product image"><ImageField value={v.image_url} onChange={(url) => set('image_url', url)} /></Field>
       <Field label="Description"><Textarea value={v.description} onChange={(e) => set('description', e.target.value)} rows={4} placeholder="Optional" maxLength={5000} /></Field>
       <div className="flex justify-end">
         <Button type="submit" loading={saving}>{submitLabel}</Button>
