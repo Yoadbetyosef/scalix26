@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireCore } from '@/lib/core/guard'
-import { createWorkflow } from '@/lib/core/workflow'
+import { createWorkflow, listWorkflows } from '@/lib/core/workflow'
+
+export async function GET() {
+  const c = await requireCore()
+  if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json({ workflows: await listWorkflows(c.tenantId) })
+}
 
 const schema = z.object({
   key: z.string().min(1).max(60).regex(/^[a-z0-9_]+$/), name: z.string().min(1).max(200), recordType: z.string().min(1).max(40),

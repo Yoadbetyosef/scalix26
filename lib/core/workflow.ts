@@ -45,6 +45,23 @@ export async function transition(tenantId: string, instanceId: string, toStageId
   return (data ?? { ok: false, error: 'no_result' }) as { ok: boolean; error?: string; from?: string; to?: string; terminal?: boolean }
 }
 
+// All configured workflow definitions with their stages + allowed transitions — for the (read-only) overview.
+// Stage sets are CONFIGURED per tenant/vertical, never hard-coded in Core.
+export async function listWorkflows(tenantId: string) {
+  const { data: defs } = await admin().from('workflow_definitions').select('id, key, name, record_type, active').eq('tenant_id', tenantId).order('name')
+  const rows = (defs ?? []) as Array<{ id: string; key: string; name: string; record_type: string; active: boolean }>
+  if (!rows.length) return []
+  const ids = rows.map((r) => r.id)
+  const [{ data: stages }, { data: trans }] = await Promise.all([
+    admin().from('workflow_stages').select('id, workflow_definition_id, key, label, sort_order, is_initial, is_terminal, is_success, is_failed').in('workflow_definition_id', ids).order('sort_order'),
+    admin().from('workflow_transitions').select('workflow_definition_id, from_stage_id, to_stage_id').in('workflow_definition_id', ids),
+  ])
+  const sByDef = new Map<string, unknown[]>(), tByDef = new Map<string, unknown[]>()
+  for (const s of (stages ?? []) as Array<{ workflow_definition_id: string }>) { if (!sByDef.has(s.workflow_definition_id)) sByDef.set(s.workflow_definition_id, []); sByDef.get(s.workflow_definition_id)!.push(s) }
+  for (const t of (trans ?? []) as Array<{ workflow_definition_id: string }>) { if (!tByDef.has(t.workflow_definition_id)) tByDef.set(t.workflow_definition_id, []); tByDef.get(t.workflow_definition_id)!.push(t) }
+  return rows.map((r) => ({ ...r, stages: sByDef.get(r.id) ?? [], transitions: tByDef.get(r.id) ?? [] }))
+}
+
 export async function getInstance(tenantId: string, instanceId: string) {
   const [{ data: inst }, { data: history }] = await Promise.all([
     admin().from('workflow_instances').select('*').eq('tenant_id', tenantId).eq('id', instanceId).maybeSingle(),
