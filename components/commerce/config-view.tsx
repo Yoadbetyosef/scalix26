@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Package as PackageIcon, SlidersHorizontal, Type, Hash, Plus, Check } from 'lucide-react'
+import { Package as PackageIcon, SlidersHorizontal, Type, Hash, Plus, Check, Tag, ArrowUp, ArrowDown, Archive, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 
 const TABS = [
   { key: 'packages', label: 'Packages', icon: PackageIcon },
+  { key: 'categories', label: 'Categories', icon: Tag },
   { key: 'fields', label: 'Custom fields', icon: SlidersHorizontal },
   { key: 'terminology', label: 'Terminology', icon: Type },
   { key: 'numbering', label: 'Numbering', icon: Hash },
@@ -27,6 +28,7 @@ export function ConfigView() {
       <header className="mb-6"><h1 className="text-2xl font-light tracking-tight text-ink">Settings</h1><p className="mt-1 text-sm text-muted">Configure your industry package, custom fields, wording and document numbering.</p></header>
       <Tabs tabs={TABS} value={tab} onChange={setTab} className="mb-6" />
       {tab === 'packages' && <Packages />}
+      {tab === 'categories' && <Categories />}
       {tab === 'fields' && <Fields />}
       {tab === 'terminology' && <Terminology />}
       {tab === 'numbering' && <Numbering />}
@@ -201,6 +203,85 @@ function NumRow({ rule, onSave }: { rule: Rule; onSave: (docType: string, prefix
       <Input value={padding} onChange={(e) => setPadding(e.target.value)} className="h-9 w-20" type="number" min="1" max="10" />
       <span className="shrink-0 text-xs text-muted">next {rule.next_number}</span>
       <Button size="sm" variant="outline" onClick={() => onSave(rule.doc_type, prefix, Number(padding) || rule.padding)}>Save</Button>
+    </div>
+  )
+}
+
+// ── Categories ────────────────────────────────────────────────────────────────
+interface Cat { id: string; name: string; group_label: string | null; sort_order: number; archived_at: string | null; source_package_id: string | null }
+function Categories() {
+  const [cats, setCats] = useState<Cat[] | null>(null)
+  const [newName, setNewName] = useState('')
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
+  const load = () => fetch('/api/core/categories?archived=1').then((r) => r.json()).then((d) => setCats(d.categories ?? [])).catch(() => setCats([]))
+  useEffect(() => { load() }, [])
+
+  const active = (cats ?? []).filter((c) => !c.archived_at).sort((a, b) => a.sort_order - b.sort_order)
+  const archived = (cats ?? []).filter((c) => c.archived_at)
+
+  async function create() {
+    const name = newName.trim(); if (!name) return
+    const res = await fetch('/api/core/categories', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.ok) { setNewName(''); toast.success('Category added.'); load() } else toast.error(d.error === 'duplicate' ? 'That category already exists.' : 'Could not add.')
+  }
+  async function patch(id: string, body: Record<string, unknown>) { const res = await fetch(`/api/core/categories/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); if (res.ok) load(); else { const d = await res.json().catch(() => ({})); toast.error(d.error === 'duplicate' ? 'That name already exists.' : 'Could not update.') } }
+  async function del(id: string) { const res = await fetch(`/api/core/categories/${id}`, { method: 'DELETE' }); if (res.ok) { toast.success('Category deleted.'); load() } else toast.error(res.status === 409 ? 'In use — archive it instead of deleting.' : 'Could not delete.') }
+  async function move(idx: number, dir: -1 | 1) {
+    const arr = [...active]; const j = idx + dir; if (j < 0 || j >= arr.length) return
+    ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
+    setCats((prev) => prev ? [...arr, ...archived] : prev)
+    await fetch('/api/core/categories/reorder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: arr.map((c) => c.id) }) })
+    load()
+  }
+
+  if (!cats) return <SkeletonRows />
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted">Categories power the product Category picker. They’re seeded by your installed package and you can add your own. Archived categories disappear from selection but stay on existing products.</p>
+      <div className="flex items-center gap-2">
+        <Input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') create() }} placeholder="New category name" className="h-10" />
+        <Button size="sm" onClick={create}><Plus className="h-4 w-4" /> Add</Button>
+      </div>
+
+      {active.length === 0 ? <p className="py-6 text-center text-sm text-muted">No categories yet.</p> : (
+        <ul className="space-y-1">
+          {active.map((c, i) => (
+            <li key={c.id} className="flex items-center gap-2 rounded-card border border-hairline bg-surface p-2 shadow-e1">
+              <div className="flex flex-col">
+                <button onClick={() => move(i, -1)} disabled={i === 0} className="text-muted hover:text-ink disabled:opacity-30" aria-label="Move up"><ArrowUp className="h-3.5 w-3.5" /></button>
+                <button onClick={() => move(i, 1)} disabled={i === active.length - 1} className="text-muted hover:text-ink disabled:opacity-30" aria-label="Move down"><ArrowDown className="h-3.5 w-3.5" /></button>
+              </div>
+              {editing?.id === c.id ? (
+                <input value={editing.name} onChange={(e) => setEditing({ id: c.id, name: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter' && editing.name.trim()) { patch(c.id, { name: editing.name.trim() }); setEditing(null) } }} autoFocus className="h-9 flex-1 rounded-input border border-hairline px-2 text-sm text-ink focus:border-ink/30 focus:outline-none" />
+              ) : (
+                <div className="min-w-0 flex-1"><span className="truncate text-sm text-ink">{c.name}</span>{c.group_label && <span className="ml-2 text-xs text-muted">{c.group_label}</span>}{c.source_package_id && <Badge variant="resolved" className="ml-2">Package</Badge>}</div>
+              )}
+              {editing?.id === c.id
+                ? <Button size="sm" variant="outline" onClick={() => { if (editing.name.trim()) { patch(c.id, { name: editing.name.trim() }); setEditing(null) } }}>Save</Button>
+                : <>
+                    <button onClick={() => setEditing({ id: c.id, name: c.name })} className="text-xs text-subtle hover:text-ink">Rename</button>
+                    <button onClick={() => patch(c.id, { archived: true })} className="flex h-7 w-7 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Archive"><Archive className="h-4 w-4" /></button>
+                  </>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {archived.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Archived</h3>
+          <ul className="space-y-1">
+            {archived.map((c) => (
+              <li key={c.id} className="flex items-center gap-2 rounded-card border border-hairline bg-sunken/40 p-2">
+                <span className="min-w-0 flex-1 truncate text-sm text-subtle">{c.name}</span>
+                <button onClick={() => patch(c.id, { archived: false })} className="flex h-7 w-7 items-center justify-center rounded-lg text-subtle hover:bg-white hover:text-ink" aria-label="Restore"><RotateCcw className="h-4 w-4" /></button>
+                <button onClick={() => del(c.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-subtle hover:bg-white hover:text-danger" aria-label="Delete (only if unused)"><Trash2 className="h-4 w-4" /></button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { PRODUCT_STATUSES } from '@/lib/core/product-input'
+import { CategorySelect } from '@/components/commerce/category-select'
 import { toast } from 'sonner'
 
 // Typed Core product fields only — NO vertical fields here (those render on the Attributes tab from
@@ -47,7 +48,7 @@ export function ProductGeneralForm({ initial, submitLabel, onSubmit }: {
       <Field label="Name" required><Input value={v.name} onChange={(e) => set('name', e.target.value)} placeholder="Product name" maxLength={300} /></Field>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Field label="SKU"><Input value={v.sku} onChange={(e) => set('sku', e.target.value)} placeholder="Optional" maxLength={120} /></Field>
-        <Field label="Category"><Input value={v.category} onChange={(e) => set('category', e.target.value)} placeholder="Optional" maxLength={120} /></Field>
+        <Field label="Category"><CategorySelect value={v.category} onChange={(name) => set('category', name)} /></Field>
         <Field label="Brand"><Input value={v.brand} onChange={(e) => set('brand', e.target.value)} placeholder="Optional" maxLength={120} /></Field>
         <Field label="Base price (USD)">
           <Input value={v.price} onChange={(e) => set('price', e.target.value)} type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00" />

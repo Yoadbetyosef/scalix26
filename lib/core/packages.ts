@@ -86,6 +86,16 @@ export async function installPackage(tenantId: string, packageKey: string, actor
   )
   if (instErr) return { ok: false, error: instErr.message }
 
+  // Seed the package's default categories — insert-only (ignoreDuplicates) so a tenant's renames/reorder/
+  // archives are never clobbered on re-install; only brand-new categories are added.
+  const { data: pkgCats } = await admin().from('vertical_schema_package_categories').select('group_label, name, sort_order').eq('package_id', pkg.id).order('sort_order')
+  if (pkgCats?.length) {
+    await admin().from('product_categories').upsert(
+      (pkgCats as Array<{ group_label: string | null; name: string; sort_order: number }>).map((cat) => ({ tenant_id: tenantId, name: cat.name, group_label: cat.group_label, sort_order: cat.sort_order, source_package_id: pkg.id })),
+      { onConflict: 'tenant_id,name', ignoreDuplicates: true },
+    )
+  }
+
   return { ok: true, action, fields: templates.length, version: pkg.version }
 }
 
