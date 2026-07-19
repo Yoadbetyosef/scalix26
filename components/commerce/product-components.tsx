@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Boxes, Pencil, Archive, RotateCcw, QrCode, ExternalLink, SlidersHorizontal, Layers } from 'lucide-react'
+import { Plus, Boxes, Pencil, Archive, RotateCcw, QrCode, ExternalLink, SlidersHorizontal, Layers, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -10,13 +10,15 @@ import { Drawer } from '@/components/ui/drawer'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Menu, type MenuItem } from '@/components/ui/menu'
 import { AttributeEditor } from '@/components/commerce/attribute-editor'
 import { ComponentCatalog } from '@/components/commerce/component-catalog'
+import { ComponentImages, ComponentQR } from '@/components/commerce/component-images'
 import { formatCents, centsToInput, inputToCents } from '@/lib/core/money-format'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-interface Component { id: string; name: string; sku: string | null; quantity: number; price_cents: number | null; cost_cents: number | null; currency: string; status: string; notes: string | null; description: string | null; component_type: string | null; track_inventory: boolean; qr_code_token: string }
+interface Component { id: string; name: string; sku: string | null; quantity: number; price_cents: number | null; cost_cents: number | null; currency: string; status: string; notes: string | null; description: string | null; component_type: string | null; track_inventory: boolean; qr_code_token: string; image_url: string | null }
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active', inactive: 'neutral', discontinued: 'closed' }
 
 export function ProductComponents({ productId }: { productId: string }) {
@@ -24,6 +26,8 @@ export function ProductComponents({ productId }: { productId: string }) {
   const [editing, setEditing] = useState<Component | 'new' | null>(null)
   const [attrsFor, setAttrsFor] = useState<Component | null>(null)
   const [catalogFor, setCatalogFor] = useState<Component | null>(null)
+  const [imagesFor, setImagesFor] = useState<Component | null>(null)
+  const [qrFor, setQrFor] = useState<Component | null>(null)
 
   const load = () => fetch(`/api/core/products/${productId}/components`).then((r) => r.json()).then((d) => setComponents(d.components ?? [])).catch(() => setComponents([]))
   useEffect(() => { load() }, [productId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -50,18 +54,22 @@ export function ProductComponents({ productId }: { productId: string }) {
         <ul className="space-y-2">
           {components.map((cmp) => (
             <li key={cmp.id} className={cn('flex items-center gap-3 rounded-card border border-hairline bg-surface p-3 shadow-e1', cmp.status === 'discontinued' && 'opacity-60')}>
+              <ComponentThumb url={cmp.image_url} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-ink">{cmp.name}</p>
                 <p className="truncate text-xs text-muted">{[`×${cmp.quantity}`, cmp.sku, cmp.price_cents != null ? formatCents(cmp.price_cents, cmp.currency) : null].filter(Boolean).join(' · ')}</p>
               </div>
-              <a href={`/p/${cmp.qr_code_token}`} target="_blank" rel="noreferrer" className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Public QR page" title="View public QR page"><QrCode className="h-4 w-4" /></a>
               <Badge variant={STATUS_VARIANT[cmp.status] ?? 'neutral'}>{cmp.status}</Badge>
-              <button onClick={() => setCatalogFor(cmp)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Variants & images" title="Variants & images"><Layers className="h-4 w-4" /></button>
-              <button onClick={() => setAttrsFor(cmp)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Attributes" title="Attributes"><SlidersHorizontal className="h-4 w-4" /></button>
-              <button onClick={() => setEditing(cmp)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Edit"><Pencil className="h-4 w-4" /></button>
-              {cmp.status === 'discontinued'
-                ? <button onClick={() => setStatus(cmp, 'active')} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Restore"><RotateCcw className="h-4 w-4" /></button>
-                : <button onClick={() => setStatus(cmp, 'discontinued')} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Archive"><Archive className="h-4 w-4" /></button>}
+              <Menu ariaLabel="Component actions" buttonClassName="flex h-9 w-9 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" items={([
+                { label: 'View QR', icon: QrCode, onClick: () => setQrFor(cmp) },
+                { label: 'Manage images', icon: ImageIcon, onClick: () => setImagesFor(cmp) },
+                { label: 'Manage variants', icon: Layers, onClick: () => setCatalogFor(cmp) },
+                { label: 'Edit attributes', icon: SlidersHorizontal, onClick: () => setAttrsFor(cmp) },
+                { label: 'Edit component', icon: Pencil, onClick: () => setEditing(cmp) },
+                cmp.status === 'discontinued'
+                  ? { label: 'Restore', icon: RotateCcw, onClick: () => setStatus(cmp, 'active') }
+                  : { label: 'Archive', icon: Archive, onClick: () => setStatus(cmp, 'discontinued') },
+              ]) as MenuItem[]} />
             </li>
           ))}
         </ul>
@@ -74,8 +82,21 @@ export function ProductComponents({ productId }: { productId: string }) {
         </Drawer>
       )}
       {catalogFor && <ComponentCatalog componentId={catalogFor.id} componentName={catalogFor.name} onClose={() => setCatalogFor(null)} />}
+      {imagesFor && (() => { const live = components?.find((c) => c.id === imagesFor.id) ?? imagesFor; return (
+        <Drawer open onClose={() => setImagesFor(null)} title={`Images — ${live.name}`}>
+          <ComponentImages componentId={live.id} primaryUrl={live.image_url} onChanged={load} />
+        </Drawer>
+      ) })()}
+      {qrFor && <Drawer open onClose={() => setQrFor(null)} title={`QR code — ${qrFor.name}`}><ComponentQR componentId={qrFor.id} /></Drawer>}
     </div>
   )
+}
+
+function ComponentThumb({ url }: { url: string | null }) {
+  return url
+    ? // eslint-disable-next-line @next/next/no-img-element
+      <img src={url} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+    : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sunken text-muted"><ImageIcon className="h-5 w-5" /></span>
 }
 
 function ComponentForm({ productId, component, onClose, onSaved }: { productId: string; component: Component | null; onClose: () => void; onSaved: () => void }) {

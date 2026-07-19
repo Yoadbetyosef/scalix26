@@ -17,7 +17,8 @@ export interface ProductListItem {
 export async function listProducts(tenantId: string, limit = 500): Promise<ProductListItem[]> {
   const { data: products } = await admin().from('catalog_products')
     .select('id, name, sku, category, price, status, image_url, updated_at')
-    .eq('tenant_id', tenantId).order('updated_at', { ascending: false }).limit(limit)
+    .eq('tenant_id', tenantId).is('archived_at', null).is('deleted_at', null)
+    .order('updated_at', { ascending: false }).limit(limit)
   const rows = (products ?? []) as Array<Omit<ProductListItem, 'variantCount' | 'componentCount'>>
   if (!rows.length) return []
   const ids = rows.map((r) => r.id)
@@ -63,6 +64,34 @@ export async function updateProduct(tenantId: string, id: string, patch: Product
   if (error) return { ok: false, error: error.message }
   if (!data) return { ok: false, error: 'not_found' }
   return { ok: true, product: data as ProductRecord }
+}
+
+// Archive/restore a whole product — reversible; hidden from the active catalog + new selection, kept in history.
+export async function archiveProduct(tenantId: string, id: string, archived: boolean): Promise<boolean> {
+  const { error } = await admin().from('catalog_products').update({ archived_at: archived ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', id)
+  return !error
+}
+
+// Safe delete: if the product OR any of its components is referenced by historical document lines, TOMBSTONE
+// it (soft delete — references + history preserved). Otherwise hard-delete (CASCADE removes components/
+// variants/media). Either way it leaves the active catalog. Tenant-scoped.
+export async function deleteProduct(tenantId: string, id: string): Promise<{ ok: true; mode: 'soft' | 'hard' } | { ok: false; error: string }> {
+  const { data: prod } = await admin().from('catalog_products').select('id').eq('tenant_id', tenantId).eq('id', id).maybeSingle()
+  if (!prod) return { ok: false, error: 'not_found' }
+  const { data: comps } = await admin().from('product_components').select('id').eq('tenant_id', tenantId).eq('product_id', id)
+  const compIds = (comps ?? []).map((c) => c.id as string)
+  const { count: byProduct } = await admin().from('sales_document_lines').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('product_id', id)
+  let referenced = (byProduct ?? 0) > 0
+  if (!referenced && compIds.length) {
+    const { count: byComp } = await admin().from('sales_document_lines').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).in('component_id', compIds)
+    referenced = (byComp ?? 0) > 0
+  }
+  if (referenced) {
+    const { error } = await admin().from('catalog_products').update({ deleted_at: new Date().toISOString(), status: 'discontinued', updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', id)
+    return error ? { ok: false, error: error.message } : { ok: true, mode: 'soft' }
+  }
+  const { error } = await admin().from('catalog_products').delete().eq('tenant_id', tenantId).eq('id', id)
+  return error ? { ok: false, error: error.message } : { ok: true, mode: 'hard' }
 }
 
 // Map validated input → catalog_products columns, coercing '' → null (never write empty strings).

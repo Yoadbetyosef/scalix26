@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Info, Layers, Boxes, SlidersHorizontal, Image as ImageIcon, Warehouse, Activity, Package } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, Info, Layers, Boxes, SlidersHorizontal, Image as ImageIcon, Warehouse, Activity, Package, Pencil, Archive, Trash2, RotateCcw } from 'lucide-react'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Drawer } from '@/components/ui/drawer'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Menu } from '@/components/ui/menu'
 import { ProductGeneralForm } from '@/components/commerce/product-general-form'
 import { ProductVariants } from '@/components/commerce/product-variants'
 import { ProductComponents } from '@/components/commerce/product-components'
@@ -30,8 +36,16 @@ const TABS: TabItem[] = [
 ]
 
 export function ProductDetail({ productId }: { productId: string }) {
+  const router = useRouter()
   const [product, setProduct] = useState<Product | null | 'notfound'>(null)
   const [tab, setTab] = useState('general')
+  const [deleting, setDeleting] = useState(false)
+
+  const reloadProduct = () => fetch(`/api/core/products/${productId}`).then((r) => r.json()).then((d) => setProduct(d.product)).catch(() => {})
+  async function archive(archived: boolean) {
+    const res = await fetch(`/api/core/products/${productId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ archived }) })
+    if (res.ok) { toast.success(archived ? 'Product archived — hidden from the catalog, kept in history.' : 'Product restored.'); reloadProduct() } else toast.error('Could not update the product.')
+  }
 
   useEffect(() => {
     let live = true
@@ -80,7 +94,17 @@ export function ProductDetail({ productId }: { productId: string }) {
             <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
               {product.sku && <span className="truncate">{product.sku}</span>}
               <Badge variant={STATUS_VARIANT[product.status] ?? 'neutral'}>{product.status}</Badge>
+              {!!product.archived_at && <Badge variant="closed">Archived</Badge>}
             </div>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setTab('general')}><Pencil className="h-4 w-4" /> Edit product</Button>
+            <Menu label="More actions" ariaLabel="More product actions" items={[
+              product.archived_at
+                ? { label: 'Restore product', icon: RotateCcw, onClick: () => archive(false) }
+                : { label: 'Archive product', icon: Archive, onClick: () => archive(true) },
+              { label: 'Delete product', icon: Trash2, destructive: true, onClick: () => setDeleting(true) },
+            ]} />
           </div>
         </header>
       )}
@@ -104,6 +128,36 @@ export function ProductDetail({ productId }: { productId: string }) {
       {tab === 'media' && (product
         ? <ProductMedia productId={productId} primaryUrl={typeof product.image_url === 'string' ? product.image_url : null} onSetPrimary={setPrimary} />
         : <Skeleton className="h-40 w-full" />)}
+
+      {deleting && product && <DeleteProductModal productId={productId} productName={product.name} onClose={() => setDeleting(false)} onDeleted={() => router.push('/commerce/catalog')} />}
     </div>
+  )
+}
+
+function DeleteProductModal({ productId, productName, onClose, onDeleted }: { productId: string; productName: string; onClose: () => void; onDeleted: () => void }) {
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const confirmed = typed.trim() === productName.trim()
+  async function del() {
+    if (!confirmed) return
+    setBusy(true)
+    const res = await fetch(`/api/core/products/${productId}`, { method: 'DELETE' })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (res.ok && d.ok) { toast.success(d.mode === 'soft' ? 'Product deleted — kept in historical documents.' : 'Product deleted.'); onDeleted() }
+    else toast.error(d.error || 'Could not delete the product.')
+  }
+  return (
+    <Drawer open onClose={onClose} title="Delete product"
+      footer={<div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={onClose}>Cancel</Button><Button variant="destructive" size="sm" loading={busy} disabled={!confirmed} onClick={del}>Delete product</Button></div>}>
+      <div className="space-y-4 text-sm">
+        <p className="text-subtle">Deleting <strong className="text-ink">{productName}</strong> removes it and its <strong>components, variants, images, QR pages and inventory records</strong> from the active catalog and all new-selection dropdowns.</p>
+        <p className="rounded-card border border-info/20 bg-info/5 px-3 py-2 text-xs text-subtle">If this product (or any of its components) appears on any estimate, quote, order or invoice, it is <strong>kept as a tombstone</strong> so those historical documents, payments and activity stay intact and readable — nothing is broken.</p>
+        <div className="space-y-1.5">
+          <Label>Type the product name to confirm</Label>
+          <Input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={productName} autoFocus />
+        </div>
+      </div>
+    </Drawer>
   )
 }

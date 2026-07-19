@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Layers, Plus, Pencil, Archive, RotateCcw, ImagePlus, Trash2, Image as ImageIcon } from 'lucide-react'
+import { Plus, Pencil, Archive, RotateCcw } from 'lucide-react'
 import { Drawer } from '@/components/ui/drawer'
-import { Tabs } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,17 +13,14 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 interface Variant { id: string; name: string; sku: string | null; price_override_cents: number | null; cost_cents: number | null; currency: string; status: string; track_inventory: boolean }
-interface Media { id: string; url: string; kind: string; alt: string | null }
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active', inactive: 'neutral', discontinued: 'closed' }
 
-// A component managed as its own catalog item: fabric/color/size VARIANTS (own SKU/price/cost/QR/inventory)
-// and an image gallery. Attributes (fabric/dimensions) live in the component Attributes drawer.
+// A component's fabric/color/size VARIANTS (own SKU/price/cost/QR/inventory). Images have their own manager;
+// attributes (fabric/dimensions) live in the component Attributes drawer.
 export function ComponentCatalog({ componentId, componentName, onClose }: { componentId: string; componentName: string; onClose: () => void }) {
-  const [tab, setTab] = useState('variants')
   return (
-    <Drawer open onClose={onClose} title={`${componentName} — variants & images`}>
-      <Tabs tabs={[{ key: 'variants', label: 'Variants', icon: Layers }, { key: 'media', label: 'Images', icon: ImageIcon }]} value={tab} onChange={setTab} className="mb-4" />
-      {tab === 'variants' ? <ComponentVariants componentId={componentId} /> : <ComponentMedia componentId={componentId} />}
+    <Drawer open onClose={onClose} title={`${componentName} — variants`}>
+      <ComponentVariants componentId={componentId} />
     </Drawer>
   )
 }
@@ -95,32 +91,3 @@ function VariantForm({ componentId, variant, onClose, onSaved }: { componentId: 
   )
 }
 
-function ComponentMedia({ componentId }: { componentId: string }) {
-  const [media, setMedia] = useState<Media[] | null>(null)
-  const [url, setUrl] = useState('')
-  const load = () => fetch(`/api/core/components/${componentId}/media`).then((r) => r.json()).then((d) => setMedia(d.media ?? [])).catch(() => setMedia([]))
-  useEffect(() => { load() }, [componentId]) // eslint-disable-line react-hooks/exhaustive-deps
-  async function add() {
-    if (!url.trim()) { toast.error('Enter an image URL.'); return }
-    const res = await fetch(`/api/core/components/${componentId}/media`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: url.trim() }) })
-    if (res.ok) { setUrl(''); load() } else toast.error('Could not add image.')
-  }
-  async function del(id: string) { const res = await fetch(`/api/core/media/${id}`, { method: 'DELETE' }); if (res.ok) load(); else toast.error('Could not remove.') }
-  if (!media) return <div className="grid grid-cols-3 gap-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="aspect-square w-full" />)}</div>
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2"><Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Image URL (https://…)" className="h-10" /><Button size="sm" onClick={add}><ImagePlus className="h-4 w-4" /> Add</Button></div>
-      {media.length === 0 ? <p className="py-6 text-center text-sm text-muted">No images yet.</p> : (
-        <ul className="grid grid-cols-3 gap-2">
-          {media.map((m) => (
-            <li key={m.id} className="group relative overflow-hidden rounded-card border border-hairline bg-sunken">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={m.url} alt={m.alt || ''} className="aspect-square w-full object-cover" />
-              <button onClick={() => del(m.id)} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-subtle hover:text-danger" aria-label="Remove"><Trash2 className="h-4 w-4" /></button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}

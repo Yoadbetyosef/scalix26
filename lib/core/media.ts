@@ -28,6 +28,12 @@ export async function deleteMedia(tenantId: string, id: string): Promise<boolean
   return !error
 }
 
+// Persist a new media order (tenant-scoped per row).
+export async function reorderMedia(tenantId: string, ids: string[]): Promise<boolean> {
+  for (let i = 0; i < ids.length; i++) await admin().from('product_media').update({ sort_order: i }).eq('tenant_id', tenantId).eq('id', ids[i])
+  return true
+}
+
 // Component media gallery — same table, keyed by component_id.
 export async function listComponentMedia(tenantId: string, componentId: string): Promise<MediaRow[]> {
   const { data } = await admin().from('product_media').select('id, product_id, url, kind, alt, sort_order, created_at')
