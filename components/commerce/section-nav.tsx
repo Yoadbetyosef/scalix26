@@ -11,6 +11,7 @@ const LINKS = [
   { href: '/commerce/estimates', label: 'Estimates' },
   { href: '/commerce/quotes', label: 'Quotes' },
   { href: '/commerce/invoices', label: 'Invoices' },
+  { href: '/commerce/customers', label: 'Customers' },
 ]
 
 export function SectionNav() {

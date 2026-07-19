@@ -7,6 +7,21 @@ import { addActivity } from './activities'
 // table: archive-without-delete, normalized-key maintenance, and duplicate detection.
 const admin = () => createAdminClient()
 
+const CONTACT_COLS = 'id, name, phone, email, channel, address, language, notes, total_conversations, last_interaction, archived_at, merged_into_id, created_at, updated_at'
+
+// Active contacts for a tenant (excludes merged-away rows). Optionally include archived.
+export async function listContacts(tenantId: string, opts: { includeArchived?: boolean } = {}): Promise<Record<string, unknown>[]> {
+  let q = admin().from('contacts').select(CONTACT_COLS).eq('tenant_id', tenantId).is('merged_into_id', null)
+  if (!opts.includeArchived) q = q.is('archived_at', null)
+  const { data } = await q.order('last_interaction', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(500)
+  return (data as Record<string, unknown>[]) ?? []
+}
+
+export async function getContact(tenantId: string, id: string): Promise<Record<string, unknown> | null> {
+  const { data } = await admin().from('contacts').select(CONTACT_COLS).eq('tenant_id', tenantId).eq('id', id).maybeSingle()
+  return (data as Record<string, unknown> | null) ?? null
+}
+
 export async function archiveContact(tenantId: string, id: string, actor: string, archived = true): Promise<boolean> {
   const { error } = await admin().from('contacts').update({ archived_at: archived ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', id)
   if (error) return false
