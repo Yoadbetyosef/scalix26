@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { SectionNav } from '@/components/commerce/section-nav'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -42,6 +43,7 @@ export function CatalogList() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+      <SectionNav />
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-light tracking-tight text-ink">Catalog</h1>

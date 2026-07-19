@@ -38,6 +38,13 @@ async function recomputeTotals(tenantId: string, type: DocType, documentId: stri
   await admin().from(TABLE[type]).update({ ...totals, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', documentId)
 }
 
+export async function listDocuments(tenantId: string, type: DocType, limit = 200) {
+  const { data } = await admin().from(TABLE[type])
+    .select('id, number, status, contact_id, company_id, currency, total_cents, source_document_type, created_at, updated_at')
+    .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit)
+  return data ?? []
+}
+
 export async function getDocument(tenantId: string, type: DocType, documentId: string) {
   const [{ data: doc }, { data: lines }] = await Promise.all([
     admin().from(TABLE[type]).select('*').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle(),
