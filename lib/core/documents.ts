@@ -51,7 +51,23 @@ export async function getDocument(tenantId: string, type: DocType, documentId: s
     admin().from('sales_document_lines').select('*').eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId).order('sort_order'),
   ])
   if (!doc) return null
-  return { document: doc, lines: lines ?? [] }
+  let contact = null, company = null
+  if (doc.contact_id) contact = (await admin().from('contacts').select('id, name, phone, email').eq('tenant_id', tenantId).eq('id', doc.contact_id).maybeSingle()).data ?? null
+  if (doc.company_id) company = (await admin().from('companies').select('id, name').eq('tenant_id', tenantId).eq('id', doc.company_id).maybeSingle()).data ?? null
+  return { document: doc, lines: lines ?? [], contact, company }
+}
+
+// Attach/clear the customer (contact + optional company) on a document. Cross-tenant safe: a contact/company
+// from another tenant is rejected. Conversion preserves these (core_convert_document copies contact_id/company_id).
+export async function setDocumentCustomer(tenantId: string, type: DocType, documentId: string, input: { contactId?: string | null; companyId?: string | null }): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (input.contactId) { const { data } = await admin().from('contacts').select('id').eq('tenant_id', tenantId).eq('id', input.contactId).maybeSingle(); if (!data) return { ok: false, error: 'contact_not_found' } }
+  if (input.companyId) { const { data } = await admin().from('companies').select('id').eq('tenant_id', tenantId).eq('id', input.companyId).maybeSingle(); if (!data) return { ok: false, error: 'company_not_found' } }
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if ('contactId' in input) patch.contact_id = input.contactId ?? null
+  if ('companyId' in input) patch.company_id = input.companyId ?? null
+  const { data, error } = await admin().from(TABLE[type]).update(patch).eq('tenant_id', tenantId).eq('id', documentId).select('id').maybeSingle()
+  if (error) return { ok: false, error: error.message }
+  return data ? { ok: true } : { ok: false, error: 'not_found' }
 }
 
 export async function updateStatus(tenantId: string, type: DocType, documentId: string, toStatus: string, actor: string, note?: string): Promise<boolean> {

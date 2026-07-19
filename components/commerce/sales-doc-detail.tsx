@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Plus, ArrowRightLeft, CreditCard } from 'lucide-react'
+import { ArrowLeft, Plus, ArrowRightLeft, CreditCard, User } from 'lucide-react'
+import { CustomerPicker } from '@/components/commerce/customer-picker'
 import { Button } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,11 +27,20 @@ export function SalesDocDetail({ type, id }: { type: DocType; id: string }) {
   const [doc, setDoc] = useState<Doc | null | 'notfound'>(null)
   const [lines, setLines] = useState<Line[]>([])
   const [pay, setPay] = useState<PaySummary | null>(null)
+  const [contact, setContact] = useState<{ id: string; name: string | null; phone: string | null; email: string | null } | null>(null)
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(null)
   const [addingLine, setAddingLine] = useState(false)
   const [recording, setRecording] = useState(false)
+  const [pickingCustomer, setPickingCustomer] = useState(false)
   const [conv, setConv] = useState<{ target: string; targetId: string; number?: string; existed: boolean } | null>(null)
 
-  const loadDoc = () => fetch(`/api/core/documents/${type}/${id}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('404')))).then((d) => { setDoc(d.document); setLines(d.lines ?? []) }).catch(() => setDoc('notfound'))
+  const loadDoc = () => fetch(`/api/core/documents/${type}/${id}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error('404')))).then((d) => { setDoc(d.document); setLines(d.lines ?? []); setContact(d.contact ?? null); setCompany(d.company ?? null) }).catch(() => setDoc('notfound'))
+
+  async function setCustomer(v: { contactId: string | null; companyId: string | null }) {
+    const res = await fetch(`/api/core/documents/${type}/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.ok) { toast.success('Customer updated.'); setPickingCustomer(false); loadDoc() } else toast.error(d.error || 'Could not set the customer.')
+  }
   const loadPay = () => fetch(`/api/core/documents/${type}/${id}/payments`).then((r) => r.json()).then(setPay).catch(() => setPay(null))
   useEffect(() => { loadDoc(); loadPay() }, [type, id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -66,6 +76,17 @@ export function SalesDocDetail({ type, id }: { type: DocType; id: string }) {
               </select>
             </div>
           </header>
+
+          {/* Customer */}
+          <section className="mb-5 flex items-center justify-between gap-2 rounded-card border border-hairline bg-surface p-3 shadow-e1">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent-strong"><User className="h-4 w-4" /></span>
+              {contact
+                ? <div className="min-w-0"><p className="truncate text-sm font-medium text-ink">{contact.name || 'Unknown'}{company && <span className="font-normal text-muted"> · {company.name}</span>}</p><p className="truncate text-xs text-muted">{[contact.phone, contact.email].filter(Boolean).join(' · ') || '—'}</p></div>
+                : <p className="text-sm text-muted">No customer</p>}
+            </div>
+            <Button size="sm" variant="outline" onClick={() => setPickingCustomer(true)}>{contact ? 'Change' : 'Add customer'}</Button>
+          </section>
 
           {conv && (
             <div className="mb-5 flex items-center justify-between gap-2 rounded-card border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
@@ -132,6 +153,7 @@ export function SalesDocDetail({ type, id }: { type: DocType; id: string }) {
 
       {addingLine && <LineForm type={type} id={id} onClose={() => setAddingLine(false)} onDone={() => { setAddingLine(false); loadDoc(); loadPay() }} />}
       {recording && <PaymentForm type={type} id={id} onClose={() => setRecording(false)} onDone={() => { setRecording(false); loadDoc(); loadPay() }} />}
+      {pickingCustomer && <CustomerPicker contactId={contact?.id ?? null} companyId={company?.id ?? null} onClose={() => setPickingCustomer(false)} onSelect={setCustomer} />}
     </div>
   )
 }
