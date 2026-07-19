@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-// Sub-navigation across the Core commerce surfaces. Orders intentionally absent — orders live in the
-// existing (legacy) Orders section; Core sales documents are estimates/quotes/invoices.
+// Sub-navigation across the Core commerce surfaces. Orders is a simple link to the EXISTING legacy
+// /orders route (not a Core document) so users can still reach it from Commerce — it is neither
+// duplicated nor replaced here. Core sales documents are estimates/quotes/invoices.
 const LINKS = [
   { href: '/commerce/catalog', label: 'Catalog' },
   { href: '/commerce/estimates', label: 'Estimates' },
   { href: '/commerce/quotes', label: 'Quotes' },
   { href: '/commerce/invoices', label: 'Invoices' },
+  { href: '/orders', label: 'Orders' },
   { href: '/commerce/customers', label: 'Customers' },
   { href: '/commerce/companies', label: 'Companies' },
   { href: '/commerce/workflows', label: 'Workflows' },

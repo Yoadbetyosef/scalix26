@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Warehouse, Plus, ArrowRightLeft } from 'lucide-react'
+import { Warehouse, Plus, ArrowRightLeft, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,9 +28,13 @@ export function ProductInventory({ productId }: { productId: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
         <p className="text-sm text-muted">Stock tracked in the Core ledger. Every change is an audited movement — counts are never edited directly.</p>
         {data.locations.length > 0 && <Button size="sm" onClick={() => setMoving(true)}><ArrowRightLeft className="h-4 w-4" /> Move stock</Button>}
+      </div>
+      <div className="mb-4 flex items-start gap-2 rounded-card border border-info/20 bg-info/5 px-3 py-2 text-xs text-subtle">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+        <p>New here? Core inventory starts empty and fills up as you record movements. Any stock from your earlier catalog isn’t shown yet — nothing was changed. Record a movement to begin tracking this product.</p>
       </div>
 
       {data.locations.length === 0 ? (
