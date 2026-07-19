@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ProductGeneralForm } from '@/components/commerce/product-general-form'
 import { ProductVariants } from '@/components/commerce/product-variants'
 import { ProductComponents } from '@/components/commerce/product-components'
-import { ProductAttributes } from '@/components/commerce/product-attributes'
+import { AttributeEditor } from '@/components/commerce/attribute-editor'
 import { ProductInventory } from '@/components/commerce/product-inventory'
 import { ProductActivity } from '@/components/commerce/product-activity'
 import { ProductMedia } from '@/components/commerce/product-media'
@@ -93,7 +93,12 @@ export function ProductDetail({ productId }: { productId: string }) {
       )}
       {tab === 'variants' && <ProductVariants productId={productId} />}
       {tab === 'components' && <ProductComponents productId={productId} />}
-      {tab === 'attributes' && <ProductAttributes productId={productId} />}
+      {tab === 'attributes' && (
+        <div className="max-w-2xl">
+          <p className="mb-4 text-sm text-muted">Industry-specific details for this product, from your installed package and custom fields.</p>
+          <AttributeEditor endpoint={`/api/core/products/${productId}/attributes`} />
+        </div>
+      )}
       {tab === 'inventory' && <ProductInventory productId={productId} />}
       {tab === 'activity' && <ProductActivity productId={productId} />}
       {tab === 'media' && (product

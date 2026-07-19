@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Boxes, Pencil, Archive, RotateCcw, QrCode, ExternalLink } from 'lucide-react'
+import { Plus, Boxes, Pencil, Archive, RotateCcw, QrCode, ExternalLink, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -10,6 +10,7 @@ import { Drawer } from '@/components/ui/drawer'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { AttributeEditor } from '@/components/commerce/attribute-editor'
 import { formatCents, centsToInput, inputToCents } from '@/lib/core/money-format'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -20,6 +21,7 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active'
 export function ProductComponents({ productId }: { productId: string }) {
   const [components, setComponents] = useState<Component[] | null>(null)
   const [editing, setEditing] = useState<Component | 'new' | null>(null)
+  const [attrsFor, setAttrsFor] = useState<Component | null>(null)
 
   const load = () => fetch(`/api/core/products/${productId}/components`).then((r) => r.json()).then((d) => setComponents(d.components ?? [])).catch(() => setComponents([]))
   useEffect(() => { load() }, [productId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -52,6 +54,7 @@ export function ProductComponents({ productId }: { productId: string }) {
               </div>
               <a href={`/p/${cmp.qr_code_token}`} target="_blank" rel="noreferrer" className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Public QR page" title="View public QR page"><QrCode className="h-4 w-4" /></a>
               <Badge variant={STATUS_VARIANT[cmp.status] ?? 'neutral'}>{cmp.status}</Badge>
+              <button onClick={() => setAttrsFor(cmp)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Attributes" title="Attributes"><SlidersHorizontal className="h-4 w-4" /></button>
               <button onClick={() => setEditing(cmp)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Edit"><Pencil className="h-4 w-4" /></button>
               {cmp.status === 'discontinued'
                 ? <button onClick={() => setStatus(cmp, 'active')} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Restore"><RotateCcw className="h-4 w-4" /></button>
@@ -62,6 +65,11 @@ export function ProductComponents({ productId }: { productId: string }) {
       )}
 
       {editing && <ComponentForm productId={productId} component={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+      {attrsFor && (
+        <Drawer open onClose={() => setAttrsFor(null)} title={`Attributes — ${attrsFor.name}`}>
+          <AttributeEditor endpoint={`/api/core/components/${attrsFor.id}/attributes`} emptyHint="No component attributes defined yet. Add component fields in Settings → Custom fields." />
+        </Drawer>
+      )}
     </div>
   )
 }

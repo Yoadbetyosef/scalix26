@@ -7,6 +7,7 @@ import { centsToInput, inputToCents } from './money-format'
 export interface FieldDef {
   id: string; key: string; label: string; field_type: FieldType; required: boolean
   validation?: Record<string, unknown> | null; options?: { value: string; label: string }[]
+  source_package_id?: string | null
 }
 export type FieldState = string | boolean | string[]
 

@@ -15,7 +15,12 @@ export function FieldControl({ def, value, onChange }: { def: FieldDef; value: F
   const help = typeof def.validation?.help === 'string' ? (def.validation.help as string) : null
   return (
     <div className="space-y-1.5">
-      <Label>{def.label}{def.required && <span className="text-danger"> *</span>}</Label>
+      <div className="flex items-center gap-2">
+        <Label>{def.label}{def.required && <span className="text-danger"> *</span>}</Label>
+        {def.source_package_id
+          ? <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent-strong">Package</span>
+          : <span className="rounded-full bg-sunken px-1.5 py-0.5 text-[10px] font-medium text-muted">Custom</span>}
+      </div>
       <Control def={def} value={value} onChange={onChange} />
       {help && <p className="text-xs text-muted">{help}</p>}
     </div>

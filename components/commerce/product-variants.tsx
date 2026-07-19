@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Layers, Pencil, Archive, RotateCcw } from 'lucide-react'
+import { Plus, Layers, Pencil, Archive, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer } from '@/components/ui/drawer'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AttributeEditor } from '@/components/commerce/attribute-editor'
 import { formatCents, centsToInput, inputToCents } from '@/lib/core/money-format'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -19,6 +20,7 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active'
 export function ProductVariants({ productId }: { productId: string }) {
   const [variants, setVariants] = useState<Variant[] | null>(null)
   const [editing, setEditing] = useState<Variant | 'new' | null>(null)
+  const [attrsFor, setAttrsFor] = useState<Variant | null>(null)
 
   const load = () => fetch(`/api/core/products/${productId}/variants`).then((r) => r.json()).then((d) => setVariants(d.variants ?? [])).catch(() => setVariants([]))
   useEffect(() => { load() }, [productId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -50,6 +52,7 @@ export function ProductVariants({ productId }: { productId: string }) {
                 <p className="truncate text-xs text-muted">{[v.sku, v.price_override_cents != null ? formatCents(v.price_override_cents, v.currency) : null].filter(Boolean).join(' · ') || 'No SKU'}</p>
               </div>
               <Badge variant={STATUS_VARIANT[v.status] ?? 'neutral'}>{v.status}</Badge>
+              <button onClick={() => setAttrsFor(v)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Attributes" title="Attributes"><SlidersHorizontal className="h-4 w-4" /></button>
               <button onClick={() => setEditing(v)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Edit"><Pencil className="h-4 w-4" /></button>
               {v.status === 'discontinued'
                 ? <button onClick={() => setStatus(v, 'active')} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Restore"><RotateCcw className="h-4 w-4" /></button>
@@ -60,6 +63,11 @@ export function ProductVariants({ productId }: { productId: string }) {
       )}
 
       {editing && <VariantForm productId={productId} variant={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
+      {attrsFor && (
+        <Drawer open onClose={() => setAttrsFor(null)} title={`Attributes — ${attrsFor.name}`}>
+          <AttributeEditor endpoint={`/api/core/variants/${attrsFor.id}/attributes`} emptyHint="No variant attributes defined yet. Add variant fields in Settings → Custom fields." />
+        </Drawer>
+      )}
     </div>
   )
 }
