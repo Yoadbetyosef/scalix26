@@ -18,11 +18,11 @@ export async function createDocument(tenantId: string, type: DocType, input: Doc
   return error ? { ok: false, error: error.message } : { ok: true, document: data as Record<string, unknown> }
 }
 
-export interface LineInput extends LineAmounts { productId?: string | null; variantId?: string | null; description?: string | null; customAttributes?: Record<string, unknown> }
+export interface LineInput extends LineAmounts { productId?: string | null; variantId?: string | null; componentId?: string | null; description?: string | null; customAttributes?: Record<string, unknown> }
 export async function addLine(tenantId: string, type: DocType, documentId: string, line: LineInput): Promise<{ ok: true } | { ok: false; error: string }> {
   const { count } = await admin().from('sales_document_lines').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId)
   const { error } = await admin().from('sales_document_lines').insert({
-    tenant_id: tenantId, document_type: type, document_id: documentId, product_id: line.productId ?? null, variant_id: line.variantId ?? null,
+    tenant_id: tenantId, document_type: type, document_id: documentId, product_id: line.productId ?? null, variant_id: line.variantId ?? null, component_id: line.componentId ?? null,
     description: line.description ?? null, quantity: line.quantity, unit_price_cents: line.unit_price_cents,
     discount_cents: line.discount_cents ?? 0, tax_cents: line.tax_cents ?? 0, line_total_cents: lineTotalCents(line),
     custom_attributes: line.customAttributes ?? {}, sort_order: count ?? 0,

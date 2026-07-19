@@ -5,7 +5,7 @@ import { addLine, type DocType } from '@/lib/core/documents'
 
 const TYPES = ['estimate', 'quote', 'invoice'] as const
 const schema = z.object({
-  productId: z.string().uuid().nullable().optional(), variantId: z.string().uuid().nullable().optional(),
+  productId: z.string().uuid().nullable().optional(), variantId: z.string().uuid().nullable().optional(), componentId: z.string().uuid().nullable().optional(),
   description: z.string().max(1000).nullable().optional(),
   quantity: z.number().nonnegative(), unit_price_cents: z.number().int(),
   discount_cents: z.number().int().nonnegative().optional(), tax_cents: z.number().int().nonnegative().optional(),

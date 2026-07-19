@@ -164,12 +164,16 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 
 interface PickProduct { id: string; name: string; sku: string | null; price: number | null }
 interface PickVariant { id: string; name: string; sku: string | null; price_override_cents: number | null }
+interface PickComponent { id: string; name: string; price_cents: number | null; status: string }
 
 function LineForm({ type, id, onClose, onDone }: { type: DocType; id: string; onClose: () => void; onDone: () => void }) {
   const [products, setProducts] = useState<PickProduct[] | null>(null)
   const [q, setQ] = useState('')
   const [product, setProduct] = useState<PickProduct | null>(null)
   const [variants, setVariants] = useState<PickVariant[]>([])
+  const [components, setComponents] = useState<PickComponent[]>([])
+  const [componentId, setComponentId] = useState<string | null>(null)
+  const [compVariants, setCompVariants] = useState<PickVariant[]>([])
   const [variantId, setVariantId] = useState<string | null>(null)
   const [description, setDescription] = useState('')
   const [quantity, setQuantity] = useState('1')
@@ -180,23 +184,38 @@ function LineForm({ type, id, onClose, onDone }: { type: DocType; id: string; on
   const matches = (products ?? []).filter((p) => { const s = q.trim().toLowerCase(); return s ? [p.name, p.sku].some((v) => v?.toLowerCase().includes(s)) : true }).slice(0, 8)
 
   function pickProduct(p: PickProduct) {
-    setProduct(p); setQ(''); setVariantId(null)
+    setProduct(p); setQ(''); setVariantId(null); setComponentId(null); setCompVariants([])
     setDescription(p.name); setPrice(p.price != null ? String(p.price) : '')
     fetch(`/api/core/products/${p.id}/variants`).then((r) => r.json()).then((d) => setVariants((d.variants ?? []).filter((v: { status: string }) => v.status !== 'discontinued'))).catch(() => setVariants([]))
+    fetch(`/api/core/products/${p.id}/components`).then((r) => r.json()).then((d) => setComponents((d.components ?? []).filter((c: PickComponent) => c.status !== 'discontinued'))).catch(() => setComponents([]))
   }
   function pickVariant(vid: string) {
     setVariantId(vid || null)
     const v = variants.find((x) => x.id === vid)
     if (v) { setDescription(`${product?.name ?? ''} — ${v.name}`.trim()); if (v.price_override_cents != null) setPrice(centsToInput(v.price_override_cents)) }
   }
-  function clearProduct() { setProduct(null); setVariants([]); setVariantId(null) }
+  function pickComponent(cid: string) {
+    setComponentId(cid || null); setVariantId(null); setCompVariants([])
+    const cmp = components.find((x) => x.id === cid)
+    if (cmp) {
+      setDescription(`${product?.name ?? ''} — ${cmp.name}`.trim()); if (cmp.price_cents != null) setPrice(centsToInput(cmp.price_cents))
+      fetch(`/api/core/components/${cid}/variants`).then((r) => r.json()).then((d) => setCompVariants((d.variants ?? []).filter((v: { status: string }) => v.status !== 'discontinued'))).catch(() => setCompVariants([]))
+    } else if (product) { setDescription(product.name); setPrice(product.price != null ? String(product.price) : '') }
+  }
+  function pickCompVariant(vid: string) {
+    setVariantId(vid || null)
+    const v = compVariants.find((x) => x.id === vid)
+    const cmp = components.find((x) => x.id === componentId)
+    if (v) { setDescription(`${product?.name ?? ''} — ${cmp?.name ?? ''} — ${v.name}`.replace(/\s+—\s+$/, '').trim()); if (v.price_override_cents != null) setPrice(centsToInput(v.price_override_cents)) }
+  }
+  function clearProduct() { setProduct(null); setVariants([]); setComponents([]); setComponentId(null); setCompVariants([]); setVariantId(null) }
 
   async function save() {
     const qty = Number(quantity); const cents = inputToCents(price)
     if (!Number.isFinite(qty) || qty < 0) { toast.error('Enter a valid quantity.'); return }
     if (cents == null || Number.isNaN(cents)) { toast.error('Enter a valid unit price.'); return }
     setSaving(true)
-    const res = await fetch(`/api/core/documents/${type}/${id}/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ productId: product?.id ?? null, variantId, description: description.trim() || null, quantity: qty, unit_price_cents: cents }) })
+    const res = await fetch(`/api/core/documents/${type}/${id}/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ productId: product?.id ?? null, componentId, variantId, description: description.trim() || null, quantity: qty, unit_price_cents: cents }) })
     const d = await res.json().catch(() => ({}))
     setSaving(false)
     if (res.ok && d.ok) { toast.success('Line added.'); onDone() } else toast.error(d.error || 'Could not add the line.')
@@ -224,7 +243,23 @@ function LineForm({ type, id, onClose, onDone }: { type: DocType; id: string; on
             )}
           </div>
         )}
-        {product && variants.length > 0 && (
+        {product && components.length > 0 && (
+          <div className="space-y-1.5"><Label>Component (optional — order a single piece)</Label>
+            <select value={componentId ?? ''} onChange={(e) => pickComponent(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none">
+              <option value="">— whole product —</option>
+              {components.map((cmp) => <option key={cmp.id} value={cmp.id}>{cmp.name}</option>)}
+            </select>
+          </div>
+        )}
+        {componentId && compVariants.length > 0 && (
+          <div className="space-y-1.5"><Label>Component variant (optional)</Label>
+            <select value={variantId ?? ''} onChange={(e) => pickCompVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none">
+              <option value="">— none —</option>
+              {compVariants.map((v) => <option key={v.id} value={v.id}>{v.name}{v.sku ? ` · ${v.sku}` : ''}</option>)}
+            </select>
+          </div>
+        )}
+        {product && !componentId && variants.length > 0 && (
           <div className="space-y-1.5"><Label>Variant (optional)</Label>
             <select value={variantId ?? ''} onChange={(e) => pickVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none">
               <option value="">— none —</option>

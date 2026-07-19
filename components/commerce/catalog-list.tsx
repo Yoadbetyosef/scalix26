@@ -24,6 +24,8 @@ export function CatalogList() {
   const [products, setProducts] = useState<ProductRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [cat, setCat] = useState('')
+  const [categories, setCategories] = useState<string[]>([])
 
   useEffect(() => {
     let live = true
@@ -31,15 +33,15 @@ export function CatalogList() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status === 404 ? 'Commerce is not enabled for this business.' : 'Failed to load products.'))))
       .then((d) => { if (live) setProducts(d.products ?? []) })
       .catch((e) => { if (live) { setError(e.message); toast.error(e.message) } })
+    fetch('/api/core/categories').then((r) => r.json()).then((d) => { if (live) setCategories((d.categories ?? []).map((c: { name: string }) => c.name)) }).catch(() => {})
     return () => { live = false }
   }, [])
 
   const filtered = useMemo(() => {
     if (!products) return []
     const s = q.trim().toLowerCase()
-    if (!s) return products
-    return products.filter((p) => [p.name, p.sku, p.category].some((v) => v?.toLowerCase().includes(s)))
-  }, [products, q])
+    return products.filter((p) => (!cat || p.category === cat) && (!s || [p.name, p.sku, p.category].some((v) => v?.toLowerCase().includes(s))))
+  }, [products, q, cat])
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
@@ -55,12 +57,17 @@ export function CatalogList() {
       </header>
 
       {products && products.length > 0 && (
-        <div className="relative mb-4 max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
-            value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…"
-            className="h-11 w-full rounded-input border border-hairline bg-white pl-9 pr-3 text-sm text-ink placeholder:text-muted focus:border-ink/30 focus:outline-none"
-          />
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <div className="relative max-w-sm flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className="h-11 w-full rounded-input border border-hairline bg-white pl-9 pr-3 text-sm text-ink placeholder:text-muted focus:border-ink/30 focus:outline-none" />
+          </div>
+          {categories.length > 0 && (
+            <select value={cat} onChange={(e) => setCat(e.target.value)} className="h-11 rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none">
+              <option value="">All categories</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
         </div>
       )}
 
