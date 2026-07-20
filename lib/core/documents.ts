@@ -4,8 +4,10 @@ import { lineTotalCents, documentTotals, type LineAmounts } from './money'
 // Sales-document repository (estimates/quotes/invoices). Totals are recomputed server-side from lines on
 // every mutation (client never sets totals). Status changes are recorded in document_status_history.
 const admin = () => createAdminClient()
-export type DocType = 'estimate' | 'quote' | 'invoice'
-const TABLE: Record<DocType, string> = { estimate: 'estimates', quote: 'quotes', invoice: 'invoices' }
+// 'proposal' is the unified sales document (replaces estimate+quote in the UI). estimate/quote remain valid
+// types so legacy records stay fully readable/convertible through the same repo — one document layer.
+export type DocType = 'estimate' | 'quote' | 'invoice' | 'proposal'
+const TABLE: Record<DocType, string> = { estimate: 'estimates', quote: 'quotes', invoice: 'invoices', proposal: 'proposals' }
 
 export interface DocumentInput { contactId?: string | null; companyId?: string | null; currency?: string; notes?: string | null }
 export async function createDocument(tenantId: string, type: DocType, input: DocumentInput, actor: string): Promise<{ ok: true; document: Record<string, unknown> } | { ok: false; error: string }> {

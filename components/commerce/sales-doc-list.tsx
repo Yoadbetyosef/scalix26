@@ -15,7 +15,7 @@ import { toast } from 'sonner'
 
 interface Doc { id: string; number: string; status: string; currency: string; total_cents: number; source_document_type: string | null; created_at: string }
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { draft: 'draft', sent: 'open', accepted: 'active', paid: 'active', rejected: 'closed', void: 'closed' }
-const LABEL: Record<DocType, { one: string; many: string }> = { estimate: { one: 'estimate', many: 'Estimates' }, quote: { one: 'quote', many: 'Quotes' }, invoice: { one: 'invoice', many: 'Invoices' } }
+const LABEL: Record<DocType, { one: string; many: string }> = { estimate: { one: 'estimate', many: 'Estimates' }, quote: { one: 'quote', many: 'Quotes' }, invoice: { one: 'invoice', many: 'Invoices' }, proposal: { one: 'proposal', many: 'Proposals' } }
 const when = (iso: string) => { try { return new Date(iso).toLocaleDateString() } catch { return iso } }
 
 export function SalesDocList({ type }: { type: DocType }) {

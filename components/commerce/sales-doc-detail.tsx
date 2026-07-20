@@ -20,7 +20,7 @@ interface PaySummary { total_cents?: number; paid_cents?: number; balance_cents?
 
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { draft: 'draft', sent: 'open', accepted: 'active', paid: 'active', partial: 'pending', unpaid: 'draft', refunded: 'closed', rejected: 'closed', void: 'closed' }
 const STATUSES = ['draft', 'sent', 'accepted', 'rejected', 'paid', 'void']
-const CONVERT_TARGETS: Record<DocType, ('quote' | 'invoice')[]> = { estimate: ['quote', 'invoice'], quote: ['invoice'], invoice: [] }
+const CONVERT_TARGETS: Record<DocType, ('quote' | 'invoice')[]> = { estimate: ['quote', 'invoice'], quote: ['invoice'], invoice: [], proposal: ['invoice'] }
 const when = (iso: string) => { try { return new Date(iso).toLocaleString() } catch { return iso } }
 
 export function SalesDocDetail({ type, id }: { type: DocType; id: string }) {

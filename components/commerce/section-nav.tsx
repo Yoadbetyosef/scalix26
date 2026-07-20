@@ -4,15 +4,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-// Sub-navigation across the Core commerce surfaces. Orders is a simple link to the EXISTING legacy
-// /orders route (not a Core document) so users can still reach it from Commerce — it is neither
-// duplicated nor replaced here. Core sales documents are estimates/quotes/invoices.
+// Sub-navigation across the Core commerce surfaces. Estimates + Quotes are unified into ONE "Proposals"
+// module (legacy estimate/quote records remain readable inside it; old routes redirect there). Orders is a
+// link to the EXISTING legacy /orders route (not a Core document) — neither duplicated nor replaced here.
 const LINKS = [
   { href: '/commerce/catalog', label: 'Catalog' },
-  { href: '/commerce/estimates', label: 'Estimates' },
-  { href: '/commerce/quotes', label: 'Quotes' },
-  { href: '/commerce/invoices', label: 'Invoices' },
+  { href: '/commerce/proposals', label: 'Proposals' },
   { href: '/orders', label: 'Orders' },
+  { href: '/commerce/invoices', label: 'Invoices' },
   { href: '/commerce/customers', label: 'Customers' },
   { href: '/commerce/companies', label: 'Companies' },
   { href: '/commerce/workflows', label: 'Workflows' },

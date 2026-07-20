@@ -63,6 +63,9 @@ export async function updateSession(request: NextRequest) {
     // External order-approval: the factory/customer has no Scalix account — the secure token in the URL is
     // the sole credential (validated server-side in the route). Only these two prefixes are opened.
     '/approval/', '/api/approval/',
+    // Public proposal page: the customer has no Scalix account — the secure token in the URL is the sole
+    // credential (hashed + validated server-side, rate-limited, revocable). Only these two prefixes open.
+    '/proposals/', '/api/proposals/',
     // Scheduled jobs: Vercel/external cron requests carry NO user session, so they must bypass the
     // login redirect to reach the route — where cronAuthorized (the fail-closed CRON_SECRET bearer)
     // is the real gate. These are NOT open: a request without the secret gets 401 at the route.

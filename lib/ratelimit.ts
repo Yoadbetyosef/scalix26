@@ -50,6 +50,8 @@ export const POLICIES = {
   command_center: { limit: 60, window: '1 m', fail: 'closed' },
   // PUBLIC unauthenticated order-approval token page + response — fail CLOSED (abuse/enumeration guard).
   orders_approval: { limit: 40, window: '1 m', fail: 'closed' },
+  // PUBLIC unauthenticated proposal token page + accept/decline — fail CLOSED (abuse/enumeration guard).
+  proposals_public: { limit: 40, window: '1 m', fail: 'closed' },
   // Webhooks: signature stays primary; this only caps floods. Generous so provider retries pass.
   webhook:         { limit: 240, window: '1 m',  fail: 'open' },
   webhook_stripe:  { limit: 600, window: '1 m',  fail: 'open' },
