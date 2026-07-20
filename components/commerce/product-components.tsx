@@ -62,6 +62,14 @@ export function ProductComponents({ productId, parentCategory = null }: { produc
                 <p className="truncate text-xs text-muted">{[`×${cmp.quantity}`, cmp.sku, (cmp.use_parent_category ? parentCategory : cmp.category) || null, cmp.price_cents != null ? formatCents(cmp.price_cents, cmp.currency) : null].filter(Boolean).join(' · ')}</p>
               </div>
               <Badge variant={STATUS_VARIANT[cmp.status] ?? 'neutral'}>{cmp.status}</Badge>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openDetail(cmp, 'qr') }}
+                aria-label={`QR code for ${cmp.name}`}
+                title="View the scannable QR code for this sub-product"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-hairline-strong bg-white px-2.5 text-xs font-medium text-ink shadow-e1 transition-colors hover:bg-sunken">
+                <QrCode className="h-4 w-4" /> QR
+              </button>
               <span onClick={(e) => e.stopPropagation()}>
                 <Menu ariaLabel="Component quick actions" buttonClassName="flex h-9 w-9 items-center justify-center rounded-lg text-subtle hover:bg-white hover:text-ink" items={([
                   { label: 'View QR', icon: QrCode, onClick: () => openDetail(cmp, 'qr') },
