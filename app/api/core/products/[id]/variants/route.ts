@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireCoreTenant } from '@/lib/core/guard'
+import { requireCore } from '@/lib/core/guard'
 import { listVariants, createVariant } from '@/lib/core/variants'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const c = await requireCoreTenant('commerce')
+  const c = await requireCore()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ variants: await listVariants(c.tenantId, (await params).id) })
 }
 
 const schema = z.object({ name: z.string().min(1).max(300), sku: z.string().max(200).nullable().optional(), priceOverrideCents: z.number().int().nullable().optional(), costCents: z.number().int().nullable().optional(), currency: z.string().max(10).optional(), status: z.enum(['active', 'inactive', 'discontinued']).optional(), trackInventory: z.boolean().optional(), imageUrl: z.string().max(2000).nullable().optional() })
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const c = await requireCoreTenant('commerce')
+  const c = await requireCore()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })

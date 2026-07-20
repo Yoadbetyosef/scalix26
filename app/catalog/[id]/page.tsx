@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { Package, Download } from 'lucide-react'
 import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, type CatalogProduct, type AvailabilityStatus, type MovementType } from '@/lib/catalog/types'
 import { ProductForm } from '@/components/catalog/product-form'
+import { ProductComponents } from '@/components/commerce/product-components'
 import { useToast } from '@/components/admin/toast'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -179,6 +180,12 @@ export default function ProductDetailPage() {
             </ul>
           )}
         </div>
+      </div>
+
+      {/* Components — the SAME Core components/sub-products shown in Commerce (one shared source) */}
+      <div className="mt-6 rounded-xl border border-hairline-strong bg-white p-4">
+        <h3 className="mb-3 font-semibold text-ink">Components</h3>
+        <ProductComponents productId={id} parentCategory={product.category ?? null} />
       </div>
     </div>
   )

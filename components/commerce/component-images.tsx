@@ -111,10 +111,14 @@ export function ComponentImages({ componentId, primaryUrl, onChanged }: { compon
   )
 }
 
-// QR panel: name, rendered QR, public URL, copy, download, print, and public-page status.
+// QR panel: name, rendered QR, public URL, copy, download, print, and public-page status. Works for any QR
+// endpoint (component or variant) — both return the same shape.
 export function ComponentQR({ componentId }: { componentId: string }) {
+  return <QrPanel endpoint={`/api/core/components/${componentId}/qr`} />
+}
+export function QrPanel({ endpoint }: { endpoint: string }) {
   const [data, setData] = useState<{ name: string; publicUrl: string; dataUrl: string; active: boolean } | null>(null)
-  useEffect(() => { fetch(`/api/core/components/${componentId}/qr`).then((r) => r.json()).then(setData).catch(() => setData(null)) }, [componentId])
+  useEffect(() => { fetch(endpoint).then((r) => r.json()).then(setData).catch(() => setData(null)) }, [endpoint])
 
   function print() {
     if (!data) return

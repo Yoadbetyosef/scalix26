@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 // This generalizes the furniture "parts + QR" behavior into a Core, industry-neutral structure.
 const admin = () => createAdminClient()
 
-export interface ComponentInput { name: string; sku?: string | null; imageUrl?: string | null; quantity?: number; priceCents?: number | null; costCents?: number | null; currency?: string; status?: string; variantId?: string | null; notes?: string | null; description?: string | null; componentType?: string | null; trackInventory?: boolean }
+export interface ComponentInput { name: string; sku?: string | null; imageUrl?: string | null; quantity?: number; priceCents?: number | null; costCents?: number | null; currency?: string; status?: string; variantId?: string | null; notes?: string | null; description?: string | null; componentType?: string | null; trackInventory?: boolean; category?: string | null; useParentCategory?: boolean }
 
 export async function listComponents(tenantId: string, productId: string) {
   const { data } = await admin().from('product_components').select('*').eq('tenant_id', tenantId).eq('product_id', productId).order('sort_order')
@@ -24,7 +24,7 @@ export async function createComponent(tenantId: string, productId: string, input
     tenant_id: tenantId, product_id: productId, variant_id: input.variantId ?? null, name: input.name.trim(), sku: input.sku ?? null,
     image_url: input.imageUrl ?? null, quantity: input.quantity ?? 1, price_cents: input.priceCents ?? null, cost_cents: input.costCents ?? null, currency: input.currency ?? 'usd',
     status: input.status ?? 'active', notes: input.notes ?? null, description: input.description ?? null, component_type: input.componentType ?? null,
-    track_inventory: input.trackInventory ?? true, sort_order: count ?? 0,
+    track_inventory: input.trackInventory ?? true, category: input.category ?? null, use_parent_category: input.useParentCategory ?? true, sort_order: count ?? 0,
   }).select('*').single()
   return error ? { ok: false, error: error.message } : { ok: true, component: data as Record<string, unknown> }
 }
@@ -42,6 +42,8 @@ export async function updateComponent(tenantId: string, id: string, patch: Parti
   if (patch.description !== undefined) db.description = patch.description
   if (patch.componentType !== undefined) db.component_type = patch.componentType
   if (patch.trackInventory != null) db.track_inventory = patch.trackInventory
+  if (patch.category !== undefined) db.category = patch.category
+  if (patch.useParentCategory != null) db.use_parent_category = patch.useParentCategory
   const { data } = await admin().from('product_components').update(db).eq('tenant_id', tenantId).eq('id', id).select('*').maybeSingle()
   return data ? { ok: true as const, component: data } : { ok: false as const, error: 'not_found' }
 }

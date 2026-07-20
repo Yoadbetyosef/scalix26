@@ -16,10 +16,10 @@ import { formatCents, centsToInput, inputToCents } from '@/lib/core/money-format
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-interface Component { id: string; name: string; sku: string | null; quantity: number; price_cents: number | null; cost_cents: number | null; currency: string; status: string; notes: string | null; description: string | null; component_type: string | null; track_inventory: boolean; qr_code_token: string; image_url: string | null }
+interface Component { id: string; name: string; sku: string | null; quantity: number; price_cents: number | null; cost_cents: number | null; currency: string; status: string; notes: string | null; description: string | null; component_type: string | null; track_inventory: boolean; qr_code_token: string; image_url: string | null; category: string | null; use_parent_category: boolean }
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active', inactive: 'neutral', discontinued: 'closed' }
 
-export function ProductComponents({ productId }: { productId: string }) {
+export function ProductComponents({ productId, parentCategory = null }: { productId: string; parentCategory?: string | null }) {
   const [components, setComponents] = useState<Component[] | null>(null)
   const [editing, setEditing] = useState<Component | 'new' | null>(null)
   const [detailFor, setDetailFor] = useState<Component | null>(null)
@@ -59,7 +59,7 @@ export function ProductComponents({ productId }: { productId: string }) {
               <ComponentThumb url={cmp.image_url} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-ink">{cmp.name}</p>
-                <p className="truncate text-xs text-muted">{[`×${cmp.quantity}`, cmp.sku, cmp.price_cents != null ? formatCents(cmp.price_cents, cmp.currency) : null].filter(Boolean).join(' · ')}</p>
+                <p className="truncate text-xs text-muted">{[`×${cmp.quantity}`, cmp.sku, (cmp.use_parent_category ? parentCategory : cmp.category) || null, cmp.price_cents != null ? formatCents(cmp.price_cents, cmp.currency) : null].filter(Boolean).join(' · ')}</p>
               </div>
               <Badge variant={STATUS_VARIANT[cmp.status] ?? 'neutral'}>{cmp.status}</Badge>
               <span onClick={(e) => e.stopPropagation()}>

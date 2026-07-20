@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { requireCoreTenant } from '@/lib/core/guard'
+import { requireCore } from '@/lib/core/guard'
 
 // POST /api/core/uploads — multipart { file } → stores it in the tenant's folder of the existing
 // `catalog-images` public bucket and returns a stable public URL. Reuses the catalog storage pattern (no
@@ -9,7 +9,7 @@ const MAX_BYTES = 10 * 1024 * 1024
 const EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' }
 
 export async function POST(req: NextRequest) {
-  const c = await requireCoreTenant('commerce')
+  const c = await requireCore()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const form = await req.formData().catch(() => null)

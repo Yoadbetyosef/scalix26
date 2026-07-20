@@ -10,6 +10,10 @@ export async function listVariants(tenantId: string, productId: string) {
   const { data } = await admin().from('product_variants').select('*').eq('tenant_id', tenantId).eq('product_id', productId).order('sort_order')
   return data ?? []
 }
+export async function getVariant(tenantId: string, id: string) {
+  const { data } = await admin().from('product_variants').select('*').eq('tenant_id', tenantId).eq('id', id).maybeSingle()
+  return data ?? null
+}
 // Variants of a COMPONENT (component-owned). Same table, component_id set instead of product_id.
 export async function listComponentVariants(tenantId: string, componentId: string) {
   const { data } = await admin().from('product_variants').select('*').eq('tenant_id', tenantId).eq('component_id', componentId).order('sort_order')

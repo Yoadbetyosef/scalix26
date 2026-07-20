@@ -116,7 +116,7 @@ export function ProductDetail({ productId }: { productId: string }) {
           : <ProductGeneralForm initial={product} submitLabel="Save changes" onSubmit={saveGeneral} />
       )}
       {tab === 'variants' && <ProductVariants productId={productId} />}
-      {tab === 'components' && <ProductComponents productId={productId} />}
+      {tab === 'components' && <ProductComponents productId={productId} parentCategory={product && typeof product.category === 'string' ? product.category : null} />}
       {tab === 'attributes' && (
         <div className="max-w-2xl">
           <p className="mb-4 text-sm text-muted">Industry-specific details for this product, from your installed package and custom fields.</p>

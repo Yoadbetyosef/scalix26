@@ -12,12 +12,14 @@ import { AttributeEditor } from '@/components/commerce/attribute-editor'
 import { ComponentImages, ComponentQR } from '@/components/commerce/component-images'
 import { ComponentVariants } from '@/components/commerce/component-catalog'
 import { InventoryPanel } from '@/components/commerce/product-inventory'
+import { CategorySelect } from '@/components/commerce/category-select'
 import { centsToInput, inputToCents } from '@/lib/core/money-format'
 import { toast } from 'sonner'
 
 export interface ComponentLite {
   id: string; name: string; sku: string | null; quantity: number; price_cents: number | null; cost_cents: number | null
   status: string; notes: string | null; description: string | null; component_type: string | null; track_inventory: boolean; image_url: string | null; qr_code_token: string
+  category: string | null; use_parent_category: boolean
 }
 
 const TABS: TabItem[] = [
@@ -54,6 +56,8 @@ function ComponentGeneral({ component, onChanged }: { component: ComponentLite; 
   const [cost, setCost] = useState(centsToInput(component.cost_cents))
   const [description, setDescription] = useState(component.description ?? '')
   const [trackInventory, setTrackInventory] = useState(component.track_inventory ?? true)
+  const [useParent, setUseParent] = useState(component.use_parent_category ?? true)
+  const [category, setCategory] = useState(component.category ?? '')
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -62,7 +66,7 @@ function ComponentGeneral({ component, onChanged }: { component: ComponentLite; 
     const p = inputToCents(price), c = inputToCents(cost)
     if (Number.isNaN(p) || Number.isNaN(c)) { toast.error('Enter valid amounts.'); return }
     setSaving(true)
-    const res = await fetch(`/api/core/components/${component.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: name.trim(), sku: sku.trim() || null, componentType: componentType.trim() || null, quantity: qty, priceCents: p, costCents: c, description: description.trim() || null, trackInventory }) })
+    const res = await fetch(`/api/core/components/${component.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: name.trim(), sku: sku.trim() || null, componentType: componentType.trim() || null, quantity: qty, priceCents: p, costCents: c, description: description.trim() || null, trackInventory, useParentCategory: useParent, category: useParent ? null : (category || null) }) })
     setSaving(false)
     if (res.ok) { toast.success('Component saved.'); onChanged() } else toast.error('Could not save the component.')
   }
@@ -80,6 +84,10 @@ function ComponentGeneral({ component, onChanged }: { component: ComponentLite; 
         <div className="space-y-1.5"><Label>Cost (USD)</Label><Input value={cost} onChange={(e) => setCost(e.target.value)} type="number" min="0" step="0.01" inputMode="decimal" /></div>
       </div>
       <div className="space-y-1.5"><Label>Description</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={5000} /></div>
+      <div className="space-y-2 rounded-card border border-hairline p-3">
+        <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={useParent} onChange={(e) => setUseParent(e.target.checked)} className="h-4 w-4 accent-[var(--color-accent)]" /> Use the parent product’s category</label>
+        {!useParent && <div className="space-y-1.5"><Label>Component category</Label><CategorySelect value={category} onChange={setCategory} /></div>}
+      </div>
       <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={trackInventory} onChange={(e) => setTrackInventory(e.target.checked)} className="h-4 w-4 accent-[var(--color-accent)]" /> Track inventory for this component</label>
       <div className="flex justify-end"><Button size="sm" loading={saving} onClick={save}>Save</Button></div>
     </div>

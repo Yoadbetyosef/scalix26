@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireCoreTenant } from '@/lib/core/guard'
+import { requireCore } from '@/lib/core/guard'
 import { listDefinitions, getFieldValues, setFieldValue } from '@/lib/core/fields'
 
 // A component's attribute schema (entity_type='component') + current values. Kept strictly separate from
 // variant attributes. Commerce-gated; tenant from the guard; values are tenant-scoped.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const c = await requireCoreTenant('commerce')
+  const c = await requireCore()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const id = (await params).id
   const [definitions, values] = await Promise.all([listDefinitions(c.tenantId, 'component'), getFieldValues(c.tenantId, 'component', id)])
@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 const schema = z.object({ values: z.record(z.string(), z.unknown()) })
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const c = await requireCoreTenant('commerce')
+  const c = await requireCore()
   if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
