@@ -42,7 +42,7 @@ try {
   ok('2. search matches title / customer name / number', match('johnson').length >= 2 && match('neomi'.slice(0, 3)).length >= 0 && match(num.toLowerCase()).length === 1)
 
   // 3. Long content: 10k line description + 25k scope save fine.
-  const longDesc = 'שלום '.repeat(1500).slice(0, 10000), longScope = 'x'.repeat(25000)
+  const longDesc = ('שלום 😀 O\'Reilly "quote"\n').repeat(600).slice(0, 10000), longScope = 'x'.repeat(25000)
   await rest(`proposals?id=eq.${p1.id}`, { method: 'PATCH', body: JSON.stringify({ scope: longScope }) })
   const line = await ins('sales_document_lines', { tenant_id: tA, document_type: 'proposal', document_id: p1.id, product_id: prod.id, description: longDesc, quantity: 1, unit_price_cents: 10000, line_total_cents: 10000, custom_attributes: {} })
   const saved = (await list(`proposals?id=eq.${p1.id}&select=scope`))[0]

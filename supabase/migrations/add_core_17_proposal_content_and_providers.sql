@@ -41,12 +41,15 @@ ALTER TABLE invoices
 -- lives here (NOT on the proposal).
 CREATE TABLE IF NOT EXISTS commerce_settings (
   tenant_id uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
-  default_invoice_provider text NOT NULL DEFAULT 'scalix',   -- scalix|quickbooks|stripe
-  invoice_send_by_default boolean NOT NULL DEFAULT false,
-  default_payment_terms_days integer NOT NULL DEFAULT 14,
-  default_tax_behavior text NOT NULL DEFAULT 'none',
-  default_invoice_email_message text,
   updated_at timestamptz NOT NULL DEFAULT now());
+-- Add each column explicitly so this works whether commerce_settings is new OR already existed (CREATE TABLE
+-- IF NOT EXISTS is a no-op on an existing table and would skip new columns).
+ALTER TABLE commerce_settings
+  ADD COLUMN IF NOT EXISTS default_invoice_provider text NOT NULL DEFAULT 'scalix',
+  ADD COLUMN IF NOT EXISTS invoice_send_by_default boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS default_payment_terms_days integer NOT NULL DEFAULT 14,
+  ADD COLUMN IF NOT EXISTS default_tax_behavior text NOT NULL DEFAULT 'none',
+  ADD COLUMN IF NOT EXISTS default_invoice_email_message text;
 ALTER TABLE commerce_settings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Tenant commerce_settings access" ON commerce_settings;
 CREATE POLICY "Tenant commerce_settings access" ON commerce_settings FOR ALL USING (tenant_id = get_tenant_id()) WITH CHECK (tenant_id = get_tenant_id());
