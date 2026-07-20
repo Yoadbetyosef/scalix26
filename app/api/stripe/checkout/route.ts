@@ -45,8 +45,11 @@ export async function POST(req: NextRequest) {
     // Never logs the secret key or any customer/payment data. The client gets a generic, safe message.
     const err = e as { type?: string; code?: string; message?: string; requestId?: string }
     const misconfigured = err.message === 'STRIPE_SECRET_KEY is not configured'
+    // Stripe error messages here name the failing config (e.g. "No such price: '…'" when the key and price
+    // ids belong to different Stripe accounts) — no secrets or customer/payment data — so log them to make
+    // account/price misconfiguration diagnosable at a glance instead of via round-trips.
     console.error('[stripe/checkout] failed to create session', {
-      misconfigured, type: err.type, code: err.code, requestId: err.requestId, plan,
+      misconfigured, type: err.type, code: err.code, requestId: err.requestId, plan, priceId, message: err.message,
     })
     return misconfigured
       ? NextResponse.json({ error: 'Billing is temporarily unavailable. Please contact support.' }, { status: 500 })
