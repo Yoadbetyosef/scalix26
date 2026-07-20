@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Create your AI employee · Scalix26</title>
+  <meta name="description" content="Create your Scalix26 account and start automating every conversation in minutes." />
+  <style>
+    /* ---- Scalix26 signup (static, self-contained) --------------------------------------------------
+       Clean HTML version of app.scalix26.com/auth/signup for review. No external requests (fonts,
+       scripts, images) — everything is inline so it renders identically anywhere it is hosted. */
+    :root {
+      --ink: #1b2136;          /* headings / primary text */
+      --muted: #6b7280;        /* secondary text */
+      --subtle: #9aa1ad;       /* hints */
+      --line: #e6e8ef;         /* borders */
+      --field: #eef1fb;        /* filled input bg */
+      --accent: #5b6cf0;       /* Scalix waveform blue */
+      --btn: #3f4453;          /* primary button */
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(135deg, #eef0fb 0%, #f7f8fc 42%, #ffffff 100%);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 48px;
+      align-items: center;
+      padding: 40px 48px;
+    }
+
+    /* ---- Left / hero ---- */
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 56px; }
+    .brand .name { font-weight: 800; letter-spacing: .14em; font-size: 20px; color: var(--ink); }
+    .hero h1 {
+      font-size: clamp(44px, 6vw, 76px);
+      line-height: 1.02;
+      font-weight: 300;
+      letter-spacing: -0.02em;
+      margin: 0 0 22px;
+    }
+    .hero p { font-size: 19px; color: var(--muted); margin: 0 0 44px; }
+    .orb {
+      width: 340px; max-width: 70%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 45%, #ffffff 55%, #eef0fb 100%);
+      box-shadow: 0 0 0 1.5px rgba(91,108,240,.35), 0 30px 60px -30px rgba(91,108,240,.45);
+    }
+
+    /* ---- Right / form ---- */
+    .panel { width: 100%; max-width: 420px; margin-left: auto; }
+    .field { margin-bottom: 20px; }
+    label { display: block; font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+    .input {
+      width: 100%;
+      height: 54px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 0 16px;
+      font-size: 16px;
+      color: var(--ink);
+      display: flex; align-items: center;
+    }
+    .input.filled { background: var(--field); border-color: transparent; }
+    .input input {
+      border: 0; outline: 0; background: transparent;
+      width: 100%; height: 100%; font-size: 16px; color: var(--ink);
+      font-family: inherit;
+    }
+    .input input::placeholder { color: var(--subtle); }
+    .eye { border: 0; background: transparent; color: var(--subtle); cursor: pointer; padding: 0 0 0 8px; display: flex; }
+
+    .legal { font-size: 13px; color: var(--subtle); line-height: 1.5; margin: 4px 0 20px; }
+    .legal a { color: var(--muted); text-decoration: underline; }
+
+    .btn {
+      width: 100%;
+      height: 56px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--btn);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn:hover { background: #333846; }
+    .sub { text-align: center; font-size: 13px; color: var(--subtle); margin: 14px 0 0; }
+    .signin { text-align: center; font-size: 15px; color: var(--muted); margin-top: 40px; }
+    .signin a { color: var(--ink); font-weight: 600; text-decoration: none; }
+
+    @media (max-width: 860px) {
+      .wrap { grid-template-columns: 1fr; gap: 32px; padding: 32px 24px; }
+      .hero { text-align: left; }
+      .orb { display: none; }
+      .panel { margin: 0 auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <!-- Left: brand + hero -->
+    <section class="hero">
+      <div class="brand">
+        <!-- Scalix waveform mark -->
+        <svg width="30" height="30" viewBox="0 0 30 30" role="img" aria-label="Scalix26 logo">
+          <circle cx="15" cy="15" r="14" fill="none" stroke="#5b6cf0" stroke-width="1.6" opacity="0.55"/>
+          <g fill="#5b6cf0">
+            <rect x="9"  y="12" width="1.8" height="6"  rx="0.9"/>
+            <rect x="12" y="9"  width="1.8" height="12" rx="0.9"/>
+            <rect x="15" y="6"  width="1.8" height="18" rx="0.9"/>
+            <rect x="18" y="10" width="1.8" height="10" rx="0.9"/>
+            <rect x="21" y="13" width="1.8" height="4"  rx="0.9"/>
+          </g>
+        </svg>
+        <span class="name">SCALIX26</span>
+      </div>
+
+      <h1>Create your<br/>AI employee.</h1>
+      <p>Start automating every conversation in minutes.</p>
+
+      <div class="orb" aria-hidden="true">
+        <!-- Animated-looking waveform (static): teal → blue → purple bars -->
+        <svg width="60%" viewBox="0 0 200 120" role="img" aria-label="Voice waveform">
+          <defs>
+            <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%"  stop-color="#2dd4bf"/>
+              <stop offset="50%" stop-color="#5b6cf0"/>
+              <stop offset="100%" stop-color="#a78bfa"/>
+            </linearGradient>
+          </defs>
+          <g fill="url(#wave)">
+            <rect x="10"  y="46" width="8" height="28" rx="4"/>
+            <rect x="24"  y="34" width="8" height="52" rx="4"/>
+            <rect x="38"  y="22" width="8" height="76" rx="4"/>
+            <rect x="52"  y="10" width="8" height="100" rx="4"/>
+            <rect x="66"  y="26" width="8" height="68" rx="4"/>
+            <rect x="80"  y="16" width="8" height="88" rx="4"/>
+            <rect x="94"  y="4"  width="8" height="112" rx="4"/>
+            <rect x="108" y="18" width="8" height="84" rx="4"/>
+            <rect x="122" y="30" width="8" height="60" rx="4"/>
+            <rect x="136" y="20" width="8" height="80" rx="4"/>
+            <rect x="150" y="38" width="8" height="44" rx="4"/>
+            <rect x="164" y="30" width="8" height="60" rx="4"/>
+            <rect x="178" y="48" width="8" height="24" rx="4"/>
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <!-- Right: signup form -->
+    <section class="panel">
+      <form action="#" method="post" autocomplete="on">
+        <div class="field">
+          <label for="business">Business name</label>
+          <div class="input"><input id="business" name="business" type="text" placeholder="Smith's Locksmith Services" /></div>
+        </div>
+
+        <div class="field">
+          <label for="email">Work email</label>
+          <div class="input filled"><input id="email" name="email" type="email" placeholder="you@company.com" /></div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input filled">
+            <input id="password" name="password" type="password" placeholder="••••••••••" />
+            <button type="button" class="eye" aria-label="Show password" onclick="var p=document.getElementById('password');p.type=p.type==='password'?'text':'password';">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <p class="legal">By creating an account, you agree to our <a href="https://app.scalix26.com/terms">Terms of Service</a> and <a href="https://app.scalix26.com/privacy">Privacy Policy</a>.</p>
+
+        <button type="submit" class="btn">Continue</button>
+        <p class="sub">14-day free trial · no credit card required</p>
+      </form>
+
+      <p class="signin">Already have an account? <a href="https://app.scalix26.com/auth/login">Sign in →</a></p>
+    </section>
+  </main>
+</body>
+</html>
