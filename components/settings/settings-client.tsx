@@ -38,14 +38,24 @@ export function SettingsClient({ tenant, channels, hideBilling = false }: Props)
     if (url) window.open(url, '_blank')
   }
 
-  async function handleUpgrade(priceId: string) {
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ priceId }),
-    })
-    const { url } = await res.json()
-    if (url) window.location.href = url
+  const [upgrading, setUpgrading] = useState<string | null>(null)
+  async function handleUpgrade(plan: string) {
+    if (upgrading) return
+    setUpgrading(plan)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.url) { window.location.assign(data.url); return }
+      toast.error(data.error || 'Could not start checkout. Please try again.')
+    } catch {
+      toast.error('Could not reach billing. Check your connection and try again.')
+    } finally {
+      setUpgrading(null)
+    }
   }
 
   const planColors = { trial: 'bg-yellow-50 text-yellow-700', starter: 'bg-blue-50 text-blue-700', pro: 'bg-purple-50 text-purple-700', business: 'bg-green-50 text-green-700' }
@@ -221,9 +231,9 @@ export function SettingsClient({ tenant, channels, hideBilling = false }: Props)
           {/* Plans */}
           <div className="space-y-3">
             {[
-              { key: 'starter', name: 'Starter', price: '$297', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID, features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
-              { key: 'pro', name: 'Pro', price: '$397', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID, features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
-              { key: 'business', name: 'Business', price: '$597', period: '/mo', priceId: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_PRICE_ID, features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
+              { key: 'starter', name: 'Starter', price: '$297', period: '/mo', features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
+              { key: 'pro', name: 'Pro', price: '$397', period: '/mo', features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
+              { key: 'business', name: 'Business', price: '$597', period: '/mo', features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
             ].map(plan => {
               const isCurrent = tenant.plan === plan.key
               return (
@@ -244,10 +254,11 @@ export function SettingsClient({ tenant, channels, hideBilling = false }: Props)
                     </div>
                     {!isCurrent && (
                       <button
-                        onClick={() => handleUpgrade(plan.priceId!)}
-                        className="h-11 px-5 text-sm font-medium bg-ink text-white rounded-button shadow-e1 hover:bg-ink/90 hover:shadow-e2 transition-all flex-shrink-0"
+                        onClick={() => handleUpgrade(plan.key)}
+                        disabled={upgrading !== null}
+                        className="h-11 px-5 text-sm font-medium bg-ink text-white rounded-button shadow-e1 hover:bg-ink/90 hover:shadow-e2 transition-all flex-shrink-0 disabled:opacity-60"
                       >
-                        Upgrade
+                        {upgrading === plan.key ? 'Starting…' : 'Upgrade'}
                       </button>
                     )}
                   </div>
