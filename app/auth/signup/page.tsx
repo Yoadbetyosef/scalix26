@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 import { AuthShell } from '@/components/auth/auth-shell'
-import { SocialButtons } from '@/components/auth/social-buttons'
 
 const inputClass =
   'h-12 w-full rounded-xl border border-hairline bg-white px-4 text-[15px] text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.05)]'
@@ -26,12 +25,10 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [smsConsent, setSmsConsent] = useState(false)
   const supabase = createClient()
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
-    if (!smsConsent) { setError('Please agree to receive SMS messages to continue.'); return }
     setLoading(true)
     setError('')
     // Industry is no longer collected at signup — default from the brand (e.g. the
@@ -146,31 +143,18 @@ export default function SignupPage() {
           </div>
         )}
 
-        {/* SMS consent + legal — compact, subtle legal text directly above Continue. */}
-        <div className="space-y-1.5">
-          <label className="flex items-start gap-2 text-[11px] leading-snug text-muted">
-            <input
-              type="checkbox"
-              required
-              checked={smsConsent}
-              onChange={(e) => setSmsConsent(e.target.checked)}
-              className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 rounded border-hairline-strong accent-black"
-            />
-            <span>I agree to receive SMS messages from Scalix26 regarding my account and service updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out. Reply HELP for assistance.</span>
-          </label>
-          <p className="text-[10px] leading-snug text-muted/70">
-            By creating an account, you agree to our{' '}
-            <a href="https://scalix26.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Terms of Service</a>{' '}
-            and{' '}
-            <a href="https://scalix26.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Privacy Policy</a>.
-          </p>
-        </div>
+        {/* Legal — subtle text directly above Continue. */}
+        <p className="text-[10px] leading-snug text-muted/70">
+          By creating an account, you agree to our{' '}
+          <a href="https://scalix26.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Terms of Service</a>{' '}
+          and{' '}
+          <a href="https://scalix26.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Privacy Policy</a>.
+        </p>
 
         <Button
           type="submit"
           loading={loading}
-          disabled={!smsConsent}
-          className="mt-1 h-12 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-sm transition-all hover:bg-black/90 hover:shadow-md disabled:opacity-50 disabled:hover:shadow-sm"
+          className="mt-1 h-12 w-full rounded-xl bg-black text-[15px] font-medium text-white shadow-sm transition-all hover:bg-black/90 hover:shadow-md"
         >
           Continue
         </Button>
@@ -179,14 +163,6 @@ export default function SignupPage() {
           {brand.trialDays}-day free trial &middot; no credit card required
         </p>
       </form>
-
-      <div className="my-6 flex items-center gap-4">
-        <span className="h-px flex-1 bg-hairline" />
-        <span className="text-xs text-muted">or</span>
-        <span className="h-px flex-1 bg-hairline" />
-      </div>
-
-      <SocialButtons />
 
       <p className="mt-8 text-center text-sm text-subtle">
         Already have an account?{' '}
