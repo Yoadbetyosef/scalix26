@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { proposalTotals } from './money'
 import { hashToken, generateProposalToken, tokensMatch, looksLikeToken } from './proposal-token'
 import { proposalEmailHtml } from './proposal-email'
-import { PROPOSAL_STATUSES } from './proposal-status'
+import { PROPOSAL_STATUSES, editableFor, lockReasonFor } from './proposal-status'
 
 describe('proposalTotals (line discounts + overall discount + document tax)', () => {
   const lines = [{ quantity: 2, unit_price_cents: 5000, discount_cents: 0 }, { quantity: 1, unit_price_cents: 3000, discount_cents: 500 }]
@@ -28,4 +28,15 @@ describe('branded proposal email', () => {
 
 describe('proposal lifecycle statuses', () => {
   it('covers the full lifecycle', () => expect([...PROPOSAL_STATUSES]).toEqual(['draft', 'ready', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'converted']))
+})
+
+describe('proposal edit locks (version safety)', () => {
+  it('draft/ready/sent/viewed/declined/expired are editable', () => { for (const s of ['draft', 'ready', 'sent', 'viewed', 'declined', 'expired']) expect(editableFor(s)).toBe(true) })
+  it('accepted + converted are locked', () => { expect(editableFor('accepted')).toBe(false); expect(editableFor('converted')).toBe(false) })
+  it('lock reasons are specific and only for locked statuses', () => {
+    expect(lockReasonFor('converted')).toMatch(/read-only/i)
+    expect(lockReasonFor('accepted')).toMatch(/locked/i)
+    expect(lockReasonFor('draft')).toBeNull()
+    expect(lockReasonFor('sent')).toBeNull()
+  })
 })

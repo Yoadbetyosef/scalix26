@@ -12,7 +12,7 @@ const FROM = `Scalix <${FROM_ADDRESS}>`
 // deterministic resource id, quantity = 1 message).
 // fromName/replyTo let a caller brand the send as the business (display name) and route replies to the
 // business's own inbox, WITHOUT changing the verified From address (which must stay on FROM_ADDRESS).
-export interface EmailMeta { tenantId?: string; customerId?: string | null; fromName?: string; replyTo?: string }
+export interface EmailMeta { tenantId?: string; customerId?: string | null; fromName?: string; replyTo?: string; cc?: string }
 
 function meterEmail(id: string | undefined, meta?: EmailMeta) {
   if (!meta?.tenantId || !id) return
@@ -31,7 +31,8 @@ export async function sendEmail(to: string, subject: string, html: string, meta?
   const cleanName = meta?.fromName?.replace(/["<>\r\n]/g, '').trim()
   const from = cleanName ? `"${cleanName}" <${FROM_ADDRESS}>` : FROM
   const replyTo = meta?.replyTo?.trim() || undefined
-  const { data, error } = await resend.emails.send({ from, to, subject, html, ...(replyTo ? { replyTo } : {}) })
+  const cc = meta?.cc?.trim() || undefined
+  const { data, error } = await resend.emails.send({ from, to, subject, html, ...(replyTo ? { replyTo } : {}), ...(cc ? { cc } : {}) })
   if (error) {
     console.error('[email] send error:', error)
     return { success: false, error: error.message }

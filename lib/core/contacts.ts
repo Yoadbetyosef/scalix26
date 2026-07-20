@@ -49,6 +49,37 @@ export async function backfillNormalizedKeys(tenantId: string): Promise<number> 
   return n
 }
 
+// Create a contact from the proposal builder, with duplicate protection. If an active contact already
+// shares the normalized email or phone (and force is not set), returns those candidates instead of creating
+// a duplicate. companyName is find-or-created into companies and returned for linking on the proposal.
+export interface NewContactInput { name: string; companyName?: string | null; email?: string | null; phone?: string | null; address?: string | null; notes?: string | null; force?: boolean }
+export async function createContactWithDedupe(tenantId: string, actor: string, input: NewContactInput): Promise<{ ok: true; created: false; duplicates: Array<{ id: string; name: string | null; email: string | null; phone: string | null }> } | { ok: true; created: true; contact: { id: string; name: string | null; email: string | null; phone: string | null }; companyId: string | null } | { ok: false; error: string }> {
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: 'name_required' }
+  const nEmail = normalizeEmail(input.email ?? null), nPhone = normalizePhone(input.phone ?? null)
+  if (!input.force && (nEmail || nPhone)) {
+    const ors: string[] = []
+    if (nEmail) ors.push(`normalized_email.eq.${nEmail}`)
+    if (nPhone) ors.push(`normalized_phone.eq.${nPhone}`)
+    const { data: existing } = await admin().from('contacts').select('id, name, email, phone').eq('tenant_id', tenantId).is('archived_at', null).is('merged_into_id', null).or(ors.join(',')).limit(5)
+    if (existing && existing.length) return { ok: true, created: false, duplicates: existing as Array<{ id: string; name: string | null; email: string | null; phone: string | null }> }
+  }
+  let companyId: string | null = null
+  const companyName = input.companyName?.trim()
+  if (companyName) {
+    const { data: found } = await admin().from('companies').select('id').eq('tenant_id', tenantId).ilike('name', companyName).is('archived_at', null).limit(1).maybeSingle()
+    if (found) companyId = found.id as string
+    else { const { data: c } = await admin().from('companies').insert({ tenant_id: tenantId, name: companyName }).select('id').single(); companyId = (c?.id as string) ?? null }
+  }
+  const { data, error } = await admin().from('contacts').insert({
+    tenant_id: tenantId, name, email: input.email?.trim() || null, phone: input.phone?.trim() || null, address: input.address?.trim() || null,
+    notes: input.notes?.trim() || null, channel: 'manual', normalized_email: nEmail, normalized_phone: nPhone,
+  }).select('id, name, email, phone').single()
+  if (error) return { ok: false, error: error.message }
+  await addActivity(tenantId, { contactId: data.id as string, type: 'created', title: 'Contact created from proposal', actor })
+  return { ok: true, created: true, contact: data as { id: string; name: string | null; email: string | null; phone: string | null }, companyId }
+}
+
 // Suggest likely duplicates of a contact (exact normalized phone/email overlap, scored). Excludes archived
 // and already-merged rows.
 export async function findContactDuplicates(tenantId: string, contactId: string): Promise<DuplicateMatch[]> {
