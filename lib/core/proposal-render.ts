@@ -89,7 +89,8 @@ export async function resolveLineSnapshot(tenantId: string, ref: { productId?: s
 export const TEMPLATES = ['clean', 'visual', 'minimal'] as const
 export type ProposalTemplate = (typeof TEMPLATES)[number]
 
-export interface RenderLine { description: string | null; quantity: number; unit_price_cents: number; discount_cents: number; line_total_cents: number; image_url: string | null; sku: string | null; product_name: string | null; component_name: string | null; variant_name: string | null; color: string | null; fabric: string | null; measurements: string | null; attributes: Record<string, string> }
+export interface RenderFabric { name: string | null; code: string | null; image_url: string | null; color: string | null; composition: string | null; martindale: string | null }
+export interface RenderLine { description: string | null; quantity: number; unit_price_cents: number; discount_cents: number; line_total_cents: number; image_url: string | null; sku: string | null; product_name: string | null; component_name: string | null; variant_name: string | null; color: string | null; fabric: string | null; measurements: string | null; attributes: Record<string, string>; fabricPick: RenderFabric | null }
 export interface RenderSection { title: string; body: string }
 export interface RenderableProposal {
   number: string; title: string | null; status: string; is_expired: boolean; template: ProposalTemplate
@@ -114,12 +115,14 @@ export async function assembleRenderable(tenantId: string, doc: Record<string, u
     const hidden = a.hide_image === true
     const override = (a.proposal_image_url as string) || null
     const image = hidden ? null : (override ?? snap?.image_url ?? (a.image_url as string) ?? null)
+    const fp = (a.fabric as Record<string, unknown>) ?? null
     return {
       description: (l.description as string) ?? null, quantity: l.quantity as number, unit_price_cents: l.unit_price_cents as number,
       discount_cents: (l.discount_cents as number) ?? 0, line_total_cents: l.line_total_cents as number,
       image_url: image, sku: snap?.sku ?? (a.sku as string) ?? null,
       product_name: snap?.product_name ?? null, component_name: snap?.component_name ?? null, variant_name: snap?.variant_name ?? null,
       color: snap?.color ?? null, fabric: snap?.fabric ?? null, measurements: snap?.measurements ?? null, attributes: snap?.attributes ?? {},
+      fabricPick: fp ? { name: (fp.name as string) ?? null, code: (fp.code as string) ?? null, image_url: (fp.image_url as string) ?? null, color: (fp.color as string) ?? null, composition: (fp.composition as string) ?? null, martindale: (fp.martindale as string) ?? null } : null,
     }
   })
   const visibleSections: RenderSection[] = (sections ?? []).filter((s) => s.visible !== false && ((s.title as string)?.trim() || (s.body as string)?.trim())).map((s) => ({ title: (s.title as string) ?? '', body: (s.body as string) ?? '' }))

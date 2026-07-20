@@ -16,6 +16,8 @@ export const SUPPORTED_TERMS = {
   product: { singular: 'Product', plural: 'Products' },
   variant: { singular: 'Variant', plural: 'Variants' },
   component: { singular: 'Component', plural: 'Components' },
+  catalog: { singular: 'Catalog', plural: 'Catalog' },       // surface label (furniture → "Inventory")
+  material: { singular: 'Material', plural: 'Materials' },    // material/finish library (furniture → "Fabric(s)")
 } as const
 export type SupportedTerm = keyof typeof SUPPORTED_TERMS
 export function isSupportedTerm(k: string): k is SupportedTerm { return Object.prototype.hasOwnProperty.call(SUPPORTED_TERMS, k) }

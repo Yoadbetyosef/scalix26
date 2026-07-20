@@ -8,6 +8,7 @@ import { proposalEmailHtml } from './proposal-email'
 import { getBranding } from './proposal-branding'
 import { logActivity, listActivity } from './proposal-activity'
 import { resolveLineSnapshot, assembleRenderable, TEMPLATES, type RenderableProposal, type ProposalTemplate } from './proposal-render'
+import { getMaterial, materialSnapshot } from './materials'
 import { editableFor, lockReasonFor } from './proposal-status'
 export { PROPOSAL_STATUSES, type ProposalStatus, editableFor, lockReasonFor } from './proposal-status'
 
@@ -189,18 +190,23 @@ export async function updateProposal(tenantId: string, id: string, patch: Propos
 }
 
 // ── Lines (server-resolved catalog snapshots) ────────────────────────────────────────────────────────
-export interface ProposalLineInput { productId?: string | null; variantId?: string | null; componentId?: string | null; description?: string | null; quantity: number; unit_price_cents: number; discount_cents?: number }
+export interface ProposalLineInput { productId?: string | null; variantId?: string | null; componentId?: string | null; fabricId?: string | null; description?: string | null; quantity: number; unit_price_cents: number; discount_cents?: number }
 
 export async function addProposalLine(tenantId: string, id: string, line: ProposalLineInput, actor: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const st = await proposalStatus(tenantId, id)
   if (!st.ok) return { ok: false, error: st.error! }
   const snapshot = (line.productId || line.componentId || line.variantId) ? await resolveLineSnapshot(tenantId, line) : null
+  // Fabric/material snapshot — copied onto the line so it survives later catalog changes.
+  let fabric: Record<string, unknown> | null = null
+  if (line.fabricId) { const m = await getMaterial(tenantId, line.fabricId); if (m) fabric = materialSnapshot(m) }
+  const custom: Record<string, unknown> = snapshot ? { snapshot, sku: snapshot.sku, image_url: snapshot.image_url } : {}
+  if (fabric) custom.fabric = fabric
   const { count } = await admin().from('sales_document_lines').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('document_type', 'proposal').eq('document_id', id)
   const { error } = await admin().from('sales_document_lines').insert({
     tenant_id: tenantId, document_type: 'proposal', document_id: id, product_id: line.productId ?? null, variant_id: line.variantId ?? null, component_id: line.componentId ?? null,
     description: line.description ?? snapshot?.product_name ?? null, quantity: line.quantity, unit_price_cents: line.unit_price_cents,
     discount_cents: line.discount_cents ?? 0, tax_cents: 0, line_total_cents: lineTotalCents({ quantity: line.quantity, unit_price_cents: line.unit_price_cents, discount_cents: line.discount_cents ?? 0 }),
-    custom_attributes: snapshot ? { snapshot, sku: snapshot.sku, image_url: snapshot.image_url } : {}, sort_order: count ?? 0,
+    custom_attributes: custom, sort_order: count ?? 0,
   })
   if (error) return { ok: false, error: error.message }
   await recomputeTotals(tenantId, id)
@@ -382,10 +388,12 @@ export async function convertProposalToOrder(tenantId: string, actor: string, id
   const { data: lines } = await admin().from('sales_document_lines').select('*').eq('tenant_id', tenantId).eq('document_type', 'proposal').eq('document_id', id).order('sort_order')
   if ((lines ?? []).length) {
     await admin().from('order_line_items').insert(((lines ?? []) as Record<string, unknown>[]).map((l) => { const a = (l.custom_attributes as Record<string, unknown>) ?? {}; const s = (a.snapshot as Record<string, unknown>) ?? {}
+      const fab = (a.fabric as Record<string, unknown>) ?? null   // selected fabric snapshot for fulfillment
       return {
         tenant_id: tenantId, order_id: order.id, product_name: (l.description as string) || (s.product_name as string) || 'Item', description: (l.description as string) ?? null,
         sku: (s.sku as string) ?? (a.sku as string) ?? null, quantity: l.quantity, unit_price_cents: l.unit_price_cents, line_total_cents: l.line_total_cents, product_ref: (l.product_id as string) ?? null,
-        measurements: (s.measurements as string) ?? null, color: (s.color as string) ?? null, material: (s.fabric as string) ?? null, display_order: (l.sort_order as number) ?? 0,
+        measurements: (s.measurements as string) ?? null, color: (fab?.color as string) ?? (s.color as string) ?? null, material: (fab?.name as string) ?? (s.fabric as string) ?? null,
+        fabric: fab, display_order: (l.sort_order as number) ?? 0,
       } }))
   }
   await admin().from('order_events').insert({ tenant_id: tenantId, order_id: order.id, type: 'created', actor: 'system', payload: { from_proposal: doc.number } })

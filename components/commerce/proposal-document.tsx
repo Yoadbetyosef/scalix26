@@ -95,6 +95,18 @@ function LineRow({ l, currency, imgSize }: { l: RenderLine; currency: string; im
         <div style={{ fontWeight: 600, color: '#111827' }}>{title}</div>
         {l.sku && <div style={{ fontSize: 12, color: '#9ca3af' }}>SKU {l.sku}</div>}
         {specs.length > 0 && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>{specs.join(' · ')}</div>}
+        {l.fabricPick && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, padding: '6px 8px', border: '1px solid #eef0f4', borderRadius: 8, background: '#fafbfc' }}>
+            {l.fabricPick.image_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={l.fabricPick.image_url} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+              : null}
+            <span style={{ fontSize: 12, color: '#4b5563', minWidth: 0 }}>
+              <strong style={{ color: '#111827' }}>{l.fabricPick.name}</strong>{l.fabricPick.code ? ` · ${l.fabricPick.code}` : ''}
+              {[l.fabricPick.color, l.fabricPick.composition, l.fabricPick.martindale && `Martindale ${l.fabricPick.martindale}`].filter(Boolean).length > 0 && <span style={{ display: 'block', color: '#6b7280' }}>{[l.fabricPick.color, l.fabricPick.composition, l.fabricPick.martindale && `Martindale ${l.fabricPick.martindale}`].filter(Boolean).join(' · ')}</span>}
+            </span>
+          </div>
+        )}
         <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{l.quantity} × {fmt(l.unit_price_cents, currency)}{l.discount_cents ? ` − ${fmt(l.discount_cents, currency)}` : ''}</div>
       </div>
       <div style={{ fontWeight: 600, color: '#111827', textAlign: 'right', whiteSpace: 'nowrap' }}>{fmt(l.line_total_cents, currency)}</div>

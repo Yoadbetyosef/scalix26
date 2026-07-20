@@ -5,7 +5,7 @@ import { addProposalLine } from '@/lib/core/proposals'
 import { zodMessage } from '@/lib/core/zod-error'
 
 const schema = z.object({
-  productId: z.string().uuid().nullable().optional(), variantId: z.string().uuid().nullable().optional(), componentId: z.string().uuid().nullable().optional(),
+  productId: z.string().uuid().nullable().optional(), variantId: z.string().uuid().nullable().optional(), componentId: z.string().uuid().nullable().optional(), fabricId: z.string().uuid().nullable().optional(),
   description: z.string().max(10000).nullable().optional(), quantity: z.number().min(0), unit_price_cents: z.number().int().min(0),
   discount_cents: z.number().int().min(0).optional(),
 })

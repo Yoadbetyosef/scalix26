@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Layers, Boxes, SlidersHorizontal, Image as ImageIcon, Warehouse, Activity, Package, Pencil, Archive, Trash2, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Info, Layers, Boxes, SlidersHorizontal, Image as ImageIcon, Warehouse, Activity, Package, Pencil, Archive, Trash2, RotateCcw, Palette } from 'lucide-react'
 import { Tabs, type TabItem } from '@/components/ui/tabs'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -20,26 +20,30 @@ import { AttributeEditor } from '@/components/commerce/attribute-editor'
 import { ProductInventory } from '@/components/commerce/product-inventory'
 import { ProductActivity } from '@/components/commerce/product-activity'
 import { ProductMedia } from '@/components/commerce/product-media'
+import { ProductMaterials } from '@/components/commerce/product-materials'
+import { useTerminology } from '@/lib/hooks/use-terminology'
 import { toast } from 'sonner'
 
 interface Product { id: string; name: string; sku: string | null; status: string; image_url: string | null; [k: string]: unknown }
 const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { active: 'active', inactive: 'neutral', discontinued: 'closed' }
 
-const TABS: TabItem[] = [
-  { key: 'general', label: 'General', icon: Info },
-  { key: 'variants', label: 'Variants', icon: Layers },
-  { key: 'components', label: 'Components', icon: Boxes },
-  { key: 'attributes', label: 'Attributes', icon: SlidersHorizontal },
-  { key: 'media', label: 'Media', icon: ImageIcon },
-  { key: 'inventory', label: 'Inventory', icon: Warehouse },
-  { key: 'activity', label: 'Activity', icon: Activity },
-]
-
 export function ProductDetail({ productId }: { productId: string }) {
   const router = useRouter()
+  const { term } = useTerminology()
   const [product, setProduct] = useState<Product | null | 'notfound'>(null)
   const [tab, setTab] = useState('general')
   const [deleting, setDeleting] = useState(false)
+  // Labels resolve through tenant terminology (furniture: Variants→"Configurations", Materials→"Fabrics").
+  const TABS: TabItem[] = [
+    { key: 'general', label: 'General', icon: Info },
+    { key: 'variants', label: term('variant', { plural: true, fallback: 'Variants' }), icon: Layers },
+    { key: 'components', label: term('component', { plural: true, fallback: 'Components' }), icon: Boxes },
+    { key: 'fabrics', label: term('material', { plural: true, fallback: 'Materials' }), icon: Palette },
+    { key: 'attributes', label: 'Attributes', icon: SlidersHorizontal },
+    { key: 'media', label: 'Media', icon: ImageIcon },
+    { key: 'inventory', label: 'Inventory', icon: Warehouse },
+    { key: 'activity', label: 'Activity', icon: Activity },
+  ]
 
   const reloadProduct = () => fetch(`/api/core/products/${productId}`).then((r) => r.json()).then((d) => setProduct(d.product)).catch(() => {})
   async function archive(archived: boolean) {
@@ -117,6 +121,7 @@ export function ProductDetail({ productId }: { productId: string }) {
       )}
       {tab === 'variants' && <ProductVariants productId={productId} />}
       {tab === 'components' && <ProductComponents productId={productId} parentCategory={product && typeof product.category === 'string' ? product.category : null} />}
+      {tab === 'fabrics' && <ProductMaterials productId={productId} />}
       {tab === 'attributes' && (
         <div className="max-w-2xl">
           <p className="mb-4 text-sm text-muted">Industry-specific details for this product, from your installed package and custom fields.</p>

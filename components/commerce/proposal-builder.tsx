@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formatCents, inputToCents, centsToInput } from '@/lib/core/money-format'
 import { AVAILABILITY } from '@/components/commerce/product-inventory'
+import { MATERIAL_STATUS } from '@/components/commerce/materials-list'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -482,6 +483,8 @@ function LineDrawer({ id, onClose, onDone }: { id: string; onClose: () => void; 
   const [discount, setDiscount] = useState('')
   const [busy, setBusy] = useState(false)
   const [inv, setInv] = useState<{ availability: string; available: number; incoming: number; nextArrival: string | null } | null>(null)
+  const [materials, setMaterials] = useState<Array<{ id: string; name: string; code: string | null; image_url: string | null; status: string }>>([])
+  const [fabricId, setFabricId] = useState<string | null>(null)
   const addedRef = useRef(0)
 
   useEffect(() => { fetch('/api/core/products').then((r) => r.json()).then((d) => setProducts(d.products ?? [])).catch(() => setProducts([])) }, [])
@@ -499,9 +502,10 @@ function LineDrawer({ id, onClose, onDone }: { id: string; onClose: () => void; 
   const matches = (products ?? []).filter((p) => { const s = q.trim().toLowerCase(); return s ? [p.name, p.sku].some((v) => v?.toLowerCase().includes(s)) : true }).slice(0, 8)
 
   function pickProduct(p: PickProduct) {
-    setProduct(p); setQ(''); setVariantId(null); setComponentId(null); setCompVariants([]); setDescription(p.name); setPrice(p.price != null ? String(p.price) : '')
+    setProduct(p); setQ(''); setVariantId(null); setComponentId(null); setCompVariants([]); setFabricId(null); setDescription(p.name); setPrice(p.price != null ? String(p.price) : '')
     fetch(`/api/core/products/${p.id}/variants`).then((r) => r.json()).then((d) => setVariants((d.variants ?? []).filter((v: PickVar) => v.status !== 'discontinued'))).catch(() => setVariants([]))
     fetch(`/api/core/products/${p.id}/components`).then((r) => r.json()).then((d) => setComponents((d.components ?? []).filter((c: PickComp) => c.status !== 'discontinued'))).catch(() => setComponents([]))
+    fetch(`/api/core/products/${p.id}/materials`).then((r) => r.json()).then((d) => setMaterials(d.materials ?? [])).catch(() => setMaterials([]))
   }
   function pickComponent(cid: string) {
     setComponentId(cid || null); setVariantId(null); setCompVariants([])
@@ -511,14 +515,14 @@ function LineDrawer({ id, onClose, onDone }: { id: string; onClose: () => void; 
   }
   function pickCompVariant(vid: string) { setVariantId(vid || null); const v = compVariants.find((x) => x.id === vid); const cmp = components.find((x) => x.id === componentId); if (v) { setDescription(`${product?.name ?? ''} — ${cmp?.name ?? ''} — ${v.name}`.replace(/\s+—\s+$/, '').trim()); if (v.price_override_cents != null) setPrice(centsToInput(v.price_override_cents)) } }
   function pickVariant(vid: string) { setVariantId(vid || null); const v = variants.find((x) => x.id === vid); if (v) { setDescription(`${product?.name ?? ''} — ${v.name}`.trim()); if (v.price_override_cents != null) setPrice(centsToInput(v.price_override_cents)) } }
-  function reset() { setProduct(null); setComponents([]); setVariants([]); setComponentId(null); setCompVariants([]); setVariantId(null); setDescription(''); setPrice(''); setDiscount(''); setQuantity('1') }
+  function reset() { setProduct(null); setComponents([]); setVariants([]); setComponentId(null); setCompVariants([]); setVariantId(null); setMaterials([]); setFabricId(null); setDescription(''); setPrice(''); setDiscount(''); setQuantity('1') }
 
   async function add(keepOpen: boolean) {
     const qty = Number(quantity); const cents = inputToCents(price); const disc = inputToCents(discount) ?? 0
     if (!Number.isFinite(qty) || qty < 0) { toast.error('Enter a valid quantity.'); return }
     if (cents == null || Number.isNaN(cents)) { toast.error('Enter a valid unit price.'); return }
     setBusy(true)
-    const res = await fetch(`/api/core/proposals/${id}/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ productId: product?.id ?? null, componentId, variantId, description: description.trim() || null, quantity: qty, unit_price_cents: cents, discount_cents: disc }) })
+    const res = await fetch(`/api/core/proposals/${id}/lines`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ productId: product?.id ?? null, componentId, variantId, fabricId, description: description.trim() || null, quantity: qty, unit_price_cents: cents, discount_cents: disc }) })
     const d = await res.json().catch(() => ({})); setBusy(false)
     if (res.ok && d.ok) { addedRef.current++; toast.success('Line added.'); if (keepOpen && product) { setVariantId(null); setComponentId(null); setDiscount(''); toast.message('Pick another component from the same product.') } else if (keepOpen) reset(); else onDone() }
     else toast.error(d.error === 'locked' ? 'This proposal is locked.' : (d.error || 'Could not add the line.'))
@@ -539,6 +543,24 @@ function LineDrawer({ id, onClose, onDone }: { id: string; onClose: () => void; 
         {product && components.length > 0 && <div className="space-y-1.5"><Label>Component (order a single sub-product)</Label><select value={componentId ?? ''} onChange={(e) => pickComponent(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none"><option value="">— whole product —</option>{components.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>}
         {componentId && compVariants.length > 0 && <div className="space-y-1.5"><Label>Component variant</Label><select value={variantId ?? ''} onChange={(e) => pickCompVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none"><option value="">— none —</option>{compVariants.map((v) => <option key={v.id} value={v.id}>{v.name}{v.sku ? ` · ${v.sku}` : ''}</option>)}</select></div>}
         {product && !componentId && variants.length > 0 && <div className="space-y-1.5"><Label>Variant</Label><select value={variantId ?? ''} onChange={(e) => pickVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none"><option value="">— none —</option>{variants.map((v) => <option key={v.id} value={v.id}>{v.name}{v.sku ? ` · ${v.sku}` : ''}</option>)}</select></div>}
+        {materials.length > 0 && (
+          <div className="space-y-1.5">
+            <Label>Fabric</Label>
+            <div className="flex flex-wrap gap-2">
+              {materials.map((m) => { const st = MATERIAL_STATUS[m.status] ?? { variant: 'neutral' as const }; const on = fabricId === m.id
+                return (
+                  <button key={m.id} type="button" onClick={() => setFabricId(on ? null : m.id)} title={m.name} className={cn('flex items-center gap-2 rounded-lg border p-1.5 pr-2.5 text-xs transition-colors', on ? 'border-accent bg-accent/5' : 'border-hairline hover:bg-sunken/40')}>
+                    {m.image_url
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={m.image_url} alt="" className="h-8 w-8 rounded object-cover" />
+                      : <span className="h-8 w-8 rounded bg-sunken" />}
+                    <span className="min-w-0"><span className="block max-w-[120px] truncate font-medium text-ink">{m.name}</span><span className={cn('inline-block h-1.5 w-1.5 rounded-full align-middle', st.variant === 'active' ? 'bg-green-500' : st.variant === 'pending' ? 'bg-amber-500' : st.variant === 'closed' ? 'bg-red-500' : 'bg-gray-400')} /> <span className="text-[10px] text-muted">{m.code ?? ''}</span></span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
         {inv && (() => { const av = AVAILABILITY[inv.availability] ?? { label: inv.availability, variant: 'neutral' as const }; const over = Number(quantity) > inv.available
           return <div className="space-y-1 rounded-lg border border-hairline bg-sunken/50 px-3 py-2 text-xs"><div className="flex items-center gap-2"><Badge variant={av.variant}>{av.label}</Badge><span className="text-muted">{inv.available} available{inv.incoming > 0 ? ` · ${inv.incoming} incoming${inv.nextArrival ? ` (exp. ${inv.nextArrival})` : ''}` : ''}</span></div>{over && <p className="text-amber-700">Requested {quantity} exceeds {inv.available} available. You can still add it as a backorder / against incoming stock / made-to-order.</p>}</div>
         })()}
