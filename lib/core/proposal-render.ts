@@ -90,20 +90,21 @@ export const TEMPLATES = ['clean', 'visual', 'minimal'] as const
 export type ProposalTemplate = (typeof TEMPLATES)[number]
 
 export interface RenderLine { description: string | null; quantity: number; unit_price_cents: number; discount_cents: number; line_total_cents: number; image_url: string | null; sku: string | null; product_name: string | null; component_name: string | null; variant_name: string | null; color: string | null; fabric: string | null; measurements: string | null; attributes: Record<string, string> }
+export interface RenderSection { title: string; body: string }
 export interface RenderableProposal {
-  number: string; status: string; is_expired: boolean; template: ProposalTemplate
+  number: string; title: string | null; status: string; is_expired: boolean; template: ProposalTemplate
   branding: Branding
   customer: { name: string | null; company: string | null; email: string | null; phone: string | null; address: string | null }
   created_at: string | null; expires_at: string | null
-  intro: string | null; terms: string | null
+  intro: string | null; scope: string | null; sections: RenderSection[]; terms: string | null
   currency: string; subtotal_cents: number; discount_cents: number; tax_cents: number; total_cents: number
   accepted_at: string | null; declined_at: string | null
   canRespond: boolean
   lines: RenderLine[]
 }
 
-// Assemble the renderable from a proposal row + its lines + resolved customer + branding. Pure-ish (no writes).
-export async function assembleRenderable(tenantId: string, doc: Record<string, unknown>, lines: Record<string, unknown>[], contact: { name?: string | null; email?: string | null; phone?: string | null; address?: string | null } | null, company: { name?: string | null } | null): Promise<RenderableProposal> {
+// Assemble the renderable from a proposal row + its lines + resolved customer + branding + sections. Pure-ish.
+export async function assembleRenderable(tenantId: string, doc: Record<string, unknown>, lines: Record<string, unknown>[], contact: { name?: string | null; email?: string | null; phone?: string | null; address?: string | null } | null, company: { name?: string | null } | null, sections: Record<string, unknown>[] = []): Promise<RenderableProposal> {
   const branding = await getBranding(tenantId)
   const expired = !!doc.expires_at && new Date(doc.expires_at as string) < new Date() && !['accepted', 'declined', 'converted'].includes(doc.status as string)
   const template = (TEMPLATES.includes(doc.template as ProposalTemplate) ? doc.template : 'clean') as ProposalTemplate
@@ -121,11 +122,12 @@ export async function assembleRenderable(tenantId: string, doc: Record<string, u
       color: snap?.color ?? null, fabric: snap?.fabric ?? null, measurements: snap?.measurements ?? null, attributes: snap?.attributes ?? {},
     }
   })
+  const visibleSections: RenderSection[] = (sections ?? []).filter((s) => s.visible !== false && ((s.title as string)?.trim() || (s.body as string)?.trim())).map((s) => ({ title: (s.title as string) ?? '', body: (s.body as string) ?? '' }))
   return {
-    number: doc.number as string, status: expired ? 'expired' : (doc.status as string), is_expired: expired, template, branding,
+    number: doc.number as string, title: (doc.title as string) ?? null, status: expired ? 'expired' : (doc.status as string), is_expired: expired, template, branding,
     customer: { name: (contact?.name as string) ?? null, company: (company?.name as string) ?? null, email: (contact?.email as string) ?? null, phone: (contact?.phone as string) ?? null, address: (contact?.address as string) ?? null },
     created_at: (doc.created_at as string) ?? null, expires_at: (doc.expires_at as string) ?? null,
-    intro: (doc.customer_notes as string) ?? branding.intro ?? null, terms: (doc.terms as string) ?? branding.default_terms ?? null,
+    intro: (doc.customer_notes as string) ?? branding.intro ?? null, scope: (doc.scope as string) ?? null, sections: visibleSections, terms: (doc.terms as string) ?? branding.default_terms ?? null,
     currency: doc.currency as string, subtotal_cents: doc.subtotal_cents as number, discount_cents: doc.discount_cents as number, tax_cents: doc.tax_cents as number, total_cents: doc.total_cents as number,
     accepted_at: (doc.accepted_at as string) ?? null, declined_at: (doc.declined_at as string) ?? null,
     canRespond: !expired && !['accepted', 'declined', 'converted'].includes(doc.status as string),
@@ -140,5 +142,6 @@ export async function getPreviewRenderable(tenantId: string, id: string): Promis
   const { data: lines } = await admin().from('sales_document_lines').select('*').eq('tenant_id', tenantId).eq('document_type', 'proposal').eq('document_id', id).order('sort_order')
   const contact = doc.contact_id ? (await admin().from('contacts').select('name, email, phone, address').eq('id', doc.contact_id).maybeSingle()).data : null
   const company = doc.company_id ? (await admin().from('companies').select('name').eq('id', doc.company_id).maybeSingle()).data : null
-  return assembleRenderable(tenantId, doc as Record<string, unknown>, (lines ?? []) as Record<string, unknown>[], contact, company)
+  const { data: sections } = await admin().from('proposal_sections').select('title, body, sort_order, visible').eq('tenant_id', tenantId).eq('proposal_id', id).order('sort_order')
+  return assembleRenderable(tenantId, doc as Record<string, unknown>, (lines ?? []) as Record<string, unknown>[], contact, company, (sections ?? []) as Record<string, unknown>[])
 }

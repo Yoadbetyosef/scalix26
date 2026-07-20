@@ -25,21 +25,42 @@ async function expireStale(tenantId: string) {
     .eq('tenant_id', tenantId).in('status', ['sent', 'viewed']).not('expires_at', 'is', null).lt('expires_at', now())
 }
 
-export interface UnifiedRow { id: string; legacy_type: ProposalLegacyType; number: string; status: string; contact_id: string | null; company_id: string | null; currency: string; total_cents: number; expires_at: string | null; created_at: string; updated_at: string }
+export interface UnifiedRow { id: string; legacy_type: ProposalLegacyType; number: string; title: string | null; status: string; contact_id: string | null; company_id: string | null; customer_name: string | null; company_name: string | null; customer_email: string | null; currency: string; total_cents: number; expires_at: string | null; converted: boolean; created_at: string; updated_at: string }
+export interface ListFilter { search?: string; status?: string; converted?: 'yes' | 'no'; type?: ProposalLegacyType }
 
-export async function listProposals(tenantId: string, limit = 300): Promise<UnifiedRow[]> {
+export async function listProposals(tenantId: string, filter: ListFilter = {}, limit = 300): Promise<UnifiedRow[]> {
   await expireStale(tenantId)
   const cols = 'id, number, status, contact_id, company_id, currency, total_cents, created_at, updated_at'
-  const [p, e, q] = await Promise.all([
-    admin().from('proposals').select(`${cols}, expires_at`).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit),
+  const [p, e, q, contacts, companies] = await Promise.all([
+    admin().from('proposals').select(`${cols}, expires_at, title, converted_invoice_id, converted_order_id`).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit),
     admin().from('estimates').select(cols).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit),
     admin().from('quotes').select(cols).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit),
+    admin().from('contacts').select('id, name, email').eq('tenant_id', tenantId),
+    admin().from('companies').select('id, name').eq('tenant_id', tenantId),
   ])
-  const rows: UnifiedRow[] = [
-    ...(p.data ?? []).map((r) => ({ ...(r as Record<string, unknown>), legacy_type: 'proposal' as const })),
-    ...(e.data ?? []).map((r) => ({ ...(r as Record<string, unknown>), expires_at: null, legacy_type: 'estimate' as const })),
-    ...(q.data ?? []).map((r) => ({ ...(r as Record<string, unknown>), expires_at: null, legacy_type: 'quote' as const })),
-  ] as unknown as UnifiedRow[]
+  const cById = new Map((contacts.data ?? []).map((c) => [c.id as string, c as { name: string | null; email: string | null }]))
+  const coById = new Map((companies.data ?? []).map((c) => [c.id as string, (c.name as string) ?? null]))
+  const enrich = (r: Record<string, unknown>, type: ProposalLegacyType): UnifiedRow => {
+    const c = r.contact_id ? cById.get(r.contact_id as string) : null
+    return {
+      id: r.id as string, legacy_type: type, number: r.number as string, title: (r.title as string) ?? null, status: r.status as string,
+      contact_id: (r.contact_id as string) ?? null, company_id: (r.company_id as string) ?? null,
+      customer_name: c?.name ?? null, company_name: r.company_id ? coById.get(r.company_id as string) ?? null : null, customer_email: c?.email ?? null,
+      currency: r.currency as string, total_cents: r.total_cents as number, expires_at: (r.expires_at as string) ?? null,
+      converted: !!(r.converted_invoice_id || r.converted_order_id), created_at: r.created_at as string, updated_at: r.updated_at as string,
+    }
+  }
+  let rows: UnifiedRow[] = [
+    ...(p.data ?? []).map((r) => enrich(r as Record<string, unknown>, 'proposal')),
+    ...(e.data ?? []).map((r) => enrich(r as Record<string, unknown>, 'estimate')),
+    ...(q.data ?? []).map((r) => enrich(r as Record<string, unknown>, 'quote')),
+  ]
+  const s = filter.search?.trim().toLowerCase()
+  if (s) rows = rows.filter((r) => [r.number, r.title, r.customer_name, r.company_name, r.customer_email].some((v) => v?.toLowerCase().includes(s)))
+  if (filter.status) rows = rows.filter((r) => r.status === filter.status)
+  if (filter.type) rows = rows.filter((r) => r.legacy_type === filter.type)
+  if (filter.converted === 'yes') rows = rows.filter((r) => r.converted)
+  if (filter.converted === 'no') rows = rows.filter((r) => !r.converted)
   return rows.sort((a, b) => (a.created_at < b.created_at ? 1 : -1)).slice(0, limit)
 }
 
@@ -66,13 +87,23 @@ export async function getProposal(tenantId: string, id: string) {
   if (doc.contact_id) contact = (await admin().from('contacts').select('id, name, phone, email, address').eq('tenant_id', tenantId).eq('id', doc.contact_id).maybeSingle()).data ?? null
   if (doc.company_id) company = (await admin().from('companies').select('id, name').eq('tenant_id', tenantId).eq('id', doc.company_id).maybeSingle()).data ?? null
   const activity = type === 'proposal' ? await listActivity(tenantId, id) : []
+  const { data: sections } = type === 'proposal'
+    ? await admin().from('proposal_sections').select('id, title, body, sort_order, visible').eq('tenant_id', tenantId).eq('proposal_id', id).order('sort_order')
+    : { data: [] }
   const status = doc.status as string
   const legacyReadOnly = type !== 'proposal'
   return {
     type, editable: type === 'proposal' && editableFor(status), legacyReadOnly,
     lockReason: type === 'proposal' ? lockReasonFor(status) : 'Legacy record — read-only for history.',
-    document: doc, lines: lines ?? [], contact, company, activity,
+    document: doc, lines: lines ?? [], contact, company, activity, sections: sections ?? [],
   }
+}
+
+// Intelligent default title: "[Customer] Proposal" / "[Company] Proposal", else null.
+async function defaultTitle(tenantId: string, contactId?: string | null, companyId?: string | null): Promise<string | null> {
+  if (contactId) { const { data } = await admin().from('contacts').select('name').eq('tenant_id', tenantId).eq('id', contactId).maybeSingle(); if (data?.name) return `${(data.name as string).trim()} Proposal` }
+  if (companyId) { const { data } = await admin().from('companies').select('name').eq('tenant_id', tenantId).eq('id', companyId).maybeSingle(); if (data?.name) return `${(data.name as string).trim()} Proposal` }
+  return null
 }
 
 // ── Create / duplicate ───────────────────────────────────────────────────────────────────────────────
@@ -80,7 +111,7 @@ export async function createProposal(tenantId: string, actor: string, input: { c
   const { data: num, error: nerr } = await admin().rpc('core_next_document_number', { p_tenant: tenantId, p_doc_type: 'proposal' })
   if (nerr) return { ok: false, error: nerr.message }
   const { data, error } = await admin().from('proposals').insert({
-    tenant_id: tenantId, number: num as string, contact_id: input.contactId ?? null, company_id: input.companyId ?? null,
+    tenant_id: tenantId, number: num as string, title: await defaultTitle(tenantId, input.contactId, input.companyId), contact_id: input.contactId ?? null, company_id: input.companyId ?? null,
     currency: input.currency ?? 'usd', status: 'draft', template: 'clean', salesperson_id: actor, created_by: actor,
   }).select('id').single()
   if (error) return { ok: false, error: error.message }
@@ -132,8 +163,8 @@ async function noteEditAfterSend(tenantId: string, id: string, status: string, a
 }
 
 // ── Autosave (proposal-only header fields) ───────────────────────────────────────────────────────────
-export interface ProposalPatch { contactId?: string | null; companyId?: string | null; currency?: string; status?: string; salespersonId?: string | null; expiresAt?: string | null; customerNotes?: string | null; internalNotes?: string | null; terms?: string | null; overallDiscountCents?: number; taxCents?: number; template?: string; notes?: string | null }
-const PATCH_MAP: Record<keyof ProposalPatch, string> = { contactId: 'contact_id', companyId: 'company_id', currency: 'currency', status: 'status', salespersonId: 'salesperson_id', expiresAt: 'expires_at', customerNotes: 'customer_notes', internalNotes: 'internal_notes', terms: 'terms', overallDiscountCents: 'overall_discount_cents', taxCents: 'tax_cents', template: 'template', notes: 'notes' }
+export interface ProposalPatch { title?: string | null; scope?: string | null; contactId?: string | null; companyId?: string | null; currency?: string; status?: string; salespersonId?: string | null; expiresAt?: string | null; customerNotes?: string | null; internalNotes?: string | null; terms?: string | null; overallDiscountCents?: number; taxCents?: number; template?: string; notes?: string | null }
+const PATCH_MAP: Record<keyof ProposalPatch, string> = { title: 'title', scope: 'scope', contactId: 'contact_id', companyId: 'company_id', currency: 'currency', status: 'status', salespersonId: 'salesperson_id', expiresAt: 'expires_at', customerNotes: 'customer_notes', internalNotes: 'internal_notes', terms: 'terms', overallDiscountCents: 'overall_discount_cents', taxCents: 'tax_cents', template: 'template', notes: 'notes' }
 
 export async function updateProposal(tenantId: string, id: string, patch: ProposalPatch, actor: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const st = await proposalStatus(tenantId, id)
@@ -142,6 +173,11 @@ export async function updateProposal(tenantId: string, id: string, patch: Propos
   if (patch.companyId) { const { data } = await admin().from('companies').select('id').eq('tenant_id', tenantId).eq('id', patch.companyId).maybeSingle(); if (!data) return { ok: false, error: 'company_not_found' } }
   const upd: Record<string, unknown> = { updated_at: now() }
   for (const k of Object.keys(patch) as (keyof ProposalPatch)[]) if (patch[k] !== undefined) upd[PATCH_MAP[k]] = patch[k]
+  // Backfill a default title when the customer changes and no title has been set yet.
+  if ('contactId' in patch && patch.title === undefined) {
+    const { data: cur } = await admin().from('proposals').select('title').eq('tenant_id', tenantId).eq('id', id).maybeSingle()
+    if (cur && !(cur.title as string)?.trim()) { const dt = await defaultTitle(tenantId, patch.contactId, patch.companyId ?? undefined); if (dt) upd.title = dt }
+  }
   const { error } = await admin().from('proposals').update(upd).eq('tenant_id', tenantId).eq('id', id)
   if (error) return { ok: false, error: error.message }
   if (patch.overallDiscountCents !== undefined || patch.taxCents !== undefined) await recomputeTotals(tenantId, id)
@@ -296,8 +332,11 @@ export async function resolvePublicProposal(rawToken: string, opts: { recordView
   }
   const contact = doc.contact_id ? (await admin().from('contacts').select('name, email, phone, address').eq('id', doc.contact_id).maybeSingle()).data : null
   const company = doc.company_id ? (await admin().from('companies').select('name').eq('id', doc.company_id).maybeSingle()).data : null
-  const { data: lines } = await admin().from('sales_document_lines').select('*').eq('document_type', 'proposal').eq('document_id', doc.id).order('sort_order')
-  return assembleRenderable(doc.tenant_id as string, doc as Record<string, unknown>, (lines ?? []) as Record<string, unknown>[], contact, company)
+  const [{ data: lines }, { data: sections }] = await Promise.all([
+    admin().from('sales_document_lines').select('*').eq('document_type', 'proposal').eq('document_id', doc.id).order('sort_order'),
+    admin().from('proposal_sections').select('title, body, sort_order, visible').eq('tenant_id', doc.tenant_id as string).eq('proposal_id', doc.id).order('sort_order'),
+  ])
+  return assembleRenderable(doc.tenant_id as string, doc as Record<string, unknown>, (lines ?? []) as Record<string, unknown>[], contact, company, (sections ?? []) as Record<string, unknown>[])
 }
 
 export async function respondToProposal(rawToken: string, action: 'accept' | 'decline', input: { name?: string | null; email?: string | null; reason?: string | null }): Promise<{ ok: true; status: string } | { ok: false; error: string }> {

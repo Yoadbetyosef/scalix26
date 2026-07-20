@@ -18,6 +18,9 @@ export function ProposalDocument({ proposal: p }: { proposal: RenderableProposal
         {/* Header */}
         <Header p={p} accent={accent} />
 
+        {/* Title (primary label) — the number stays the identifier below */}
+        {p.title && <div style={{ padding: '18px 28px 0' }}><h1 style={{ fontSize: 24, fontWeight: 300, letterSpacing: '-0.01em', color: '#111827', margin: 0 }}>{p.title}</h1></div>}
+
         {/* Meta: customer + dates */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, justifyContent: 'space-between', padding: '20px 28px', borderBottom: '1px solid #f0f1f3' }}>
           <div>
@@ -37,7 +40,8 @@ export function ProposalDocument({ proposal: p }: { proposal: RenderableProposal
         </div>
 
         {p.is_expired && <div style={{ background: '#fef2f2', color: '#b91c1c', fontSize: 14, padding: '10px 28px' }}>This proposal has expired. Please contact {p.branding.business_name} for an updated version.</div>}
-        {p.intro && <div style={{ padding: '18px 28px', color: '#374151', fontSize: 15, whiteSpace: 'pre-wrap', borderBottom: '1px solid #f0f1f3' }}>{p.intro}</div>}
+        {p.intro && <Section title={null} body={p.intro} />}
+        {p.scope && <Section title="Scope" body={p.scope} />}
 
         {/* Line items */}
         <div>
@@ -52,7 +56,10 @@ export function ProposalDocument({ proposal: p }: { proposal: RenderableProposal
           <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #e5e7eb' }}><TotalRow label="Total" value={fmt(p.total_cents, p.currency)} strong accent={accent} /></div>
         </div>
 
-        {p.terms && <div style={{ borderTop: '1px solid #f0f1f3', padding: '18px 28px' }}><div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9ca3af', marginBottom: 6 }}>Terms &amp; conditions</div><div style={{ fontSize: 13, color: '#4b5563', whiteSpace: 'pre-wrap' }}>{p.terms}</div></div>}
+        {/* Custom sections (delivery, warranty, timeline, …) */}
+        {p.sections.map((s, i) => <Section key={i} title={s.title || null} body={s.body} />)}
+
+        {p.terms && <Section title="Terms & conditions" body={p.terms} />}
 
         {/* Footer */}
         <div style={{ borderTop: '1px solid #e5e7eb', padding: '16px 28px', fontSize: 12, color: '#9ca3af', display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between' }}>
@@ -95,6 +102,17 @@ function LineRow({ l, currency, imgSize }: { l: RenderLine; currency: string; im
   )
 }
 
+// A titled multiline content block. Content is plain text rendered by React (auto-escaped — no HTML
+// injection) with white-space: pre-wrap so line breaks + long English/Hebrew/emoji text are preserved.
+function Section({ title, body }: { title: string | null; body: string }) {
+  if (!body?.trim() && !title?.trim()) return null
+  return (
+    <div style={{ borderTop: '1px solid #f0f1f3', padding: '18px 28px' }}>
+      {title && <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9ca3af', marginBottom: 6 }}>{title}</div>}
+      <div style={{ fontSize: title ? 13 : 15, color: title ? '#4b5563' : '#374151', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{body}</div>
+    </div>
+  )
+}
 function TotalRow({ label, value, strong, accent }: { label: string; value: string; strong?: boolean; accent?: string }) {
   return <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}><span style={{ color: '#6b7280' }}>{label}</span><span style={{ fontWeight: strong ? 700 : 400, color: strong ? (accent || '#111827') : '#111827', fontSize: strong ? 18 : 14 }}>{value}</span></div>
 }

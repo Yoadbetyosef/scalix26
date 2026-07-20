@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Plus, Trash2, Send, Copy, Eye, ArrowRightLeft, User, Check, Loader2, CircleAlert, Archive, Lock, Link2, ImageOff, Upload, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Send, Copy, Eye, FileText, Package, User, Check, Loader2, CircleAlert, Archive, Lock, Link2, ImageOff, Upload, ExternalLink, GripVertical } from 'lucide-react'
 import { CustomerPicker } from '@/components/commerce/customer-picker'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
@@ -22,10 +22,11 @@ const STATUS_VARIANT: Record<string, BadgeProps['variant']> = { draft: 'draft', 
 const EVENT_LABEL: Record<string, string> = { created: 'Created', customer_changed: 'Customer changed', item_added: 'Item added', item_edited: 'Item edited', item_removed: 'Item removed', previewed: 'Previewed internally', email_attempted: 'Email send attempted', email_sent: 'Email sent', email_failed: 'Email failed', viewed: 'Viewed by customer', accepted: 'Accepted', declined: 'Declined', expired: 'Expired', updated_after_send: 'Updated after send', converted_invoice: 'Converted to invoice', converted_order: 'Converted to order', archived: 'Archived', duplicated: 'Duplicated', template_changed: 'Template changed' }
 const TEMPLATES = [{ v: 'clean', l: 'Clean' }, { v: 'visual', l: 'Visual' }, { v: 'minimal', l: 'Minimal' }]
 
-interface Doc { id: string; number: string; status: string; currency: string; subtotal_cents: number; discount_cents: number; overall_discount_cents: number; tax_cents: number; total_cents: number; contact_id: string | null; company_id: string | null; expires_at: string | null; customer_notes: string | null; internal_notes: string | null; terms: string | null; template: string; public_token: string | null; last_emailed_to: string | null; sent_at: string | null; first_viewed_at: string | null; last_viewed_at: string | null; accepted_at: string | null; accepted_by_name: string | null; declined_at: string | null; updated_after_send_at: string | null; converted_invoice_id: string | null; converted_order_id: string | null }
+interface Doc { id: string; number: string; title: string | null; scope: string | null; status: string; currency: string; subtotal_cents: number; discount_cents: number; overall_discount_cents: number; tax_cents: number; total_cents: number; contact_id: string | null; company_id: string | null; expires_at: string | null; customer_notes: string | null; internal_notes: string | null; terms: string | null; template: string; public_token: string | null; last_emailed_to: string | null; sent_at: string | null; first_viewed_at: string | null; last_viewed_at: string | null; accepted_at: string | null; accepted_by_name: string | null; declined_at: string | null; updated_after_send_at: string | null; converted_invoice_id: string | null; converted_order_id: string | null }
 interface Line { id: string; description: string | null; quantity: number; unit_price_cents: number; discount_cents: number; line_total_cents: number; product_id: string | null; component_id: string | null; variant_id: string | null; custom_attributes: Record<string, unknown> }
 interface Activity { id: string; event_type: string; message: string | null; created_at: string }
-interface Full { type: 'proposal' | 'estimate' | 'quote'; editable: boolean; legacyReadOnly: boolean; lockReason: string | null; document: Doc; lines: Line[]; contact: { id: string; name: string | null; phone: string | null; email: string | null } | null; company: { id: string; name: string } | null; activity: Activity[] }
+interface Section { id: string; title: string; body: string; sort_order: number; visible: boolean }
+interface Full { type: 'proposal' | 'estimate' | 'quote'; editable: boolean; legacyReadOnly: boolean; lockReason: string | null; document: Doc; lines: Line[]; contact: { id: string; name: string | null; phone: string | null; email: string | null } | null; company: { id: string; name: string } | null; activity: Activity[]; sections: Section[] }
 const when = (iso: string | null) => { if (!iso) return null; try { return new Date(iso).toLocaleString() } catch { return iso } }
 const lineImg = (l: Line): string | null => { const a = l.custom_attributes ?? {}; if (a.hide_image === true) return null; return (a.proposal_image_url as string) || ((a.snapshot as { image_url?: string })?.image_url) || (a.image_url as string) || null }
 
@@ -39,17 +40,29 @@ export function ProposalBuilder({ id }: { id: string }) {
   const [addingCustomer, setAddingCustomer] = useState(false)
   const [sending, setSending] = useState(false)
   const [editUnlocked, setEditUnlocked] = useState(false)
-  const [conv, setConv] = useState<{ target: string; id: string; number?: string; existed: boolean } | null>(null)
+  const [converting, setConverting] = useState<null | 'invoice' | 'order'>(null)
 
+  const pendingRef = useRef(0)
+  const previewHref = `/commerce/proposals/${id}/preview`
   const load = useCallback(() => fetch(`/api/core/proposals/${id}`).then((r) => (r.ok ? r.json() : Promise.reject())).then(setData).catch(() => setData('notfound')), [id])
   useEffect(() => { load() }, [load])
 
   const patch = useCallback(async (fields: Record<string, unknown>) => {
+    pendingRef.current++
     setSave('saving')
-    const res = await fetch(`/api/core/proposals/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(fields) })
-    if (res.ok) { setSave('saved'); load(); setTimeout(() => setSave((s) => (s === 'saved' ? 'idle' : s)), 1500) }
-    else { setSave('error'); const d = await res.json().catch(() => ({})); if (res.status === 409) toast.error('This proposal is locked. Duplicate it to make changes.'); else toast.error(d.error || 'Could not save.') }
+    try {
+      const res = await fetch(`/api/core/proposals/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(fields) })
+      if (res.ok) { setSave('saved'); await load(); setTimeout(() => setSave((s) => (s === 'saved' ? 'idle' : s)), 1500) }
+      else { setSave('error'); const d = await res.json().catch(() => ({})); if (res.status === 409) toast.error('This proposal is locked. Duplicate it to make changes.'); else toast.error(d.error || 'Could not save.') }
+    } finally { pendingRef.current-- }
   }, [id, load])
+  // Wait for any in-flight saves so Send/Convert never use a stale version.
+  const flush = useCallback(async () => { for (let i = 0; i < 60 && pendingRef.current > 0; i++) await new Promise((r) => setTimeout(r, 50)) }, [])
+  // Warn before leaving with an unsaved / failed save.
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => { if (save === 'saving' || save === 'error') { e.preventDefault(); e.returnValue = '' } }
+    window.addEventListener('beforeunload', h); return () => window.removeEventListener('beforeunload', h)
+  }, [save])
 
   async function setCustomer(v: { contactId: string | null; companyId: string | null }) { await patch({ contactId: v.contactId, companyId: v.companyId }); setPickingCustomer(false) }
   async function removeLine(lineId: string) { const res = await fetch(`/api/core/proposals/${id}/lines/${lineId}`, { method: 'DELETE' }); if (res.ok) load(); else toast.error('Could not remove the line.') }
@@ -58,13 +71,6 @@ export function ProposalBuilder({ id }: { id: string }) {
     if (res.ok && d.ok) { toast.success('Proposal duplicated.'); router.push(`/commerce/proposals/${d.id}`) } else toast.error(d.error || 'Could not duplicate.')
   }
   async function archive() { if (!confirm('Archive this proposal? It will be marked declined and hidden from active work.')) return; await patch({ status: 'declined' }); toast.success('Proposal archived.') }
-  async function convert(target: 'invoice' | 'order') {
-    const res = await fetch(`/api/core/proposals/${id}/convert`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ target }) })
-    const d = await res.json().catch(() => ({}))
-    if (res.ok && d.ok) { setConv({ target, id: d.invoiceId || d.orderId, number: d.number || d.orderNumber, existed: !!d.idempotent }); toast.success(d.idempotent ? `Already converted to ${target}.` : `Converted to ${target}.`); load() }
-    else toast.error(d.error || 'Conversion failed.')
-  }
-  function openPreview() { window.open(`/commerce/proposals/${id}/preview`, '_blank', 'noopener') }
 
   if (data === 'notfound') return <div className="mx-auto max-w-3xl px-4 py-10 text-center text-sm text-muted">Proposal not found.</div>
   if (!data) return <div className="mx-auto max-w-3xl px-4 py-6"><Skeleton className="h-16 w-full" /></div>
@@ -82,16 +88,19 @@ export function ProposalBuilder({ id }: { id: string }) {
 
       {data.legacyReadOnly && <div className="mb-4 rounded-card border border-hairline bg-sunken px-4 py-2.5 text-sm text-subtle">This is a legacy {data.type} — shown read-only for history.</div>}
 
-      <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-light tracking-tight text-ink">{doc.number}</h1>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted"><Badge variant={STATUS_VARIANT[status] ?? 'neutral'}>{status}</Badge><SaveIndicator state={save} /></div>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          {/* Title = primary label (editable); number = secondary identifier. */}
+          {canEditNow
+            ? <input defaultValue={doc.title ?? ''} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (doc.title ?? '')) patch({ title: v || null }) }} placeholder={`${doc.number} — add a title`} maxLength={200} className="w-full max-w-md rounded-md border border-transparent bg-transparent text-xl font-light tracking-tight text-ink outline-none hover:border-hairline focus:border-ink/30 focus:bg-white" />
+            : <h1 className="text-xl font-light tracking-tight text-ink">{doc.title || doc.number}</h1>}
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted"><span className="font-mono text-subtle">{doc.number}</span><Badge variant={STATUS_VARIANT[status] ?? 'neutral'}>{status}</Badge><SaveIndicator state={save} /></div>
         </div>
         {!data.legacyReadOnly && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={openPreview}><Eye className="h-4 w-4" /> Preview</Button>
+            <a href={previewHref} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}><Eye className="h-4 w-4" /> Preview</a>
             <Button size="sm" variant="outline" onClick={duplicate}><Copy className="h-4 w-4" /> Duplicate</Button>
-            <Button size="sm" onClick={() => setSending(true)} disabled={locked} title={locked ? (data.lockReason ?? 'Locked') : 'Send to the customer'}><Send className="h-4 w-4" /> Send</Button>
+            <Button size="sm" onClick={async () => { await flush(); setSending(true) }} disabled={locked} title={locked ? (data.lockReason ?? 'Locked') : 'Send to the customer'}><Send className="h-4 w-4" /> Send</Button>
             <Button size="sm" variant="ghost" onClick={archive} disabled={status === 'converted'} title={status === 'converted' ? 'Converted proposals cannot be archived' : 'Archive'}><Archive className="h-4 w-4" /> Archive</Button>
           </div>
         )}
@@ -111,10 +120,13 @@ export function ProposalBuilder({ id }: { id: string }) {
       )}
       {sentLike && editUnlocked && doc.updated_after_send_at && <div className="mb-5 rounded-card border border-hairline bg-sunken px-4 py-2 text-xs text-muted">Edited after sending. Re-send to give the customer the updated version.</div>}
 
-      {conv && (
-        <div className="mb-5 flex items-center justify-between gap-2 rounded-card border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
-          <span className="text-ink">{conv.existed ? 'Already converted' : 'Converted'} to {conv.target} {conv.number ?? ''}</span>
-          <Link href={conv.target === 'order' ? `/orders/${conv.id}` : `/commerce/invoices/${conv.id}`} className="font-medium text-accent-strong hover:underline">Open →</Link>
+      {(doc.converted_invoice_id || doc.converted_order_id) && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-card border border-accent/30 bg-accent/5 px-4 py-3 text-sm">
+          <span className="text-ink">This proposal has been converted.</span>
+          <span className="flex gap-3">
+            {doc.converted_invoice_id && <Link href={`/commerce/invoices/${doc.converted_invoice_id}`} className="font-medium text-accent-strong hover:underline">View invoice →</Link>}
+            {doc.converted_order_id && <Link href={`/orders/${doc.converted_order_id}`} className="font-medium text-accent-strong hover:underline">View order →</Link>}
+          </span>
         </div>
       )}
 
@@ -186,23 +198,33 @@ export function ProposalBuilder({ id }: { id: string }) {
       </section>
 
       {!locked ? (
-        <section className="mb-5 grid gap-4 sm:grid-cols-2">
-          <NoteField label="Customer-facing intro" hint="Shown on the proposal" defaultValue={doc.customer_notes} disabled={!canEditNow} onSave={(v) => patch({ customerNotes: v })} />
-          <NoteField label="Internal notes" hint="Never shown to the customer" defaultValue={doc.internal_notes} disabled={!canEditNow} onSave={(v) => patch({ internalNotes: v })} />
-          <div className="sm:col-span-2"><NoteField label="Terms & conditions" hint="Shown on the proposal" defaultValue={doc.terms} disabled={!canEditNow} onSave={(v) => patch({ terms: v })} rows={3} /></div>
-        </section>
+        <>
+          <section className="mb-5 grid gap-4 sm:grid-cols-2">
+            <NoteField label="Customer-facing intro" hint="Shown before the items" defaultValue={doc.customer_notes} disabled={!canEditNow} onSave={(v) => patch({ customerNotes: v })} max={25000} />
+            <NoteField label="Internal notes" hint="Never shown to the customer" defaultValue={doc.internal_notes} disabled={!canEditNow} onSave={(v) => patch({ internalNotes: v })} max={25000} />
+            <div className="sm:col-span-2"><NoteField label="Scope / description" hint="Explain the project or package (customer-facing)" defaultValue={doc.scope} disabled={!canEditNow} onSave={(v) => patch({ scope: v })} rows={3} max={25000} /></div>
+            <div className="sm:col-span-2"><NoteField label="Terms & conditions" hint="Shown on the proposal" defaultValue={doc.terms} disabled={!canEditNow} onSave={(v) => patch({ terms: v })} rows={3} max={25000} /></div>
+          </section>
+          <SectionsEditor id={id} sections={data.sections} disabled={!canEditNow} onChanged={load} />
+        </>
       ) : (
         <section className="mb-5 space-y-3">
           {doc.customer_notes && <ReadNote label="Customer intro" value={doc.customer_notes} />}
+          {doc.scope && <ReadNote label="Scope" value={doc.scope} />}
+          {data.sections.map((s) => <ReadNote key={s.id} label={s.title || 'Section'} value={s.body} />)}
           {doc.terms && <ReadNote label="Terms" value={doc.terms} />}
         </section>
       )}
 
-      {!data.legacyReadOnly && status !== 'converted' && (
+      {!data.legacyReadOnly && (
         <section className="mb-5 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted">Convert{status !== 'accepted' ? ' (accept first for the standard flow)' : ''}:</span>
-          <Button size="sm" variant="outline" onClick={() => convert('invoice')}><ArrowRightLeft className="h-4 w-4" /> To invoice</Button>
-          <Button size="sm" variant="outline" onClick={() => convert('order')}><ArrowRightLeft className="h-4 w-4" /> To order</Button>
+          {doc.converted_invoice_id
+            ? <Link href={`/commerce/invoices/${doc.converted_invoice_id}`} className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}><FileText className="h-4 w-4" /> View invoice</Link>
+            : <Button size="sm" variant="outline" onClick={async () => { await flush(); setConverting('invoice') }}><FileText className="h-4 w-4" /> Create invoice</Button>}
+          {doc.converted_order_id
+            ? <Link href={`/orders/${doc.converted_order_id}`} className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}><Package className="h-4 w-4" /> View order</Link>
+            : <Button size="sm" variant="outline" onClick={async () => { await flush(); setConverting('order') }}><Package className="h-4 w-4" /> Create order</Button>}
+          {status !== 'accepted' && status !== 'converted' && <span className="text-xs text-muted">Tip: accept first for the standard flow.</span>}
         </section>
       )}
 
@@ -224,7 +246,8 @@ export function ProposalBuilder({ id }: { id: string }) {
       {editLine && <EditLineDrawer id={id} line={editLine} currency={doc.currency} onClose={() => setEditLine(null)} onDone={() => { setEditLine(null); load() }} />}
       {pickingCustomer && <CustomerPicker contactId={contact?.id ?? null} companyId={company?.id ?? null} onClose={() => setPickingCustomer(false)} onSelect={setCustomer} />}
       {addingCustomer && <NewCustomerForm onClose={() => setAddingCustomer(false)} onCreated={(contactId, companyId) => { setAddingCustomer(false); patch({ contactId, companyId }) }} />}
-      {sending && <SendModal id={id} doc={doc} contact={contact} onClose={() => setSending(false)} onSent={() => { setSending(false); load() }} onPreview={openPreview} onPatch={patch} />}
+      {sending && <SendModal id={id} doc={doc} contact={contact} previewHref={previewHref} onClose={() => setSending(false)} onSent={() => { setSending(false); load() }} onPatch={patch} flush={flush} />}
+      {converting && <ConversionModal id={id} kind={converting} doc={doc} previewHref={previewHref} status={status} onClose={() => setConverting(null)} onDone={() => { setConverting(null); load() }} />}
     </div>
   )
 }
@@ -237,15 +260,122 @@ function SaveIndicator({ state }: { state: SaveState }) {
 }
 function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) { return <div className="flex items-center justify-between py-0.5"><span className="text-muted">{label}</span><span className={strong ? 'font-semibold text-ink' : 'text-ink'}>{value}</span></div> }
 function ReadNote({ label, value }: { label: string; value: string }) { return <div className="rounded-card border border-hairline bg-surface p-3 shadow-e1"><p className="mb-1 text-xs font-medium text-muted">{label}</p><p className="whitespace-pre-wrap text-sm text-subtle">{value}</p></div> }
-function NoteField({ label, hint, defaultValue, onSave, disabled, rows = 2 }: { label: string; hint: string; defaultValue: string | null; onSave: (v: string | null) => void; disabled?: boolean; rows?: number }) {
-  return <div className="space-y-1"><Label className="text-xs">{label} <span className="font-normal text-muted">· {hint}</span></Label><Textarea defaultValue={defaultValue ?? ''} rows={rows} disabled={disabled} maxLength={20000} onBlur={(e) => onSave(e.target.value.trim() || null)} placeholder="—" /></div>
+function NoteField({ label, hint, defaultValue, onSave, disabled, rows = 2, max = 25000 }: { label: string; hint: string; defaultValue: string | null; onSave: (v: string | null) => void; disabled?: boolean; rows?: number; max?: number }) {
+  const [count, setCount] = useState((defaultValue ?? '').length)
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between"><Label className="text-xs">{label} <span className="font-normal text-muted">· {hint}</span></Label>{count > max * 0.8 && <span className={cn('text-[10px]', count > max ? 'text-danger' : 'text-muted')}>{count.toLocaleString()}/{max.toLocaleString()}</span>}</div>
+      <Textarea defaultValue={defaultValue ?? ''} rows={rows} disabled={disabled} maxLength={max} onChange={(e) => setCount(e.target.value.length)} onBlur={(e) => onSave(e.target.value.trim() || null)} placeholder="—" />
+    </div>
+  )
 }
 
-function SendModal({ id, doc, contact, onClose, onSent, onPreview, onPatch }: { id: string; doc: Doc; contact: { name: string | null; email: string | null } | null; onClose: () => void; onSent: () => void; onPreview: () => void; onPatch: (f: Record<string, unknown>) => void }) {
+// Custom, reorderable, show/hide-able proposal sections.
+function SectionsEditor({ id, sections, disabled, onChanged }: { id: string; sections: Section[]; disabled?: boolean; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+  async function add() { setBusy(true); const r = await fetch(`/api/core/proposals/${id}/sections`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'New section', body: '' }) }); setBusy(false); if (r.ok) onChanged(); else toast.error('Could not add the section.') }
+  async function save(sectionId: string, patch: Record<string, unknown>) { const r = await fetch(`/api/core/proposals/${id}/sections/${sectionId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }); if (!r.ok) { const d = await r.json().catch(() => ({})); toast.error(d.error || 'Could not save the section.') } else onChanged() }
+  async function remove(sectionId: string) { const r = await fetch(`/api/core/proposals/${id}/sections/${sectionId}`, { method: 'DELETE' }); if (r.ok) onChanged() }
+  return (
+    <section className="mb-5">
+      <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-medium text-ink">Custom sections</h2>{!disabled && <Button size="sm" variant="ghost" onClick={add} loading={busy}><Plus className="h-4 w-4" /> Add section</Button>}</div>
+      {sections.length === 0 ? <p className="rounded-card border border-dashed border-hairline-strong px-4 py-3 text-center text-xs text-muted">Add sections like Delivery, Warranty, Timeline or Exclusions — shown on the customer proposal.</p> : (
+        <ul className="space-y-2">
+          {sections.map((s) => (
+            <li key={s.id} className="rounded-card border border-hairline bg-surface p-3 shadow-e1">
+              <div className="mb-1.5 flex items-center gap-2">
+                <GripVertical className="h-4 w-4 shrink-0 text-subtle" />
+                <input defaultValue={s.title} disabled={disabled} onBlur={(e) => e.target.value !== s.title && save(s.id, { title: e.target.value })} placeholder="Section title" maxLength={200} className="flex-1 rounded-md border border-transparent bg-transparent text-sm font-medium text-ink outline-none hover:border-hairline focus:border-ink/30 focus:bg-white" />
+                <label className="flex items-center gap-1 text-[11px] text-muted"><input type="checkbox" defaultChecked={s.visible} disabled={disabled} onChange={(e) => save(s.id, { visible: e.target.checked })} className="h-3.5 w-3.5 accent-[var(--color-accent)]" /> Show</label>
+                {!disabled && <button onClick={() => remove(s.id)} className="text-subtle hover:text-danger" aria-label="Remove section"><Trash2 className="h-4 w-4" /></button>}
+              </div>
+              <Textarea defaultValue={s.body} disabled={disabled} rows={2} maxLength={25000} onBlur={(e) => e.target.value !== s.body && save(s.id, { body: e.target.value })} placeholder="Section content…" />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+// Provider-aware Create invoice / Create order modal.
+function ConversionModal({ id, kind, doc, previewHref, status, onClose, onDone }: { id: string; kind: 'invoice' | 'order'; doc: Doc; previewHref: string; status: string; onClose: () => void; onDone: () => void }) {
+  const [providers, setProviders] = useState<{ providers: Array<{ id: string; name: string; kind: string; connected: boolean; isDefault: boolean; note?: string; detail?: string }>; default: string } | null>(null)
+  const [provider, setProvider] = useState('scalix')
+  const [alsoInvoice, setAlsoInvoice] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ invoiceId?: string; orderId?: string; sync_status?: string; external_url?: string | null; provider?: string } | null>(null)
+  useEffect(() => { if (kind === 'invoice' || true) fetch('/api/core/commerce/invoice-providers').then((r) => r.json()).then((d) => { setProviders(d); setProvider(d.default || 'scalix') }).catch(() => setProviders({ providers: [{ id: 'scalix', name: 'Scalix Invoice', kind: 'invoice', connected: true, isDefault: true }], default: 'scalix' })) }, [kind])
+
+  async function run() {
+    if (busy) return
+    setBusy(true)
+    const url = kind === 'invoice' ? `/api/core/proposals/${id}/create-invoice` : `/api/core/proposals/${id}/create-order`
+    const body = kind === 'invoice' ? { provider } : { alsoInvoice, provider: alsoInvoice ? provider : undefined }
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    const d = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok || !d.ok) { toast.error(d.error || 'Conversion failed.'); return }
+    if (kind === 'invoice') setResult({ invoiceId: d.invoiceId, sync_status: d.sync_status, external_url: d.external_url, provider: d.provider })
+    else setResult({ orderId: d.orderId, invoiceId: d.invoice?.invoiceId, sync_status: d.invoice?.sync_status })
+    toast.success(kind === 'invoice' ? 'Invoice created.' : 'Order created.')
+  }
+
+  const chosen = providers?.providers.find((p) => p.id === provider)
+  return (
+    <Drawer open onClose={result ? onDone : onClose} title={kind === 'invoice' ? 'Create invoice' : 'Create order'}
+      footer={result ? <div className="flex justify-end"><Button size="sm" onClick={onDone}>Done</Button></div>
+        : <div className="flex items-center justify-between gap-2"><a href={previewHref} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }))}><Eye className="h-4 w-4" /> Preview</a><div className="flex gap-2"><Button variant="outline" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" loading={busy} disabled={busy} onClick={run}>{kind === 'invoice' ? 'Create invoice' : 'Create order'}</Button></div></div>}>
+      {result ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 rounded-card border border-success/30 bg-success/5 px-3 py-2 text-sm text-success"><Check className="h-4 w-4" /> {kind === 'invoice' ? 'Invoice' : 'Order'} created.</div>
+          {result.sync_status === 'failed' && <div className="rounded-card border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">Provider sync failed — the internal invoice was still created. You can retry the sync from the invoice.</div>}
+          {result.sync_status === 'synced' && result.provider === 'stripe' && result.external_url && <a href={result.external_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-accent-strong hover:underline"><ExternalLink className="h-4 w-4" /> Open Stripe payment link</a>}
+          {result.orderId && <Link href={`/orders/${result.orderId}`} className="inline-flex items-center gap-1.5 text-sm text-accent-strong hover:underline"><Package className="h-4 w-4" /> Open the order</Link>}
+          {result.invoiceId && <Link href={`/commerce/invoices/${result.invoiceId}`} className="inline-flex items-center gap-1.5 text-sm text-accent-strong hover:underline"><FileText className="h-4 w-4" /> Open the invoice</Link>}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {status !== 'accepted' && <div className="rounded-card border border-amber-300/50 bg-amber-50 px-3 py-2 text-xs text-amber-900">This proposal isn’t accepted yet. You can still convert, but the standard flow is to accept first.</div>}
+          <div className="rounded-card border border-hairline bg-sunken/40 p-3 text-sm"><div className="flex justify-between"><span className="text-muted">{doc.title || doc.number}</span><span className="font-medium text-ink">{formatCents(doc.total_cents, doc.currency)}</span></div></div>
+
+          {kind === 'invoice' ? (
+            <div className="space-y-2">
+              <Label className="text-xs">Invoice destination</Label>
+              {!providers ? <Skeleton className="h-24 w-full" /> : providers.providers.map((p) => (
+                <label key={p.id} className={cn('flex cursor-pointer items-start gap-3 rounded-card border p-3', provider === p.id ? 'border-accent bg-accent/5' : 'border-hairline', !p.connected && 'opacity-60')}>
+                  <input type="radio" name="prov" disabled={!p.connected} checked={provider === p.id} onChange={() => setProvider(p.id)} className="mt-1 accent-[var(--color-accent)]" />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2 text-sm font-medium text-ink">{p.name}{p.isDefault && <span className="rounded bg-sunken px-1.5 py-0.5 text-[10px] text-subtle">Default</span>}{!p.connected && <span className="rounded bg-sunken px-1.5 py-0.5 text-[10px] text-muted">Not connected</span>}</span>
+                    <span className="block text-xs text-muted">{p.detail}</span>
+                    {p.note && <span className="mt-0.5 block text-[11px] text-amber-700">{p.note}</span>}
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-muted">Creates an internal operational order with the customer, products, components, variants and proposal-specific descriptions. No inventory is decremented by creating the order.</p>
+              <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={alsoInvoice} onChange={(e) => setAlsoInvoice(e.target.checked)} className="h-4 w-4 accent-[var(--color-accent)]" /> Also create an invoice</label>
+              {alsoInvoice && providers && (
+                <select value={provider} onChange={(e) => setProvider(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none">
+                  {providers.providers.filter((p) => p.connected).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              )}
+            </div>
+          )}
+          {chosen?.kind === 'payment_link' && kind === 'invoice' && <p className="text-[11px] text-muted">This creates the internal Scalix invoice and attaches a Stripe <strong>payment link</strong> — it is not a Stripe invoice.</p>}
+        </div>
+      )}
+    </Drawer>
+  )
+}
+
+function SendModal({ id, doc, contact, previewHref, onClose, onSent, onPatch, flush }: { id: string; doc: Doc; contact: { name: string | null; email: string | null } | null; previewHref: string; onClose: () => void; onSent: () => void; onPatch: (f: Record<string, unknown>) => void; flush: () => Promise<void> }) {
   const [name, setName] = useState(contact?.name ?? '')
   const [email, setEmail] = useState(contact?.email ?? doc.last_emailed_to ?? '')
   const [cc, setCc] = useState('')
-  const [subject, setSubject] = useState(`Your proposal ${doc.number}`)
+  const [subject, setSubject] = useState(doc.title ? `${doc.title} (${doc.number})` : `Your proposal ${doc.number}`)
   const [message, setMessage] = useState('')
   const [expires, setExpires] = useState(doc.expires_at ? String(doc.expires_at).slice(0, 10) : '')
   const [busy, setBusy] = useState(false)
@@ -257,6 +387,7 @@ function SendModal({ id, doc, contact, onClose, onSent, onPreview, onPatch }: { 
     if (busy) return
     setBusy(true)
     if (expires && expires !== (doc.expires_at ? String(doc.expires_at).slice(0, 10) : '')) onPatch({ expiresAt: new Date(expires).toISOString() })
+    await flush() // never send a stale version — wait for any pending autosave
     const res = await fetch(`/api/core/proposals/${id}/send`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ recipientEmail: email.trim(), recipientName: name.trim() || null, cc: cc.trim() || null, subject: subject.trim() || null, message: message.trim() || null }) })
     const d = await res.json().catch(() => ({}))
     setBusy(false)
@@ -267,7 +398,7 @@ function SendModal({ id, doc, contact, onClose, onSent, onPreview, onPatch }: { 
   return (
     <Drawer open onClose={() => (link ? onSent() : onClose())} title="Send proposal"
       footer={<div className="flex items-center justify-between gap-2">
-        <Button variant="ghost" size="sm" onClick={onPreview}><Eye className="h-4 w-4" /> Preview</Button>
+        <a href={previewHref} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ size: 'sm', variant: 'ghost' }))}><Eye className="h-4 w-4" /> Preview</a>
         <div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => (link ? onSent() : onClose())}>{link ? 'Done' : 'Cancel'}</Button>{!link && <Button size="sm" loading={busy} disabled={!emailOk || busy} onClick={send}><Send className="h-4 w-4" /> Send</Button>}</div>
       </div>}>
       {link ? (
