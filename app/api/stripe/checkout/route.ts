@@ -39,7 +39,12 @@ export async function POST(req: NextRequest) {
     if (!session.url) return NextResponse.json({ error: 'Could not start checkout. Please try again.' }, { status: 502 })
     return NextResponse.json({ url: session.url })
   } catch (e) {
-    console.error('[stripe/checkout] Stripe error:', e instanceof Error ? e.message : e)
-    return NextResponse.json({ error: 'Could not start checkout. Please try again in a moment.' }, { status: 502 })
+    // TEMPORARY safe diagnostics (no secrets: priceId, origin, and Stripe error text are not sensitive).
+    const err = e as { type?: string; code?: string; param?: string; message?: string; requestId?: string }
+    console.error('[stripe/checkout] Stripe error', { type: err.type, code: err.code, param: err.param, requestId: err.requestId, message: err.message, plan, priceId, origin })
+    return NextResponse.json({
+      error: 'Could not start checkout. Please try again in a moment.',
+      debug: { plan, priceId, origin, stripe_type: err.type, stripe_code: err.code, stripe_param: err.param, stripe_request_id: err.requestId, stripe_message: err.message },
+    }, { status: 502 })
   }
 }
