@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { stripe, PLANS } from '@/lib/stripe/client'
+import { getStripe, PLANS } from '@/lib/stripe/client'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 // Start a subscription Checkout. The client sends the PLAN KEY ('starter'|'pro'|'business') and the Stripe
@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
 
   const origin = req.nextUrl.origin
   try {
+    // getStripe() throws a controlled error if STRIPE_SECRET_KEY is missing (never a silent null client).
+    const stripe = getStripe()
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -39,12 +41,15 @@ export async function POST(req: NextRequest) {
     if (!session.url) return NextResponse.json({ error: 'Could not start checkout. Please try again.' }, { status: 502 })
     return NextResponse.json({ url: session.url })
   } catch (e) {
-    // TEMPORARY safe diagnostics (no secrets: priceId, origin, and Stripe error text are not sensitive).
-    const err = e as { type?: string; code?: string; param?: string; message?: string; requestId?: string }
-    console.error('[stripe/checkout] Stripe error', { type: err.type, code: err.code, param: err.param, requestId: err.requestId, message: err.message, plan, priceId, origin })
-    return NextResponse.json({
-      error: 'Could not start checkout. Please try again in a moment.',
-      debug: { plan, priceId, origin, stripe_type: err.type, stripe_code: err.code, stripe_param: err.param, stripe_request_id: err.requestId, stripe_message: err.message },
-    }, { status: 502 })
+    // Safe server-side logging only: internal error type/code, Stripe request id when present, and the plan.
+    // Never logs the secret key or any customer/payment data. The client gets a generic, safe message.
+    const err = e as { type?: string; code?: string; message?: string; requestId?: string }
+    const misconfigured = err.message === 'STRIPE_SECRET_KEY is not configured'
+    console.error('[stripe/checkout] failed to create session', {
+      misconfigured, type: err.type, code: err.code, requestId: err.requestId, plan,
+    })
+    return misconfigured
+      ? NextResponse.json({ error: 'Billing is temporarily unavailable. Please contact support.' }, { status: 500 })
+      : NextResponse.json({ error: 'Could not start checkout. Please try again in a moment.' }, { status: 502 })
   }
 }
