@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Archive, RotateCcw, QrCode } from 'lucide-react'
+import { Plus, Pencil, Archive, RotateCcw, QrCode, Warehouse } from 'lucide-react'
 import { Drawer } from '@/components/ui/drawer'
 import { QrPanel } from '@/components/commerce/component-images'
+import { InventoryPanel } from '@/components/commerce/product-inventory'
 import { Button } from '@/components/ui/button'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,6 +31,7 @@ export function ComponentVariants({ componentId }: { componentId: string }) {
   const [variants, setVariants] = useState<Variant[] | null>(null)
   const [editing, setEditing] = useState<Variant | 'new' | null>(null)
   const [qrFor, setQrFor] = useState<Variant | null>(null)
+  const [invFor, setInvFor] = useState<Variant | null>(null)
   const load = () => fetch(`/api/core/components/${componentId}/variants`).then((r) => r.json()).then((d) => setVariants(d.variants ?? [])).catch(() => setVariants([]))
   useEffect(() => { load() }, [componentId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -47,6 +49,7 @@ export function ComponentVariants({ componentId }: { componentId: string }) {
             <li key={v.id} className={cn('flex items-center gap-2 rounded-card border border-hairline bg-surface p-2.5 shadow-e1', v.status === 'discontinued' && 'opacity-60')}>
               <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-ink">{v.name}</p><p className="truncate text-xs text-muted">{[v.sku, v.price_override_cents != null ? formatCents(v.price_override_cents, v.currency) : null].filter(Boolean).join(' · ') || 'No SKU'}</p></div>
               <Badge variant={STATUS_VARIANT[v.status] ?? 'neutral'}>{v.status}</Badge>
+              <button onClick={() => setInvFor(v)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Inventory" title="Inventory"><Warehouse className="h-4 w-4" /></button>
               <button onClick={() => setQrFor(v)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="View QR" title="View QR"><QrCode className="h-4 w-4" /></button>
               <button onClick={() => setEditing(v)} className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle hover:bg-sunken hover:text-ink" aria-label="Edit" title="Edit"><Pencil className="h-4 w-4" /></button>
               {v.status === 'discontinued'
@@ -58,6 +61,7 @@ export function ComponentVariants({ componentId }: { componentId: string }) {
       )}
       {editing && <VariantForm componentId={componentId} variant={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}
       {qrFor && <Drawer open onClose={() => setQrFor(null)} title={`QR — ${qrFor.name}`}><QrPanel endpoint={`/api/core/variants/${qrFor.id}/qr`} /></Drawer>}
+      {invFor && <Drawer open onClose={() => setInvFor(null)} title={`Inventory — ${invFor.name}`}><InventoryPanel itemKind="variant" itemId={invFor.id} /></Drawer>}
     </div>
   )
 }

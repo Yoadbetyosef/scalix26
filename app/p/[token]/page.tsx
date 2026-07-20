@@ -6,9 +6,13 @@ export const dynamic = 'force-dynamic'
 
 // PUBLIC QR page — target of a product component / variant QR. No auth: looked up by the unguessable token.
 // Customer-safe fields only. Clearly shows which LEVEL is being viewed (component vs variant) and its parent.
+// Availability reflects real inventory (available/incoming), with tenant overrides (made-to-order etc.).
 const AV: Record<string, { label: string; cls: string }> = {
-  active: { label: 'Available', cls: 'bg-emerald-100 text-emerald-800' },
-  inactive: { label: 'Unavailable', cls: 'bg-red-100 text-red-800' },
+  in_stock: { label: 'In stock', cls: 'bg-emerald-100 text-emerald-800' },
+  low_stock: { label: 'Low stock', cls: 'bg-amber-100 text-amber-800' },
+  out_of_stock: { label: 'Out of stock', cls: 'bg-red-100 text-red-800' },
+  incoming: { label: 'Incoming', cls: 'bg-blue-100 text-blue-800' },
+  made_to_order: { label: 'Made to order', cls: 'bg-gray-100 text-gray-700' },
   discontinued: { label: 'Discontinued', cls: 'bg-gray-100 text-gray-700' },
 }
 const money = (cents: number | null, currency: string) => (cents == null ? null : (cents / 100).toLocaleString(undefined, { style: 'currency', currency: currency || 'usd' }))
@@ -16,7 +20,7 @@ const money = (cents: number | null, currency: string) => (cents == null ? null 
 export default async function PublicQrPage({ params }: { params: Promise<{ token: string }> }) {
   const q = await resolveQrToken((await params).token)
   if (!q) notFound()
-  const av = AV[q.status] ?? AV.active
+  const av = AV[q.availability] ?? { label: 'Available', cls: 'bg-emerald-100 text-emerald-800' }
   const price = money(q.price_cents, q.currency)
   const levelLabel = q.level === 'variant' ? `Variant of ${q.parentName ?? q.productName ?? 'product'}` : q.productName ? `Component of ${q.productName}` : 'Component'
 
@@ -37,6 +41,10 @@ export default async function PublicQrPage({ params }: { params: Promise<{ token
             <span className={`rounded-full px-2.5 py-1 text-sm font-medium ${av.cls}`}>{av.label}</span>
             {price && <span className="text-xl font-semibold">{price}</span>}
           </div>
+          {(q.availability === 'incoming' || q.availability === 'out_of_stock') && q.incoming > 0 && (
+            <p className="mt-2 text-sm text-blue-700">{q.incoming} on the way{q.nextArrival ? ` · expected ${q.nextArrival}` : ''}</p>
+          )}
+          {q.aiNotes && <p className="mt-2 text-sm text-gray-600">{q.aiNotes}</p>}
 
           <dl className="mt-4 space-y-2 text-sm">
             {q.sku && <Row k="SKU" v={q.sku} />}

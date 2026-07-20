@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { formatCents, inputToCents, centsToInput } from '@/lib/core/money-format'
+import { AVAILABILITY } from '@/components/commerce/product-inventory'
 import { toast } from 'sonner'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -236,9 +237,22 @@ function LineDrawer({ id, onClose, onDone }: { id: string; onClose: () => void; 
   const [price, setPrice] = useState('')
   const [discount, setDiscount] = useState('')
   const [busy, setBusy] = useState(false)
+  const [inv, setInv] = useState<{ availability: string; available: number; incoming: number; nextArrival: string | null } | null>(null)
   const addedRef = useRef(0)
 
   useEffect(() => { fetch('/api/core/products').then((r) => r.json()).then((d) => setProducts(d.products ?? [])).catch(() => setProducts([])) }, [])
+  // Live availability for the most specific selection (variant → component → product).
+  useEffect(() => {
+    let alive = true
+    const kind = variantId ? 'variant' : componentId ? 'component' : product ? 'product' : null
+    const iid = variantId || componentId || product?.id
+    void (async () => {
+      if (!kind || !iid) { if (alive) setInv(null); return }
+      try { const d = await (await fetch(`/api/core/inventory/item?itemKind=${kind}&itemId=${iid}`)).json(); if (alive) setInv({ availability: d.availability, available: d.summary.available, incoming: d.summary.incoming, nextArrival: d.summary.nextArrival }) }
+      catch { if (alive) setInv(null) }
+    })()
+    return () => { alive = false }
+  }, [product, componentId, variantId])
   const matches = (products ?? []).filter((p) => { const s = q.trim().toLowerCase(); return s ? [p.name, p.sku].some((v) => v?.toLowerCase().includes(s)) : true }).slice(0, 8)
 
   function pickProduct(p: PickProduct) {
@@ -298,6 +312,13 @@ function LineDrawer({ id, onClose, onDone }: { id: string; onClose: () => void; 
         {product && components.length > 0 && <div className="space-y-1.5"><Label>Component (order a single sub-product)</Label><select value={componentId ?? ''} onChange={(e) => pickComponent(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none"><option value="">— whole product —</option>{components.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>}
         {componentId && compVariants.length > 0 && <div className="space-y-1.5"><Label>Component variant</Label><select value={variantId ?? ''} onChange={(e) => pickCompVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none"><option value="">— none —</option>{compVariants.map((v) => <option key={v.id} value={v.id}>{v.name}{v.sku ? ` · ${v.sku}` : ''}</option>)}</select></div>}
         {product && !componentId && variants.length > 0 && <div className="space-y-1.5"><Label>Variant</Label><select value={variantId ?? ''} onChange={(e) => pickVariant(e.target.value)} className="h-11 w-full rounded-input border border-hairline bg-white px-3 text-sm text-ink focus:border-ink/30 focus:outline-none"><option value="">— none —</option>{variants.map((v) => <option key={v.id} value={v.id}>{v.name}{v.sku ? ` · ${v.sku}` : ''}</option>)}</select></div>}
+        {inv && (() => { const a = AVAILABILITY[inv.availability] ?? { label: inv.availability, variant: 'neutral' as const }; const over = Number(quantity) > inv.available
+          return (
+            <div className="space-y-1 rounded-lg border border-hairline bg-sunken/50 px-3 py-2 text-xs">
+              <div className="flex items-center gap-2"><Badge variant={a.variant}>{a.label}</Badge><span className="text-muted">{inv.available} available{inv.incoming > 0 ? ` · ${inv.incoming} incoming${inv.nextArrival ? ` (exp. ${inv.nextArrival})` : ''}` : ''}</span></div>
+              {over && <p className="text-amber-700">Requested {quantity} exceeds {inv.available} available. You can still add it as a backorder / against incoming stock / made-to-order.</p>}
+            </div>
+          ) })()}
         <div className="space-y-1.5"><Label>Description</Label><Input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} /></div>
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1.5"><Label>Qty</Label><Input value={quantity} onChange={(e) => setQuantity(e.target.value)} type="number" min="0" step="1" inputMode="decimal" /></div>

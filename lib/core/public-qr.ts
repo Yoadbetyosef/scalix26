@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { getItemInventory, type ItemKind } from './inventory'
 
 // Public QR resolver — the ONE lookup behind /p/[token]. Resolves a component OR a variant (product- or
 // component-owned) by its unguessable token and returns a normalized, CUSTOMER-SAFE shape (no cost/internal
@@ -22,6 +23,16 @@ export interface PublicQr {
   category: string | null
   attributes: PublicAttr[]
   variants: PublicVariantOption[]
+  availability: string        // in_stock|low_stock|out_of_stock|incoming|made_to_order|discontinued
+  incoming: number
+  nextArrival: string | null
+  aiNotes: string | null      // customer-facing note the AI may also share
+}
+
+// Customer-safe inventory snapshot for a QR item (never on-hand counts / internal notes).
+async function publicInventory(tenantId: string, itemKind: ItemKind, itemId: string) {
+  const inv = await getItemInventory(tenantId, itemKind, itemId)
+  return { availability: inv.availability, incoming: inv.summary.incoming, nextArrival: inv.summary.nextArrival, aiNotes: inv.meta.ai_notes }
 }
 
 // Attribute values for a record, resolved to human labels (select values → option labels).
@@ -56,7 +67,8 @@ export async function resolveQrToken(token: string): Promise<PublicQr | null> {
     const attributes = await attributesFor(comp.tenant_id, 'component', comp.id)
     const { data: vars } = await admin().from('product_variants').select('name, sku, price_override_cents, currency, status, qr_code_token').eq('tenant_id', comp.tenant_id).eq('component_id', comp.id).neq('status', 'discontinued').order('sort_order')
     const variants: PublicVariantOption[] = (vars ?? []).map((v) => ({ name: v.name as string, sku: (v.sku as string) ?? null, price_cents: (v.price_override_cents as number) ?? null, currency: (v.currency as string) || 'usd', token: v.qr_code_token as string }))
-    return { level: 'component', productName: product?.name ?? null, parentName: null, name: comp.name as string, sku: comp.sku as string ?? null, image_url: comp.image_url as string ?? null, price_cents: comp.price_cents as number ?? null, currency: (comp.currency as string) || 'usd', status: comp.status as string, category, attributes, variants }
+    const inv = await publicInventory(comp.tenant_id, 'component', comp.id)
+    return { level: 'component', productName: product?.name ?? null, parentName: null, name: comp.name as string, sku: comp.sku as string ?? null, image_url: comp.image_url as string ?? null, price_cents: comp.price_cents as number ?? null, currency: (comp.currency as string) || 'usd', status: comp.status as string, category, attributes, variants, ...inv }
   }
 
   const { data: v } = await admin().from('product_variants')
@@ -72,7 +84,8 @@ export async function resolveQrToken(token: string): Promise<PublicQr | null> {
       const { data: p } = await admin().from('catalog_products').select('name, category').eq('id', v.product_id).maybeSingle(); productName = p?.name ?? null; category = p?.category ?? null
     }
     const attributes = await attributesFor(v.tenant_id, 'variant', v.id)
-    return { level: 'variant', productName, parentName, name: v.name as string, sku: v.sku as string ?? null, image_url: v.image_url as string ?? null, price_cents: v.price_override_cents as number ?? null, currency: (v.currency as string) || 'usd', status: v.status as string, category, attributes, variants: [] }
+    const inv = await publicInventory(v.tenant_id, 'variant', v.id)
+    return { level: 'variant', productName, parentName, name: v.name as string, sku: v.sku as string ?? null, image_url: v.image_url as string ?? null, price_cents: v.price_override_cents as number ?? null, currency: (v.currency as string) || 'usd', status: v.status as string, category, attributes, variants: [], ...inv }
   }
   return null
 }
