@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 import { AuthShell } from '@/components/auth/auth-shell'
-import { SocialButtons } from '@/components/auth/social-buttons'
 
 const inputClass =
   'h-12 w-full rounded-xl border border-hairline bg-white px-4 text-[15px] text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.05)]'
@@ -100,14 +99,6 @@ export default function LoginPage() {
           Continue
         </Button>
       </form>
-
-      <div className="my-6 flex items-center gap-4">
-        <span className="h-px flex-1 bg-hairline" />
-        <span className="text-xs text-muted">or</span>
-        <span className="h-px flex-1 bg-hairline" />
-      </div>
-
-      <SocialButtons />
 
       <p className="mt-8 text-center text-sm text-subtle">
         Don&apos;t have an account?{' '}
