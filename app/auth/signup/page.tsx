@@ -21,7 +21,8 @@ export default function SignupPage() {
     setBrand(detectBrand())
   }, [])
 
-  const [form, setForm] = useState({ businessName: '', email: '', password: '' })
+  const [form, setForm] = useState({ businessName: '', email: '', phone: '', password: '' })
+  const [smsConsent, setSmsConsent] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -42,6 +43,8 @@ export default function SignupPage() {
           email: form.email,
           password: form.password,
           businessName: form.businessName,
+          phone: form.phone,
+          smsConsent,
           industry,
         }),
       })
@@ -114,6 +117,20 @@ export default function SignupPage() {
         </div>
 
         <div className="space-y-2">
+          <label htmlFor="phone" className="text-sm font-medium text-ink">Mobile number</label>
+          <input
+            id="phone"
+            type="tel"
+            autoComplete="tel"
+            required
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            placeholder="(555) 123-4567"
+            className={inputClass}
+          />
+        </div>
+
+        <div className="space-y-2">
           <label htmlFor="password" className="text-sm font-medium text-ink">Password</label>
           <div className="relative">
             <input
@@ -142,6 +159,26 @@ export default function SignupPage() {
             {error}
           </div>
         )}
+
+        {/* SMS opt-in consent (A2P 10DLC). Optional — consent is not a condition of signup. */}
+        <label htmlFor="smsConsent" className="flex cursor-pointer gap-2.5">
+          <input
+            id="smsConsent"
+            type="checkbox"
+            checked={smsConsent}
+            onChange={(e) => setSmsConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-hairline accent-ink"
+          />
+          <span className="text-[10px] leading-snug text-muted/70">
+            I agree to receive SMS messages from Scalix26 LLC at the mobile number provided above,
+            regarding my account and service updates. Message frequency varies. Message and data rates
+            may apply. Reply STOP to opt out. Reply HELP for assistance. Consent is not a condition of
+            any purchase. View our{' '}
+            <a href="https://scalix26.com/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Terms of Service</a>{' '}
+            and{' '}
+            <a href="https://scalix26.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-ink">Privacy Policy</a>.
+          </span>
+        </label>
 
         {/* Legal — subtle text directly above Continue. */}
         <p className="text-[10px] leading-snug text-muted/70">

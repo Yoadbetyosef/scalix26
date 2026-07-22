@@ -9,7 +9,7 @@ import { enforce, clientIp } from '@/lib/ratelimit'
 export async function POST(req: NextRequest) {
   const signupLimited = await enforce('auth_signup', `ip:${clientIp(req)}`)
   if (signupLimited) return signupLimited
-  const { email, password, businessName, industry } = await req.json()
+  const { email, password, businessName, industry, phone, smsConsent } = await req.json()
 
   const supabase = await createClient()
   const serviceSupabase = await createServiceClient()
@@ -27,10 +27,21 @@ export async function POST(req: NextRequest) {
     business_name: businessName,
     industry,
     email,
+    phone: typeof phone === 'string' ? phone.trim() || null : null,
     plan: 'trial',
   })
 
   if (tenantError) return NextResponse.json({ error: "Couldn't create your account — please try again." }, { status: 400 })
+
+  // Record the SMS opt-in as consent proof (A2P 10DLC / TCPA). Best-effort: if the sms_consent columns
+  // haven't been migrated yet, this no-ops rather than breaking signup. Requires add_sms_consent.sql.
+  if (tenant?.id && smsConsent === true) {
+    const { error: consentErr } = await serviceSupabase
+      .from('tenants')
+      .update({ sms_consent: true, sms_consent_at: new Date().toISOString() })
+      .eq('id', tenant.id)
+    if (consentErr) console.warn('[signup] sms_consent not stored (migration pending?):', consentErr.code)
+  }
 
   // 3. Partner attribution: if this signup arrived through a referral link, record the referral.
   // Best-effort — never blocks or fails account creation.
