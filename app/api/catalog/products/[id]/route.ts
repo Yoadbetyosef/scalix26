@@ -50,3 +50,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try { await syncStudioFromCatalog(db, s.tenantId, data) } catch { /* studio sync is best-effort */ }
   return NextResponse.json({ product: data })
 }
+
+// DELETE /api/catalog/products/[id] — remove a product. Cascades to catalog movements and the
+// linked studio product (+ its sub-products/documents) via ON DELETE CASCADE.
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const s = await requireCatalogTenant()
+  if (!s) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { id } = await params
+  const db = createAdminClient()
+  const { error } = await db.from('catalog_products').delete().eq('id', id).eq('tenant_id', s.tenantId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

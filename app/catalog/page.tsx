@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Package, Upload, Download } from 'lucide-react'
+import { Plus, Search, Package, Upload, Download, Trash2 } from 'lucide-react'
 import { AVAILABILITY_LABELS, totalAvailable, type CatalogProduct, type AvailabilityStatus } from '@/lib/catalog/types'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -38,6 +38,14 @@ export default function CatalogListPage() {
     } catch (e) { setErr((e as Error).message) } finally { setLoading(false) }
   }
   useEffect(() => { reload() }, [])
+
+  async function del(p: CatalogProduct, e?: React.MouseEvent) {
+    e?.preventDefault(); e?.stopPropagation()
+    if (!confirm(`Delete “${p.name}”? This also removes its Studio version, sub-products and documents.`)) return
+    const res = await fetch(`/api/catalog/products/${p.id}`, { method: 'DELETE' })
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error || 'Delete failed'); return }
+    setProducts((ps) => ps.filter((x) => x.id !== p.id))
+  }
 
   async function importCsv(file: File) {
     const csv = await file.text()
@@ -108,6 +116,7 @@ export default function CatalogListPage() {
                   <th className="px-3 py-3 font-medium text-right">Storage</th>
                   <th className="px-3 py-3 font-medium text-right">Incoming</th>
                   <th className="px-3 py-3 font-medium">Status</th>
+                  <th className="px-3 py-3 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
@@ -127,6 +136,9 @@ export default function CatalogListPage() {
                     <td className="px-3 py-3 text-right tabular-nums text-subtle">{p.storage_quantity}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-subtle">{p.incoming_quantity}{p.expected_arrival_date ? '' : ''}</td>
                     <td className="px-3 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge[p.availability_status]}`}>{AVAILABILITY_LABELS[p.availability_status]}</span></td>
+                    <td className="px-3 py-3 text-right">
+                      <button onClick={(e) => del(p, e)} aria-label={`Delete ${p.name}`} title="Delete" className="rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -141,7 +153,10 @@ export default function CatalogListPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium text-ink line-clamp-1">{p.name}</span>
-                    <span className="tabular-nums text-sm text-ink">{money(p.price)}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="tabular-nums text-sm text-ink">{money(p.price)}</span>
+                      <button onClick={(e) => del(p, e)} aria-label={`Delete ${p.name}`} className="-mr-1 rounded-lg p-1.5 text-muted active:bg-red-50 active:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                    </div>
                   </div>
                   <div className="text-xs text-subtle">{p.sku || '—'}{p.category ? ` · ${p.category}` : ''}</div>
                   <div className="mt-1.5 flex items-center gap-2">
