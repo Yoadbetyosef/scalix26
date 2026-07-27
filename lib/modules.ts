@@ -20,6 +20,7 @@ export const MODULES = [
   { key: 'business_brain', label: 'Business Brain', description: 'AI business understanding' },
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
   { key: 'orders', label: 'Orders', description: 'Orders & external factory/customer approvals' },
+  { key: 'studio', label: 'Design Studio', description: 'Lean product catalog with variants, QR pages & one-tap production/quotes/invoices' },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]['key']
@@ -76,6 +77,7 @@ const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/test-ai', module: 'ai_voice' },
   { prefix: '/inventory', module: 'inventory' },
   { prefix: '/catalog', module: 'inventory' },
+  { prefix: '/studio', module: 'studio' },
   { prefix: '/pipeline', module: 'pipeline' },
   { prefix: '/estimates', module: 'estimates' },
   { prefix: '/analytics', module: 'analytics' },

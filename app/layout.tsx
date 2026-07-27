@@ -3,7 +3,6 @@ import { Inter } from 'next/font/google'
 import { headers } from 'next/headers'
 import './globals.css'
 import { Toaster } from '@/components/ui/toaster'
-import { OverflowDiagnostic } from '@/components/dev/overflow-diagnostic'
 import { cache } from 'react'
 import { resolveBrandData, resolveBrandForPartner, strongColor, type BrandData } from '@/lib/partner/brand'
 import { BrandProvider } from '@/components/brand/brand-provider'
@@ -60,7 +59,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
         </BrandProvider>
         <Toaster />
-        <OverflowDiagnostic />
       </body>
     </html>
   )

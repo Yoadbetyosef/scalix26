@@ -20,6 +20,7 @@ import {
   Handshake,
   Shield,
   ClipboardList,
+  Shapes,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -39,6 +40,7 @@ const navItems = [
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/orders', icon: ClipboardList, label: 'Orders' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
+  { href: '/studio', icon: Shapes, label: 'Studio' },
   { href: '/ai-employees', icon: Bot, label: 'AI Employees' },
   { href: '/test-ai', icon: FlaskConical, label: 'Test AI' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
@@ -53,7 +55,7 @@ const navItems = [
 // Routes verified operator-safe (reads AND mutations scoped to the active client tenant). These appear
 // in a White Label operator's client workspace — the FULL product minus Scalix billing. "Billing &
 // Subscription" is intentionally excluded (a client's plan is governed by the partner, never Scalix).
-const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Leads', 'Inbox', 'Contacts', 'Catalog', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
+const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Leads', 'Inbox', 'Contacts', 'Catalog', 'Studio', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
 
 export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules }: {
   operator?: boolean
