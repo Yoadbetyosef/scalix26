@@ -87,6 +87,16 @@ export interface StudioDocLineItem {
   sku: string | null
   qty: number
   unit_price: number | null
+  image?: string | null  // snapshot cover photo, for a richer document
+  desc?: string | null   // snapshot short description
+}
+
+export interface StudioDocSettings {
+  tenant_id: string
+  logo_url: string | null
+  terms: string | null
+  validity_days: number
+  updated_at: string
 }
 
 export interface StudioDocument {
@@ -102,6 +112,12 @@ export interface StudioDocument {
   currency: string
   line_items: StudioDocLineItem[]
   subtotal: number
+  logo_url: string | null
+  terms: string | null
+  valid_until: string | null
+  client_phone: string | null
+  sent_at: string | null
+  sent_channel: string | null
   created_by: string | null
   created_at: string
   updated_at: string

@@ -31,6 +31,10 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
     <main className="mx-auto min-h-screen max-w-2xl bg-white px-6 py-10 text-neutral-900 print:py-4">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
+          {doc.logo_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={doc.logo_url} alt={tenant.business_name || ''} className="mb-2 h-12 w-auto max-w-[180px] object-contain" />
+            : null}
           <h1 className="text-2xl font-bold tracking-tight">{tenant.business_name || 'Studio'}</h1>
           {addr.map((l, i) => <p key={i} className="text-sm text-neutral-500">{l}</p>)}
           <p className="text-sm text-neutral-500">{[tenant.email, tenant.phone].filter(Boolean).join(' · ')}</p>
@@ -39,6 +43,7 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
           <p className="text-lg font-semibold uppercase tracking-wide text-neutral-800">{meta.title}</p>
           <p className="text-sm text-neutral-500">#{docNumber(doc)}</p>
           <p className="text-sm text-neutral-500">{dateStr}</p>
+          {doc.valid_until && doc.type === 'quote' && <p className="text-sm text-neutral-500">Valid until {doc.valid_until}</p>}
         </div>
       </div>
 
@@ -63,9 +68,18 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
           {doc.line_items.map((l, i) => (
             <tr key={i} className="border-b border-neutral-100 align-top">
               <td className="py-2.5">
-                <span className="font-medium">{l.name}</span>
-                {l.fabric && <span className="block text-xs text-neutral-500">{l.fabric}</span>}
-                {l.sku && <span className="block text-xs text-neutral-400">SKU {l.sku}</span>}
+                <div className="flex gap-3">
+                  {l.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={l.image} alt="" className="h-14 w-14 flex-shrink-0 rounded-md border border-neutral-200 object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <span className="font-medium">{l.name}</span>
+                    {l.fabric && <span className="block text-xs text-neutral-500">{l.fabric}</span>}
+                    {l.desc && <span className="block text-xs text-neutral-500">{l.desc}</span>}
+                    {l.sku && <span className="block text-xs text-neutral-400">SKU {l.sku}</span>}
+                  </div>
+                </div>
               </td>
               <td className="py-2.5 text-center">{l.qty}</td>
               {!isProduction && <td className="py-2.5 text-right">{l.unit_price != null ? money(l.unit_price, doc.currency) : '—'}</td>}
@@ -87,6 +101,13 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
         <div className="mt-6">
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Notes</p>
           <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-700">{doc.notes}</p>
+        </div>
+      )}
+
+      {doc.terms && (
+        <div className="mt-6 border-t border-neutral-100 pt-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Terms</p>
+          <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-neutral-500">{doc.terms}</p>
         </div>
       )}
 
