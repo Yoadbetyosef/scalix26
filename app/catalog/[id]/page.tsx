@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import { Package, Download } from 'lucide-react'
 import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, type CatalogProduct, type AvailabilityStatus, type MovementType } from '@/lib/catalog/types'
 import { ProductForm } from '@/components/catalog/product-form'
+import { StudioSections } from '@/components/studio/studio-sections'
 import { useToast } from '@/components/admin/toast'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -109,6 +110,9 @@ export default function ProductDetailPage() {
         </div>
         {product.description && <p className="mt-3 text-sm text-muted">{product.description}</p>}
       </div>
+
+      {/* Studio experience — fabric, production/quote/invoice actions, sub-products, documents, customer page */}
+      <StudioSections catalogId={id} />
 
       {/* Quantities */}
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">

@@ -55,6 +55,7 @@ export interface StudioProduct {
   fabric_name: string | null
   fabric_composition: string | null
   fabric_durability: string | null
+  catalog_product_id: string | null   // linked inventory product, if this came from the Catalog
   qr_token: string
   created_at: string
   updated_at: string

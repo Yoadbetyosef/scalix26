@@ -3,6 +3,7 @@ import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireCatalogTenant } from '@/lib/catalog/session'
 import { sanitizeProduct } from '@/lib/catalog/sanitize'
+import { syncStudioFromCatalog } from '@/lib/studio/link'
 
 // GET /api/catalog/products/[id] — product + movement history + a QR data URL.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -45,5 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Keep the linked Studio product's shared fields (name/category/description/price) in sync. Non-fatal.
+  try { await syncStudioFromCatalog(db, s.tenantId, data) } catch { /* studio sync is best-effort */ }
   return NextResponse.json({ product: data })
 }

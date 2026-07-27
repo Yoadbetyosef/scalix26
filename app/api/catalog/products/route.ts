@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireCatalogTenant } from '@/lib/catalog/session'
 import { sanitizeProduct } from '@/lib/catalog/sanitize'
+import { ensureStudioForCatalog } from '@/lib/studio/link'
 
 // GET /api/catalog/products — all products for the caller's tenant (client filters/searches).
 export async function GET() {
@@ -23,5 +24,7 @@ export async function POST(req: NextRequest) {
   const db = createAdminClient()
   const { data, error } = await db.from('catalog_products').insert({ tenant_id: s.tenantId, ...sanitizeProduct(body) }).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Auto-create the Studio counterpart so the product gains the Studio experience. Non-fatal.
+  try { await ensureStudioForCatalog(db, s.tenantId, data) } catch { /* studio sync is best-effort */ }
   return NextResponse.json({ product: data })
 }

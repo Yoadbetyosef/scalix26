@@ -47,7 +47,7 @@ export default function StudioCatalogPage() {
             const cover = p.photos?.[0]
             const vcount = p.variants?.length || 0
             return (
-              <Link key={p.id} href={`/studio/${p.id}`} className="group overflow-hidden rounded-xl border border-hairline-strong bg-white transition hover:shadow-sm">
+              <Link key={p.id} href={p.catalog_product_id ? `/catalog/${p.catalog_product_id}` : `/studio/${p.id}`} className="group overflow-hidden rounded-xl border border-hairline-strong bg-white transition hover:shadow-sm">
                 <div className="aspect-square w-full bg-sunken">
                   {cover
                     // eslint-disable-next-line @next/next/no-img-element
