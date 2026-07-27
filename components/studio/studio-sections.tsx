@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Factory, FileText, Receipt, ExternalLink, Download } from 'lucide-react'
 import type { StudioProduct, StudioVariant, StudioDocument, StudioDocType } from '@/lib/studio/types'
 import { DOC_META, docNumber } from '@/lib/studio/types'
-import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
 import { VariantsPanel } from '@/components/studio/variants-panel'
 import { DocumentCreator } from '@/components/studio/document-creator'
 
@@ -33,23 +32,12 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
     fetch(`/api/studio/by-catalog/${catalogId}`).then((r) => r.ok && r.json()).then((d) => d && setDocuments(d.documents || [])).catch(() => {})
   }, [catalogId])
 
-  async function saveFabric(fabric: FabricValue) {
-    if (!product) return
-    const next = { ...product, ...fabric }
-    setProduct(next as StudioProduct)
-    await fetch(`/api/studio/products/${product.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next) })
-  }
-
   function downloadQr() {
     if (!qr?.dataUrl) return
     const a = document.createElement('a'); a.href = qr.dataUrl; a.download = `${product?.name || 'product'}-qr.png`; a.click()
   }
 
   if (!ready || !product) return null
-  const fabric: FabricValue = {
-    fabric_category: product.fabric_category, fabric_family: product.fabric_family, fabric_name: product.fabric_name,
-    fabric_composition: product.fabric_composition, fabric_durability: product.fabric_durability,
-  }
 
   return (
     <div className="mt-4 space-y-4">
@@ -59,12 +47,6 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
         <ActionButton icon={<FileText className="h-4 w-4" />} label="Quote" hint="for a client" onClick={() => setDocType('quote')} />
         <ActionButton icon={<Receipt className="h-4 w-4" />} label="Invoice" hint="printable" onClick={() => setDocType('invoice')} />
       </div>
-
-      {/* Fabric */}
-      <section className="rounded-xl border border-hairline-strong bg-white p-4">
-        <h3 className="mb-2 font-semibold text-ink">Fabric</h3>
-        <FabricPicker value={fabric} onChange={saveFabric} />
-      </section>
 
       {/* Sub-products */}
       <VariantsPanel product={product} initial={variants} />

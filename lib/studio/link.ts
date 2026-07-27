@@ -41,10 +41,47 @@ export async function ensureStudioForCatalog(db: AdminDb, tenantId: string, cat:
   return (retry.data as StudioProduct) ?? null
 }
 
-/** Mirror shared display fields (name/category/description/price) onto the linked studio product. */
-export async function syncStudioFromCatalog(db: AdminDb, tenantId: string, cat: CatalogLike): Promise<void> {
+export interface FabricFields {
+  fabric_category: string | null
+  fabric_family: string | null
+  fabric_name: string | null
+  fabric_composition: string | null
+  fabric_durability: string | null
+}
+
+/**
+ * Mirror shared display fields (name/category/description/price) onto the linked studio product,
+ * and — when provided — the fabric selection chosen on the catalog form.
+ */
+export async function syncStudioFromCatalog(db: AdminDb, tenantId: string, cat: CatalogLike, fabric?: FabricFields): Promise<void> {
   const studio = await ensureStudioForCatalog(db, tenantId, cat)
   if (!studio) return
-  await db.from('studio_products').update({ ...sharedFields(cat), updated_at: new Date().toISOString() })
-    .eq('id', studio.id).eq('tenant_id', tenantId)
+  const patch: Record<string, unknown> = { ...sharedFields(cat), updated_at: new Date().toISOString() }
+  if (fabric) {
+    patch.fabric_category = fabric.fabric_category ?? null
+    patch.fabric_family = fabric.fabric_family ?? null
+    patch.fabric_name = fabric.fabric_name ?? null
+    patch.fabric_composition = fabric.fabric_composition ?? null
+    patch.fabric_durability = fabric.fabric_durability ?? null
+  }
+  await db.from('studio_products').update(patch).eq('id', studio.id).eq('tenant_id', tenantId)
+}
+
+/** Read the linked studio product's fabric selection (for pre-filling the catalog edit form). */
+export async function getStudioFabric(db: AdminDb, tenantId: string, cat: CatalogLike): Promise<FabricFields | null> {
+  const studio = await ensureStudioForCatalog(db, tenantId, cat)
+  if (!studio) return null
+  return {
+    fabric_category: studio.fabric_category, fabric_family: studio.fabric_family, fabric_name: studio.fabric_name,
+    fabric_composition: studio.fabric_composition, fabric_durability: studio.fabric_durability,
+  }
+}
+
+/** Pull fabric_* fields out of a request body as clean string|null values. */
+export function fabricFromBody(body: Record<string, unknown>): FabricFields {
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  return {
+    fabric_category: str(body.fabric_category), fabric_family: str(body.fabric_family), fabric_name: str(body.fabric_name),
+    fabric_composition: str(body.fabric_composition), fabric_durability: str(body.fabric_durability),
+  }
 }

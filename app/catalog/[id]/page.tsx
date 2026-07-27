@@ -7,6 +7,7 @@ import { Package, Download } from 'lucide-react'
 import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, type CatalogProduct, type AvailabilityStatus, type MovementType } from '@/lib/catalog/types'
 import { ProductForm } from '@/components/catalog/product-form'
 import { StudioSections } from '@/components/studio/studio-sections'
+import type { FabricValue } from '@/components/studio/fabric-picker'
 import { useToast } from '@/components/admin/toast'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -24,6 +25,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<CatalogProduct | null>(null)
   const [movements, setMovements] = useState<CatalogMovement[]>([])
   const [qr, setQr] = useState<{ target: string; dataUrl: string | null } | null>(null)
+  const [fabric, setFabric] = useState<FabricValue | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [move, setMove] = useState<null | { type: MovementType; quantity: string; from_location: string; to_location: string; note: string }>(null)
@@ -36,7 +38,7 @@ export default function ProductDetailPage() {
       const res = await fetch(`/api/catalog/products/${id}`)
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Failed to load')
-      setProduct(d.product); setMovements(d.movements || []); setQr(d.qr)
+      setProduct(d.product); setMovements(d.movements || []); setQr(d.qr); setFabric(d.fabric || null)
     } catch (e) { show((e as Error).message, 'err') } finally { setLoading(false) }
   }, [id, show])
   useEffect(() => { load() }, [load])
@@ -45,7 +47,7 @@ export default function ProductDetailPage() {
     const res = await fetch(`/api/catalog/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const d = await res.json()
     if (!res.ok) throw new Error(d.error || 'Failed to save')
-    setProduct(d.product); setEditing(false); show('Saved')
+    setProduct(d.product); setEditing(false); show('Saved'); load()
   }
 
   async function submitMove() {
@@ -77,7 +79,7 @@ export default function ProductDetailPage() {
       {toast}
       <button onClick={() => setEditing(false)} className="text-sm text-subtle hover:text-ink">← Cancel</button>
       <h1 className="mb-4 mt-2 text-2xl font-bold text-ink">Edit product</h1>
-      <ProductForm initial={product} onSubmit={saveEdit} submitLabel="Save changes" />
+      <ProductForm initial={product} initialFabric={fabric || undefined} onSubmit={saveEdit} submitLabel="Save changes" />
     </div>
   )
 
@@ -108,10 +110,16 @@ export default function ProductDetailPage() {
             </div>
           </div>
         </div>
+        {fabric?.fabric_name && (
+          <p className="mt-3 text-sm text-subtle">
+            <span className="font-medium text-ink">Fabric:</span> {[fabric.fabric_family, fabric.fabric_name].filter(Boolean).join(' · ')}
+            {fabric.fabric_composition ? ` — ${fabric.fabric_composition}` : ''}
+          </p>
+        )}
         {product.description && <p className="mt-3 text-sm text-muted">{product.description}</p>}
       </div>
 
-      {/* Studio experience — fabric, production/quote/invoice actions, sub-products, documents, customer page */}
+      {/* Studio experience — production/quote/invoice actions, sub-products, documents, customer page */}
       <StudioSections catalogId={id} />
 
       {/* Quantities */}

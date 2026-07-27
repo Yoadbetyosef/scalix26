@@ -3,7 +3,7 @@ import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireCatalogTenant } from '@/lib/catalog/session'
 import { sanitizeProduct } from '@/lib/catalog/sanitize'
-import { syncStudioFromCatalog } from '@/lib/studio/link'
+import { syncStudioFromCatalog, getStudioFabric, fabricFromBody } from '@/lib/studio/link'
 
 // GET /api/catalog/products/[id] — product + movement history + a QR data URL.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -19,12 +19,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: movements } = await db.from('catalog_movements').select('*').eq('product_id', id).eq('tenant_id', s.tenantId).order('created_at', { ascending: false }).limit(100)
 
+  // The linked Studio product's fabric, so the edit form can pre-fill it. Best-effort.
+  let fabric = null
+  try { fabric = await getStudioFabric(db, s.tenantId, product) } catch { /* studio may be off */ }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
   const qrTarget = `${appUrl}/catalog/${id}`
   let qrDataUrl: string | null = null
   try { qrDataUrl = await QRCode.toDataURL(qrTarget, { margin: 1, width: 240 }) } catch { /* non-fatal */ }
 
-  return NextResponse.json({ product, movements: movements || [], qr: { target: qrTarget, dataUrl: qrDataUrl } })
+  return NextResponse.json({ product, movements: movements || [], fabric, qr: { target: qrTarget, dataUrl: qrDataUrl } })
 }
 
 // PATCH /api/catalog/products/[id] — update product fields.
@@ -46,8 +50,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  // Keep the linked Studio product's shared fields (name/category/description/price) in sync. Non-fatal.
-  try { await syncStudioFromCatalog(db, s.tenantId, data) } catch { /* studio sync is best-effort */ }
+  // Keep the linked Studio product's shared fields + fabric in sync with the catalog form. Non-fatal.
+  try { await syncStudioFromCatalog(db, s.tenantId, data, fabricFromBody(body)) } catch { /* studio sync is best-effort */ }
   return NextResponse.json({ product: data })
 }
 
