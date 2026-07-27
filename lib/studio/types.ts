@@ -94,6 +94,7 @@ export interface StudioDocLineItem {
 export interface StudioDocSettings {
   tenant_id: string
   logo_url: string | null
+  accent_color: string | null
   terms: string | null
   validity_days: number
   updated_at: string
@@ -113,6 +114,7 @@ export interface StudioDocument {
   line_items: StudioDocLineItem[]
   subtotal: number
   logo_url: string | null
+  accent_color: string | null
   terms: string | null
   valid_until: string | null
   client_phone: string | null
@@ -125,6 +127,10 @@ export interface StudioDocument {
 
 export const isStudioDocType = (v: unknown): v is StudioDocType =>
   typeof v === 'string' && (STUDIO_DOC_TYPES as readonly string[]).includes(v)
+
+/** A '#RRGGBB' brand colour, or null for the default neutral document look. Never trust the client. */
+export const hexColor = (v: unknown): string | null =>
+  typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toLowerCase() : null
 
 /** Short human-facing document number derived from its token. */
 export const docNumber = (d: Pick<StudioDocument, 'type' | 'token'>): string =>

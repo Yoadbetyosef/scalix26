@@ -68,7 +68,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     tenant_id: s.tenantId, product_id: id, type,
     party_name: str(body.party_name), party_email: str(body.party_email), client_phone: str(body.client_phone), notes: str(body.notes),
     line_items: lines, subtotal, created_by: s.email,
-    logo_url: settings?.logo_url || null, terms: settings?.terms || null, valid_until: validUntil,
+    logo_url: settings?.logo_url || null, accent_color: settings?.accent_color || null,
+    terms: settings?.terms || null, valid_until: validUntil,
   }).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ document: data })

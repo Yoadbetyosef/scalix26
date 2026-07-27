@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
-import { DOC_META, docNumber, type StudioDocument } from '@/lib/studio/types'
+import { DOC_META, docNumber, hexColor, type StudioDocument } from '@/lib/studio/types'
 import { PrintButton } from '@/components/studio/print-button'
 
 export const dynamic = 'force-dynamic'
@@ -26,9 +26,13 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
   const isProduction = doc.type === 'production'
   const dateStr = new Date(doc.created_at).toISOString().slice(0, 10)
   const addr = [tenant.address, [tenant.city, tenant.state, tenant.zip].filter(Boolean).join(', ')].filter(Boolean)
+  // The brand colour snapshot on the document (re-validated — never inline an untrusted value into style).
+  const accent = hexColor(doc.accent_color)
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl bg-white px-6 py-10 text-neutral-900 print:py-4">
+      {/* printColorAdjust so the brand bar survives the browser's print default of dropping backgrounds */}
+      {accent && <div className="mb-6 h-1.5 w-full rounded-full print:mb-4" style={{ background: accent, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           {doc.logo_url
@@ -40,7 +44,7 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
           <p className="text-sm text-neutral-500">{[tenant.email, tenant.phone].filter(Boolean).join(' · ')}</p>
         </div>
         <div className="text-right">
-          <p className="text-lg font-semibold uppercase tracking-wide text-neutral-800">{meta.title}</p>
+          <p className="text-lg font-semibold uppercase tracking-wide text-neutral-800" style={accent ? { color: accent } : undefined}>{meta.title}</p>
           <p className="text-sm text-neutral-500">#{docNumber(doc)}</p>
           <p className="text-sm text-neutral-500">{dateStr}</p>
           {doc.valid_until && doc.type === 'quote' && <p className="text-sm text-neutral-500">Valid until {doc.valid_until}</p>}
@@ -57,7 +61,7 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
 
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b-2 border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500" style={accent ? { borderBottomColor: accent } : undefined}>
             <th className="py-2">Item</th>
             <th className="py-2 text-center">Qty</th>
             {!isProduction && <th className="py-2 text-right">Unit</th>}
@@ -91,7 +95,7 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
           <tfoot>
             <tr>
               <td colSpan={3} className="py-3 text-right text-sm font-medium text-neutral-500">Subtotal</td>
-              <td className="py-3 text-right text-lg font-bold">{money(doc.subtotal, doc.currency)}</td>
+              <td className="py-3 text-right text-lg font-bold" style={accent ? { color: accent } : undefined}>{money(doc.subtotal, doc.currency)}</td>
             </tr>
           </tfoot>
         )}
