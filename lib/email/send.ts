@@ -40,7 +40,12 @@ export async function sendEmail(to: string, subject: string, html: string, meta?
   return { success: true, id: data?.id ?? null }
 }
 
-const INBOUND_FROM = 'noreply@mail.mylocksmithai.com'
+// Guaranteed-deliverable fallback sender for AI email replies. Defaults to the same verified address the
+// rest of the app already sends from, so it can never drift onto a domain that isn't verified in Resend —
+// which is exactly what a hardcoded value did: it stayed on one tenant's domain after the sending domain
+// moved. Override with EMAIL_INBOUND_FROM_ADDRESS only if inbound replies must come from a different
+// (also verified) domain.
+const INBOUND_FROM = process.env.EMAIL_INBOUND_FROM_ADDRESS?.trim() || FROM_ADDRESS
 
 // Send an AI reply to an inbound email. `from` is the agent's reply-from address
 // (its domain must be verified in Resend); we also set it as Reply-To and fall
