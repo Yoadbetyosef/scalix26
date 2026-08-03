@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { AVAILABILITY_STATUSES, AVAILABILITY_LABELS, PRODUCT_STATUSES, type CatalogProduct } from '@/lib/catalog/types'
 import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
+import { ProductNameField } from '@/components/catalog/product-name-field'
 
 export type ProductInput = Partial<CatalogProduct> & { tagsText?: string }
 
@@ -62,7 +63,16 @@ export function ProductForm({ initial, initialFabric, onSubmit, submitLabel }: {
 
       {/* The essentials */}
       <section className="rounded-xl border border-hairline-strong bg-white p-4 space-y-3">
-        <Field label="Name"><input className={input} required value={f.name || ''} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Neomi Sofa" /></Field>
+        {/* Suggests from the tenant's own product range and carries the category across. Free text is
+            still accepted, so a piece that isn't on the list yet is never blocked. */}
+        <Field label="Name">
+          <ProductNameField
+            className={input}
+            value={f.name || ''}
+            category={f.category ?? null}
+            onChange={(patch) => setF((p) => ({ ...p, name: patch.name, ...(patch.category !== undefined ? { category: patch.category } : {}) }))}
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Category"><input className={input} value={f.category || ''} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Sofas" /></Field>
           <Field label="Price"><input className={input} type="number" step="0.01" value={f.price ?? ''} onChange={(e) => set('price', e.target.value)} placeholder="0.00" /></Field>
