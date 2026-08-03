@@ -109,7 +109,7 @@ export function ProductNameField({ value, category, onChange, className }: {
         <ul ref={listRef} id={LISTBOX_ID} role="listbox" className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
           {matches.length === 0 && (
             <li className="px-3 py-2 text-sm text-gray-500">
-              Nothing matches — <span className="font-medium text-gray-700">{value}</span> will be added as a new product name.
+              Nothing matches — <span className="font-medium text-gray-700">{value}</span> will be saved as typed.
             </li>
           )}
           {rows.map(({ s, heading }, i) => {
@@ -129,6 +129,11 @@ export function ProductNameField({ value, category, onChange, className }: {
               </li>
             )
           })}
+          {/* Where the list itself is edited — findable from the moment someone wonders why a name is
+              missing, rather than only from the catalog page. */}
+          <li className="sticky bottom-0 border-t border-gray-100 bg-white px-3 py-1.5">
+            <a href="/catalog/names" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Edit this list ↗</a>
+          </li>
         </ul>
       )}
     </div>

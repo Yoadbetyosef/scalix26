@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Package, Upload, Download, Trash2 } from 'lucide-react'
+import { Plus, Search, Package, Upload, Download, Trash2, ListChecks } from 'lucide-react'
 import { AVAILABILITY_LABELS, totalAvailable, type CatalogProduct, type AvailabilityStatus } from '@/lib/catalog/types'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -75,6 +75,7 @@ export default function CatalogListPage() {
           <a href="/api/catalog/export" className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken"><Download className="h-4 w-4" /> Export</a>
           <button onClick={() => fileRef.current?.click()} className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken"><Upload className="h-4 w-4" /> Import</button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = '' }} />
+          <Link href="/catalog/names" className="hidden md:inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken"><ListChecks className="h-4 w-4" /> Product names</Link>
           <Link href="/catalog/new" className="hidden md:inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink/90">
             <Plus className="h-4 w-4" /> Add product
           </Link>
