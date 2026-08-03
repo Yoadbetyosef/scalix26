@@ -71,19 +71,40 @@ export function truncate(str: string, length: number) {
 
 // Strip markdown so plain-text channels (SMS, WhatsApp, TTS) never show literal
 // formatting like **bold**, _italics_, `code`, # headers, or - bullets.
+//
+// This matters most for speech: a text-to-speech engine reads "**Albero**" out as "star star Albero
+// star star". Anything on its way to being spoken must come through here, and unpaired symbols get
+// swept too — a model that opens a bold and never closes it would otherwise still be read aloud.
 export function stripMarkdown(text: string): string {
   if (!text) return text
   return text
-    .replace(/`{1,3}([^`]*)`{1,3}/g, '$1')          // `code` / ```blocks```
+    .replace(/```[a-z]*\n?([\s\S]*?)```/gi, '$1')   // ```fenced blocks```
+    .replace(/`([^`]*)`/g, '$1')                    // `code`
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')       // ![image](url) → alt text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')        // [label](url) → label, never read the URL aloud
+    .replace(/(\*\*\*|___)(.*?)\1/g, '$2')          // ***bold italic***
     .replace(/(\*\*|__)(.*?)\1/g, '$2')             // **bold** / __bold__
     .replace(/(\*|_)(?=\S)(.*?\S)\1/g, '$2')        // *italic* / _italic_
+    .replace(/~~(.*?)~~/g, '$1')                    // ~~strikethrough~~
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')             // # headers
+    .replace(/^\s{0,3}>\s?/gm, '')                  // > blockquotes
     .replace(/^\s*[-*+]\s+/gm, '')                  // - * + bullets
     .replace(/^\s*\d+\.\s+/gm, '')                  // 1. 2. numbered lists
-    .replace(/[ \t]{2,}/g, ' ')                      // collapse extra spaces
-    .replace(/\n{3,}/g, '\n\n')                      // collapse blank lines
+    .replace(/^\s*([-*_])\s*(?:\1\s*){2,}$/gm, '')  // --- *** ___ horizontal rules
+    // Whatever emphasis markers survived the paired rules above were unbalanced. They are never
+    // meaningful in a spoken sentence, so they go rather than being read out.
+    .replace(/\*+/g, '')
+    .replace(/(^|\s)_+|_+(?=\s|$)/g, '$1')          // stray _ at a word edge; keeps snake_case intact
+    .replace(/[ \t]{2,}/g, ' ')                     // collapse extra spaces
+    .replace(/\n{3,}/g, '\n\n')                     // collapse blank lines
     .trim()
 }
+
+// The instruction every voice prompt carries. Stripping guarantees the text channels, but a live voice
+// agent (Deepgram) runs the model and the TTS inside itself — its words never pass through our code
+// before they are spoken, so for those the prompt is the only lever there is.
+export const NO_MARKDOWN_RULE =
+  'FORMATTING: You are being spoken aloud. Write plain spoken sentences only — never use asterisks, underscores, backticks, hashes, bullet points, numbered lists, or any markdown. Never write **bold**: it is read out loud as "star star". Say names and numbers plainly, as a person would on the phone.'
 
 // Social channels (Facebook/Instagram) store the platform user id in the
 // contact's `phone` field — it is NOT a real phone number.

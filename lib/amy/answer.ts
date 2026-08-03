@@ -1,4 +1,5 @@
 import { anthropic } from '@/lib/anthropic/client'
+import { stripMarkdown } from '@/lib/utils'
 import { createAdminClient } from '@/lib/supabase/server'
 import { amyTools, runTool } from './registry'
 import { getBusinessSnapshot } from './snapshot'
@@ -126,5 +127,7 @@ export async function answerAsAmy(opts: {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`[amy] answered via ${deepSearches === 0 ? 'snapshot' : `deep_search (${deepSearches} retrieval${deepSearches > 1 ? 's' : ''})`} · model=${model}`)
   }
-  return text || 'I gathered the data but couldn’t summarize it — try rephrasing the question.'
+  // Strip on the way out as well as instructing the model: this same answer is read aloud by the
+  // dashboard's text-to-speech, where a stray ** is pronounced "star star".
+  return stripMarkdown(text) || 'I gathered the data but couldn’t summarize it — try rephrasing the question.'
 }

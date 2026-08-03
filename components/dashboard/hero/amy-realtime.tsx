@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { X } from 'lucide-react'
 import { type AmyBriefing, TTS_VOICE, buildRealtimePrompt } from './ask-amy-shared'
+import { stripMarkdown } from '@/lib/utils'
 
 const PROXY_URL = process.env.NEXT_PUBLIC_AMY_REALTIME_URL || 'ws://localhost:8081'
 const DEBUG = process.env.NODE_ENV !== 'production'
@@ -234,7 +235,10 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
               stopPlayback(); setPhase('thinking'); break
             case 'ConversationText':
               if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking') }
-              else if (msg.role === 'assistant') { mk('agentFirstTranscript'); setAmyText(msg.content || '') }
+              // Stripped for display too. The prompt tells the agent not to format, but its words are
+              // spoken by Deepgram before we ever see them — so if one slips through, at least the
+              // owner doesn't also read the asterisks on screen.
+              else if (msg.role === 'assistant') { mk('agentFirstTranscript'); setAmyText(stripMarkdown(msg.content || '')) }
               break
             case 'AgentStartedSpeaking': agentSpeakingRef.current = true; resetGate(); setPhase('speaking'); break
             case 'AgentAudioDone': agentSpeakingRef.current = false; setPhase('live'); break

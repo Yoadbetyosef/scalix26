@@ -3,7 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
-import { stripMarkdown } from '@/lib/utils'
+import { stripMarkdown, NO_MARKDOWN_RULE } from '@/lib/utils'
 import { requestBaseUrl } from '@/lib/request-url'
 import { getBusinessTimezone } from '@/lib/timezone'
 import { currentDateContext } from '@/lib/appointments'
@@ -236,7 +236,9 @@ export async function POST(req: NextRequest) {
       const bookingRules = `APPOINTMENT BOOKING: The details you need are service, date, time, name, phone, and address. As the customer gives each one, remember it. NEVER ask for a detail the customer already gave or that you already confirmed — re-read the conversation before asking. Ask for only ONE missing detail at a time. Once you have all six, confirm the full booking once (service, date, time, name, phone, address) and stop asking.`
       const transferRule = `TRANSFERS: After booking an appointment or answering a routine question, DO NOT transfer the call — confirm the details once and let the call end normally. Only transfer to a human (transfer_to_human) when the caller EXPLICITLY asks to speak to a person.`
       const langCfg = voiceLangConfig(agent?.voice_language, agent?.voice)
-      let voiceSystemPrompt = `${DEFAULT_TONE}\n\n${langCfg.promptLine}\n\nSpeak naturally in full sentences. No lists, no markdown, no formatting symbols.\n\n${bookingRules}\n\n${transferRule}\n\n${baseVoicePrompt}`
+      // The live agent runs its own TTS, so anything we strip afterwards never reaches the caller's ear.
+      // NO_MARKDOWN_RULE is the whole defence on this path, and it's the wording every voice path shares.
+      let voiceSystemPrompt = `${DEFAULT_TONE}\n\n${langCfg.promptLine}\n\nSpeak naturally in full sentences.\n${NO_MARKDOWN_RULE}\n\n${bookingRules}\n\n${transferRule}\n\n${baseVoicePrompt}`
 
       // Informational opening hours (business_hours JSON) — so phone callers who ask
       // "what are your hours?" get a real answer. Mirrors the SMS/WhatsApp prompt
