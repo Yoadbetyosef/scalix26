@@ -7,6 +7,14 @@ import { canSendForApproval, canSendToProduction, type OrderStage, type Approval
 interface Approval { id: string; approvalType: ApprovalType; recipientEmail: string; status: string; version: number; respondedAt: string | null; responseComment: string | null; estimatedCompletionDate: string | null; createdAt: string }
 interface Att { id: string; fileName: string; visibility: 'internal' | 'public' }
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
+// A response should read at a glance: approved is settled, anything else needs her.
+const STATUS_TINT: Record<string, string> = {
+  approved: 'bg-emerald-100 text-emerald-800',
+  changes_requested: 'bg-amber-100 text-amber-800',
+  rejected: 'bg-red-100 text-red-800',
+  sent: 'bg-blue-50 text-blue-700', opened: 'bg-blue-50 text-blue-700',
+  revoked: 'bg-gray-100 text-gray-500', expired: 'bg-gray-100 text-gray-500',
+}
 
 export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; stage: OrderStage; prefill: { factoryName: string | null; factoryEmail: string | null; customerName: string | null; customerEmail: string | null } }) {
   const router = useRouter()
@@ -62,12 +70,23 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
       {approvals.length > 0 && (
         <ul className="mt-3 space-y-1.5 text-sm">
           {approvals.map((ap) => (
-            <li key={ap.id} className="flex flex-wrap items-center gap-2 text-gray-600">
-              <span className="capitalize text-gray-900">{ap.approvalType}</span>
-              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px]">{ap.status.replace('_', ' ')} · v{ap.version}</span>
-              <span className="text-xs text-gray-400">{ap.recipientEmail}</span>
-              {ap.estimatedCompletionDate && <span className="text-xs text-gray-400">· est {ap.estimatedCompletionDate}</span>}
-              {['sent', 'opened'].includes(ap.status) && <button onClick={() => revoke(ap.id)} className="ml-auto text-xs text-red-600 underline">Revoke</button>}
+            <li key={ap.id}>
+              <div className="flex flex-wrap items-center gap-2 text-gray-600">
+                <span className="capitalize text-gray-900">{ap.approvalType}</span>
+                <span className={`rounded px-1.5 py-0.5 text-[11px] ${STATUS_TINT[ap.status] ?? 'bg-gray-100 text-gray-700'}`}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
+                <span className="text-xs text-gray-400">{ap.recipientEmail}</span>
+                {ap.estimatedCompletionDate && <span className="text-xs text-gray-400">· est {ap.estimatedCompletionDate}</span>}
+                {ap.respondedAt && <span className="text-xs text-gray-400">· {new Date(ap.respondedAt).toLocaleString()}</span>}
+                {['sent', 'opened'].includes(ap.status) && <button onClick={() => revoke(ap.id)} className="ml-auto text-xs text-red-600 underline">Revoke</button>}
+              </div>
+              {/* What they actually said. It was being fetched and never shown, so a "changes requested"
+                  gave no clue WHAT to change without going to find the notification email. */}
+              {ap.responseComment && (
+                <blockquote className={`mt-1 rounded-lg border-l-2 px-3 py-2 text-sm ${ap.status === 'approved' ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-amber-400 bg-amber-50 text-amber-900'}`}>
+                  <span className="mr-1 text-xs font-medium capitalize opacity-70">{ap.approvalType} said:</span>
+                  <span className="whitespace-pre-wrap">{ap.responseComment}</span>
+                </blockquote>
+              )}
             </li>
           ))}
         </ul>

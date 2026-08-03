@@ -38,7 +38,8 @@ const SPEC = {
   metal_karat: '18K Rose Gold',
 }
 
-let orderId, reqId, attId, storagePath
+let orderId, reqId
+const uploaded = []   // { attId, storagePath, fileName }
 try {
   const tenants = await (await rest('tenants?select=id,business_name,enabled_modules&enabled_modules=cs.{orders}')).json()
   const tg = tenants.find((t) => t.business_name === 'TG jewellers')
@@ -60,18 +61,20 @@ try {
   }) })).json()
   ok('created line item carrying the full jewelry spec', true)
 
-  // Real upload into the private bucket, then a public-visibility metadata row linked to the request.
-  storagePath = `${tg.id}/${orderId}/${crypto.randomUUID()}.png`
-  const up = await fetch(`${SB}/storage/v1/object/order-attachments/${storagePath}`, {
-    method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'content-type': 'image/png' }, body: PNG,
-  })
-  ok(`uploaded a real PNG into the private bucket (${up.status})`, up.ok)
-  const [att] = await (await rest('order_attachments', { method: 'POST', body: JSON.stringify({
-    tenant_id: tg.id, order_id: orderId, storage_path: storagePath, file_name: 'reference-sketch.png',
-    mime_type: 'image/png', file_size: PNG.length, visibility: 'public', uploaded_by: 'smoke-test',
-  }) })).json()
-  attId = att.id
-  ok('attachment marked "shared on approval"', !!attId)
+  // TWO real uploads — the case described: she attaches a couple of reference photos.
+  for (const fileName of ['reference-sketch.png', 'stone-closeup.png']) {
+    const storagePath = `${tg.id}/${orderId}/${crypto.randomUUID()}.png`
+    const up = await fetch(`${SB}/storage/v1/object/order-attachments/${storagePath}`, {
+      method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'content-type': 'image/png' }, body: PNG,
+    })
+    ok(`uploaded ${fileName} into the private bucket (${up.status})`, up.ok)
+    const [att] = await (await rest('order_attachments', { method: 'POST', body: JSON.stringify({
+      tenant_id: tg.id, order_id: orderId, storage_path: storagePath, file_name: fileName,
+      mime_type: 'image/png', file_size: PNG.length, visibility: 'public', uploaded_by: 'smoke-test',
+    }) })).json()
+    uploaded.push({ attId: att.id, storagePath, fileName })
+  }
+  ok('both attachments stored as "shared on approval"', uploaded.length === 2)
 
   const [req] = await (await rest('order_approval_requests', { method: 'POST', body: JSON.stringify({
     tenant_id: tg.id, order_id: orderId, approval_type: 'factory', recipient_name: 'Test Factory',
@@ -81,9 +84,9 @@ try {
   }) })).json()
   reqId = req.id
   ok('created sent approval request', !!reqId)
-  await (await rest('order_approval_attachments', { method: 'POST', body: JSON.stringify({
-    tenant_id: tg.id, approval_request_id: reqId, attachment_id: attId, display_order: 0,
-  }) })).json()
+  await (await rest('order_approval_attachments', { method: 'POST', body: JSON.stringify(
+    uploaded.map((u, i) => ({ tenant_id: tg.id, approval_request_id: reqId, attachment_id: u.attId, display_order: i })),
+  ) })).json()
 
   // ── The actual test: fetch the deployed page exactly as the factory would ──────────────────────────
   const res = await fetch(`${APP}/approval/${token}`, { redirect: 'manual' })
@@ -99,8 +102,10 @@ try {
   ]) ok(`${label} "${value}" is on the page`, html.includes(value))
 
   console.log('\n  — reference image (the other reported bug) —')
-  const imgMatch = html.match(/<img[^>]+src="([^"]*\/api\/approval\/[^"]*)"/)
-  ok('an <img> tag renders the attachment inline', !!imgMatch)
+  const imgs = [...html.matchAll(/<img[^>]+src="([^"]*\/api\/approval\/[^"]*)"/g)].map((m) => m[1])
+  ok(`BOTH images render inline (found ${imgs.length})`, imgs.length === 2)
+  for (const u of uploaded) ok(`"${u.fileName}" is named on the page`, html.includes(u.fileName))
+  const imgMatch = imgs.length ? [null, imgs[0]] : null
   // The src must be our token-scoped proxy — never a storage URL, which embeds tenant/order ids.
   ok('the image src is the proxy, not a storage URL', !!imgMatch && !/supabase|order-attachments/.test(imgMatch[1]))
   if (imgMatch) {
@@ -113,9 +118,8 @@ try {
   const bogus = await fetch(`${APP}/api/approval/${token}/file/00000000-0000-0000-0000-000000000000`)
   ok(`an unlinked attachment id is 404 (${bogus.status})`, bogus.status === 404)
   // And the real file must not be reachable with a bad token.
-  const badTok = await fetch(`${APP}/api/approval/${randomBytes(32).toString('base64url')}/file/${attId}`)
+  const badTok = await fetch(`${APP}/api/approval/${randomBytes(32).toString('base64url')}/file/${uploaded[0].attId}`)
   ok(`the file is unreachable with a wrong token (${badTok.status})`, badTok.status === 404)
-  ok('the file name is shown', html.includes('reference-sketch.png'))
 
   console.log('\n  — nothing internal leaks —')
   ok('no internal note', !html.includes(INTERNAL_SECRET))
@@ -128,8 +132,10 @@ try {
   console.error('ERROR:', e.message); fail++
 } finally {
   if (reqId) { await del(`order_approval_attachments?approval_request_id=eq.${reqId}`); await del(`order_approval_requests?id=eq.${reqId}`) }
-  if (attId) await del(`order_attachments?id=eq.${attId}`)
-  if (storagePath) await fetch(`${SB}/storage/v1/object/order-attachments/${storagePath}`, { method: 'DELETE', headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } })
+  for (const u of uploaded) {
+    await del(`order_attachments?id=eq.${u.attId}`)
+    await fetch(`${SB}/storage/v1/object/order-attachments/${u.storagePath}`, { method: 'DELETE', headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } })
+  }
   if (orderId) { await del(`order_line_items?order_id=eq.${orderId}`); await del(`order_events?order_id=eq.${orderId}`); await del(`orders?id=eq.${orderId}`) }
   console.log('\n  (cleaned up every test row and the storage object)')
 }
