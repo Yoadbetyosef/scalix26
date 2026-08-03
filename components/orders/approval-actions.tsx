@@ -27,7 +27,10 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
 
   const openModal = (type: ApprovalType) => {
     setErr(null)
-    setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: [] })
+    // Every shared file starts ticked. Sending the piece's reference photos is the normal case; leaving
+    // one out should be the deliberate act, not remembering to include it.
+    const shared = atts.filter((a) => a.visibility === 'public').map((a) => a.id)
+    setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: shared })
     setOpen(type)
   }
   const send = async () => {

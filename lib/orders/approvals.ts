@@ -3,7 +3,7 @@ import { requireActiveBusinessContext } from '@/lib/workspace'
 import { sendEmail } from '@/lib/email/send'
 import { generateApprovalToken, hashToken, looksLikeToken } from './approval-token'
 import { INVOICE_EXTENSIONS, MAX_INVOICE_BYTES, extensionOf } from './attachment-types'
-import { signedUrlFor, ORDER_BUCKET } from './attachments'
+import { ORDER_BUCKET } from './attachments'
 import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
 import { approvalEmailHtml, deliveryRequestEmailHtml } from './approval-email'
 import type { PublicOrderView } from './types'
@@ -103,7 +103,10 @@ export async function revokeApproval(requestId: string): Promise<boolean> {
 export interface PublicApprovalView {
   businessName: string; approvalType: ApprovalType; status: string; recipientName: string | null
   deadline: string | null; canRespond: boolean; order: PublicOrderView
-  attachments: Array<{ fileName: string; mimeType: string; url: string | null }>
+  // `url` points at our own token-scoped proxy, never at storage directly: a Supabase signed URL embeds
+  // the object path, which is `<tenant_id>/<order_id>/<uuid>`, and would hand both internal ids to an
+  // external factory on every image it renders.
+  attachments: Array<{ id: string; fileName: string; mimeType: string; url: string }>
   existingResponse: { comment: string | null; estimatedCompletionDate: string | null } | null
   // Factory-only production hand-off: once the order is in production, the same link lets the factory
   // upload an invoice and mark the item ready. Set only for factory tokens.
@@ -146,8 +149,11 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const attIds = (attRows ?? []).map((a) => a.attachment_id as string)
   let attachments: PublicApprovalView['attachments'] = []
   if (attIds.length) {
-    const { data: atts } = await sb.from('order_attachments').select('file_name, mime_type, storage_path, visibility').in('id', attIds).eq('visibility', 'public')
-    attachments = await Promise.all((atts ?? []).map(async (a) => ({ fileName: a.file_name as string, mimeType: a.mime_type as string, url: await signedUrlFor(a.storage_path as string, 600) })))
+    const { data: atts } = await sb.from('order_attachments').select('id, file_name, mime_type, visibility').in('id', attIds).eq('visibility', 'public')
+    attachments = (atts ?? []).map((a) => ({
+      id: a.id as string, fileName: a.file_name as string, mimeType: a.mime_type as string,
+      url: `/api/approval/${encodeURIComponent(rawToken)}/file/${a.id as string}`,
+    }))
   }
 
   const publicOrder: PublicOrderView = {
@@ -176,6 +182,26 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     canSubmitDelivery: isFactory && orderStage === 'production',
     deliverySubmitted: isFactory && ['ready', 'delivered', 'completed'].includes(orderStage),
   }
+}
+
+// Resolve one attachment for a token holder, for the proxy route that streams it. The token is the only
+// credential, so every condition is re-checked here rather than trusted from the URL: the request must be
+// live, the attachment must be linked to THAT request, and it must be public-visibility.
+export async function attachmentForToken(rawToken: string, attachmentId: string): Promise<{ storagePath: string; fileName: string; mimeType: string } | null> {
+  const r = await findByToken(rawToken)
+  if (!r) return null
+  if (['revoked', 'draft'].includes(r.status as string) || isExpired(r)) return null
+
+  const sb = createAdminClient()
+  const { data: link } = await sb.from('order_approval_attachments')
+    .select('attachment_id').eq('approval_request_id', r.id as string).eq('attachment_id', attachmentId).maybeSingle()
+  if (!link) return null
+
+  const { data: att } = await sb.from('order_attachments')
+    .select('storage_path, file_name, mime_type, visibility')
+    .eq('id', attachmentId).eq('tenant_id', r.tenant_id as string).maybeSingle()
+  if (!att || att.visibility !== 'public') return null
+  return { storagePath: att.storage_path as string, fileName: att.file_name as string, mimeType: att.mime_type as string }
 }
 
 export async function recordApprovalResponse(rawToken: string, decision: ApprovalDecision, comment: string | null, estCompletionDate: string | null): Promise<{ ok: boolean; error?: string }> {

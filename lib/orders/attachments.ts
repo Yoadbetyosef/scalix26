@@ -47,7 +47,11 @@ export async function uploadAttachment(orderId: string, file: File): Promise<{ o
   const buf = Buffer.from(await file.arrayBuffer())
   const up = await createAdminClient().storage.from(ORDER_BUCKET).upload(path, buf, { contentType: storedType, upsert: false })
   if (up.error) return { ok: false, error: up.error.message }
-  const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: storedType, file_size: file.size, uploaded_by: c.actorUserId, visibility: 'internal' }).select('*').single()
+  // Shared by default. A file the jeweller attaches to an order IS the reference material for the piece —
+  // defaulting it to internal meant the photo the factory most needed sat on the order unseen, behind a
+  // second action that was easy to miss. Anything genuinely private is one click to make internal.
+  // (The factory's own invoice upload stays internal — see submitFactoryDelivery.)
+  const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: storedType, file_size: file.size, uploaded_by: c.actorUserId, visibility: 'public' }).select('*').single()
   if (error) { await createAdminClient().storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: error.message } }
   await addEvent(orderId, 'attachment_added', { fileName: file.name })
   return { ok: true, attachment: row(data as Record<string, unknown>) }

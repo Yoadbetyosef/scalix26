@@ -117,7 +117,7 @@ export function AttachmentsPanel({ orderId }: { orderId: string }) {
           ))}
         </ul>
       )}
-      <p className="mt-2 text-[11px] text-gray-400">Only files marked “Shared on approval” appear on the external approval page. The bucket is private; links are short-lived.</p>
+      <p className="mt-2 text-[11px] text-gray-400">Files you upload are shared on the approval page by default — click “Make internal” to keep one to yourself. Storage is private throughout; the approval page serves files through a short-lived, token-scoped link.</p>
     </div>
   )
 }
