@@ -42,6 +42,10 @@ export function OrderOptionsManager() {
   if (loading) return <div className="flex items-center gap-2 p-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
   if (err) return <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>
 
+  // No lists at all — offer a starter set for the trade, or a blank list to build from scratch. This is
+  // the only path that ever creates lists, so nothing is assumed about what business this is.
+  if (!lists.length) return <EmptyState onChanged={load} />
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-600">
@@ -50,6 +54,106 @@ export function OrderOptionsManager() {
       </p>
       <div className="grid gap-4 lg:grid-cols-2">
         {lists.map((list) => <ListCard key={`${list.id}-${version}`} list={list} onChanged={load} />)}
+      </div>
+      <NewListButton onChanged={load} />
+    </div>
+  )
+}
+
+interface TemplateInfo { id: string; name: string; description: string; lists: Array<{ label: string; count: number }> }
+
+function EmptyState({ onChanged }: { onChanged: () => void }) {
+  const [templates, setTemplates] = useState<TemplateInfo[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const r = await fetch('/api/orders/options/lists')
+        if (!alive || !r.ok) return
+        setTemplates((await r.json()).templates ?? [])
+      } catch { /* the blank-list path below still works without templates */ }
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const apply = async (id: string) => {
+    setBusy(id); setErr(null)
+    try {
+      const r = await fetch('/api/orders/options/lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ template: id }) })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not set that up.')
+      onChanged()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6">
+        <h3 className="text-sm font-semibold text-gray-900">No dropdowns yet</h3>
+        <p className="mt-1 text-sm text-gray-600">
+          Start from a set built for your trade, or make your own list from scratch. Either way everything stays
+          yours to rename, reorder and delete afterwards.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {templates.map((t) => (
+            <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-3">
+              <p className="text-sm font-semibold text-gray-900">{t.name}</p>
+              <p className="mt-0.5 text-xs text-gray-500">{t.description}</p>
+              <p className="mt-2 text-xs text-gray-400">{t.lists.map((l) => `${l.label} (${l.count})`).join(' · ')}</p>
+              <button onClick={() => apply(t.id)} disabled={!!busy} className="mt-3 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
+                {busy === t.id ? 'Setting up…' : `Use ${t.name}`}
+              </button>
+            </div>
+          ))}
+        </div>
+        {err && <p className="mt-3 text-xs text-red-600">{err}</p>}
+      </div>
+      <NewListButton onChanged={onChanged} />
+    </div>
+  )
+}
+
+// Create an empty list of the tenant's own — the path that makes this work for a trade with no template.
+function NewListButton({ onChanged }: { onChanged: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [label, setLabel] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const create = async () => {
+    if (!label.trim()) return
+    setBusy(true); setErr(null)
+    try {
+      const r = await fetch('/api/orders/options/lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label }) })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not create that list.')
+      setLabel(''); setOpen(false); onChanged()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+        <Plus className="h-3.5 w-3.5" /> New dropdown list
+      </button>
+    )
+  }
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <label className="block text-xs text-gray-500">
+        What is this list called?
+        <input
+          value={label} onChange={(e) => setLabel(e.target.value)} autoFocus
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create() } if (e.key === 'Escape') setOpen(false) }}
+          placeholder="e.g. Lock type, Wood species, Fabric grade"
+          className="mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
+        />
+      </label>
+      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+      <div className="mt-2 flex gap-2">
+        <button onClick={create} disabled={busy || !label.trim()} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">{busy ? 'Creating…' : 'Create'}</button>
+        <button onClick={() => { setOpen(false); setErr(null) }} disabled={busy} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
       </div>
     </div>
   )
@@ -62,6 +166,9 @@ function ListCard({ list, onChanged }: { list: OrderOptionList; onChanged: () =>
   // Optimistic local order so a move feels instant; the server call follows. Seeded once from props —
   // the parent remounts this card (keyed on its reload version) whenever fresh data arrives.
   const [options, setOptions] = useState<OrderOption[]>(list.options)
+  const [renaming, setRenaming] = useState(false)
+  const [listLabel, setListLabel] = useState(list.label)
+  const [confirmDeleteList, setConfirmDeleteList] = useState(false)
 
   const call = async (fn: () => Promise<Response>, refresh = true) => {
     setBusy(true); setErr(null)
@@ -90,9 +197,32 @@ function ListCard({ list, onChanged }: { list: OrderOptionList; onChanged: () =>
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">{list.label}</h3>
-        <span className="text-xs text-gray-400">{options.filter((o) => o.active).length} in use</span>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        {renaming ? (
+          <input
+            value={listLabel} onChange={(e) => setListLabel(e.target.value)} autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { setRenaming(false); if (listLabel.trim() && listLabel !== list.label) call(() => fetch(`/api/orders/options/lists/${list.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: listLabel }) })) }
+              if (e.key === 'Escape') { setListLabel(list.label); setRenaming(false) }
+            }}
+            onBlur={() => { setRenaming(false); setListLabel(list.label) }}
+            className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-semibold"
+          />
+        ) : (
+          <h3 className="flex-1 text-sm font-semibold text-gray-900">{list.label}</h3>
+        )}
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="text-xs text-gray-400">{options.filter((o) => o.active).length} in use</span>
+          <button onClick={() => setRenaming(true)} disabled={busy} className="text-gray-300 hover:text-gray-700" title="Rename this list"><Pencil className="h-3.5 w-3.5" /></button>
+          {confirmDeleteList ? (
+            <span className="flex items-center gap-1">
+              <button onClick={() => call(() => fetch(`/api/orders/options/lists/${list.id}`, { method: 'DELETE' }))} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white">Delete list</button>
+              <button onClick={() => setConfirmDeleteList(false)} className="text-[10px] text-gray-500">Cancel</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmDeleteList(true)} disabled={busy} className="text-gray-300 hover:text-red-600" title="Delete this whole list"><Trash2 className="h-3.5 w-3.5" /></button>
+          )}
+        </span>
       </div>
 
       <ul className="divide-y divide-gray-100">
