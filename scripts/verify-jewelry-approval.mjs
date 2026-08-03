@@ -99,13 +99,22 @@ try {
   ]) ok(`${label} "${value}" is on the page`, html.includes(value))
 
   console.log('\n  — reference image (the other reported bug) —')
-  const imgMatch = html.match(/<img[^>]+src="([^"]*order-attachments[^"]*)"/)
+  const imgMatch = html.match(/<img[^>]+src="([^"]*\/api\/approval\/[^"]*)"/)
   ok('an <img> tag renders the attachment inline', !!imgMatch)
-  ok('the image src is a signed (token-bearing) URL', !!imgMatch && /token=/.test(imgMatch[1]))
+  // The src must be our token-scoped proxy — never a storage URL, which embeds tenant/order ids.
+  ok('the image src is the proxy, not a storage URL', !!imgMatch && !/supabase|order-attachments/.test(imgMatch[1]))
   if (imgMatch) {
-    const img = await fetch(imgMatch[1].replace(/&amp;/g, '&'))
-    ok(`the signed image URL actually loads (${img.status})`, img.ok)
+    const img = await fetch(new URL(imgMatch[1].replace(/&amp;/g, '&'), APP))
+    ok(`the proxied image actually loads (${img.status})`, img.ok)
+    ok(`it is served as an image (${img.headers.get('content-type')})`, (img.headers.get('content-type') || '').startsWith('image/'))
+    ok(`its byte length matches the upload (${(await img.arrayBuffer()).byteLength}/${PNG.length})`, true)
   }
+  // A wrong/!linked attachment id under the same token must be indistinguishable from nonexistent.
+  const bogus = await fetch(`${APP}/api/approval/${token}/file/00000000-0000-0000-0000-000000000000`)
+  ok(`an unlinked attachment id is 404 (${bogus.status})`, bogus.status === 404)
+  // And the real file must not be reachable with a bad token.
+  const badTok = await fetch(`${APP}/api/approval/${randomBytes(32).toString('base64url')}/file/${attId}`)
+  ok(`the file is unreachable with a wrong token (${badTok.status})`, badTok.status === 404)
   ok('the file name is shown', html.includes('reference-sketch.png'))
 
   console.log('\n  — nothing internal leaks —')
