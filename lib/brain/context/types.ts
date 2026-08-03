@@ -11,6 +11,13 @@ export interface ContextRequest {
   channel: string // 'sms' | 'voice' | 'email' | 'instagram' | 'facebook' | 'whatsapp' | 'chat'
   query: string // the customer's latest message — drives intent detection
   contactId?: string | null // the identified customer, if known (customer-scoped data must never leak across customers)
+  // WHO is asking. 'customer' — the default, and what every inbound channel is — keeps the strict
+  // per-customer isolation the providers are built around. 'owner' is the business itself asking about
+  // its own operation from the dashboard, where a view across all records is the entire point.
+  //
+  // Defaulted to 'customer' deliberately: a caller that forgets to set this stays isolated, so opening
+  // data up is always an explicit act rather than an oversight.
+  audience?: 'owner' | 'customer'
 }
 
 export interface ContextResult {

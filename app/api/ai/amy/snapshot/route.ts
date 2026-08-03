@@ -33,8 +33,11 @@ export async function GET() {
     buildSnapshot(ctx),
     getBusinessTimezone(tenant.id),
     assembleBusinessContext(
-      { tenantId: tenant.id, agentId: null, channel: 'voice', query: '', essentialsOnly: true, contactId: null },
-      { include: ['catalog'] }, // force catalog + always-on business hours/location into the grounding
+      // audience:'owner' — this grounds the OWNER's own dashboard agent, not an inbound customer call.
+      { tenantId: tenant.id, agentId: null, channel: 'voice', query: '', essentialsOnly: true, contactId: null, audience: 'owner' },
+      // Force catalog AND orders in. The voice agent can't call tools mid-conversation, so whatever is
+      // absent here it simply does not know — which is why it kept asking where the orders are kept.
+      { include: ['catalog', 'orders'] },
     ).catch(() => ''),
   ])
   const snapshot = [currentDateContext(tz), live.text, bizContext, detail].filter(Boolean).join('\n\n')

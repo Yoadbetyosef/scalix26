@@ -52,7 +52,9 @@ export async function answerAsAmy(opts: {
   const [snapshot, tz, bizContext] = await Promise.all([
     getBusinessSnapshot(ctx),
     getBusinessTimezone(opts.tenantId),
-    assembleBusinessContext({ tenantId: opts.tenantId, agentId: null, channel: 'chat', query: opts.question, contactId: null }).catch(() => ''),
+    // audience:'owner' — this is the business asking about itself from its own dashboard, so providers
+    // return the across-the-board view rather than the per-customer one every inbound channel gets.
+    assembleBusinessContext({ tenantId: opts.tenantId, agentId: null, channel: 'chat', query: opts.question, contactId: null, audience: 'owner' }).catch(() => ''),
   ])
   const dateContext = currentDateContext(tz) // authoritative "today" — Amy had no date anchor before
   const bizBlock = bizContext ? `\nLIVE BUSINESS DATA (products/pricing/stock, orders, business hours, payments): answer these directly from here; if a detail isn't shown, say it's not available — never invent it.\n${bizContext}\n` : ''
