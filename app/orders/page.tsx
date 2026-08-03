@@ -20,6 +20,7 @@ export default async function OrdersPage() {
           <p className="text-sm text-gray-500">{orders.length} order{orders.length === 1 ? '' : 's'}</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/settings/options" className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Dropdowns</Link>
           <Link href="/orders/board" className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Board</Link>
           <Link href="/orders/new" className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800">+ New Order</Link>
         </div>

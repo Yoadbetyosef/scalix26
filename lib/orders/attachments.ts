@@ -1,16 +1,17 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
+import { ALLOWED_EXTENSIONS, MAX_ATTACHMENT_BYTES, extensionOf } from './attachment-types'
 import { addEvent } from './store'
 
 // Private order attachments. The bucket is never public; files are reached only via short-lived signed URLs
 // generated server-side. Metadata is RLS tenant-scoped; storage paths are prefixed by tenant + order.
 
 export const ORDER_BUCKET = 'order-attachments'
-export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
-export const ALLOWED_MIME: Record<string, string> = {
-  'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
-  'application/pdf': 'pdf',
-}
+
+// Size caps and the extension allowlist live in ./attachment-types (isomorphic) so the upload UI can
+// enforce exactly the same rules — this module reaches next/headers and can't be imported by a client.
+export { ALLOWED_EXTENSIONS, ACCEPT_ATTR, MAX_ATTACHMENT_BYTES, INVOICE_EXTENSIONS, MAX_INVOICE_BYTES } from './attachment-types'
+
 export type Visibility = 'internal' | 'public'
 export interface OrderAttachment { id: string; orderId: string; storagePath: string; fileName: string; mimeType: string; fileSize: number; visibility: Visibility; uploadedBy: string | null; createdAt: string }
 
@@ -31,19 +32,22 @@ export async function signedUrlFor(storagePath: string, expiresIn = 300): Promis
 
 export async function uploadAttachment(orderId: string, file: File): Promise<{ ok: boolean; error?: string; attachment?: OrderAttachment }> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
-  const ext = ALLOWED_MIME[file.type]
-  if (!ext) return { ok: false, error: `Unsupported file type (${file.type || 'unknown'}). Use PNG, JPG, WEBP, GIF or PDF.` }
-  if (file.size > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'File too large (max 20MB).' }
+  const ext = extensionOf(file.name)
+  const storedType = ALLOWED_EXTENSIONS[ext]
+  if (!storedType) return { ok: false, error: `Can't accept a .${ext || 'unknown'} file. Photos, PDFs, videos and CAD files (STL, OBJ, 3DM, STEP, ZIP…) are all supported.` }
+  if (file.size > MAX_ATTACHMENT_BYTES) return { ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(0)} MB — the limit is ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB.` }
   // Confirm the order belongs to this tenant before writing anything.
   const sb = await createClient()
   const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
   if (!order) return { ok: false, error: 'not found' }
 
+  // Stored under our own content type, never the browser's claim — the uploader doesn't get to decide
+  // how the file is served back.
   const path = `${c.tenantId}/${orderId}/${crypto.randomUUID()}.${ext}`
   const buf = Buffer.from(await file.arrayBuffer())
-  const up = await createAdminClient().storage.from(ORDER_BUCKET).upload(path, buf, { contentType: file.type, upsert: false })
+  const up = await createAdminClient().storage.from(ORDER_BUCKET).upload(path, buf, { contentType: storedType, upsert: false })
   if (up.error) return { ok: false, error: up.error.message }
-  const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: file.type, file_size: file.size, uploaded_by: c.actorUserId, visibility: 'internal' }).select('*').single()
+  const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: storedType, file_size: file.size, uploaded_by: c.actorUserId, visibility: 'internal' }).select('*').single()
   if (error) { await createAdminClient().storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: error.message } }
   await addEvent(orderId, 'attachment_added', { fileName: file.name })
   return { ok: true, attachment: row(data as Record<string, unknown>) }

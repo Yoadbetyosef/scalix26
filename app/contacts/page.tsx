@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Users, Phone, Mail, MessageCircle, ChevronRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ContactActions } from '@/components/contacts/new-contact'
 import { formatDate, isSocialChannel } from '@/lib/utils'
 
 // Soft channel tint for contact avatars — a quiet touch of life, the channel color
@@ -40,11 +41,13 @@ export default async function ContactsPage() {
           <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Contacts</h1>
           <p className="text-sm text-muted mt-1">{contacts?.length || 0} total contacts</p>
         </div>
+        <ContactActions />
       </div>
 
       {!contacts?.length ? (
         <EmptyState icon={Users} title="Your address book builds itself">
           Every person your AI talks to — across calls, texts, email, and social — is saved here automatically, with their full history.
+          Use <strong>New contact</strong> to add someone by hand, or <strong>Import file</strong> to bring in a whole list at once.
         </EmptyState>
       ) : (
         <>

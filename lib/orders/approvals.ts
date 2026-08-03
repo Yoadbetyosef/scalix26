@@ -2,7 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { sendEmail } from '@/lib/email/send'
 import { generateApprovalToken, hashToken, looksLikeToken } from './approval-token'
-import { signedUrlFor, ALLOWED_MIME, MAX_ATTACHMENT_BYTES, ORDER_BUCKET } from './attachments'
+import { INVOICE_EXTENSIONS, MAX_INVOICE_BYTES, extensionOf } from './attachment-types'
+import { signedUrlFor, ORDER_BUCKET } from './attachments'
 import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
 import { approvalEmailHtml, deliveryRequestEmailHtml } from './approval-email'
 import type { PublicOrderView } from './types'
@@ -137,7 +138,9 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   }
 
   const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes, stage').eq('id', r.order_id as string).maybeSingle()
-  const { data: lines } = await sb.from('order_line_items').select('product_name, description, quantity, measurements, color, material, custom_spec').eq('order_id', r.order_id as string).order('display_order')
+  // Jewelry specs are part of the safe projection: the factory can't approve a piece it can't see the
+  // stone, shape and metal for. Pricing and internal notes remain excluded.
+  const { data: lines } = await sb.from('order_line_items').select('product_name, description, quantity, measurements, color, material, custom_spec, stone_quality, stone_color, stone_origin, stone_type, center_stone_shape, side_stone_shape, center_stone_carat, side_stone_carat_total, metal_karat').eq('order_id', r.order_id as string).order('display_order')
   const { data: tenant } = await sb.from('tenants').select('business_name').eq('id', r.tenant_id as string).maybeSingle()
   const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
   const attIds = (attRows ?? []).map((a) => a.attachment_id as string)
@@ -150,7 +153,15 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const publicOrder: PublicOrderView = {
     orderNumber: (order?.order_number as string) ?? '', customerName: (order?.customer_name as string) ?? null,
     requestedCompletionDate: (order?.requested_completion_date as string) ?? null, publicNotes: (order?.public_notes as string) ?? null,
-    lineItems: ((lines as Array<Record<string, unknown>>) ?? []).map((l) => ({ productName: l.product_name as string, description: (l.description as string) ?? null, quantity: Number(l.quantity ?? 1), measurements: (l.measurements as string) ?? null, color: (l.color as string) ?? null, material: (l.material as string) ?? null, customSpec: (l.custom_spec as string) ?? null })),
+    lineItems: ((lines as Array<Record<string, unknown>>) ?? []).map((l) => ({
+      productName: l.product_name as string, description: (l.description as string) ?? null, quantity: Number(l.quantity ?? 1),
+      measurements: (l.measurements as string) ?? null, color: (l.color as string) ?? null, material: (l.material as string) ?? null, customSpec: (l.custom_spec as string) ?? null,
+      stoneQuality: (l.stone_quality as string) ?? null, stoneColor: (l.stone_color as string) ?? null, stoneOrigin: (l.stone_origin as string) ?? null, stoneType: (l.stone_type as string) ?? null,
+      centerStoneShape: (l.center_stone_shape as string) ?? null, sideStoneShape: (l.side_stone_shape as string) ?? null,
+      centerStoneCarat: l.center_stone_carat == null ? null : Number(l.center_stone_carat),
+      sideStoneCaratTotal: l.side_stone_carat_total == null ? null : Number(l.side_stone_carat_total),
+      metalKarat: (l.metal_karat as string) ?? null,
+    })),
   }
   const responded = ['approved', 'changes_requested', 'rejected'].includes(r.status as string)
   const orderStage = (order?.stage as OrderStage) ?? 'new'
@@ -209,9 +220,12 @@ export async function submitFactoryDelivery(rawToken: string, file: File): Promi
   if (!r) return { ok: false, error: 'This link is invalid or has expired.' }
   if (['revoked', 'draft'].includes(r.status as string) || isExpired(r)) return { ok: false, error: 'This link is no longer available.' }
   if ((r.approval_type as ApprovalType) !== 'factory') return { ok: false, error: 'This action is not available.' }
-  const ext = ALLOWED_MIME[file.type]
-  if (!ext) return { ok: false, error: `Unsupported file type (${file.type || 'unknown'}). Use PNG, JPG, WEBP, GIF or PDF.` }
-  if (file.size > MAX_ATTACHMENT_BYTES) return { ok: false, error: 'File too large (max 20MB).' }
+  // Extension-based, and narrower than the tenant-side allowlist — this endpoint is reachable with only
+  // a token, so it accepts invoice documents and photos and nothing else.
+  const ext = extensionOf(file.name)
+  const storedType = INVOICE_EXTENSIONS[ext]
+  if (!storedType) return { ok: false, error: `Unsupported file type (.${ext || 'unknown'}). Upload the invoice as a PDF or a photo.` }
+  if (file.size > MAX_INVOICE_BYTES) return { ok: false, error: `File too large (max ${MAX_INVOICE_BYTES / 1024 / 1024}MB).` }
 
   const sb = createAdminClient()
   const tenantId = r.tenant_id as string, orderId = r.order_id as string
@@ -222,9 +236,9 @@ export async function submitFactoryDelivery(rawToken: string, file: File): Promi
   // Store the invoice in the private bucket (same path convention as tenant-side uploads).
   const path = `${tenantId}/${orderId}/${crypto.randomUUID()}.${ext}`
   const buf = Buffer.from(await file.arrayBuffer())
-  const up = await sb.storage.from(ORDER_BUCKET).upload(path, buf, { contentType: file.type, upsert: false })
+  const up = await sb.storage.from(ORDER_BUCKET).upload(path, buf, { contentType: storedType, upsert: false })
   if (up.error) return { ok: false, error: up.error.message }
-  const { error: insErr } = await sb.from('order_attachments').insert({ tenant_id: tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: file.type, file_size: file.size, uploaded_by: 'factory', visibility: 'internal' })
+  const { error: insErr } = await sb.from('order_attachments').insert({ tenant_id: tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: storedType, file_size: file.size, uploaded_by: 'factory', visibility: 'internal' })
   if (insErr) { await sb.storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: insErr.message } }
 
   const now = new Date().toISOString()

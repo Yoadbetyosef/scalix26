@@ -17,7 +17,20 @@ const ACCENTS: { label: string; value: string | null }[] = [
 ]
 
 // One-time (editable) branding for every quote/invoice/production doc: logo, colour, terms, validity.
-export function DocSettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
+//
+// The endpoints are injectable because the same branding record is reachable through two module gates —
+// /api/studio/* for Studio, /api/orders/* for a tenant that only runs Orders. Defaults keep the Studio
+// caller unchanged.
+export function DocSettingsModal({
+  onClose, onSaved,
+  settingsEndpoint = '/api/studio/doc-settings',
+  uploadEndpoint = '/api/studio/upload',
+}: {
+  onClose: () => void
+  onSaved?: () => void
+  settingsEndpoint?: string
+  uploadEndpoint?: string
+}) {
   const [logo, setLogo] = useState('')
   const [accent, setAccent] = useState<string | null>(null)
   const [terms, setTerms] = useState('')
@@ -30,18 +43,18 @@ export function DocSettingsModal({ onClose, onSaved }: { onClose: () => void; on
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetch('/api/studio/doc-settings').then((r) => r.json()).then((d) => {
+    fetch(settingsEndpoint).then((r) => r.json()).then((d) => {
       const s = d.settings || {}
       setLogo(s.logo_url || ''); setAccent(s.accent_color || null)
       setTerms(s.terms || ''); setDays(String(s.validity_days || 30))
     }).finally(() => setLoaded(true))
-  }, [])
+  }, [settingsEndpoint])
 
   async function upload(file: File) {
     setUploading(true); setErr(null)
     try {
       const body = new FormData(); body.append('file', file)
-      const res = await fetch('/api/studio/upload', { method: 'POST', body })
+      const res = await fetch(uploadEndpoint, { method: 'POST', body })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Upload failed')
       setLogo(d.url)
@@ -57,7 +70,7 @@ export function DocSettingsModal({ onClose, onSaved }: { onClose: () => void; on
   async function save() {
     setBusy(true); setErr(null)
     try {
-      const res = await fetch('/api/studio/doc-settings', {
+      const res = await fetch(settingsEndpoint, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ logo_url: logo, accent_color: accent, terms, validity_days: Number(days) || 30 }),
       })

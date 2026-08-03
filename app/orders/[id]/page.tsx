@@ -11,6 +11,13 @@ import { ApprovalActions } from '@/components/orders/approval-actions'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+// One-line human summary of a line item's jewelry spec, e.g.
+// "1.25ct Round Natural Diamond VS1 G · 0.50ct side Baguette · 14K White Gold · size 6.5"
+const specLine = (l: import('@/lib/orders/types').OrderLineItem): string => {
+  const center = [l.centerStoneCarat ? `${l.centerStoneCarat}ct` : null, l.centerStoneShape, l.stoneOrigin, l.stoneType, l.stoneQuality, l.stoneColor].filter(Boolean).join(' ')
+  const side = [l.sideStoneCaratTotal ? `${l.sideStoneCaratTotal}ct side` : null, l.sideStoneShape].filter(Boolean).join(' ')
+  return [center, side, l.metalKarat, l.measurements, l.color, l.material, l.customSpec].filter(Boolean).join(' · ')
+}
 const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', sent_to_production: 'Sent to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,19 +33,26 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <div>
           <div className="font-mono text-xs text-gray-500">{o.orderNumber}</div>
           <h1 className="text-2xl font-semibold text-gray-900">{o.customerName ?? 'Order'}</h1>
-          <span className="mt-1 inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}{isProtectedStage(o.stage) && ' 🔒'}</span>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}{isProtectedStage(o.stage) && ' 🔒'}</span>
+            {o.isCustomDesign && <span className="inline-block rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-800">Custom design</span>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {!isTerminalStage(o.stage) && (
             <OrderEdit orderId={o.id} initial={{
-              orderNumber: o.orderNumber,
+              orderNumber: o.orderNumber, contactId: o.contactId,
               customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
               factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
               assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
               depositCents: o.depositCents, currency: o.currency, internalNotes: o.internalNotes, publicNotes: o.publicNotes,
-              lineItems: o.lineItems.map((l) => ({ productName: l.productName, description: l.description, sku: l.sku, quantity: l.quantity, unitPriceCents: l.unitPriceCents, measurements: l.measurements, color: l.color, material: l.material, customSpec: l.customSpec })),
+              clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
+              lineItems: o.lineItems,
             }} />
           )}
+          {/* Open in a new tab: the document is a print-to-PDF page, not a place to navigate away to. */}
+          <Link href={`/orders/${o.id}/document/estimate`} target="_blank" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Estimate</Link>
+          <Link href={`/orders/${o.id}/document/quote`} target="_blank" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Quote</Link>
           <StageControl orderId={o.id} stage={o.stage} />
           <DeleteOrderButton orderId={o.id} orderNumber={o.orderNumber} />
         </div>
@@ -60,7 +74,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                   <tr key={l.id}>
                     <td className="px-2 py-1.5"><div className="font-medium text-gray-900">{l.productName}</div>{l.description && <div className="text-xs text-gray-500">{l.description}</div>}</td>
                     <td className="px-2 py-1.5 tabular-nums">{l.quantity}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-600">{[l.measurements, l.color, l.material, l.customSpec].filter(Boolean).join(' · ') || '—'}</td>
+                    <td className="px-2 py-1.5 text-xs text-gray-600">{specLine(l) || '—'}</td>
                     <td className="px-2 py-1.5 tabular-nums">{money(l.unitPriceCents, o.currency)}</td>
                     <td className="px-2 py-1.5 tabular-nums">{money(l.lineTotalCents, o.currency)}</td>
                   </tr>
@@ -83,6 +97,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               <div className="flex justify-between"><dt>Est. completion</dt><dd className="text-gray-900">{o.estimatedCompletionDate ?? '—'}</dd></div>
             </dl>
           </div>
+          {o.clientRequirements && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm">
+              <h3 className="mb-1 text-sm font-semibold text-violet-900">Client requirements</h3>
+              <p className="whitespace-pre-wrap text-violet-900/80">{o.clientRequirements}</p>
+            </div>
+          )}
           {o.publicNotes && <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm"><h3 className="mb-1 text-sm font-semibold text-gray-900">Public notes</h3><p className="text-gray-600">{o.publicNotes}</p></div>}
           {o.internalNotes && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm"><h3 className="mb-1 text-sm font-semibold text-amber-900">Internal notes (never shared)</h3><p className="text-amber-800">{o.internalNotes}</p></div>}
         </div>

@@ -1,13 +1,34 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Box, FileText, Film, Image as ImageIcon, Upload } from 'lucide-react'
+import { ACCEPT_ATTR } from '@/lib/orders/attachment-types'
+
+// Sketches, reference photos, CAD renders, videos and documents for an order. Drag a pile of files in or
+// pick them — they upload one after another so a single rejection doesn't lose the rest. The bucket is
+// private throughout; previews and links are short-lived signed URLs.
 
 interface Att { id: string; fileName: string; mimeType: string; fileSize: number; visibility: 'internal' | 'public'; url: string | null }
-const kb = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
+
+const size = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
+const isImage = (m: string) => m.startsWith('image/') && m !== 'image/heic' && m !== 'image/heif'  // heic won't render in most browsers
+const isVideo = (m: string) => m.startsWith('video/')
+
+function KindIcon({ mime }: { mime: string }) {
+  const cls = 'h-5 w-5 text-gray-400'
+  if (isImage(mime)) return <ImageIcon className={cls} />
+  if (isVideo(mime)) return <Film className={cls} />
+  if (mime === 'application/pdf') return <FileText className={cls} />
+  return <Box className={cls} />                                   // CAD / archive / anything else
+}
 
 export function AttachmentsPanel({ orderId }: { orderId: string }) {
   const [items, setItems] = useState<Att[]>([])
-  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<string | null>(null)
+  const [errs, setErrs] = useState<string[]>([])
+  const [dragging, setDragging] = useState(false)
+  const fileInput = useRef<HTMLInputElement>(null)
   const base = `/api/orders/${orderId}/attachments`
 
   const load = useCallback(async () => {
@@ -15,41 +36,87 @@ export function AttachmentsPanel({ orderId }: { orderId: string }) {
   }, [base])
   useEffect(() => { let active = true; (async () => { const r = await fetch(base); if (active && r.ok) setItems((await r.json()).attachments) })(); return () => { active = false } }, [base])
 
-  const upload = async (file: File) => {
-    setBusy(true); setErr(null)
-    try {
-      const fd = new FormData(); fd.append('file', file)
-      const r = await fetch(base, { method: 'POST', body: fd })
-      if (!r.ok) throw new Error((await r.json()).error || 'Upload failed')
-      await load()
-    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  // Sequential rather than parallel: a 100 MB video and a stack of photos at once would otherwise
+  // compete for the same connection, and per-file errors stay attributable this way.
+  const uploadAll = async (files: File[]) => {
+    if (!files.length) return
+    setBusy(true); setErrs([])
+    const failures: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      setProgress(`Uploading ${i + 1} of ${files.length}: ${files[i].name}`)
+      try {
+        const fd = new FormData(); fd.append('file', files[i])
+        const r = await fetch(base, { method: 'POST', body: fd })
+        if (!r.ok) failures.push(`${files[i].name} — ${(await r.json().catch(() => ({}))).error ?? 'upload failed'}`)
+      } catch { failures.push(`${files[i].name} — upload failed`) }
+    }
+    setProgress(null); setErrs(failures); setBusy(false)
+    await load()
   }
+
   const setVisibility = async (id: string, visibility: 'internal' | 'public') => {
     setBusy(true); try { await fetch(`${base}/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility }) }); await load() } finally { setBusy(false) }
   }
-  const remove = async (id: string) => { if (!confirm('Delete this attachment?')) return; setBusy(true); try { await fetch(`${base}/${id}`, { method: 'DELETE' }); await load() } finally { setBusy(false) } }
+  const remove = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}?`)) return
+    setBusy(true); try { await fetch(`${base}/${id}`, { method: 'DELETE' }); await load() } finally { setBusy(false) }
+  }
 
   return (
     <div>
-      {err && <div className="mb-2 text-xs text-red-600">{err}</div>}
-      <label className="mb-3 inline-block cursor-pointer rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-        {busy ? 'Working…' : '+ Upload file'}
-        <input type="file" className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = '' }} />
-      </label>
-      <ul className="space-y-2">
-        {items.map((x) => (
-          <li key={x.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 p-2 text-sm">
-            {x.url ? <a href={x.url} target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:underline">{x.fileName}</a> : <span className="text-gray-700">{x.fileName}</span>}
-            <span className="text-xs text-gray-400">{kb(x.fileSize)}</span>
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${x.visibility === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{x.visibility === 'public' ? 'Shared on approval' : 'Internal only'}</span>
-            <span className="ml-auto flex gap-2">
-              <button onClick={() => setVisibility(x.id, x.visibility === 'public' ? 'internal' : 'public')} disabled={busy} className="text-xs text-gray-600 underline">{x.visibility === 'public' ? 'Make internal' : 'Share on approval'}</button>
-              <button onClick={() => remove(x.id)} disabled={busy} className="text-xs text-red-600 underline">Delete</button>
-            </span>
-          </li>
-        ))}
-        {items.length === 0 && <li className="text-sm text-gray-400">No attachments.</li>}
-      </ul>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); void uploadAll(Array.from(e.dataTransfer.files)) }}
+        onClick={() => !busy && fileInput.current?.click()}
+        className={`mb-3 flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${dragging ? 'border-gray-900 bg-gray-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}
+      >
+        <Upload className="h-5 w-5 text-gray-400" />
+        <span className="text-sm font-medium text-gray-900">{busy ? progress ?? 'Working…' : 'Drop files here, or click to choose'}</span>
+        <span className="text-xs text-gray-500">Photos, sketches, PDFs, videos, CAD (STL, OBJ, 3DM, STEP, ZIP…) — up to 50 MB each</span>
+      </div>
+      <input
+        ref={fileInput} type="file" multiple className="hidden" accept={ACCEPT_ATTR} disabled={busy}
+        onChange={(e) => { void uploadAll(Array.from(e.target.files ?? [])); e.target.value = '' }}
+      />
+
+      {errs.length > 0 && (
+        <ul className="mb-3 space-y-1 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          {errs.map((m, i) => <li key={i}>{m}</li>)}
+        </ul>
+      )}
+
+      {items.length === 0 ? (
+        <p className="text-sm text-gray-400">No files yet.</p>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {items.map((x) => (
+            <li key={x.id} className="flex items-start gap-3 rounded-lg border border-gray-200 p-2">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50">
+                {isImage(x.mimeType) && x.url
+                  // eslint-disable-next-line @next/next/no-img-element -- signed one-off URL, not a static asset
+                  ? <img src={x.url} alt="" className="h-full w-full object-cover" />
+                  : <KindIcon mime={x.mimeType} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                {x.url
+                  ? <a href={x.url} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium text-blue-600 hover:underline" title={x.fileName}>{x.fileName}</a>
+                  : <span className="block truncate text-sm text-gray-700" title={x.fileName}>{x.fileName}</span>}
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-gray-400">{size(x.fileSize)}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${x.visibility === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {x.visibility === 'public' ? 'Shared on approval' : 'Internal only'}
+                  </span>
+                </div>
+                <div className="mt-1 flex gap-2">
+                  <button onClick={() => setVisibility(x.id, x.visibility === 'public' ? 'internal' : 'public')} disabled={busy} className="text-xs text-gray-600 underline">{x.visibility === 'public' ? 'Make internal' : 'Share on approval'}</button>
+                  <button onClick={() => remove(x.id, x.fileName)} disabled={busy} className="text-xs text-red-600 underline">Delete</button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="mt-2 text-[11px] text-gray-400">Only files marked “Shared on approval” appear on the external approval page. The bucket is private; links are short-lived.</p>
     </div>
   )
