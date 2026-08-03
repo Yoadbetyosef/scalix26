@@ -19,7 +19,9 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
   const load = useCallback(async () => {
     const [ar, at] = await Promise.all([fetch(`/api/orders/${orderId}/approvals`), fetch(`/api/orders/${orderId}/attachments`)])
     if (ar.ok) setApprovals((await ar.json()).approvals)
-    if (at.ok) setAtts(((await at.json()).attachments as Att[]).filter((a) => a.visibility === 'public'))
+    // Keep INTERNAL files in the list too. Filtering them out here was hiding the reason a factory
+    // received no photos: a file defaults to internal, and nothing on this screen said so.
+    if (at.ok) setAtts((await at.json()).attachments as Att[])
   }, [orderId])
   useEffect(() => { let active = true; (async () => { const [ar, at] = await Promise.all([fetch(`/api/orders/${orderId}/approvals`), fetch(`/api/orders/${orderId}/attachments`)]); if (!active) return; if (ar.ok) setApprovals((await ar.json()).approvals); if (at.ok) setAtts(((await at.json()).attachments as Att[]).filter((a) => a.visibility === 'public')) })(); return () => { active = false } }, [orderId])
 
@@ -81,10 +83,34 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
             <label className="mt-3 block text-xs text-gray-500">Message<textarea value={f.message} onChange={(e) => setF((p) => ({ ...p, message: e.target.value }))} rows={2} className={inp} /></label>
             {atts.length > 0 && (
               <div className="mt-3">
-                <div className="text-xs text-gray-500">Attachments to include (only files shared on approval)</div>
+                <div className="text-xs text-gray-500">Files to send with this request</div>
                 {atts.map((a) => (
-                  <label key={a.id} className="mt-1 flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={f.include.includes(a.id)} onChange={(e) => setF((p) => ({ ...p, include: e.target.checked ? [...p.include, a.id] : p.include.filter((x) => x !== a.id) }))} />{a.fileName}</label>
+                  a.visibility === 'public' ? (
+                    <label key={a.id} className="mt-1 flex items-center gap-2 text-sm text-gray-700">
+                      <input type="checkbox" checked={f.include.includes(a.id)} onChange={(e) => setF((p) => ({ ...p, include: e.target.checked ? [...p.include, a.id] : p.include.filter((x) => x !== a.id) }))} />
+                      {a.fileName}
+                    </label>
+                  ) : (
+                    // Internal file: show it, explain why it can't be sent, and make it one click to fix.
+                    <div key={a.id} className="mt-1 flex items-center gap-2 text-sm text-gray-400">
+                      <input type="checkbox" disabled className="opacity-40" />
+                      <span className="truncate">{a.fileName}</span>
+                      <span className="shrink-0 text-xs">internal only</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await fetch(`/api/orders/${orderId}/attachments/${a.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility: 'public' }) })
+                          setAtts((p) => p.map((x) => (x.id === a.id ? { ...x, visibility: 'public' } : x)))
+                          setF((p) => ({ ...p, include: [...p.include, a.id] }))
+                        }}
+                        className="shrink-0 text-xs text-blue-600 underline"
+                      >Share it</button>
+                    </div>
+                  )
                 ))}
+                {!atts.some((a) => a.visibility === 'public') && (
+                  <p className="mt-1.5 text-xs text-amber-700">Uploaded files start as internal. Click <strong>Share it</strong> to include one with this request.</p>
+                )}
               </div>
             )}
             <label className="mt-3 block text-xs text-gray-500">Internal note (never shared)<input value={f.internalNote} onChange={(e) => setF((p) => ({ ...p, internalNote: e.target.value }))} className={inp} /></label>
