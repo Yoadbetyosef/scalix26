@@ -4,11 +4,11 @@ import { describe, it, expect, beforeAll } from 'vitest'
 beforeAll(() => { process.env.APP_ENCRYPTION_KEY = 'a'.repeat(64) })
 
 describe('quickbooks oauth state (CSRF)', () => {
-  it('round-trips the tenant id for a fresh, untampered state', async () => {
+  it('round-trips the tenant id (and return target) for a fresh, untampered state', async () => {
     const { signState, verifyState } = await import('./state')
     const now = 1_000_000
     const s = signState('tenant-123', now)
-    expect(verifyState(s, now + 5_000)).toBe('tenant-123')
+    expect(verifyState(s, now + 5_000)).toEqual({ tenantId: 'tenant-123', ret: '' })
   })
 
   it('rejects a tampered payload', async () => {
