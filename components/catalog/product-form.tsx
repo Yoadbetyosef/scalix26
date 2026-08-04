@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AVAILABILITY_STATUSES, AVAILABILITY_LABELS, PRODUCT_STATUSES, type CatalogProduct } from '@/lib/catalog/types'
 import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
 import { ProductNameField } from '@/components/catalog/product-name-field'
+import { ProductCostCard } from '@/components/catalog/product-cost-card'
 
 export type ProductInput = Partial<CatalogProduct> & { tagsText?: string }
 
@@ -108,6 +109,12 @@ export function ProductForm({ initial, initialFabric, onSubmit, submitLabel }: {
           <Field label="Expected arrival"><input className={input} type="date" value={f.expected_arrival_date || ''} onChange={(e) => set('expected_arrival_date', e.target.value)} /></Field>
         </div>
       </section>
+
+      {/* Cost & Margin — only once the product exists, since a cost row hangs off its id. On the create
+          form there is nothing to attach it to yet, and a disabled card would be noise. The card also
+          renders nothing at all unless this session is permitted to see costs; it asks the endpoint
+          rather than being told, so there's no second copy of the rule here to fall out of date. */}
+      {initial?.id && <ProductCostCard productId={initial.id} />}
 
       {/* Everything else, folded away */}
       <details className="rounded-xl border border-hairline-strong bg-white p-4">
