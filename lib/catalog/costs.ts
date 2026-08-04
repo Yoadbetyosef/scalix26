@@ -145,15 +145,12 @@ export async function saveCost(target: CostTarget, input: CostInput): Promise<Co
 
   const col = targetColumn(target)
   const sb = await createClient()
-  const { data: existing } = await sb.from('product_costs').select('markup_percent').eq(col, target.id).maybeSingle()
+  const { data: existing } = await sb.from('product_costs').select('id, markup_percent').eq(col, target.id).maybeSingle()
   // Keep the markup already snapshotted on an existing row; only a brand-new row takes today's default.
   // Identical for a variant — the snapshot rule doesn't change with what the row describes.
   const markup = existing ? Number(existing.markup_percent) : (await getCostSettings(a.tenantId)).markupPercent
 
-  const { error } = await sb.from('product_costs').upsert({
-    tenant_id: a.tenantId,
-    product_id: target.kind === 'product' ? target.id : null,
-    variant_id: target.kind === 'variant' ? target.id : null,
+  const fields = {
     cost_primary: input.costPrimary ?? null,
     cost_secondary: input.costSecondary ?? null,
     shipping_cost: input.shippingCost ?? 0,
@@ -161,7 +158,34 @@ export async function saveCost(target: CostTarget, input: CostInput): Promise<Co
     markup_percent: markup,
     updated_at: new Date().toISOString(),
     updated_by: a.actorUserId,
-  }, { onConflict: col })
+  }
+
+  // Explicit update-or-insert rather than an upsert. Uniqueness here is enforced by two PARTIAL indexes
+  // (one per target column, each `WHERE … IS NOT NULL`), and an ON CONFLICT target has to repeat that
+  // predicate to match — which PostgREST cannot express. Asking it to upsert produced "no unique or
+  // exclusion constraint matching the ON CONFLICT specification" and wrote nothing at all.
+  if (existing) {
+    const { error } = await sb.from('product_costs').update(fields).eq('id', existing.id as string)
+    if (error) throw new Error(error.message)
+    return getCost(target)
+  }
+
+  const { error } = await sb.from('product_costs').insert({
+    tenant_id: a.tenantId,
+    product_id: target.kind === 'product' ? target.id : null,
+    variant_id: target.kind === 'variant' ? target.id : null,
+    ...fields,
+  })
+  // 23505: another request inserted the row between the read above and this write. The partial index did
+  // its job; finish as an update rather than failing a save the user has every reason to expect to work.
+  if (error?.code === '23505') {
+    const { data: raced } = await sb.from('product_costs').select('id').eq(col, target.id).maybeSingle()
+    if (raced) {
+      const { error: e2 } = await sb.from('product_costs').update(fields).eq('id', raced.id as string)
+      if (e2) throw new Error(e2.message)
+      return getCost(target)
+    }
+  }
   if (error) throw new Error(error.message)
 
   return getCost(target)
