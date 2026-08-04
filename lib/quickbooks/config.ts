@@ -4,11 +4,20 @@
 
 export type QboEnvironment = 'sandbox' | 'production'
 
+// Every value is trimmed. A trailing newline or space is invisible in a dashboard but survives into the
+// request: URLSearchParams encodes it verbatim, so a redirect_uri ending in "\n" goes to Intuit as
+// "…%0A" and comes back as "The redirect_uri query parameter value is invalid". The same slip in
+// QBO_ENVIRONMENT is quieter and worse — "production\n" fails the equality check below and silently
+// falls back to sandbox, so everything connects and syncs into a test company with no error anywhere.
+const env = (name: string): string => (process.env[name] || '').trim()
+
 export const QBO = {
-  clientId: process.env.QBO_CLIENT_ID || '',
-  clientSecret: process.env.QBO_CLIENT_SECRET || '',
-  redirectUri: process.env.QBO_REDIRECT_URI || '',
-  environment: (process.env.QBO_ENVIRONMENT === 'production' ? 'production' : 'sandbox') as QboEnvironment,
+  clientId: env('QBO_CLIENT_ID'),
+  clientSecret: env('QBO_CLIENT_SECRET'),
+  redirectUri: env('QBO_REDIRECT_URI'),
+  // Trimmed BEFORE the comparison, and still defaulted to sandbox for any unrecognised value — the safe
+  // direction to fail, since sandbox can't touch a real company's books.
+  environment: (env('QBO_ENVIRONMENT') === 'production' ? 'production' : 'sandbox') as QboEnvironment,
 }
 
 export const qboConfigured = (): boolean => !!(QBO.clientId && QBO.clientSecret && QBO.redirectUri)
