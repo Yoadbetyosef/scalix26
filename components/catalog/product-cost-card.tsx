@@ -144,10 +144,12 @@ export function ProductCostCard({ productId }: { productId: string }) {
             <Readout label="Margin" value={liveMargin === null ? '—' : `${liveMargin.toFixed(1)}%`} tone={marginTone(liveMargin)} strong />
           </div>
 
+          {/* Built as whole strings rather than JSX text interleaved with expressions: JSX drops the
+              leading space of a text node that follows an expression, which rendered "The EURfigure". */}
           {settings.secondaryCurrency && (
             <p className="text-xs text-subtle">
-              The {settings.secondaryCurrency} figure is a reference note from the supplier&apos;s invoice. It is never
-              converted and never counted in the total — record what you actually paid in {settings.baseCurrency}.
+              {`The ${settings.secondaryCurrency} figure is a reference note from the supplier’s invoice. `}
+              {`It is never converted and never counted in the total — record what you actually paid in ${settings.baseCurrency}.`}
             </p>
           )}
 

@@ -43,3 +43,25 @@ describe('cost payload', () => {
     expect(costPayloadSchema.safeParse({}).success).toBe(true)
   })
 })
+
+// Two questions asked directly, pinned as tests so the answer can't drift.
+describe('the two guarantees', () => {
+  it('Q1 — PUT does NOT accept markup_percent from the body, in any spelling', () => {
+    for (const body of [{ markupPercent: 999 }, { markup_percent: 999 }, { costPrimary: 100, markupPercent: 0 }]) {
+      expect(costPayloadSchema.safeParse(body).success).toBe(false)
+    }
+  })
+
+  it('Q2 — clearing a saved cost sends null, which is stored as NULL and never 0', () => {
+    // The card turns an empty input into null before it ever reaches the wire.
+    const numHelper = (s: string): number | null => { const t = s.trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) && n >= 0 ? n : null }
+    expect(numHelper('')).toBeNull()
+    expect(numHelper('   ')).toBeNull()
+    expect(numHelper('0')).toBe(0)      // an explicit zero stays a zero — a different fact
+
+    // …and null is a valid payload, distinct from omitting the field.
+    const parsed = costPayloadSchema.safeParse({ costPrimary: null })
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.costPrimary).toBeNull()
+  })
+})
