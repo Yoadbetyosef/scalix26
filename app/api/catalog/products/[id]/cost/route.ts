@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getProductCost, saveProductCost } from '@/lib/catalog/costs'
+import { getCost, saveCost } from '@/lib/catalog/costs'
 
 // Cost and margin for one product, on its own endpoint.
 //
@@ -36,7 +36,7 @@ const fail = (reason: 'not_found' | 'forbidden') =>
     : NextResponse.json({ error: 'Not found' }, { status: 404 })
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const r = await getProductCost((await params).id)
+  const r = await getCost({ kind: 'product', id: (await params).id })
   if (!r.ok) return fail(r.reason)
   return NextResponse.json(r.data)
 }
@@ -45,7 +45,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })
   try {
-    const r = await saveProductCost((await params).id, parsed.data)
+    const r = await saveCost({ kind: 'product', id: (await params).id }, parsed.data)
     if (!r.ok) return fail(r.reason)
     return NextResponse.json(r.data)
   } catch (e) {

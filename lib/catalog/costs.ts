@@ -18,7 +18,6 @@ import { requireCatalogTenant } from './session'
 export interface CostSettings { markupPercent: number; baseCurrency: string; secondaryCurrency: string | null }
 
 export interface ProductCost {
-  productId: string
   costPrimary: number | null
   costSecondary: number | null
   shippingCost: number
@@ -35,6 +34,10 @@ export interface ProductCostView {
   marginPercent: number | null  // null when either side is unknown
 }
 
+// Which thing a cost row describes. Both live in one table, so the formula, the RLS policy and the
+// endpoint stay single-sourced — the reason this isn't a second table.
+export type CostTarget = { kind: 'product'; id: string } | { kind: 'variant'; id: string }
+
 export interface CostInput {
   costPrimary?: number | null
   costSecondary?: number | null
@@ -47,7 +50,6 @@ export interface CostInput {
 export type CostResult<T> = { ok: true; data: T } | { ok: false; reason: 'not_found' | 'forbidden' }
 
 const row = (r: Record<string, unknown>): ProductCost => ({
-  productId: r.product_id as string,
   costPrimary: r.cost_primary === null || r.cost_primary === undefined ? null : Number(r.cost_primary),
   costSecondary: r.cost_secondary === null || r.cost_secondary === undefined ? null : Number(r.cost_secondary),
   shippingCost: Number(r.shipping_cost ?? 0),
@@ -86,20 +88,38 @@ async function costAccess(): Promise<{ tenantId: string; actorUserId: string } |
   return { tenantId: s.tenantId, actorUserId: c.actorUserId }
 }
 
-export async function getProductCost(productId: string): Promise<CostResult<ProductCostView>> {
+// The selling price the margin is measured against. For a sub-product that is the SUB-PRODUCT's own
+// price — a variant priced at 3,500 must never be scored against its parent's 8,000.
+async function targetPrice(tenantId: string, target: CostTarget): Promise<number | null | 'missing'> {
+  const db = createAdminClient()
+  if (target.kind === 'product') {
+    const { data } = await db.from('catalog_products').select('price').eq('tenant_id', tenantId).eq('id', target.id).maybeSingle()
+    if (!data) return 'missing'
+    return data.price === null || data.price === undefined ? null : Number(data.price)
+  }
+  // A variant with no price of its own falls back to its parent product's base price, which is the rule
+  // the rest of the app already uses to decide what a sub-product sells for.
+  const { data } = await db.from('studio_variants')
+    .select('price, studio_products!inner(base_price)').eq('tenant_id', tenantId).eq('id', target.id).maybeSingle()
+  if (!data) return 'missing'
+  const own = data.price
+  if (own !== null && own !== undefined) return Number(own)
+  const parent = (data as unknown as { studio_products?: { base_price: number | null } }).studio_products?.base_price
+  return parent === null || parent === undefined ? null : Number(parent)
+}
+
+const targetColumn = (t: CostTarget) => (t.kind === 'product' ? 'product_id' : 'variant_id')
+
+export async function getCost(target: CostTarget): Promise<CostResult<ProductCostView>> {
   const a = await costAccess()
   if (a === 'not_found' || a === 'forbidden') return { ok: false, reason: a }
 
-  // Admin client for the product itself (ordinary catalog data, read the same way as everywhere else)…
-  const { data: product } = await createAdminClient()
-    .from('catalog_products').select('id, price').eq('tenant_id', a.tenantId).eq('id', productId).maybeSingle()
-  if (!product) return { ok: false, reason: 'not_found' }
+  const price = await targetPrice(a.tenantId, target)
+  if (price === 'missing') return { ok: false, reason: 'not_found' }
 
-  // …and the RLS-scoped client for the cost, so the policy actually runs.
+  // RLS-scoped client for the cost itself, so the policy actually runs.
   const sb = await createClient()
-  const { data } = await sb.from('product_costs').select('*').eq('product_id', productId).maybeSingle()
-
-  const price = product.price === null || product.price === undefined ? null : Number(product.price)
+  const { data } = await sb.from('product_costs').select('*').eq(targetColumn(target), target.id).maybeSingle()
   const cost = data ? row(data as Record<string, unknown>) : null
   return {
     ok: true,
@@ -115,22 +135,25 @@ export async function getProductCost(productId: string): Promise<CostResult<Prod
 // Upsert. markup_percent is snapshotted from the tenant default at save time, so changing that default
 // later never silently rewrites what a product cost last quarter. computed_cost is omitted entirely —
 // the database generates it.
-export async function saveProductCost(productId: string, input: CostInput): Promise<CostResult<ProductCostView>> {
+export async function saveCost(target: CostTarget, input: CostInput): Promise<CostResult<ProductCostView>> {
   const a = await costAccess()
   if (a === 'not_found' || a === 'forbidden') return { ok: false, reason: a }
 
-  const { data: product } = await createAdminClient()
-    .from('catalog_products').select('id').eq('tenant_id', a.tenantId).eq('id', productId).maybeSingle()
-  if (!product) return { ok: false, reason: 'not_found' }
+  // Confirm the target belongs to this tenant before writing. The composite foreign key enforces the
+  // same thing in the database; this is here so a wrong id answers 404 rather than a constraint error.
+  if (await targetPrice(a.tenantId, target) === 'missing') return { ok: false, reason: 'not_found' }
 
+  const col = targetColumn(target)
   const sb = await createClient()
-  const { data: existing } = await sb.from('product_costs').select('markup_percent').eq('product_id', productId).maybeSingle()
+  const { data: existing } = await sb.from('product_costs').select('markup_percent').eq(col, target.id).maybeSingle()
   // Keep the markup already snapshotted on an existing row; only a brand-new row takes today's default.
+  // Identical for a variant — the snapshot rule doesn't change with what the row describes.
   const markup = existing ? Number(existing.markup_percent) : (await getCostSettings(a.tenantId)).markupPercent
 
   const { error } = await sb.from('product_costs').upsert({
     tenant_id: a.tenantId,
-    product_id: productId,
+    product_id: target.kind === 'product' ? target.id : null,
+    variant_id: target.kind === 'variant' ? target.id : null,
     cost_primary: input.costPrimary ?? null,
     cost_secondary: input.costSecondary ?? null,
     shipping_cost: input.shippingCost ?? 0,
@@ -138,21 +161,21 @@ export async function saveProductCost(productId: string, input: CostInput): Prom
     markup_percent: markup,
     updated_at: new Date().toISOString(),
     updated_by: a.actorUserId,
-  }, { onConflict: 'product_id' })
+  }, { onConflict: col })
   if (error) throw new Error(error.message)
 
-  return getProductCost(productId)
+  return getCost(target)
 }
 
 // Re-snapshot a single product onto the tenant's CURRENT default markup — an explicit act, never a
 // side effect of changing the default.
-export async function applyCurrentMarkup(productId: string): Promise<CostResult<ProductCostView>> {
+export async function applyCurrentMarkup(target: CostTarget): Promise<CostResult<ProductCostView>> {
   const a = await costAccess()
   if (a === 'not_found' || a === 'forbidden') return { ok: false, reason: a }
   const sb = await createClient()
   const { error } = await sb.from('product_costs')
     .update({ markup_percent: (await getCostSettings(a.tenantId)).markupPercent, updated_at: new Date().toISOString(), updated_by: a.actorUserId })
-    .eq('product_id', productId)
+    .eq(targetColumn(target), target.id)
   if (error) throw new Error(error.message)
-  return getProductCost(productId)
+  return getCost(target)
 }

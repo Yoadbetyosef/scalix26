@@ -30,7 +30,13 @@ const fmt = (n: number | null, ccy: string) =>
 const marginTone = (m: number | null) =>
   m === null ? 'text-muted' : m < 10 ? 'text-red-600' : m < 20 ? 'text-amber-600' : 'text-emerald-700'
 
-export function ProductCostCard({ productId }: { productId: string }) {
+// One component for both a product and a sub-product. The only difference is which endpoint it talks
+// to, so that is the only thing parameterised — forking it would mean two copies of the permission
+// handling, the blank-vs-zero rule and the margin colouring, free to drift apart.
+export function ProductCostCard({ productId, variantId, compact }: { productId?: string; variantId?: string; compact?: boolean }) {
+  const endpoint = variantId
+    ? `/api/catalog/variants/${variantId}/cost`
+    : `/api/catalog/products/${productId}/cost`
   const [view, setView] = useState<View | null>(null)
   const [allowed, setAllowed] = useState<boolean | null>(null)   // null = still asking
   const [open, setOpen] = useState(false)
@@ -46,7 +52,7 @@ export function ProductCostCard({ productId }: { productId: string }) {
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch(`/api/catalog/products/${productId}/cost`)
+        const r = await fetch(endpoint)
         if (!alive) return
         if (r.status === 403) { setAllowed(false); return }
         if (!r.ok) { setAllowed(false); return }
@@ -61,7 +67,7 @@ export function ProductCostCard({ productId }: { productId: string }) {
       } catch { if (alive) setAllowed(false) }
     })()
     return () => { alive = false }
-  }, [productId])
+  }, [endpoint])
 
   if (allowed !== true || !view) return null
 
@@ -79,7 +85,7 @@ export function ProductCostCard({ productId }: { productId: string }) {
   const save = async () => {
     setSaving(true); setErr(null); setSaved(false)
     try {
-      const r = await fetch(`/api/catalog/products/${productId}/cost`, {
+      const r = await fetch(endpoint, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         // Every field every time — PUT replaces the row, so omitting one would clear it.
         body: JSON.stringify({
@@ -94,10 +100,10 @@ export function ProductCostCard({ productId }: { productId: string }) {
   }
 
   return (
-    <section className="rounded-xl border border-hairline-strong bg-white">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between p-4 text-left">
+    <section className={compact ? 'rounded-lg border border-hairline bg-sunken/30' : 'rounded-xl border border-hairline-strong bg-white'}>
+      <button type="button" onClick={() => setOpen((o) => !o)} className={`flex w-full items-center justify-between text-left ${compact ? 'px-3 py-2' : 'p-4'}`}>
         <span className="flex items-center gap-2">
-          <h2 className="font-semibold text-ink">Cost &amp; Margin</h2>
+          <h2 className={compact ? 'text-xs font-semibold uppercase tracking-wide text-subtle' : 'font-semibold text-ink'}>Cost &amp; Margin</h2>
           {!open && view.cost?.computedCost != null && (
             <span className="text-sm text-muted">
               {fmt(view.cost.computedCost, settings.baseCurrency)}
@@ -112,7 +118,7 @@ export function ProductCostCard({ productId }: { productId: string }) {
       </button>
 
       {open && (
-        <div className="space-y-4 border-t border-hairline px-4 pb-4 pt-3">
+        <div className={`space-y-4 border-t border-hairline pt-3 ${compact ? 'px-3 pb-3' : 'px-4 pb-4'}`}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label={`Cost (${settings.baseCurrency})`}>
               <input className={input} inputMode="decimal" value={f.primary} placeholder="—"

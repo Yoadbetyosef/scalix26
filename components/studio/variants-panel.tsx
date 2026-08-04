@@ -5,6 +5,7 @@ import { Plus, Trash2, Pencil, QrCode, Download, ExternalLink } from 'lucide-rea
 import type { StudioProduct, StudioVariant } from '@/lib/studio/types'
 import { variantPrice, variantTitle } from '@/lib/studio/types'
 import { SubProductForm } from '@/components/studio/sub-product-form'
+import { ProductCostCard } from '@/components/catalog/product-cost-card'
 
 export function VariantsPanel({ product, initial }: { product: StudioProduct; initial: StudioVariant[] }) {
   const [variants, setVariants] = useState<StudioVariant[]>(initial)
@@ -90,6 +91,11 @@ export function VariantsPanel({ product, initial }: { product: StudioProduct; in
                   <button onClick={() => toggleQr(v.id, title)} title="QR code" className={`flex-shrink-0 rounded-lg p-2 hover:bg-sunken ${qrFor === v.id ? 'text-accent' : 'text-muted hover:text-ink'}`}><QrCode className="h-4 w-4" /></button>
                   <button onClick={() => { setEditingId(v.id); setAdding(false) }} className="flex-shrink-0 rounded-lg p-2 text-muted hover:bg-sunken hover:text-ink"><Pencil className="h-4 w-4" /></button>
                   <button onClick={() => remove(v.id)} className="flex-shrink-0 rounded-lg p-2 text-muted hover:bg-sunken hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                </div>
+                {/* This sub-product's own cost, measured against its own price — the same card the
+                    product uses, not a copy of it. Renders nothing when the session may not see costs. */}
+                <div className="mt-2">
+                  <ProductCostCard variantId={v.id} compact />
                 </div>
                 {qrFor === v.id && (
                   <div className="mt-2 flex items-center gap-4 rounded-lg border border-hairline bg-sunken/40 p-3">
