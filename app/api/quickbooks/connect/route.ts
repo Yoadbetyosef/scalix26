@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
-import { qboConfigured } from '@/lib/quickbooks/config'
+import { QBO, qboConfigured } from '@/lib/quickbooks/config'
 import { authorizeUrl } from '@/lib/quickbooks/oauth'
 import { signState } from '@/lib/quickbooks/state'
 
@@ -16,5 +16,13 @@ export async function GET(req: NextRequest) {
     const u = new URL(back, req.url); u.searchParams.set('qb', 'not_configured')
     return NextResponse.redirect(u)
   }
-  return NextResponse.redirect(authorizeUrl(signState(c.tenantId, Date.now(), agentId)))
+  const url = authorizeUrl(signState(c.tenantId, Date.now(), agentId))
+  // TEMPORARY DIAGNOSTIC — remove once the redirect_uri mismatch is resolved.
+  // JSON.stringify is the point: it renders an invisible trailing "\n" or " " visibly, which is the
+  // difference between a value that looks correct in a dashboard and one Intuit rejects.
+  // The authorize URL carries client_id and the signed state — no secret. client_id is visible in the
+  // browser's address bar during this very redirect, so the log adds no exposure the user doesn't see.
+  console.log('[QBO] redirect_uri raw:', JSON.stringify(QBO.redirectUri))
+  console.log('[QBO] full authorize URL:', url)
+  return NextResponse.redirect(url)
 }
