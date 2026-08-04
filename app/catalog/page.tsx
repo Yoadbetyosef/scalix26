@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, Package, Upload, Download, Trash2, ListChecks } from 'lucide-react'
+import { Plus, Search, Package, Upload, Download, Trash2, ListChecks, ChevronRight } from 'lucide-react'
+import type { VariantsByProduct } from '@/lib/catalog/variants'
 import { AVAILABILITY_LABELS, totalAvailable, type CatalogProduct, type AvailabilityStatus } from '@/lib/catalog/types'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -23,6 +24,12 @@ const money = (n: number | null) => (n === null ? '—' : `$${n.toLocaleString()
 
 export default function CatalogListPage() {
   const [products, setProducts] = useState<CatalogProduct[]>([])
+  // Sub-products for every product at once, keyed by product id. Empty for a tenant without Studio,
+  // which is exactly why nothing below needs to know whether Studio exists.
+  const [variants, setVariants] = useState<VariantsByProduct>({})
+  // Collapsed by default — with a handful of sub-products in the whole system, nothing should shift
+  // the list on load. Expansion is per product and deliberately not remembered across reloads.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
@@ -31,12 +38,23 @@ export default function CatalogListPage() {
 
   async function reload() {
     try {
-      const res = await fetch('/api/catalog/products')
+      // Both in flight together; the variants call is best-effort, since the list is fully usable
+      // without it and a failure there must never blank the catalog.
+      const [res, vres] = await Promise.all([
+        fetch('/api/catalog/products'),
+        fetch('/api/catalog/variants').catch(() => null),
+      ])
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Failed to load')
       setProducts(d.products || [])
+      setVariants(vres?.ok ? ((await vres.json()).variants ?? {}) : {})
     } catch (e) { setErr((e as Error).message) } finally { setLoading(false) }
   }
+  const toggle = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev)
+    if (!next.delete(id)) next.add(id)
+    return next
+  })
   useEffect(() => { reload() }, [])
 
   async function del(p: CatalogProduct, e?: React.MouseEvent) {
@@ -121,13 +139,29 @@ export default function CatalogListPage() {
                 </tr>
               </thead>
               <tbody>
-                {list.map((p) => (
-                  <tr key={p.id} className="border-b border-hairline last:border-0 hover:bg-sunken/50">
+                {list.map((p) => {
+                  const subs = variants[p.id] ?? []
+                  const open = expanded.has(p.id)
+                  return (
+                  <Fragment key={p.id}>
+                  <tr className="border-b border-hairline last:border-0 hover:bg-sunken/50">
                     <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        {/* Only products that actually have sub-products get a control. Everything else
+                            renders precisely as before — no placeholder, no disabled arrow, nothing to
+                            suggest something is missing. */}
+                        {subs.length > 0 ? (
+                          <button
+                            type="button" onClick={() => toggle(p.id)}
+                            aria-expanded={open} aria-label={`${open ? 'Hide' : 'Show'} sub-products of ${p.name}`}
+                            className="-ml-1 rounded p-1 text-muted hover:bg-sunken hover:text-ink"
+                          ><ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90' : ''}`} /></button>
+                        ) : <span className="w-1" />}
                       <Link href={`/catalog/${p.id}`} className="flex items-center gap-3">
                         <Thumb p={p} />
-                        <span><span className="font-medium text-ink hover:underline">{p.name}</span><span className="block text-xs text-subtle">{p.sku || '—'}{p.brand ? ` · ${p.brand}` : ''}</span></span>
+                        <span><span className="font-medium text-ink hover:underline">{p.name}</span><span className="block text-xs text-subtle">{p.sku || '—'}{p.brand ? ` · ${p.brand}` : ''}{subs.length > 0 ? ` · ${subs.length} sub-product${subs.length === 1 ? '' : 's'}` : ''}</span></span>
                       </Link>
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-muted">{p.category || '—'}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-ink">{money(p.price)}</td>
@@ -141,15 +175,34 @@ export default function CatalogListPage() {
                       <button onClick={(e) => del(p, e)} aria-label={`Delete ${p.name}`} title="Delete" className="rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </td>
                   </tr>
-                ))}
+                  {open && subs.map((v) => (
+                    <tr key={v.id} className="border-b border-hairline bg-sunken/30 last:border-0">
+                      <td className="py-2 pl-14 pr-4">
+                        <span className="text-ink">{v.name}</span>
+                        <span className="block text-xs text-subtle">{v.sku || '—'}</span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-subtle">Sub-product</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-ink">{money(v.price)}</td>
+                      {/* Stock and status are tracked on the parent product, not per sub-product, so
+                          these stay blank rather than repeating the parent's numbers as if they were
+                          the variant's own. */}
+                      <td colSpan={7} />
+                    </tr>
+                  ))}
+                  </Fragment>
+                )})}
               </tbody>
             </table>
           </div>
 
           {/* Mobile cards */}
           <div className="grid grid-cols-1 gap-3 md:hidden">
-            {list.map((p) => (
-              <Link key={p.id} href={`/catalog/${p.id}`} className="flex gap-3 rounded-xl border border-hairline-strong bg-white p-3 active:bg-sunken/60">
+            {list.map((p) => {
+              const subs = variants[p.id] ?? []
+              const open = expanded.has(p.id)
+              return (
+              <div key={p.id} className="rounded-xl border border-hairline-strong bg-white">
+              <Link href={`/catalog/${p.id}`} className="flex gap-3 p-3 active:bg-sunken/60">
                 <Thumb p={p} big />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
@@ -167,7 +220,33 @@ export default function CatalogListPage() {
                   {p.expected_arrival_date && p.incoming_quantity > 0 && <div className="mt-0.5 text-[11px] text-amber-600">Arrives {p.expected_arrival_date}</div>}
                 </div>
               </Link>
-            ))}
+              {/* Same rule as the table: no control at all unless there is something behind it. */}
+              {subs.length > 0 && (
+                <>
+                  <button
+                    type="button" onClick={() => toggle(p.id)} aria-expanded={open}
+                    className="flex w-full items-center gap-1 border-t border-hairline px-3 py-2 text-left text-xs font-medium text-subtle active:bg-sunken/60"
+                  >
+                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />
+                    {subs.length} sub-product{subs.length === 1 ? '' : 's'}
+                  </button>
+                  {open && (
+                    <ul className="border-t border-hairline">
+                      {subs.map((v) => (
+                        <li key={v.id} className="flex items-baseline justify-between gap-3 bg-sunken/30 px-3 py-2">
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm text-ink">{v.name}</span>
+                            <span className="block text-[11px] text-subtle">{v.sku || '—'}</span>
+                          </span>
+                          <span className="shrink-0 tabular-nums text-sm text-ink">{money(v.price)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+              </div>
+            )})}
           </div>
         </>
       )}
