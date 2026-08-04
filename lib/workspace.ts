@@ -73,7 +73,7 @@ export interface ActiveBusinessContext {
   partnerId: string | null           // set only while operating (mode === 'operator')
   tenantId: string                   // the validated active business id
   mode: 'owner' | 'operator'
-  capabilities: { canOperate: boolean; canEditBilling: boolean; canEditSettings: boolean }
+  capabilities: { canOperate: boolean; canEditBilling: boolean; canEditSettings: boolean; canViewCosts: boolean }
 }
 
 export async function requireActiveBusinessContext(): Promise<ActiveBusinessContext | null> {
@@ -85,13 +85,18 @@ export async function requireActiveBusinessContext(): Promise<ActiveBusinessCont
 
   // Owner mode = the user's own business → full capability. Operator mode = derive from the partner role
   // (aliased WL roles): owner/manager full; support operates but not billing/ownership; finance billing only.
-  let capabilities = { canOperate: true, canEditBilling: true, canEditSettings: true }
+  let capabilities = { canOperate: true, canEditBilling: true, canEditSettings: true, canViewCosts: true }
   if (ws.mode === 'operator') {
     const role = (await getPartnerContext())?.role
     capabilities = {
       canOperate: role !== 'finance',
       canEditBilling: role === 'owner' || role === 'manager' || role === 'finance',
       canEditSettings: role === 'owner' || role === 'manager' || role === 'support' || role === 'sales' || role === 'marketing',
+      // What a business pays for its stock is its own margin structure. A White Label partner operates
+      // the account but is not the business, so NO partner role grants this — deliberately not derived
+      // from `role` at all. product_costs RLS draws the same line in the database, so this flag is the
+      // convenience, not the protection. When real team accounts exist, only this line changes.
+      canViewCosts: false,
     }
   }
   return { actorUserId: user.id, partnerId: ws.partnerId, tenantId: ws.tenantId, mode: ws.mode, capabilities }
