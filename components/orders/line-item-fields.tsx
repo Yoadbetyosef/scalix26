@@ -11,6 +11,7 @@ export interface LineDraft {
   stoneType: string; stoneOrigin: string; stoneQuality: string; stoneColor: string
   centerStoneShape: string; sideStoneShape: string; metalKarat: string
   centerStoneCarat: string; sideStoneCaratTotal: string
+  certificateLab: string; ringSize: string
 }
 
 export const emptyLine = (): LineDraft => ({
@@ -19,6 +20,7 @@ export const emptyLine = (): LineDraft => ({
   stoneType: '', stoneOrigin: '', stoneQuality: '', stoneColor: '',
   centerStoneShape: '', sideStoneShape: '', metalKarat: '',
   centerStoneCarat: '', sideStoneCaratTotal: '',
+  certificateLab: '', ringSize: '',
 })
 
 // Turn the on-screen strings into the API payload. Blank means "not specified", never 0 or "".
@@ -28,6 +30,7 @@ export const lineToPayload = (l: LineDraft) => ({
   measurements: l.measurements || null, color: l.color || null, material: l.material || null, customSpec: l.customSpec || null,
   stoneType: l.stoneType || null, stoneOrigin: l.stoneOrigin || null, stoneQuality: l.stoneQuality || null, stoneColor: l.stoneColor || null,
   centerStoneShape: l.centerStoneShape || null, sideStoneShape: l.sideStoneShape || null, metalKarat: l.metalKarat || null,
+  certificateLab: l.certificateLab || null, ringSize: l.ringSize || null,
   centerStoneCarat: l.centerStoneCarat.trim() === '' ? null : parseFloat(l.centerStoneCarat),
   sideStoneCaratTotal: l.sideStoneCaratTotal.trim() === '' ? null : parseFloat(l.sideStoneCaratTotal),
 })
@@ -39,6 +42,7 @@ export const lineFromSaved = (l: {
   stoneType?: string | null; stoneOrigin?: string | null; stoneQuality?: string | null; stoneColor?: string | null
   centerStoneShape?: string | null; sideStoneShape?: string | null; metalKarat?: string | null
   centerStoneCarat?: number | null; sideStoneCaratTotal?: number | null
+  certificateLab?: string | null; ringSize?: string | null
 }): LineDraft => ({
   productName: l.productName, description: l.description ?? '', sku: l.sku ?? '',
   quantity: String(l.quantity), unitPrice: l.unitPriceCents ? (l.unitPriceCents / 100).toString() : '',
@@ -47,6 +51,7 @@ export const lineFromSaved = (l: {
   centerStoneShape: l.centerStoneShape ?? '', sideStoneShape: l.sideStoneShape ?? '', metalKarat: l.metalKarat ?? '',
   centerStoneCarat: l.centerStoneCarat == null ? '' : String(l.centerStoneCarat),
   sideStoneCaratTotal: l.sideStoneCaratTotal == null ? '' : String(l.sideStoneCaratTotal),
+  certificateLab: l.certificateLab ?? '', ringSize: l.ringSize ?? '',
 })
 
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
@@ -95,11 +100,16 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
           <label className="block text-xs text-gray-500">Center weight (ct)<input value={line.centerStoneCarat} onChange={(e) => onChange('centerStoneCarat', e.target.value)} inputMode="decimal" placeholder="e.g. 1.25" className={inp} /></label>
           <OptionSelect label="Side shape" value={line.sideStoneShape} options={opts('side_stone_shape')} onChange={(v) => onChange('sideStoneShape', v)} />
           <label className="block text-xs text-gray-500">Side total weight (ct)<input value={line.sideStoneCaratTotal} onChange={(e) => onChange('sideStoneCaratTotal', e.target.value)} inputMode="decimal" placeholder="e.g. 0.50" className={inp} /></label>
+          {/* The lab that graded the stone — it belongs with the stone, not with the metal. */}
+          <OptionSelect label="Certificate lab" value={line.certificateLab} options={opts('certificate_lab')} onChange={(v) => onChange('certificateLab', v)} />
         </div>
       </fieldset>
 
       <div className="grid gap-2 sm:grid-cols-4">
         <OptionSelect label="Gold karat / metal" value={line.metalKarat} options={opts('metal_karat')} onChange={(v) => onChange('metalKarat', v)} />
+        {/* Ring size is its own field, not free text: a mistyped size is a remake. Measurements stays
+            for everything that isn't a ring — chain length, pendant dimensions. */}
+        <OptionSelect label="Ring size" value={line.ringSize} options={opts('ring_size')} onChange={(v) => onChange('ringSize', v)} />
         <label className="block text-xs text-gray-500">Measurements / size<input value={line.measurements} onChange={(e) => onChange('measurements', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Finish / colour note<input value={line.color} onChange={(e) => onChange('color', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Custom spec<input value={line.customSpec} onChange={(e) => onChange('customSpec', e.target.value)} className={inp} /></label>

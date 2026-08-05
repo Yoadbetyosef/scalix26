@@ -143,7 +143,7 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes, stage').eq('id', r.order_id as string).maybeSingle()
   // Jewelry specs are part of the safe projection: the factory can't approve a piece it can't see the
   // stone, shape and metal for. Pricing and internal notes remain excluded.
-  const { data: lines } = await sb.from('order_line_items').select('product_name, description, quantity, measurements, color, material, custom_spec, stone_quality, stone_color, stone_origin, stone_type, center_stone_shape, side_stone_shape, center_stone_carat, side_stone_carat_total, metal_karat').eq('order_id', r.order_id as string).order('display_order')
+  const { data: lines } = await sb.from('order_line_items').select('product_name, description, quantity, measurements, color, material, custom_spec, stone_quality, stone_color, stone_origin, stone_type, center_stone_shape, side_stone_shape, center_stone_carat, side_stone_carat_total, metal_karat, certificate_lab, ring_size').eq('order_id', r.order_id as string).order('display_order')
   const { data: tenant } = await sb.from('tenants').select('business_name').eq('id', r.tenant_id as string).maybeSingle()
   const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
   const attIds = (attRows ?? []).map((a) => a.attachment_id as string)
@@ -167,6 +167,7 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
       centerStoneCarat: l.center_stone_carat == null ? null : Number(l.center_stone_carat),
       sideStoneCaratTotal: l.side_stone_carat_total == null ? null : Number(l.side_stone_carat_total),
       metalKarat: (l.metal_karat as string) ?? null,
+      certificateLab: (l.certificate_lab as string) ?? null, ringSize: (l.ring_size as string) ?? null,
     })),
   }
   const responded = ['approved', 'changes_requested', 'rejected'].includes(r.status as string)

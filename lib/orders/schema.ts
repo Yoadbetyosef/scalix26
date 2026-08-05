@@ -16,6 +16,7 @@ export const lineItemSchema = z.object({
   customSpec: z.string().max(2000).nullable().optional(), productRef: z.string().uuid().nullable().optional(),
   stoneQuality: optionLabel, stoneColor: optionLabel, stoneOrigin: optionLabel, stoneType: optionLabel,
   centerStoneShape: optionLabel, sideStoneShape: optionLabel, metalKarat: optionLabel,
+  certificateLab: optionLabel, ringSize: optionLabel,
   centerStoneCarat: carat, sideStoneCaratTotal: carat,
 })
 

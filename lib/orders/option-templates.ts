@@ -14,9 +14,15 @@ export interface OptionTemplate { id: string; name: string; description: string;
 export const JEWELRY_LIST_KEYS = [
   'stone_quality', 'stone_color', 'stone_origin', 'stone_type',
   'center_stone_shape', 'side_stone_shape', 'metal_karat',
+  'certificate_lab', 'ring_size',
 ] as const
 
 const SHAPES = ['Round', 'Oval', 'Princess', 'Cushion', 'Emerald', 'Pear', 'Marquise', 'Radiant', 'Asscher', 'Heart', 'Trillion', 'Baguette']
+
+// US ring sizes 3 through 12 in quarter steps. Whole sizes print bare ("4"), quarters keep two decimals
+// ("4.25", "4.50") so the open dropdown reads as one column instead of a ragged mix.
+const RING_SIZES = Array.from({ length: 37 }, (_, i) => 3 + i * 0.25)
+  .map((n) => (Number.isInteger(n) ? String(n) : n.toFixed(2)))
 
 export const OPTION_TEMPLATES: OptionTemplate[] = [
   {
@@ -31,6 +37,8 @@ export const OPTION_TEMPLATES: OptionTemplate[] = [
       { key: 'center_stone_shape', label: 'Center stone shape', options: SHAPES },
       { key: 'side_stone_shape', label: 'Side stone shape', options: [...SHAPES, 'Tapered Baguette'] },
       { key: 'metal_karat', label: 'Gold karat / metal', options: ['10K Yellow Gold', '10K White Gold', '10K Rose Gold', '14K Yellow Gold', '14K White Gold', '14K Rose Gold', '18K Yellow Gold', '18K White Gold', '18K Rose Gold', 'Platinum', 'Sterling Silver'] },
+      { key: 'certificate_lab', label: 'Certificate lab', options: ['GIA', 'HRD', 'IGI', 'EGL'] },
+      { key: 'ring_size', label: 'Ring size', options: RING_SIZES },
     ],
   },
   {

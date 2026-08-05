@@ -33,6 +33,7 @@ const lineRow = (r: Record<string, unknown>): OrderLineItem => ({
   stoneQuality: (r.stone_quality as string) ?? null, stoneColor: (r.stone_color as string) ?? null, stoneOrigin: (r.stone_origin as string) ?? null, stoneType: (r.stone_type as string) ?? null,
   centerStoneShape: (r.center_stone_shape as string) ?? null, sideStoneShape: (r.side_stone_shape as string) ?? null,
   centerStoneCarat: num(r.center_stone_carat), sideStoneCaratTotal: num(r.side_stone_carat_total), metalKarat: (r.metal_karat as string) ?? null,
+  certificateLab: (r.certificate_lab as string) ?? null, ringSize: (r.ring_size as string) ?? null,
 })
 
 // One place that turns a LineItemInput into its DB row — used by both create and update so the jewelry
@@ -44,6 +45,7 @@ const lineInsert = (tenantId: string, orderId: string, i: LineItemInput, total: 
   stone_quality: i.stoneQuality ?? null, stone_color: i.stoneColor ?? null, stone_origin: i.stoneOrigin ?? null, stone_type: i.stoneType ?? null,
   center_stone_shape: i.centerStoneShape ?? null, side_stone_shape: i.sideStoneShape ?? null,
   center_stone_carat: i.centerStoneCarat ?? null, side_stone_carat_total: i.sideStoneCaratTotal ?? null, metal_karat: i.metalKarat ?? null,
+  certificate_lab: i.certificateLab ?? null, ring_size: i.ringSize ?? null,
 })
 const eventRow = (r: Record<string, unknown>): OrderEvent => ({ id: r.id as string, orderId: r.order_id as string, type: r.type as string, actor: (r.actor as string) ?? null, payload: (r.payload as Record<string, unknown>) ?? null, createdAt: r.created_at as string })
 

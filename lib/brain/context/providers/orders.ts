@@ -82,7 +82,7 @@ async function orderDetail(req: ContextRequest, db: SupabaseClient, orderNumber:
 
   const { data: items } = await db
     .from('order_line_items')
-    .select('product_name, quantity, stone_type, stone_origin, stone_quality, stone_color, center_stone_shape, center_stone_carat, side_stone_shape, side_stone_carat_total, metal_karat, measurements')
+    .select('product_name, quantity, stone_type, stone_origin, stone_quality, stone_color, center_stone_shape, center_stone_carat, side_stone_shape, side_stone_carat_total, metal_karat, certificate_lab, ring_size, measurements')
     .eq('order_id', data.id as string).order('display_order')
 
   const cur = ((data.currency as string) ?? 'usd').toUpperCase()
@@ -91,7 +91,8 @@ async function orderDetail(req: ContextRequest, db: SupabaseClient, orderNumber:
     l.stone_type, l.stone_origin, l.stone_quality, l.stone_color,
     l.center_stone_shape, l.center_stone_carat ? `${l.center_stone_carat}ct centre` : null,
     l.side_stone_shape, l.side_stone_carat_total ? `${l.side_stone_carat_total}ct side` : null,
-    l.metal_karat, l.measurements,
+    l.certificate_lab ? `${l.certificate_lab} cert` : null,
+    l.metal_karat, l.ring_size ? `size ${l.ring_size}` : null, l.measurements,
   ].filter(Boolean).join(' · ')
   const lines = ((items as Array<Record<string, unknown>> | null) ?? [])
     .map((l) => `  - ${l.product_name} ×${l.quantity}${spec(l) ? `: ${spec(l)}` : ''}`)

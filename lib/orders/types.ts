@@ -6,6 +6,7 @@ export interface JewelrySpec {
   stoneQuality: string | null; stoneColor: string | null; stoneOrigin: string | null; stoneType: string | null
   centerStoneShape: string | null; sideStoneShape: string | null
   centerStoneCarat: number | null; sideStoneCaratTotal: number | null; metalKarat: string | null
+  certificateLab: string | null; ringSize: string | null
 }
 
 export interface OrderLineItem extends JewelrySpec {

@@ -16,7 +16,7 @@ const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100
 const specLine = (l: import('@/lib/orders/types').OrderLineItem): string => {
   const center = [l.centerStoneCarat ? `${l.centerStoneCarat}ct` : null, l.centerStoneShape, l.stoneOrigin, l.stoneType, l.stoneQuality, l.stoneColor].filter(Boolean).join(' ')
   const side = [l.sideStoneCaratTotal ? `${l.sideStoneCaratTotal}ct side` : null, l.sideStoneShape].filter(Boolean).join(' ')
-  return [center, side, l.metalKarat, l.measurements, l.color, l.material, l.customSpec].filter(Boolean).join(' · ')
+  return [center, side, l.certificateLab ? `${l.certificateLab} cert` : null, l.metalKarat, l.ringSize ? `size ${l.ringSize}` : null, l.measurements, l.color, l.material, l.customSpec].filter(Boolean).join(' · ')
 }
 const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', sent_to_production: 'Sent to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
 
