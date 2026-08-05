@@ -114,11 +114,39 @@ export const externalIdFor = (platformId: string | null | undefined, productUrl:
   return productUrl ? sha256(productUrl) : null
 }
 
+// Query parameters that change without the image changing. Stripped for HASHING ONLY — the stored
+// image_url keeps every parameter, because on WordPress/Jetpack the query string is often a resize
+// directive (?fit=1600,1600&ssl=1) and dropping it wholesale would serve a broken image. Only the
+// params that are demonstrably volatile come out.
+const VOLATILE_IMAGE_PARAMS = new Set(['v', 'ver', 'version', 'rev', 't', 'ts', 'time', 'timestamp', 'cache', 'cb', 'nocache', '_', 'rand', 'updated', 'last_modified'])
+
+// The image's identity for diffing purposes: same picture, same key, whatever cache-buster the CDN
+// hung off it this morning.
+export function stableImageKey(url: string | null): string {
+  if (!url) return ''
+  try {
+    const u = new URL(url)
+    for (const key of [...u.searchParams.keys()]) {
+      if (VOLATILE_IMAGE_PARAMS.has(key.toLowerCase())) u.searchParams.delete(key)
+    }
+    u.searchParams.sort()          // parameter order is not information
+    return `${u.origin}${u.pathname}${u.search}`
+  } catch { return url }
+}
+
 // What "changed" means. Only the fields a business would notice: renamed, repriced, rewritten,
-// re-photographed, or back in stock. A tracking parameter appearing on a product URL is not a change.
+// re-photographed, or back in stock. A tracking parameter appearing on a product URL is not a change,
+// and neither is a cache-buster on an image — both would otherwise rewrite an entire catalogue every
+// night and bury the real changes.
 export const contentHashOf = (p: {
   title: string; price: number | null; description: string | null; imageUrl: string | null; availability: Availability
-}): string => sha256([p.title, p.price ?? '', p.description ?? '', p.imageUrl ?? '', p.availability].join('|'))
+}): string => sha256([
+  p.title.replace(/\s+/g, ' ').trim(),        // whitespace in server-rendered HTML is not content
+  p.price ?? '',                              // already a number by here, so "1,299.00" and "1299" agree
+  (p.description ?? '').replace(/\s+/g, ' ').trim(),
+  stableImageKey(p.imageUrl),
+  p.availability,
+].join('|'))
 
 // Takes the source's origin rather than its type: nothing in normalisation actually varies by source
 // — the adapters have already reduced six wire formats to one RawProduct — and the only thing that

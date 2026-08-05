@@ -24,7 +24,8 @@ export type FailureReason =
   | 'blocked'              // answered, but with 401/403 and the browser-header retry didn't help
   | 'no_products_found'    // readable, but nothing on it looks like a product
   | 'fetch_failed'         // transport failure mid-run
-  | 'llm_failed'           // tier 4 couldn't produce a usable shape
+  | 'llm_failed'           // the AI tier couldn't produce a usable shape
+  | 'low_confidence'       // readable, but the sampled pages don't look like products — stopped early
 
 // ── Detection ───────────────────────────────────────────────────────────────────────────────────────
 

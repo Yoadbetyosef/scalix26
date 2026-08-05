@@ -226,7 +226,9 @@ async function handleFailure(
 
   // A site that says no does not say yes on the third ask. Retrying robots or an SPA wastes the
   // tenant's time and ours; those go straight to a state the UI can act on.
-  const terminal = reason === 'robots_blocked' || reason === 'spa_unsupported'
+  // Retrying will not change any of these: a site that says no, a page with nothing on the server,
+  // or a site that simply isn't a shop. They go straight to a state the tenant can act on.
+  const terminal = reason === 'robots_blocked' || reason === 'spa_unsupported' || reason === 'low_confidence'
   const canRetry = !terminal && job.attempts < job.max_attempts
 
   if (canRetry) {
@@ -257,6 +259,7 @@ function reasonMessage(reason: string | undefined): string {
     case 'robots_blocked': return 'This site\'s robots.txt tells automated readers to stay out of the product pages.'
     case 'unreachable': return 'The site did not respond.'
     case 'no_products_found': return 'We reached the site but could not find anything that looks like a product.'
+    case 'low_confidence': return 'We read a few pages of this site and they did not look like product pages.'
     default: return 'We could not read this site automatically.'
   }
 }

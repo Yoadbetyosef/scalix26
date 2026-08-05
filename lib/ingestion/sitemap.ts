@@ -17,6 +17,18 @@ export const PRODUCT_URL_PATTERNS = [
 
 export const looksLikeProductUrl = (url: string): boolean => PRODUCT_URL_PATTERNS.some((re) => re.test(url))
 
+// A sitemap the site itself calls its product sitemap. This matters more than the URL shapes above:
+// plenty of real stores hang products off a category path — craftmasterhardware.com lists 25,232
+// products at /shop-by-category/door-locks/kw334-11p-… and exactly one of them matches any of the
+// patterns above. When the site has labelled the file, believe the label and take every URL in it.
+//
+// "category" is excluded because sitemap_category_products.xml is a CATEGORY sitemap that happens to
+// contain the word.
+export const looksLikeProductSitemap = (url: string): boolean => {
+  const name = url.split('/').pop()?.toLowerCase() ?? ''
+  return /product/.test(name) && !/categor/.test(name)
+}
+
 export interface SitemapContents { urls: string[]; sitemaps: string[] }
 
 export function parseSitemap(xml: string): SitemapContents {
@@ -70,10 +82,14 @@ export async function collectProductUrls(
     const { urls: pageUrls, sitemaps } = parseSitemap(res.body)
     // Prefer child sitemaps whose own name suggests products — on a big site that is the difference
     // between reading the catalogue and reading the blog.
-    queue.push(...sitemaps.sort((a, b) => Number(looksLikeProductUrl(b)) - Number(looksLikeProductUrl(a))))
+    queue.push(...sitemaps.sort((a, b) => Number(looksLikeProductSitemap(b)) - Number(looksLikeProductSitemap(a))))
+
+    // Inside a file the site calls its product sitemap, every entry is a product, whatever its path
+    // looks like. Elsewhere we fall back to guessing from the URL.
+    const trustAll = looksLikeProductSitemap(next)
 
     for (const u of pageUrls) {
-      if (!looksLikeProductUrl(u)) continue
+      if (!trustAll && !looksLikeProductUrl(u)) continue
       if (seen.has(u)) continue
       seen.add(u)
       urls.push(u)

@@ -13,7 +13,10 @@ import { DomainRateLimiter } from '../rateLimiter'
 import { IngestionError, type FetchContext, type RawProduct, type SourceRef } from '../types'
 import { fetchRobots } from '../robots'
 
-export const MAX_CRAWL_URLS = 2000
+// One request per second means 2,000 URLs is already a 33-minute crawl of a single site. A catalogue
+// bigger than that wants a feed or an API, and the tenant is better served by being told so.
+// Overridable per deployment so a smoke test doesn't have to sit through the full cap.
+export const MAX_CRAWL_URLS = Number(process.env.CATALOG_MAX_CRAWL_URLS) || 2000
 
 // Shared by tier 4 and tier 5: find the pages worth reading, refusing to cross robots.txt.
 export async function discoverProductUrls(

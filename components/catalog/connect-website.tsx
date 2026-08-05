@@ -44,6 +44,10 @@ const FAILURE_COPY: Record<string, { title: string; body: string }> = {
     title: 'Your site didn’t respond',
     body: 'We couldn’t reach that address. Check the spelling, and that the site is live — then try again.',
   },
+  low_confidence: {
+    title: 'This doesn’t look like a shop to us',
+    body: 'We read a few pages of your site and none of them looked like a product page — no prices, no product codes. If you do sell online, the options below will get your list in directly.',
+  },
   no_products_found: {
     title: 'We couldn’t find any products',
     body: 'We reached your site but nothing on it looked like a product page. If your products live somewhere else — a marketplace, a PDF, a spreadsheet — the options below will get them in.',

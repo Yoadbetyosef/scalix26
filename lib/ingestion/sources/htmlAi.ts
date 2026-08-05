@@ -21,6 +21,29 @@ import { discoverProductUrls } from './jsonld'
 export const MAX_AI_PAGES = 100
 const MAX_TEXT_CHARS = 6000
 
+// The give-up gate. Before committing to 100 model calls, read a handful of pages and check we are
+// getting products out of them. A site that is readable but simply isn't a shop — a services
+// business, a blog, a marketing site whose "products" are pages about the team — will happily return
+// 100 pages of nothing, and we'd pay for every one before finding out.
+//
+// The test is deliberately generous: a page counts as a hit if the model found a name AND either a
+// price or a SKU. A name alone is what a page title gives you, so accepting it would defeat the gate.
+export const CONFIDENCE_SAMPLE = 5
+export const CONFIDENCE_MIN_HITS = 2
+
+export const isConfident = (v: Extracted | null): boolean =>
+  Boolean(v?.title && (v.price != null || (v.sku && String(v.sku).trim())))
+
+// Pulled out of the loop so the rule can be tested without a network: a live site that triggers it is
+// one whose URLs look like products while its pages are not, which is precisely the situation you
+// cannot arrange on demand.
+export const shouldStopForLowConfidence = (
+  { seen, confidentHits, hasFieldMap }: { seen: number; confidentHits: number; hasFieldMap: boolean },
+): boolean =>
+  // A source replaying a saved map costs nothing per page and has already proved itself — the gate
+  // only ever guards the paid path.
+  !hasFieldMap && seen >= CONFIDENCE_SAMPLE && confidentHits < CONFIDENCE_MIN_HITS
+
 const extracted = z.object({
   title: z.string().min(1).nullable().optional(),
   description: z.string().nullable().optional(),
@@ -153,6 +176,7 @@ export async function* fetchProducts(source: SourceRef, ctx: FetchContext = {}):
   const { urls } = await discoverProductUrls(source, MAX_AI_PAGES, http)
   let seen = 0
   let llmPagesUsed = 0
+  let confidentHits = 0
 
   for (const url of urls.slice(0, MAX_AI_PAGES)) {
     if (ctx.signal?.aborted) return
@@ -193,9 +217,19 @@ export async function* fetchProducts(source: SourceRef, ctx: FetchContext = {}):
       }
     }
 
+    if (isConfident(values)) confidentHits++
+
     const product = values ? toRawProduct(values, page.url, page.body) : null
     if (product) yield product
     seen++
+
+    if (shouldStopForLowConfidence({ seen, confidentHits, hasFieldMap: Boolean(map) })) {
+      throw new IngestionError(
+        'low_confidence',
+        `Only ${confidentHits} of the first ${seen} pages looked like a product. Stopping rather than reading ${urls.length} pages of a site that may not be a shop.`,
+      )
+    }
+
     if (seen % 25 === 0) await ctx.onProgress?.({ current: seen, total: urls.length, phase: map ? 'reading pages' : 'reading pages with AI' })
   }
 
