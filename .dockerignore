@@ -1,0 +1,12 @@
+# Docker reads ONLY the .dockerignore at the build context root. The catalog-worker image builds with
+# the repository root as its context (it needs lib/), so this file — not catalog-worker/.dockerignore
+# — is the one that applies.
+node_modules
+**/node_modules
+.next
+.git
+.env*
+*.log
+.vercel
+.claude
+coverage
