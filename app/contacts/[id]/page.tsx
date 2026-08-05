@@ -42,6 +42,9 @@ export default async function ContactProfilePage({ params, searchParams }: { par
   const ident = contactIdentifier(contact.channel, contact.phone)
   const IdentIcon = ident?.isPhone ? Phone : MessageCircle
 
+  // Same rule as the list (CT2): identify them by whatever we actually have rather than by "Unknown".
+  const title = contact.name || contact.email || contact.phone || 'Unknown contact'
+
   return (
     <div className="p-4 sm:p-6 max-w-4xl">
       {/* Header */}
@@ -49,11 +52,11 @@ export default async function ContactProfilePage({ params, searchParams }: { par
         <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:text-ink hover:bg-sunken flex-shrink-0">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sunken to-hairline ring-1 ring-hairline flex items-center justify-center text-ink text-lg font-light flex-shrink-0">
-          {contact.name?.[0] || contact.phone?.[0] || '?'}
+        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sunken to-hairline ring-1 ring-hairline flex items-center justify-center text-ink text-lg font-light uppercase flex-shrink-0">
+          {title[0] || '?'}
         </div>
         <div className="min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink truncate">{contact.name || 'Unknown contact'}</h1>
+          <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink truncate">{title}</h1>
           {contact.channel && (
             <Badge variant={contact.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'} className="mt-0.5">
               {contact.channel}

@@ -1,8 +1,9 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
+import { escapeSearchTerm } from '@/lib/contacts/store'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, Phone, Mail, MessageCircle, ChevronRight } from 'lucide-react'
+import { Users, Phone, Mail, MessageCircle, ChevronRight, ChevronLeft, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ContactActions } from '@/components/contacts/new-contact'
@@ -16,7 +17,24 @@ const CHANNEL_TINT: Record<string, string> = {
   facebook: 'bg-blue-100 text-blue-700', instagram: 'bg-pink-100 text-pink-700',
 }
 
-export default async function ContactsPage() {
+const PAGE_SIZE = 50
+
+interface ContactRow {
+  id: string; name: string | null; email: string | null; phone: string | null
+  channel: string | null; total_conversations: number; last_interaction: string | null
+}
+
+// CT2: a contact the AI created from one inbound email or call has nothing but that address or
+// number, and calling them "Unknown" hides the one thing we DO know about them. Whatever identifies
+// them is the title instead, and drives the avatar letter. Display-only — no data changes.
+const displayTitle = (c: ContactRow): string => c.name || c.email || c.phone || 'Unknown'
+const displayInitial = (c: ContactRow): string => displayTitle(c)[0] || '?'
+
+export default async function ContactsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>
+}) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
@@ -27,60 +45,98 @@ export default async function ContactsPage() {
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/auth/signup')
 
-  const { data: contacts } = await serviceSupabase
+  const params = await searchParams
+  const q = (params.q ?? '').trim()
+  const page = Math.max(1, Number(params.page) || 1)
+  const offset = (page - 1) * PAGE_SIZE
+
+  // An imported address book is far larger than a book that filled up one conversation at a time, so
+  // the page is a window onto it: a count for the header, a slice for the table, and search over the
+  // whole book rather than over whatever the slice happened to contain.
+  let query = serviceSupabase
     .from('contacts')
-    .select('*')
+    .select('id, name, email, phone, channel, total_conversations, last_interaction', { count: 'exact' })
     .eq('tenant_id', tenantId)
-    .order('last_interaction', { ascending: false })
-    .limit(100)
+    .is('merged_into_id', null)
+    // People she's actually spoken to sit on top, most recent first. Everyone else — an imported book
+    // has no interactions at all — falls into a stable A–Z run instead of an arbitrary one, with the
+    // contacts we can only identify by email or phone last.
+    .order('last_interaction', { ascending: false, nullsFirst: false })
+    .order('name', { ascending: true, nullsFirst: false })
+    .range(offset, offset + PAGE_SIZE - 1)
+
+  const safe = escapeSearchTerm(q)
+  if (safe) query = query.or(`name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%,address.ilike.%${safe}%`)
+
+  const { data, count } = await query
+  const contacts = (data ?? []) as ContactRow[]
+  const total = count ?? 0
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const firstShown = total === 0 ? 0 : offset + 1
+  const lastShown = offset + contacts.length
+  const pageHref = (n: number) => `/contacts?${new URLSearchParams({ ...(q ? { q } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`
 
   return (
     <div className="p-4 sm:p-6">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Contacts</h1>
-          <p className="text-sm text-muted mt-1">{contacts?.length || 0} total contacts</p>
+          <p className="text-sm text-muted mt-1">
+            {q
+              ? `${total} ${total === 1 ? 'match' : 'matches'} for “${q}”`
+              : `${total} total contact${total === 1 ? '' : 's'}`}
+          </p>
         </div>
         <ContactActions />
       </div>
 
-      {!contacts?.length ? (
-        <EmptyState icon={Users} title="Your address book builds itself">
-          Every person your AI talks to — across calls, texts, email, and social — is saved here automatically, with their full history.
-          Use <strong>New contact</strong> to add someone by hand, or <strong>Import file</strong> to bring in a whole list at once.
-        </EmptyState>
+      {/* Search — a plain GET form, so a search is a real URL the browser can go back to. */}
+      <form className="relative mb-4">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+        <input
+          name="q"
+          type="search"
+          defaultValue={q}
+          placeholder="Search by name, email, phone, or address..."
+          className="pl-10 h-11 w-full rounded-xl border border-hairline bg-white text-sm text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
+        />
+      </form>
+
+      {!contacts.length ? (
+        q ? (
+          <EmptyState icon={Search} title="No contacts match that search">
+            Nothing here matches <strong>{q}</strong>. Try part of a name, an email address, a phone number, or a city.
+          </EmptyState>
+        ) : (
+          <EmptyState icon={Users} title="Your address book builds itself">
+            Every person your AI talks to — across calls, texts, email, and social — is saved here automatically, with their full history.
+            Use <strong>New contact</strong> to add someone by hand, or <strong>Import file</strong> to bring in a whole list at once.
+          </EmptyState>
+        )
       ) : (
         <>
           {/* Mobile compact list rows */}
           <div className="md:hidden -mx-4 border-t border-hairline">
-            {contacts.map((contact) => {
-              // CT2: email becomes the title when name is Unknown (display-only, no data change).
-              const hasName = Boolean(contact.name)
-              const emailPrefix = contact.email ? contact.email.split('@')[0] : ''
-              const title = hasName ? contact.name : (contact.email || contact.phone || 'Unknown')
-              // Initials: name → first letter; else email prefix; else phone; else '?'.
-              const initial = (hasName ? contact.name?.[0] : (emailPrefix?.[0] || contact.phone?.[0])) || '?'
-              return (
-                <Link
-                  key={contact.id}
-                  href={`/contacts/${contact.id}`}
-                  className="tap-target flex items-center gap-3 min-h-[64px] px-4 border-b border-hairline"
-                >
-                  <div className={`w-[38px] h-[38px] rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium flex-shrink-0 uppercase`}>
-                    {initial}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-ink truncate">{title}</p>
-                    {contact.total_conversations > 0 && (
-                      <p className="text-xs text-muted truncate mt-0.5">
-                        {contact.total_conversations} conversation{contact.total_conversations !== 1 ? 's' : ''}
-                      </p>
-                    )}
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-muted flex-shrink-0" />
-                </Link>
-              )
-            })}
+            {contacts.map((contact) => (
+              <Link
+                key={contact.id}
+                href={`/contacts/${contact.id}`}
+                className="tap-target flex items-center gap-3 min-h-[64px] px-4 border-b border-hairline"
+              >
+                <div className={`w-[38px] h-[38px] rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium flex-shrink-0 uppercase`}>
+                  {displayInitial(contact)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink truncate">{displayTitle(contact)}</p>
+                  {contact.total_conversations > 0 && (
+                    <p className="text-xs text-muted truncate mt-0.5">
+                      {contact.total_conversations} conversation{contact.total_conversations !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted flex-shrink-0" />
+              </Link>
+            ))}
           </div>
 
           {/* Desktop table */}
@@ -101,11 +157,11 @@ export default async function ContactsPage() {
                   <tr key={contact.id} className="hover:bg-sunken transition-colors">
                     <td className="px-6 py-4">
                       <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3 group">
-                        <div className={`w-8 h-8 rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium`}>
-                          {contact.name?.[0] || contact.phone?.[0] || '?'}
+                        <div className={`w-8 h-8 rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium uppercase flex-shrink-0`}>
+                          {displayInitial(contact)}
                         </div>
                         <span className="text-sm font-medium text-ink group-hover:text-accent-strong transition-colors">
-                          {contact.name || 'Unknown'}
+                          {displayTitle(contact)}
                         </span>
                       </Link>
                     </td>
@@ -148,6 +204,36 @@ export default async function ContactsPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Paging. Hidden when the whole book fits on one page — most businesses never see it. */}
+          {lastPage > 1 && (
+            <div className="flex items-center justify-between gap-3 mt-4">
+              <p className="text-xs text-muted">
+                Showing {firstShown}–{lastShown} of {total}
+              </p>
+              <div className="flex items-center gap-2">
+                {page > 1 ? (
+                  <Link href={pageHref(page - 1)} className="tap-target inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline bg-white text-sm text-ink hover:bg-sunken transition-colors">
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline text-sm text-muted">
+                    <ChevronLeft className="w-4 h-4" /> Previous
+                  </span>
+                )}
+                <span className="text-xs text-muted tabular-nums px-1">Page {page} of {lastPage}</span>
+                {page < lastPage ? (
+                  <Link href={pageHref(page + 1)} className="tap-target inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline bg-white text-sm text-ink hover:bg-sunken transition-colors">
+                    Next <ChevronRight className="w-4 h-4" />
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline text-sm text-muted">
+                    Next <ChevronRight className="w-4 h-4" />
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

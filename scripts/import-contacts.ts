@@ -11,9 +11,15 @@
 // One addition the in-app importer doesn't need: a row with NO email and NO phone is matched on name
 // as well, so re-running this script can't fill the book with duplicates of name-only rows.
 //
-// Dry run by default — it prints exactly what would happen and writes nothing. Add --commit to insert.
+// --enrich handles the other half of the problem: a contact the app created from a single inbound
+// email has nothing but that address, so it reads as "Unknown" everywhere. When the business later
+// produces the file that names them, --enrich fills the empty columns on the matched record. It only
+// ever writes into a blank — an existing value is never overwritten, because what the business
+// already corrected in the app outranks what the export says.
 //
-//   Run: node_modules/.bin/tsx scripts/import-contacts.ts <tenant-id> <rows.json> [--commit]
+// Dry run by default — it prints exactly what would happen and writes nothing. Add --commit to write.
+//
+//   Run: node_modules/.bin/tsx scripts/import-contacts.ts <tenant-id> <rows.json> [--enrich] [--commit]
 import { readFileSync } from 'node:fs'
 import { normalizeEmail, normalizePhone, type ImportRow, type ContactSummary } from '../lib/contacts/store'
 
@@ -28,11 +34,15 @@ const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'content-type': 'applic
 
 const args = process.argv.slice(2)
 const commit = args.includes('--commit')
+const enrich = args.includes('--enrich')
 const [tenantId, jsonPath] = args.filter((a) => !a.startsWith('--'))
+
+// The list query pulls notes too, which enrich needs and the dedupe pass ignores.
+type ExistingContact = ContactSummary & { notes: string | null }
 
 ;(async () => {
   if (!tenantId || !jsonPath) {
-    console.error('Usage: node_modules/.bin/tsx scripts/import-contacts.ts <tenant-id> <rows.json> [--commit]')
+    console.error('Usage: node_modules/.bin/tsx scripts/import-contacts.ts <tenant-id> <rows.json> [--enrich] [--commit]')
     process.exit(1)
   }
   const rows: ImportRow[] = JSON.parse(readFileSync(jsonPath, 'utf8'))
@@ -48,17 +58,17 @@ const [tenantId, jsonPath] = args.filter((a) => !a.startsWith('--'))
 
   // Every live contact for the tenant, matching lib/contacts/store.ts loadExisting: merged-away records
   // are excluded so a contact folded into another can't block its survivor from matching.
-  const existing: ContactSummary[] = await (await fetch(
-    `${SB}/rest/v1/contacts?select=id,name,email,phone,address,currency&tenant_id=eq.${tenantId}&merged_into_id=is.null&limit=10000`,
+  const existing: ExistingContact[] = await (await fetch(
+    `${SB}/rest/v1/contacts?select=id,name,email,phone,address,currency,notes&tenant_id=eq.${tenantId}&merged_into_id=is.null&limit=10000`,
     { headers: H },
   )).json()
   console.log(`Already in the book: ${existing.length}`)
 
   // Keys come from the raw email/phone rather than normalized_email/normalized_phone, because contacts
   // created before those columns existed still have them null.
-  const byEmail = new Map<string, ContactSummary>()
-  const byPhone = new Map<string, ContactSummary>()
-  const byName = new Map<string, ContactSummary>()
+  const byEmail = new Map<string, ExistingContact>()
+  const byPhone = new Map<string, ExistingContact>()
+  const byName = new Map<string, ExistingContact>()
   for (const r of existing) {
     const e = normalizeEmail(r.email); if (e && !byEmail.has(e)) byEmail.set(e, r)
     const p = normalizePhone(r.phone); if (p && !byPhone.has(p)) byPhone.set(p, r)
@@ -66,7 +76,7 @@ const [tenantId, jsonPath] = args.filter((a) => !a.startsWith('--'))
   }
 
   const toCreate: ImportRow[] = []
-  const duplicates: Array<{ row: ImportRow; existing: ContactSummary; reason: string }> = []
+  const duplicates: Array<{ row: ImportRow; existing: ExistingContact; reason: string }> = []
   const skipped: Array<{ row: ImportRow; reason: string }> = []
   const seenEmail = new Set<string>(); const seenPhone = new Set<string>(); const seenName = new Set<string>()
 
@@ -90,10 +100,33 @@ const [tenantId, jsonPath] = args.filter((a) => !a.startsWith('--'))
   for (const d of duplicates) console.log(`  dup (${d.reason})  ${d.row.name ?? '—'}  ←→  ${d.existing.name ?? d.existing.email ?? d.existing.phone}`)
   for (const s of skipped) console.log(`  skip (${s.reason})  ${s.row.name ?? s.row.email ?? s.row.phone ?? '—'}`)
 
+  // What --enrich would add to the records the rows above matched: blank columns only.
+  const FIELDS = ['name', 'phone', 'address', 'currency', 'notes'] as const
+  const patches: Array<{ id: string; label: string; patch: Record<string, string | null> }> = []
+  if (enrich) {
+    for (const d of duplicates) {
+      const patch: Record<string, string | null> = {}
+      for (const f of FIELDS) {
+        const incoming = (d.row[f] ?? '').trim()
+        if (incoming && !(d.existing[f as keyof ExistingContact] ?? '')) patch[f] = incoming
+      }
+      // A phone arriving into a blank column has to carry its match key with it, or the next import
+      // won't recognise the person it just filled in.
+      if (patch.phone) patch.normalized_phone = normalizePhone(patch.phone)
+      if (Object.keys(patch).length) {
+        patches.push({ id: d.existing.id, label: d.existing.name ?? d.existing.email ?? d.existing.phone ?? d.existing.id, patch })
+      }
+    }
+    console.log(`\nTo enrich: ${patches.length}`)
+    for (const p of patches) console.log(`  ${p.label}  +  ${Object.keys(p.patch).filter((k) => k !== 'normalized_phone').join(', ')}`)
+  }
+
   if (!commit) {
-    console.log('\nDry run — nothing written. Re-run with --commit to insert.')
-    console.log('First 3 rows as they would be stored:')
-    for (const r of toCreate.slice(0, 3)) console.log(' ', JSON.stringify(r))
+    console.log('\nDry run — nothing written. Re-run with --commit to write.')
+    if (toCreate.length) {
+      console.log('First 3 new rows as they would be stored:')
+      for (const r of toCreate.slice(0, 3)) console.log(' ', JSON.stringify(r))
+    }
     return
   }
 
@@ -117,6 +150,16 @@ const [tenantId, jsonPath] = args.filter((a) => !a.startsWith('--'))
     created += body.length
   }
   console.log(`\nWritten: ${created}`)
+
+  let enriched = 0
+  for (const p of patches) {
+    const res = await fetch(`${SB}/rest/v1/contacts?id=eq.${p.id}&tenant_id=eq.${tenantId}`, {
+      method: 'PATCH', headers: H, body: JSON.stringify(p.patch),
+    })
+    if (!res.ok) { console.error(`Enrich failed for ${p.label}:`, await res.text()); process.exit(1) }
+    enriched++
+  }
+  if (enrich) console.log(`Enriched: ${enriched}`)
 
   const after = await (await fetch(`${SB}/rest/v1/contacts?select=id&tenant_id=eq.${tenantId}&merged_into_id=is.null&limit=10000`, { headers: H })).json()
   console.log(`Contact book now holds: ${after.length}`)

@@ -26,6 +26,10 @@ export const normalizePhone = (v: string | null | undefined): string | null => {
   return digits.length > 10 ? digits.slice(-10) : digits
 }
 
+// PostgREST reads % as a wildcard and , ( ) as .or() syntax, so a term carrying them would either
+// match everything or break the filter outright. Blanked out before any ilike pattern is built.
+export const escapeSearchTerm = (term: string): string => term.replace(/[%,()\\]/g, ' ').trim()
+
 const summary = (r: Record<string, unknown>): ContactSummary => ({
   id: r.id as string, name: (r.name as string) ?? null, email: (r.email as string) ?? null,
   phone: (r.phone as string) ?? null, address: (r.address as string) ?? null, currency: (r.currency as string) ?? null,
@@ -38,8 +42,7 @@ export async function searchContacts(q: string, limit = 8): Promise<ContactSumma
   const term = q.trim()
   if (term.length < 1) return []
   const sb = await createClient()
-  // Escape PostgREST's pattern wildcards and the comma that separates .or() branches.
-  const safe = term.replace(/[%,()\\]/g, ' ').trim()
+  const safe = escapeSearchTerm(term)
   if (!safe) return []
   const { data } = await sb.from('contacts')
     .select('id, name, email, phone, address, currency')
