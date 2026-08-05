@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Globe, Loader2, RefreshCw, Upload, Link2, Plus, CheckCircle2, AlertCircle, X } from 'lucide-react'
+import { IngestedProducts } from './ingested-products'
 
 // "Connect your website" — paste a URL, and the products a business already publishes become
 // something the AI can answer questions from.
@@ -207,6 +208,10 @@ export function ConnectWebsite({ onProductsChanged }: { onProductsChanged?: () =
           <SourceRow key={s.id} source={s} onResync={() => void resync(s.id)} onDisconnect={() => void disconnect(s.id)} onUpload={() => fileRef.current?.click()} />
         ))}
       </div>
+
+      {/* What those sources actually captured. Inside this card on purpose: everything here comes
+          from the website, and the physical inventory list lives further down the page. */}
+      <IngestedProducts />
 
       <input
         ref={fileRef} type="file" accept=".csv,text/csv,.tsv,text/tab-separated-values" className="hidden"
