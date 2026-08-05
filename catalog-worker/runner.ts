@@ -50,10 +50,15 @@ export async function runJob(job: SyncJobRow, signal: AbortSignal): Promise<void
 
     // A source can arrive here still undetected — the API route hands detection over whenever its
     // 12-second budget runs out. Detecting here costs the tenant nothing but a little more waiting.
+    //
+    // The test is "do we know how to read this yet", NOT "is it new". An uploaded file arrives
+    // pending too, and its source_url is a filename — sending that through website detection returns
+    // 'unreachable', fails the first attempt, and makes every spreadsheet upload look broken for a
+    // minute before the retry succeeds.
     let sourceType = source.source_type as SourceType
     let pattern = (source.extraction_pattern ?? null) as ExtractionPattern | null
 
-    if (source.status === 'pending' || source.status === 'detecting' || !sourceType || sourceType === 'manual') {
+    if (sourceType === 'manual' || source.status === 'detecting') {
       await updateSource(source.id, { status: 'detecting', progress: { current: 0, total: null, phase: 'looking at the site' } })
       const detected = await detectPlatform(source.source_url, { budgetMs: 60_000, telemetry, signal })
       if (!detected.sourceType) throw new IngestionError(detected.reason ?? 'no_products_found', reasonMessage(detected.reason))
