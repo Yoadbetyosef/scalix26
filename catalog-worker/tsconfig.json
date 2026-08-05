@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    // The worker imports pure modules out of the app's lib/ (lib/ingestion, the shared rate card and
+    // the pricing maths). Those are relative imports; this mapping exists only so that TypeScript can
+    // still resolve the `@/…` specifier inside lib/billing/pricing.ts's LAZY import — which is never
+    // executed here, because the worker only ever calls that module's pure functions.
+    "paths": { "@/*": ["../*"] }
+  },
+  "include": ["**/*.ts", "../lib/ingestion/**/*.ts", "../lib/cost/rates.ts", "../lib/billing/pricing.ts", "../lib/csv/parse.ts", "../lib/scrape-headers.ts"],
+  "exclude": ["node_modules"]
+}

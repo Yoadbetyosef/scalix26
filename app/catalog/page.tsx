@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Plus, Search, Package, Upload, Download, Trash2, ListChecks, ChevronRight } from 'lucide-react'
 import type { VariantsByProduct } from '@/lib/catalog/variants'
 import { AVAILABILITY_LABELS, totalAvailable, type CatalogProduct, type AvailabilityStatus } from '@/lib/catalog/types'
+import { ConnectWebsite } from '@/components/catalog/connect-website'
 
 const badge: Record<AvailabilityStatus, string> = {
   in_stock: 'bg-emerald-50 text-emerald-700',
@@ -99,6 +100,10 @@ export default function CatalogListPage() {
           </Link>
         </div>
       </div>
+
+      {/* What the business publishes on their own site, kept separate from what they physically
+          stock. This panel writes to catalog_ingested_products and never to the inventory below. */}
+      <ConnectWebsite />
 
       <div className="mb-3 relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />

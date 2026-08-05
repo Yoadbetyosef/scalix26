@@ -1,0 +1,27 @@
+{
+  "name": "scalix-catalog-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Catalog ingestion worker \u2014 claims sync jobs and reads tenants' product catalogues. Its own Railway service, sharing nothing with voice-server.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.99.0",
+    "@supabase/supabase-js": "^2.106.2",
+    "tsx": "^4.20.6",
+    "zod": "^4.4.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5",
+    "@types/ws": "^8.5.12"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -38,6 +38,10 @@ export const POLICIES = {
   brain_run:       { limit: 10,  window: '1 h',  fail: 'open' },
   brain_read:      { limit: 30,  window: '1 m',  fail: 'open' },
   scan_website:    { limit: 10,  window: '1 h',  fail: 'open' },
+  // Manual "sync now" on a connected website. Keyed by SOURCE, not tenant: a business with three
+  // shops should be able to refresh each one — the limit exists to stop someone hammering a single
+  // site, not to ration the button.
+  catalog_sync:    { limit: 1,   window: '15 m', fail: 'open' },
   demo_generate:   { limit: 20,  window: '1 h',  fail: 'open' },
   coach_email:     { limit: 30,  window: '1 h',  fail: 'open' },
   convo_send:      { limit: 60,  window: '1 m',  fail: 'open' },

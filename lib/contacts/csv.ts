@@ -1,46 +1,10 @@
 import type { ImportRow } from './store'
+import { parseDelimited, detectDelimiter } from '@/lib/csv/parse'
 
-// Minimal RFC-4180 CSV/TSV reader plus header auto-mapping, with no dependency. Runs in the browser so an
-// imported file is parsed on the spot and only the recognised rows are sent to the server.
-
-// Splits on the delimiter while honouring quoted fields, "" escapes, and newlines inside quotes.
-export function parseDelimited(text: string, delimiter = ','): string[][] {
-  const rows: string[][] = []
-  let row: string[] = []
-  let field = ''
-  let quoted = false
-  // Normalise line endings first so \r\n inside the data can't produce phantom empty fields.
-  const src = text.replace(/\r\n?/g, '\n')
-
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i]
-    if (quoted) {
-      if (ch === '"') {
-        if (src[i + 1] === '"') { field += '"'; i++ }   // escaped quote
-        else quoted = false
-      } else field += ch
-      continue
-    }
-    if (ch === '"') { quoted = true; continue }
-    if (ch === delimiter) { row.push(field); field = ''; continue }
-    if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; continue }
-    field += ch
-  }
-  // Trailing field/row (a file that doesn't end in a newline).
-  if (field.length || row.length) { row.push(field); rows.push(row) }
-  return rows.filter((r) => r.some((c) => c.trim() !== ''))
-}
-
-// Tab-separated files (a straight copy-paste out of Excel) are common enough to detect rather than ask about.
-export const detectDelimiter = (text: string): string => {
-  const firstLine = text.split(/\r?\n/, 1)[0] ?? ''
-  const tabs = (firstLine.match(/\t/g) ?? []).length
-  const commas = (firstLine.match(/,/g) ?? []).length
-  const semis = (firstLine.match(/;/g) ?? []).length
-  if (tabs > commas && tabs > semis) return '\t'
-  if (semis > commas) return ';'                     // European Excel exports
-  return ','
-}
+// Header auto-mapping for the contact importer. The reader itself lives in lib/csv/parse.ts — the
+// ingestion module parses the same kind of file and a spreadsheet must not depend on which door it
+// came through. Re-exported here so existing importers of this module keep working.
+export { parseDelimited, detectDelimiter }
 
 export type ContactField = keyof ImportRow
 export const CONTACT_FIELDS: Array<{ key: ContactField; label: string }> = [
