@@ -300,6 +300,16 @@ export async function POST(req: NextRequest) {
       // exact price_id to send_payment_link. No-op if the business hasn't connected Stripe.
       try { const payLine = await catalogPromptLine(channel.tenant_id); if (payLine) voiceSystemPrompt += `\n\n${payLine}` } catch { /* fail-safe */ }
 
+      // The website catalogue, for a business small enough to carry the whole list in the prompt. Above
+      // SNAPSHOT_MAX_PRODUCTS this returns null and the agent uses the search_catalog function instead.
+      // Assembled here, at call SETUP, so it costs the caller nothing once the call is live.
+      try {
+        const { catalogSnapshot } = await import('@/lib/catalog/snapshot')
+        const snapshot = await catalogSnapshot(channel.tenant_id)
+        if (snapshot) voiceSystemPrompt += `\n\n${snapshot}`
+        else voiceSystemPrompt += `\n\nPRODUCTS: Use the search_catalog function to look up any product, price, or availability before stating one. When it returns a price range, give the range and ask which version they mean — never read the versions out one by one.`
+      } catch { /* fail-safe: the function still works without the prompt line */ }
+
       // Unified Business Context — realtime voice has no transcript at prompt-build time, so inject only the
       // small always-on essentials (business hours + location). Keeps the voice payload tight. Best-effort.
       try {

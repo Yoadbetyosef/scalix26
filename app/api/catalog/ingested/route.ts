@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireCatalogTenant } from '@/lib/catalog/session'
-import { escapeSearchTerm } from '@/lib/contacts/store'
+import { retrieveProducts } from '@/lib/catalog/retrieval'
 
 // Read-only view of what the website gave us. Search rather than a browsable list, because with
 // 9,000 products nobody pages through — and typing a product name is exactly what the agent does
@@ -18,7 +18,11 @@ export async function GET(req: NextRequest) {
 
   const db = createAdminClient()
   const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
-  const safe = escapeSearchTerm(q)
+
+  // A search here runs the SAME function the voice agent calls, so what the tenant sees while tuning
+  // their catalogue is what a caller gets. The rows are still returned for browsing, but the grouped
+  // answer is the point.
+  const agent = q ? await retrieveProducts(s.tenantId, q, 'test') : null
 
   let query = db
     .from('catalog_ingested_products')
@@ -26,10 +30,10 @@ export async function GET(req: NextRequest) {
     .eq('tenant_id', s.tenantId)
     .eq('is_active', true)
 
-  if (safe) {
-    query = query.or(`title.ilike.%${safe}%,sku.ilike.%${safe}%`).limit(SEARCH_LIMIT)
-    // Shortest title first: on a catalogue of near-identical variants, "Round Cut Diamond Ring" is a
-    // better first answer than the 90-character version of the same thing.
+  if (q) {
+    // Show exactly the rows the agent's retrieval matched — not a second, differently-worded query.
+    const ids = agent?.groupIds ?? []
+    query = ids.length ? query.in('id', ids).limit(SEARCH_LIMIT) : query.eq('id', '00000000-0000-0000-0000-000000000000')
     query = query.order('title', { ascending: true })
   } else {
     query = query.order('last_seen_at', { ascending: false }).limit(DEFAULT_LIMIT)
@@ -51,6 +55,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     products: data ?? [],
     query: q,
+    // What the agent would say, and the structured object behind it.
+    agent: agent ? {
+      say: agent.say, resolved: agent.resolved, clarifying: agent.clarifying,
+      matched: agent.matched, latencyMs: agent.latencyMs, timedOut: agent.timedOut, groups: agent.groups,
+    } : null,
     stats: {
       total: total.count ?? 0,
       withPrice: withPrice.count ?? 0,

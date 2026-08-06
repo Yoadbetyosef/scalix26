@@ -95,6 +95,19 @@ wss.on('connection', (twilioWs) => {
         },
       },
       {
+        // Product lookup. The catalog is two tables — physical stock and the tenant's website — and
+        // the API merges them into one answer, so the model never has to reconcile two sources aloud.
+        name: 'search_catalog',
+        description: 'Look up a product to answer what the business sells, what it costs, or whether it is available. ALWAYS call this before stating any product or price — never guess. When the result has price_from and price_to, give the range and ask which version they mean; never read the versions out one by one. Do not call this for appointments, hours, or directions.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'The product the caller asked about, roughly as they said it' },
+          },
+          required: ['query'],
+        },
+      },
+      {
         name: 'send_payment_link',
         description: 'Send the caller a secure payment link for one of the business products. Use ONLY a price_id from the PAYMENTS list in your instructions; NEVER invent one. Ask the caller for their email so the link can be sent. Only available if PAYMENTS is in your instructions.',
         parameters: {
@@ -204,6 +217,24 @@ wss.on('connection', (twilioWs) => {
             transferCall(callSid, transferNumber, fromNumber, callerNumber, reason);
             try { dgWs.close(); } catch {}
           }, 3000);
+          continue;
+        }
+
+        if (fn.name === 'search_catalog') {
+          // The API already returns a speakable line; on any failure we say the miss rather than
+          // stalling the call, because the caller hears silence either way and only the miss lets
+          // the agent carry on.
+          let content = "I don't see that in our catalog. I can check with the team and get back to you.";
+          try {
+            const r = await fetch(`${appUrl}/api/catalog/lookup?lead_token=${encodeURIComponent(leadToken || '')}&q=${encodeURIComponent(args.query || '')}`);
+            const j = await r.json();
+            if (j && j.say) content = j.say;
+            if (j && j.matches) content += ` [data: ${JSON.stringify(j.matches).slice(0, 900)}]`;
+            console.log('[catalog]', args.query, '->', j && j.found ? `${(j.matches || []).length} group(s) in ${j.took_ms}ms` : `miss in ${j && j.took_ms}ms`);
+          } catch (e) {
+            console.error('[catalog] lookup failed:', e.message);
+          }
+          dgWs.send(JSON.stringify({ type: 'FunctionCallResponse', id: fn.id, name: fn.name, content }));
           continue;
         }
 

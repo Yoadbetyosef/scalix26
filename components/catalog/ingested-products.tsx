@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Search, ExternalLink, ImageOff, Loader2 } from 'lucide-react'
+import { Search, ExternalLink, ImageOff, Loader2, Phone } from 'lucide-react'
 
 // What the website gave us, searchable.
 //
@@ -25,6 +25,18 @@ interface IngestedProduct {
 
 interface Stats { total: number; withPrice: number; withImage: number }
 
+// What the voice agent would receive for this phrase — from the same function it calls on a live
+// call, so the tenant can tune their catalogue before a customer ever hears it.
+interface AgentAnswer {
+  say: string
+  resolved: boolean
+  clarifying: boolean
+  matched: number
+  latencyMs: number
+  timedOut: boolean
+  groups: Array<{ label: string; count: number; priceMin: number | null; priceMax: number | null; axis: string | null; axisValues: string[] }>
+}
+
 const money = (p: number | null, currency: string | null) => {
   if (p === null) return null
   const symbol = currency === 'USD' || !currency ? '$' : currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : ''
@@ -34,6 +46,7 @@ const money = (p: number | null, currency: string | null) => {
 export function IngestedProducts() {
   const [products, setProducts] = useState<IngestedProduct[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [agent, setAgent] = useState<AgentAnswer | null>(null)
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(true)
   const [searching, setSearching] = useState(false)
@@ -46,6 +59,7 @@ export function IngestedProducts() {
       const json = await res.json()
       setProducts(json.products ?? [])
       setStats(json.stats ?? null)
+      setAgent(json.agent ?? null)
     } finally { setLoading(false); setSearching(false) }
   }, [])
 
@@ -87,10 +101,27 @@ export function IngestedProducts() {
         <input
           value={q}
           onChange={(e) => onType(e.target.value)}
-          placeholder="Search by product name or SKU — the way your AI looks one up on a call"
+          placeholder="Say it the way a customer would — “how much is the emerald cut halo ring”"
           className="h-11 w-full rounded-lg border border-hairline-strong pl-9 pr-3 text-sm text-ink outline-none focus:border-accent"
         />
       </div>
+
+      {/* The answer the agent would give, first — because that is the thing being tested. The rows
+          below are the evidence behind it. */}
+      {agent && (
+        <div className={`mb-3 rounded-lg border px-3 py-2.5 ${agent.resolved ? 'border-accent/30 bg-accent/5' : 'border-hairline-strong bg-sunken'}`}>
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">
+            <Phone className="h-3 w-3" /> What your AI would say on a call
+          </p>
+          <p className="text-sm text-ink">&ldquo;{agent.say}&rdquo;</p>
+          <p className="mt-1.5 text-[11px] text-muted">
+            {agent.matched} product{agent.matched === 1 ? '' : 's'} matched
+            {agent.groups.length > 0 && <> · grouped into {agent.groups.length}</>}
+            {agent.groups[0]?.axis && <> · asks about {agent.groups[0].axis}</>}
+            {' · '}{agent.latencyMs}ms{agent.timedOut && ' · timed out'}
+          </p>
+        </div>
+      )}
 
       {!products.length ? (
         <p className="py-6 text-center text-sm text-muted">
