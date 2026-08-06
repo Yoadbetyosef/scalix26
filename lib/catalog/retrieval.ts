@@ -61,9 +61,14 @@ const escape = (t: string) => t.replace(/[%,()\\]/g, ' ').trim()
 const variants = (t: string): string[] =>
   t.length > 3 && t.endsWith('s') ? [t, t.slice(0, -1)] : [t]
 
-// A caller saying "ring" is not naming a SKU. Searching the code column for ordinary words doubles
-// the predicate count for no recall. Codes look like codes: a digit, or a short token with no vowel pair.
-const looksLikeCode = (t: string): boolean => /\d/.test(t) || (t.length <= 6 && !/[aeiou]{2}/.test(t))
+// A caller saying "ring" is not naming a SKU — and the cost of pretending otherwise is not just a
+// wasted predicate. ORing title with sku stops the planner using the trigram index on title alone, so
+// every ordinary word turned into a scan. Measured: "cut", "ring" and "halo" all passed the old
+// "short token with no vowel pair" test.
+//
+// A product code carries a digit. "Kwikset 660", "MAJ-CCA-332", "KW334-11P" — every real one does,
+// and no ordinary English word does.
+const looksLikeCode = (t: string): boolean => /\d/.test(t)
 
 // One token → the OR of its spellings across the columns it could plausibly live in. Tokens are
 // ANDed by applying several of these, so the DATABASE does the narrowing.
@@ -114,8 +119,12 @@ async function searchWebsite(tenantId: string, tokens: string[]): Promise<Row[]>
 // nothing on a catalogue full of pear-shaped rings because no title says "shaped" — dropping that one
 // word finds them all. Stops at two words: below that the phrase stops being a request for a product.
 async function ladder<T>(run: (subset: string[]) => Promise<T[]>, tokens: string[]): Promise<T[]> {
+  // Two rungs, not the whole ladder: every rung is a round trip, and on the live-call path a third
+  // one costs more than the recall it buys. Full phrase, then the phrase minus its least distinctive
+  // word — which is the drop that rescued "pear shaped diamond ring".
   const ordered = byDistinctiveness(tokens)
-  for (let keep = ordered.length; keep >= Math.min(2, ordered.length); keep--) {
+  const floor = Math.max(Math.min(2, ordered.length), ordered.length - 1)
+  for (let keep = ordered.length; keep >= floor; keep--) {
     const rows = await run(ordered.slice(0, keep))
     if (rows.length) return rows
   }
