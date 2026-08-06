@@ -145,5 +145,12 @@ told their catalogue was cut short. `CATALOG_MAX_CRAWL_URLS` overrides it per de
 refused and the browser headers were needed. If that climbs, the honest-UA policy is costing coverage
 and is worth revisiting with numbers.
 
+**Two pre-existing lint errors in `app/catalog/`, deliberately not fixed.** Both are
+`react-hooks/set-state-in-effect`: `app/catalog/[id]/page.tsx` (`useEffect(() => { load() }, [load])`)
+and `app/catalog/page.tsx`. They predate the catalog ingestion and retrieval work — confirmed by
+stashing those changes and re-running eslint, which reports the same two. Left alone because fixing
+them means reworking how both pages load, and doing that midway through unrelated work is how an
+unrelated regression gets attributed to the wrong change. They want a deliberate pass of their own.
+
 **voice-server deploys separately from Vercel.** The catalog tool lives in `voice-server/server.js`
 (function definition + handler branch); a Vercel deploy alone does not ship changes to it.
