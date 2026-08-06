@@ -13,7 +13,7 @@ import { ChevronDown, Lock } from 'lucide-react'
 // Nothing about currency or markup is written here. Both arrive from tenant settings, and a business
 // with no secondary currency never sees that column at all.
 
-interface Settings { markupPercent: number; baseCurrency: string; secondaryCurrency: string | null }
+interface Settings { markupPercent: number; baseCurrency: string; secondaryCurrency: string | null; combineShippingAndDuties: boolean }
 interface Cost {
   costPrimary: number | null; costSecondary: number | null
   shippingCost: number; tariffCost: number; markupPercent: number
@@ -25,6 +25,26 @@ const input = 'h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm
 const num = (s: string): number | null => { const t = s.trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) && n >= 0 ? n : null }
 const fmt = (n: number | null, ccy: string) =>
   n === null ? '—' : `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${ccy}`
+
+// Turning the one figure the owner typed back into the two columns the database keeps.
+//
+// The tariff already recorded is left EXACTLY as it is and the remainder goes to shipping, so the
+// total is what they typed while the customs figure survives — which is the whole reason the columns
+// weren't merged. A brand-new row has no tariff, so the combined figure simply becomes shipping.
+//
+// If the combined figure is smaller than the recorded tariff, honouring the number they typed has to
+// win: shipping goes to zero and tariff is reduced to match. That is the one case where the split is
+// lost, and it only happens when the owner says the total is less than the duty alone.
+export function splitLanded(
+  combined: boolean,
+  f: { shipping: string; tariff: string; landed: string },
+  recordedTariff: number,
+): { shippingCost: number; tariffCost: number } {
+  if (!combined) return { shippingCost: num(f.shipping) ?? 0, tariffCost: num(f.tariff) ?? 0 }
+  const total = num(f.landed) ?? 0
+  if (total < recordedTariff) return { shippingCost: 0, tariffCost: total }
+  return { shippingCost: total - recordedTariff, tariffCost: recordedTariff }
+}
 
 // Thin margins are the thing worth noticing on this screen, so they carry colour; healthy ones stay quiet.
 const marginTone = (m: number | null) =>
@@ -46,7 +66,7 @@ export function ProductCostCard({ productId, variantId, compact }: { productId?:
 
   // Blank strings, not zeros: "nothing recorded" and "recorded as zero" are different facts, and the
   // form must be able to express both.
-  const [f, setF] = useState({ primary: '', secondary: '', shipping: '', tariff: '' })
+  const [f, setF] = useState({ primary: '', secondary: '', shipping: '', tariff: '', landed: '' })
 
   useEffect(() => {
     let alive = true
@@ -63,6 +83,9 @@ export function ProductCostCard({ productId, variantId, compact }: { productId?:
           secondary: d.cost.costSecondary?.toString() ?? '',
           shipping: d.cost.shippingCost ? String(d.cost.shippingCost) : '',
           tariff: d.cost.tariffCost ? String(d.cost.tariffCost) : '',
+          // One box for businesses that are quoted one number. Seeded with the SUM, so a row recorded
+          // before this was switched on still shows what was actually paid.
+          landed: d.cost.shippingCost + d.cost.tariffCost ? String(d.cost.shippingCost + d.cost.tariffCost) : '',
         })
       } catch { if (alive) setAllowed(false) }
     })()
@@ -78,8 +101,13 @@ export function ProductCostCard({ productId, variantId, compact }: { productId?:
   // Live preview while typing. The saved figure is always the database's generated column — this only
   // has to agree with it, never replace it.
   const primary = num(f.primary)
-  const liveTotal = primary === null ? null
-    : (primary + (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)) * (1 + markup / 100)
+  // Whichever shape the form is in, this is the same number: the formula sums shipping and tariff
+  // BEFORE applying markup, so one combined figure and two separate ones that add to it are
+  // arithmetically identical. That is why the merge is input-only and needs no schema change.
+  const extras = settings.combineShippingAndDuties
+    ? (num(f.landed) ?? 0)
+    : (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)
+  const liveTotal = primary === null ? null : (primary + extras) * (1 + markup / 100)
   const liveMargin = liveTotal === null || price === null || price <= 0 ? null : ((price - liveTotal) / price) * 100
 
   const save = async () => {
@@ -90,7 +118,7 @@ export function ProductCostCard({ productId, variantId, compact }: { productId?:
         // Every field every time — PUT replaces the row, so omitting one would clear it.
         body: JSON.stringify({
           costPrimary: primary, costSecondary: num(f.secondary),
-          shippingCost: num(f.shipping) ?? 0, tariffCost: num(f.tariff) ?? 0,
+          ...splitLanded(settings.combineShippingAndDuties, f, view.cost?.tariffCost ?? 0),
         }),
       })
       const d = await r.json()
@@ -133,18 +161,27 @@ export function ProductCostCard({ productId, variantId, compact }: { productId?:
               </Field>
             )}
 
-            <Field label="Shipping">
-              <input className={input} inputMode="decimal" value={f.shipping} placeholder="0"
-                onChange={(e) => { setF((p) => ({ ...p, shipping: e.target.value })); setSaved(false) }} />
-            </Field>
-            <Field label="Tariff">
-              <input className={input} inputMode="decimal" value={f.tariff} placeholder="0"
-                onChange={(e) => { setF((p) => ({ ...p, tariff: e.target.value })); setSaved(false) }} />
-            </Field>
+            {settings.combineShippingAndDuties ? (
+              <Field label="Shipping &amp; duties">
+                <input className={input} inputMode="decimal" value={f.landed} placeholder="0"
+                  onChange={(e) => { setF((p) => ({ ...p, landed: e.target.value })); setSaved(false) }} />
+              </Field>
+            ) : (
+              <>
+                <Field label="Shipping">
+                  <input className={input} inputMode="decimal" value={f.shipping} placeholder="0"
+                    onChange={(e) => { setF((p) => ({ ...p, shipping: e.target.value })); setSaved(false) }} />
+                </Field>
+                <Field label="Tariff">
+                  <input className={input} inputMode="decimal" value={f.tariff} placeholder="0"
+                    onChange={(e) => { setF((p) => ({ ...p, tariff: e.target.value })); setSaved(false) }} />
+                </Field>
+              </>
+            )}
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg bg-sunken/60 px-3 py-2.5">
-            <Readout label={`Markup (${markup}%)`} value={primary === null ? '—' : fmt((primary + (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)) * (markup / 100), settings.baseCurrency)} />
+            <Readout label={`Markup (${markup}%)`} value={primary === null ? '—' : fmt((primary + extras) * (markup / 100), settings.baseCurrency)} />
             <Readout label="Total cost" value={fmt(liveTotal, settings.baseCurrency)} strong />
             <Readout label="Selling price" value={fmt(price, settings.baseCurrency)} />
             <Readout label="Margin" value={liveMargin === null ? '—' : `${liveMargin.toFixed(1)}%`} tone={marginTone(liveMargin)} strong />

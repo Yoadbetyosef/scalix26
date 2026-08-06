@@ -21,6 +21,10 @@ export const MODULES = [
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
   { key: 'orders', label: 'Orders', description: 'Orders & external factory/customer approvals' },
   { key: 'studio', label: 'Design Studio', description: 'Lean product catalog with variants, QR pages & one-tap production/quotes/invoices' },
+  // For businesses that import: shipping and duties are one number they are quoted and one number
+  // they pay, so the cost card asks for them once instead of asking the owner to add them up. The
+  // stored columns stay separate — tariff is exactly what gets broken back out for customs paperwork.
+  { key: 'landed_cost', label: 'Landed cost', description: 'Shipping & duties captured as one figure on product costs' },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]['key']

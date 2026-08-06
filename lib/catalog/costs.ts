@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { requireCatalogTenant } from './session'
+import { enabledModulesOf } from '@/lib/modules'
 
 // What a product costs the business, and the margin that follows from it.
 //
@@ -15,7 +16,20 @@ import { requireCatalogTenant } from './session'
 //      it: the value cannot disagree with the components it came from, no matter which client wrote
 //      them. Margin, which needs the selling price from another table, is derived on read.
 
-export interface CostSettings { markupPercent: number; baseCurrency: string; secondaryCurrency: string | null }
+export interface CostSettings {
+  markupPercent: number
+  baseCurrency: string
+  secondaryCurrency: string | null
+  // Businesses that import are quoted one figure for shipping and duties and pay one figure, so the
+  // card asks once rather than asking the owner to split what nobody split for them. Gated by the
+  // `landed_cost` module, and delivered through this endpoint for the same reason everything else on
+  // this card is: the endpoint is the authority, and a prop threaded down from the page would be a
+  // second copy of the rule free to drift.
+  //
+  // INPUT ONLY. shipping_cost and tariff_cost remain separate columns — tariff is precisely what gets
+  // broken back out for customs paperwork, and dropping it would be irreversible.
+  combineShippingAndDuties: boolean
+}
 
 export interface ProductCost {
   costPrimary: number | null
@@ -68,12 +82,13 @@ const margin = (price: number | null, cost: number | null): number | null =>
 // never sees that field.
 export async function getCostSettings(tenantId: string): Promise<CostSettings> {
   const { data } = await createAdminClient()
-    .from('tenants').select('cost_markup_percent, cost_base_currency, cost_secondary_currency')
+    .from('tenants').select('cost_markup_percent, cost_base_currency, cost_secondary_currency, enabled_modules')
     .eq('id', tenantId).maybeSingle()
   return {
     markupPercent: Number(data?.cost_markup_percent ?? 10),
     baseCurrency: (data?.cost_base_currency as string) || 'USD',
     secondaryCurrency: (data?.cost_secondary_currency as string) || null,
+    combineShippingAndDuties: enabledModulesOf(data ?? {}).includes('landed_cost'),
   }
 }
 
