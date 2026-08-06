@@ -9,11 +9,22 @@ import { landedCost } from '@/lib/catalog/cost-math'
 
 // The approval screen.
 //
-// Everything on this page exists so the owner can answer one question before anything is written:
-// is this allocation resting on enough of the invoice to be worth applying? The coverage line is the
-// centre of it — freight is spread across MATCHED lines only, so at low coverage the matched products
-// absorb the freight of goods nobody identified, and the right response is to go match them rather
-// than to accept the number.
+// Everything here exists so the owner can answer one question before anything is written: is this
+// allocation resting on enough of the invoice to be worth applying? The coverage line is the centre of
+// it — freight is spread across MATCHED lines only, so at low coverage the matched products absorb the
+// freight of goods nobody identified.
+//
+// ── FOUR NUMBERS IN THREE CURRENCIES, ON ONE TABLE ──────────────────────────────────────────────────
+//
+// This is the most dangerous surface in the feature, because four different things meet on it:
+//
+//   line values      in the INVOICE's currency   (EUR, off the supplier's paper)
+//   the rate         a number the owner types    (EUR → USD, paid on this invoice)
+//   freight & duty   in BASE currency            (USD, off the forwarder's separate bill)
+//   the result       in BASE currency            (USD, what lands on the product)
+//
+// So every figure on this page is labelled with its currency, always, even where it looks obvious.
+// An unlabelled number between a EUR column and a USD column is exactly where a wrong one hides.
 
 const money = (n: number | null, ccy: string) =>
   n === null ? '—' : `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${ccy}`
@@ -33,8 +44,6 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   const [fileUrl, setFileUrl] = useState<string | null>(null)
   const [confirmReapply, setConfirmReapply] = useState(false)
 
-  // Loaded once here; every later change arrives as the full shipment in a PATCH/POST response, so
-  // there is no second fetcher to keep in step.
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -50,8 +59,6 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   }, [id])
 
   useEffect(() => {
-    // Minted per view and short-lived; the bucket is private and the bytes never reach the browser any
-    // other way.
     fetch(`/api/invoices/shipments/${id}/file`).then((r) => r.json()).then((j) => setFileUrl(j.url ?? null)).catch(() => {})
   }, [id])
 
@@ -87,13 +94,25 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   if (!d) return <p className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted">Loading…</p>
 
   const { shipment, invoice, lines, settings } = d
-  const ccy = shipment.currency
+  const base = settings.baseCurrency              // what the cost columns are kept in — USD
+  const inv = invoice.currency                    // what the supplier's paper is written in — EUR
+  const foreign = inv.toUpperCase() !== base.toUpperCase()
+
   const charges = shipment.freightTotal + shipment.dutiesTotal + shipment.otherTotal
   const applied = shipment.status === 'applied'
-  // Only a problem when there is something to write; a shipment with no charges has no currency to be
-  // wrong about. The RPC re-checks this in SQL — this is the early, fixable version of the same guard.
-  const wrongCurrency = charges > 0 && ccy.toUpperCase() !== settings.baseCurrency.toUpperCase()
   const reorders = lines.filter((l) => l.status === 'matched' && l.priorShipment)
+
+  // Belt-and-braces. The shipment's currency is now always the tenant's base — freight comes from the
+  // forwarder in base currency and is never seeded from the invoice — so this should not fire. It is
+  // kept because the RPC enforces the same thing, and a screen that cannot show a state the database
+  // can refuse would leave the owner reading an error with no matching field.
+  const wrongFreightCurrency = charges > 0 && shipment.currency.toUpperCase() !== base.toUpperCase()
+
+  // A foreign invoice cannot be applied without the rate that was paid on it. Refused rather than
+  // skipped: quietly leaving cost_primary unwritten produces a product carrying this shipment's freight
+  // with no landed cost and no margin at all, and nothing on any screen saying why.
+  const rateMissing = foreign && !invoice.exchangeRate
+  const blocked = below || wrongFreightCurrency || rateMissing || cov.matchedLines === 0 || invoice.status === 'failed'
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -109,7 +128,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
               invoice.supplierName,
               invoice.invoiceNumber && `Invoice ${invoice.invoiceNumber}`,
               invoice.invoiceDate && new Date(invoice.invoiceDate).toLocaleDateString(),
-              invoice.pageCount && `${invoice.pageCount} page${invoice.pageCount === 1 ? '' : 's'}`,
+              `Invoiced in ${inv}`,
             ].filter(Boolean).join(' · ')}
           </p>
         </div>
@@ -127,40 +146,76 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
         </p>
       )}
       {err && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
-
-      {/* Matching that degraded without failing. Said plainly, because an unmatched line means something
-          different when names were never compared, and the owner would act differently on each. */}
       {invoice.matchNote && (
         <p className="mb-4 rounded-lg bg-sunken/70 px-4 py-3 text-sm text-subtle">{invoice.matchNote}</p>
       )}
 
-      {/* The charges being spread. Editable because a forwarder's bill often arrives separately from
-          the invoice, and the owner is the one holding both. */}
-      <section className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-hairline-strong bg-white p-4 sm:grid-cols-4">
-        {/* key carries the value so a server-side change remounts the input with fresh state — see Charge. */}
-        <Charge key={`freight-${shipment.freightTotal}`} label={`Freight (${ccy})`} value={shipment.freightTotal} id={id} field="freightTotal" disabled={applied || busy} onSaved={setD} />
-        <Charge key={`duties-${shipment.dutiesTotal}`} label={`Duty (${ccy})`} value={shipment.dutiesTotal} id={id} field="dutiesTotal" disabled={applied || busy} onSaved={setD} />
-        <Charge key={`other-${shipment.otherTotal}`} label={`Other (${ccy})`} value={shipment.otherTotal} id={id} field="otherTotal" disabled={applied || busy} onSaved={setD} />
-        <div>
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">To spread</span>
-          <span className="text-base font-semibold text-ink">{money(charges, ccy)}</span>
+      {/* THE TWO DOCUMENTS, kept visibly apart because they are two documents.
+          Left: the supplier's invoice and the rate paid on it. Right: the forwarder's bill. */}
+      <section className="mb-4 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-hairline-strong bg-white p-4">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-subtle">
+            {`Supplier invoice · ${inv}`}
+          </h2>
+          {foreign ? (
+            <>
+              <Rate key={`rate-${invoice.exchangeRate ?? ''}`} id={id} from={inv} to={base}
+                value={invoice.exchangeRate} disabled={applied || busy} onSaved={setD} />
+              <p className="mt-2 text-xs text-subtle">
+                {`The rate you actually paid on this invoice. It converts the line values below into ${base} — `}
+                {`and nothing else. Freight is never multiplied by it: that arrives from your forwarder already in ${base}.`}
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">{`Invoiced in ${base}, so nothing needs converting.`}</p>
+          )}
+          {invoice.grandTotal !== null && (
+            <p className="mt-3 text-sm text-muted">{`Invoice total ${money(invoice.grandTotal, inv)}`}</p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-hairline-strong bg-white p-4">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-subtle">
+            {`Freight forwarder · ${base}`}
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Charge key={`freight-${shipment.freightTotal}`} label="Freight" value={shipment.freightTotal} id={id} field="freightTotal" ccy={base} disabled={applied || busy} onSaved={setD} />
+            <Charge key={`duties-${shipment.dutiesTotal}`} label="Duty" value={shipment.dutiesTotal} id={id} field="dutiesTotal" ccy={base} disabled={applied || busy} onSaved={setD} />
+            <Charge key={`other-${shipment.otherTotal}`} label="Other" value={shipment.otherTotal} id={id} field="otherTotal" ccy={base} disabled={applied || busy} onSaved={setD} />
+            <div>
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">To spread</span>
+              <span className="text-base font-semibold text-ink">{money(charges, base)}</span>
+            </div>
+          </div>
+          {/* Evidence, not a value. Worth seeing beside the forwarder's figure because sometimes it is
+              the same shipment quoted twice — and worth NOT copying automatically, because it is in the
+              invoice's currency and this box is in base currency. */}
+          {invoice.extractedFreight ? (
+            <p className="mt-3 text-xs text-subtle">
+              {`The supplier's own invoice also lists ${money(invoice.extractedFreight, inv)} of freight`}
+              {invoice.extractedDuties ? ` and ${money(invoice.extractedDuties, inv)} of duty` : ''}
+              {`. Not copied above — these boxes are ${base}, from your forwarder. Check whether it is the same shipment billed twice.`}
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-subtle">{`Type these from your forwarder's bill, in ${base}.`}</p>
+          )}
         </div>
       </section>
 
-      {/* Nothing here converts currencies, so freight read off a forwarder's bill in another currency
-          cannot be written into base-currency cost columns. Said before Apply rather than only at it —
-          the charges above are editable, so this is a state the owner can fix in ten seconds. */}
-      {wrongCurrency && (
-        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {`This shipment's freight is recorded in ${ccy}, but your product costs are kept in ${settings.baseCurrency}. `}
-          {`Nothing here converts currencies — re-enter the freight and duty above in ${settings.baseCurrency}.`}
+      {rateMissing && (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {`This invoice is in ${inv} and your costs are kept in ${base}. Enter the rate you paid above before applying — `}
+          {`without it these products would take the freight but end up with no landed cost at all.`}
         </p>
       )}
 
-      {/* Reordering the same product is normal and usually the newer freight is the one you want — so
-          this warns and never blocks. What it prevents is the silent version: a second apply erasing
-          the first shipment's freight, and the margin on that product being wrong from then on with
-          nothing on screen to say why. Phase 2 fixes the modelling; this makes it a decision. */}
+      {wrongFreightCurrency && (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {`The freight on this shipment is recorded in ${shipment.currency} but costs are kept in ${base}. `}
+          {`Freight is never converted — it comes from the forwarder in ${base}. Re-enter it above.`}
+        </p>
+      )}
+
       {reorders.length > 0 && !applied && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
@@ -179,14 +234,14 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
           an honest choice rather than a silent one. */}
       <section className={`mb-4 rounded-xl border px-4 py-3 ${below ? 'border-amber-200 bg-amber-50' : 'border-hairline-strong bg-white'}`}>
         <p className={`text-sm ${below ? 'text-amber-900' : 'text-ink'}`}>
-          <strong>{money(charges, ccy)}</strong>
+          <strong>{money(charges, base)}</strong>
           {` spread across ${cov.matchedLines} of ${lines.length} lines — `}
           <strong>{`${(cov.ratio * 100).toFixed(0)}%`}</strong>
           {` of the invoice's value.`}
         </p>
         {cov.unmatchedLines > 0 && (
           <p className={`mt-1 text-sm ${below ? 'text-amber-800' : 'text-muted'}`}>
-            {`${cov.unmatchedLines} line${cov.unmatchedLines === 1 ? '' : 's'} unmatched (${money(cov.unmatchedValue, ccy)})`}
+            {`${cov.unmatchedLines} line${cov.unmatchedLines === 1 ? '' : 's'} unmatched (${money(cov.unmatchedValue, inv)})`}
             {cov.skippedLines > 0 && `, ${cov.skippedLines} skipped on purpose`}
             {below
               ? '. Their share of the freight lands on the matched products instead, so those costs will be overstated. Match them below before applying.'
@@ -200,8 +255,8 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
 
       <ul className="divide-y divide-hairline rounded-xl border border-hairline-strong bg-white">
         {lines.map((l) => (
-          <Line key={l.id} line={l} ccy={ccy} baseCurrency={settings.baseCurrency} markup={settings.markupPercent}
-            invoiceCurrency={invoice.currency} disabled={applied || busy} onPatch={patchLine} />
+          <Line key={l.id} line={l} invoiceCcy={inv} baseCcy={base} markup={settings.markupPercent}
+            rate={foreign ? invoice.exchangeRate : 1} disabled={applied || busy} onPatch={patchLine} />
         ))}
       </ul>
 
@@ -211,8 +266,6 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
             <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
               <Check className="h-4 w-4" /> Applied {shipment.appliedAt && new Date(shipment.appliedAt).toLocaleString()}
             </p>
-            {/* Never silent. Re-applying overwrites what the first apply wrote, and the button says so
-                before it does anything. */}
             {confirmReapply ? (
               <span className="flex items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -230,15 +283,14 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
           </>
         ) : (
           <>
-            <button type="button" onClick={() => apply()} disabled={busy || below || wrongCurrency || cov.matchedLines === 0 || invoice.status === 'failed'}
+            <button type="button" onClick={() => apply()} disabled={busy || blocked}
               className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
               {busy ? 'Applying…' : `Apply to ${cov.matchedLines} product${cov.matchedLines === 1 ? '' : 's'}`}
             </button>
-            {/* No override for a currency mismatch, unlike coverage: low coverage is a judgement the
-                owner is entitled to make, whereas writing EUR into a USD column is simply wrong. */}
-            {below && !wrongCurrency && cov.matchedLines > 0 && (
-              // The override exists because sometimes the unmatched lines really are things the
-              // business does not stock. It is an act, never a default.
+            {/* Coverage is the only thing here with an override — it is a judgement the owner is
+                entitled to make. A missing rate and a mis-denominated freight figure are not
+                judgements, they are wrong numbers, and there is no button for those. */}
+            {below && !rateMissing && !wrongFreightCurrency && cov.matchedLines > 0 && (
               <button type="button" onClick={() => apply({ override: true })} disabled={busy}
                 className="text-sm font-medium text-amber-800 underline">
                 Apply anyway, at {(cov.ratio * 100).toFixed(0)}% coverage
@@ -252,15 +304,44 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
 }
 
 /**
- * One editable charge. Saved on blur, then the whole allocation comes back recomputed.
- *
- * The server value seeds local typing state exactly once. Re-syncing it with an effect would be state
- * derived from a prop — invalid React, and it would also fight the owner's cursor mid-edit. The parent
- * passes a `key` that includes the value, so a change from the server remounts this with a fresh
- * initial state instead.
+ * The rate paid on this invoice. Seeded once from the server; a change from the server remounts it via
+ * `key` rather than being re-synced with an effect, which would be state derived from a prop and would
+ * fight the cursor mid-edit.
  */
-function Charge({ label, value, id, field, disabled, onSaved }: {
-  label: string; value: number; id: string; field: string; disabled: boolean
+function Rate({ id, from, to, value, disabled, onSaved }: {
+  id: string; from: string; to: string; value: number | null; disabled: boolean
+  onSaved: (d: ShipmentDetail) => void
+}) {
+  const [v, setV] = useState(value ? String(value) : '')
+
+  const save = async () => {
+    const t = v.trim()
+    const n = t ? Number(t) : null
+    if (t && (!Number.isFinite(n) || (n as number) <= 0)) return
+    if (n === value) return
+    const r = await fetch(`/api/invoices/shipments/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exchangeRate: n }),
+    })
+    if (r.ok) onSaved(await r.json())
+  }
+
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Exchange rate</span>
+      <span className="flex items-center gap-2">
+        <span className="text-sm text-muted">{`1 ${from} =`}</span>
+        <input className="h-10 w-32 rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent disabled:bg-sunken/60"
+          inputMode="decimal" value={v} placeholder="0.00" disabled={disabled}
+          onChange={(e) => setV(e.target.value)} onBlur={save} />
+        <span className="text-sm text-muted">{to}</span>
+      </span>
+    </label>
+  )
+}
+
+/** One editable charge from the forwarder's bill. Always in base currency. */
+function Charge({ label, value, id, field, ccy, disabled, onSaved }: {
+  label: string; value: number; id: string; field: string; ccy: string; disabled: boolean
   onSaved: (d: ShipmentDetail) => void
 }) {
   const [v, setV] = useState(String(value || ''))
@@ -276,7 +357,7 @@ function Charge({ label, value, id, field, disabled, onSaved }: {
 
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{label}</span>
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{`${label} (${ccy})`}</span>
       <input className="h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent disabled:bg-sunken/60"
         inputMode="decimal" value={v} placeholder="0" disabled={disabled}
         onChange={(e) => setV(e.target.value)} onBlur={save} />
@@ -284,8 +365,8 @@ function Charge({ label, value, id, field, disabled, onSaved }: {
   )
 }
 
-function Line({ line, ccy, baseCurrency, markup, invoiceCurrency, disabled, onPatch }: {
-  line: InvoiceLine; ccy: string; baseCurrency: string; markup: number; invoiceCurrency: string
+function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch }: {
+  line: InvoiceLine; invoiceCcy: string; baseCcy: string; markup: number; rate: number | null
   disabled: boolean
   onPatch: (id: string, body: { productId?: string | null; skip?: boolean }) => void
 }) {
@@ -298,14 +379,17 @@ function Line({ line, ccy, baseCurrency, markup, invoiceCurrency, disabled, onPa
     if (r.ok) setSuggestions((await r.json()).suggestions ?? [])
   }
 
-  // What this line will do to the product's landed cost. Computed with the same function the cost card
-  // and the generated column use, so the figure shown here is the figure the database will hold.
-  //
-  // Unit cost only counts when the invoice is already in the tenant's base currency: nothing here
-  // converts anything, and no FX rate is stored anywhere, because a stored rate is a wrong rate.
-  const unitInBase = invoiceCurrency.toUpperCase() === baseCurrency.toUpperCase()
+  // The unit cost twice: as the supplier wrote it, and as it will be stored. Showing both is the check
+  // the owner actually performs — read the paper, read the screen, see the same number — and it is the
+  // only place a mistyped rate becomes visible before it reaches a product.
   const unit = line.quantity && line.quantity > 0 ? line.extended / line.quantity : null
-  const preview = unitInBase ? landedCost(unit, line.allocatedFreight, line.allocatedDuties, markup) : null
+  const unitBase = unit !== null && rate !== null ? unit * rate : null
+
+  // What this line will do to the product's landed cost, computed with the same function the cost card
+  // and the generated column use — so the figure shown here is the figure the database will hold.
+  const preview = landedCost(unitBase, line.allocatedFreight, line.allocatedDuties, markup)
+
+  const sameCurrency = invoiceCcy.toUpperCase() === baseCcy.toUpperCase()
 
   return (
     <li className="px-4 py-3">
@@ -316,8 +400,8 @@ function Line({ line, ccy, baseCurrency, markup, invoiceCurrency, disabled, onPa
             {[
               line.sku && `SKU ${line.sku}`,
               line.quantity !== null && `${line.quantity} ×`,
-              line.unitPrice !== null && money(line.unitPrice, ccy),
-              `= ${money(line.extended, ccy)}`,
+              line.unitPrice !== null && money(line.unitPrice, invoiceCcy),
+              `= ${money(line.extended, invoiceCcy)}`,
             ].filter(Boolean).join(' · ')}
           </p>
 
@@ -334,12 +418,9 @@ function Line({ line, ccy, baseCurrency, markup, invoiceCurrency, disabled, onPa
           {line.status === 'unmatched' && <p className="mt-1 text-xs text-amber-700">Not matched to a product</p>}
           {line.status === 'skipped' && <p className="mt-1 text-xs text-subtle">Skipped — takes no share of the freight</p>}
 
-          {/* A product can only carry one shipment's freight at a time, so applying REPLACES what an
-              earlier shipment put there. Named on the line rather than only in the summary, because the
-              owner deciding what to do about it is looking at this row. */}
           {line.priorShipment && (
             <p className="mt-1 text-xs text-amber-700">
-              {`Already carries ${money(line.priorShipment.amount, ccy)} from ${line.priorShipment.reference || 'an earlier shipment'}`}
+              {`Already carries ${money(line.priorShipment.amount, baseCcy)} from ${line.priorShipment.reference || 'an earlier shipment'}`}
               {line.priorShipment.appliedAt && ` (${new Date(line.priorShipment.appliedAt).toLocaleDateString()})`}
               {' — applying replaces it.'}
             </p>
@@ -349,9 +430,17 @@ function Line({ line, ccy, baseCurrency, markup, invoiceCurrency, disabled, onPa
         <div className="shrink-0 text-right">
           {line.status === 'matched' && (
             <>
+              {/* Unit cost converted, shown only when there is a conversion to check. */}
+              {!sameCurrency && (
+                <p className="text-xs text-subtle">
+                  {unitBase === null
+                    ? `Unit cost — needs the rate`
+                    : `Unit ${money(unit, invoiceCcy)} → ${money(unitBase, baseCcy)}`}
+                </p>
+              )}
               <p className="text-xs text-subtle">Takes</p>
-              <p className="text-sm font-medium text-ink">{money(line.allocatedFreight + line.allocatedDuties, ccy)}</p>
-              {preview !== null && <p className="text-xs text-muted">Lands at {money(preview, baseCurrency)}</p>}
+              <p className="text-sm font-medium text-ink">{money(line.allocatedFreight + line.allocatedDuties, baseCcy)}</p>
+              {preview !== null && <p className="text-xs text-muted">Lands at {money(preview, baseCcy)}</p>}
             </>
           )}
           {!disabled && (

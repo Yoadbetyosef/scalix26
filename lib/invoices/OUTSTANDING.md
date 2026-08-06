@@ -81,7 +81,8 @@ before there is a real invoice to measure it against.
 
 ## 6. Untested surfaces
 
-Unit-tested: `allocate.ts` (18 tests), `match-score.ts` (16). Those are the pure modules, and they hold
+Unit-tested: `allocate.ts` (22 tests, including the EUR-invoice arithmetic and the proof that
+converting freight produces a different, wrong number), `match-score.ts` (16). Those are the pure modules, and they hold
 the arithmetic and the judgement.
 
 **Not tested at all:** `store.ts`, `match.ts`, `extract.ts`, all five API routes, both pages. These
@@ -115,14 +116,24 @@ The real fix needs a decision Phase 1 does not make: whether a product's landed 
 most recent shipment, a weighted average across shipments still in stock, or per-batch costing. Those
 are different businesses' answers, not a missing feature.
 
-**Currency is guarded, not converted.** `apply_shipment_costs` refuses when the shipment's currency is
-not the tenant's base currency, and the screen says so before Apply. There is deliberately no FX
-anywhere — the owner re-types the figure in base currency. If tenants find that annoying, the answer is
-still not a stored rate.
+**Two currencies, and only one of them moves.** Line values convert into base currency at a rate the
+owner types on the invoice (`supplier_invoices.exchange_rate`, added in `add_landed_cost_invoices_2.sql`).
+Freight and duty never convert, because they never arrive foreign — they come from the freight
+forwarder in base currency and are typed from that bill. `apply_shipment_costs` refuses a
+foreign-currency invoice with no rate, and refuses freight denominated in anything but base currency.
+Neither has an override.
 
-**A third-currency invoice writes no unit cost.** If the invoice is in neither the base nor the declared
-secondary currency, `cost_primary` and `cost_secondary` are both left alone; freight and duty still
-land. `computed_cost` then stays NULL and the margin reads blank, which is honest but may look broken.
+Phase 1 shipped without the rate at all, on a too-broad reading of "a stored rate is a wrong rate" from
+`add_product_costs.sql`. That doctrine was written against a TENANT-WIDE rate that goes stale; a rate
+typed once on the invoice it was paid on is a historical fact, not a forecast. The gap meant a EUR
+invoice produced products with freight, a EUR reference figure, and no landed cost whatsoever.
+
+If a tenant ever gets a forwarder's bill in a foreign currency, that is a second rate on a second
+document — NOT this rate applied to one more field.
+
+**A third-currency invoice still writes `cost_primary`** (converted at the typed rate) but leaves
+`cost_secondary` null, because there is no labelled field to show an unrecognised currency in. Nothing
+is lost — `supplier_invoice_lines` keeps every original figure exactly as extracted.
 
 **The `landed_cost` module now means more than it did.** Turning it on used to mean one combined input
 on the cost card; it now also exposes `/landed-cost`. The description in `lib/modules.ts` was updated —

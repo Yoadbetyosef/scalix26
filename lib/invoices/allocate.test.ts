@@ -129,6 +129,50 @@ describe('coverage is what makes the matched-only denominator honest', () => {
   })
 })
 
+// The rate itself is applied in SQL (apply_shipment_costs), but the arithmetic it implements is pinned
+// here, because it is also what the review screen previews — and because the one thing that must never
+// drift is WHICH figures the rate touches.
+describe('a EUR invoice against a USD business', () => {
+  const RATE = 1.08   // 1 EUR = 1.08 USD, typed by the owner off the invoice they paid
+
+  it('converts the line value and leaves the freight alone', () => {
+    // 2 units at 1,000 EUR each; the forwarder separately billed 150 USD freight and 50 USD duty.
+    const a = allocate(charges(150, 50), [line('a', 2000)])
+    const unitEur = 2000 / 2
+    const unitUsd = unitEur * RATE                       // 1,080 USD — the only thing converted
+    expect(landedCost(unitUsd, a[0].allocatedFreight, a[0].allocatedDuties, 10)).toBeCloseTo(1408, 10)
+  })
+
+  it('produces a different, wrong number if freight is converted too', () => {
+    // The mistake this guards against. Freight arrives from the forwarder ALREADY in USD, so
+    // multiplying it by the invoice's rate corrupts a correct figure — silently, on the column the
+    // whole feature exists to fill.
+    const a = allocate(charges(150, 50), [line('a', 2000)])
+    const right = landedCost(1000 * RATE, a[0].allocatedFreight, a[0].allocatedDuties, 10)!
+    const wrong = landedCost(1000 * RATE, a[0].allocatedFreight * RATE, a[0].allocatedDuties * RATE, 10)!
+    expect(wrong).toBeGreaterThan(right)
+    expect(wrong - right).toBeCloseTo(200 * (RATE - 1) * 1.1, 10)
+  })
+
+  it('splits a USD freight pool identically whether the lines are priced in EUR or USD', () => {
+    // Why the allocation needs no conversion at all: weights are RATIOS of line values, so the currency
+    // cancels. A EUR-weighted split of a USD pool is a USD result.
+    const eur = allocate(charges(1000), [line('a', 100), line('b', 300)])
+    const usd = allocate(charges(1000), [line('a', 100 * RATE), line('b', 300 * RATE)])
+    expect(eur.map((x) => x.allocatedFreight)).toEqual(usd.map((x) => x.allocatedFreight))
+    expect(eur[0].allocatedFreight).toBe(250)
+  })
+
+  it('has no landed cost at all when the rate is missing', () => {
+    // What the Apply guard exists to prevent: freight lands, cost_primary does not, and the product
+    // ends up with a share of the shipment and no total or margin — with nothing on screen saying why.
+    const a = allocate(charges(150, 50), [line('a', 2000)])
+    const noRate = null
+    expect(a[0].allocatedFreight).toBe(150)
+    expect(landedCost(noRate, a[0].allocatedFreight, a[0].allocatedDuties, 10)).toBeNull()
+  })
+})
+
 describe('what the owner sees on the approval screen', () => {
   it('predicts the landed cost the generated column will store', () => {
     // The end-to-end claim: a product bought at 1,000 that takes 150 of this shipment's freight and 50

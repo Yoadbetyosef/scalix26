@@ -70,6 +70,10 @@ const invoiceRow = (r: Record<string, unknown>): SupplierInvoice => ({
   status: r.status as SupplierInvoice['status'],
   extractionError: (r.extraction_error as string) ?? null,
   matchNote: (r.match_note as string) ?? null,
+  exchangeRate: r.exchange_rate === null || r.exchange_rate === undefined ? null : Number(r.exchange_rate),
+  extractedFreight: r.extracted_freight === null || r.extracted_freight === undefined ? null : Number(r.extracted_freight),
+  extractedDuties: r.extracted_duties === null || r.extracted_duties === undefined ? null : Number(r.extracted_duties),
+  extractedOther: r.extracted_other === null || r.extracted_other === undefined ? null : Number(r.extracted_other),
   extractionCostUsd: r.extraction_cost_usd === null || r.extraction_cost_usd === undefined ? null : Number(r.extraction_cost_usd),
   createdAt: r.created_at as string,
 })
@@ -198,6 +202,10 @@ export async function createShipmentFromFile(file: File): Promise<Result<{ shipm
       supplier_name: inv.supplierName, invoice_number: inv.invoiceNumber,
       invoice_date: isoDate(inv.invoiceDate), currency: inv.currency || settings.baseCurrency,
       subtotal: inv.subtotal, tax_total: inv.taxTotal, grand_total: inv.grandTotal,
+      // What the SUPPLIER billed for carriage, in the invoice's currency. Evidence, not a value: it is
+      // shown beside the forwarder's figure so the owner can spot the same shipment quoted twice, and
+      // it never reaches landed_cost_shipments.freight_total.
+      extracted_freight: inv.freightTotal, extracted_duties: inv.dutiesTotal, extracted_other: inv.otherTotal,
       page_count: ex.pageCount, status: 'extracted', extraction_error: null,
       extraction_model: ex.model, extraction_input_tokens: ex.inputTokens,
       extraction_output_tokens: ex.outputTokens, extraction_completion_id: ex.completionId,
@@ -206,10 +214,17 @@ export async function createShipmentFromFile(file: File): Promise<Result<{ shipm
 
     await db.from('landed_cost_shipments').update({
       reference: [inv.supplierName, inv.invoiceNumber].filter(Boolean).join(' ') || null,
-      currency: inv.currency || settings.baseCurrency,
-      freight_total: inv.freightTotal ?? 0,
-      duties_total: inv.dutiesTotal ?? 0,
-      other_total: inv.otherTotal ?? 0,
+      // The shipment's currency is the FORWARDER'S, not the invoice's, and the forwarder bills in the
+      // tenant's own currency — so it stays base currency and is never seeded from the document.
+      //
+      // Seeding it from inv.currency is exactly what shipped in phase 1: a EUR invoice stamped the
+      // freight field EUR, and apply_shipment_costs then refused a shape the code should never have
+      // produced. The guard was right; this line was wrong.
+      currency: settings.baseCurrency,
+      // Deliberately NOT populated from the invoice. Freight comes from the forwarder's bill, in base
+      // currency, typed in by a person reading it. Copying the supplier's figure here would put a EUR
+      // number in a USD field the moment the invoice is foreign — and would do it silently, because
+      // the currency label above now says the field is USD.
       status: 'review', updated_at: new Date().toISOString(),
     }).eq('id', shipmentId)
 
@@ -474,20 +489,39 @@ export async function suggestForLine(lineId: string): Promise<Result<Array<{ id:
   return { ok: true, data: suggestions }
 }
 
-/** Edit the shipment's charges by hand — a forwarder's bill often arrives apart from the invoice. */
-export async function setCharges(shipmentId: string, charges: Partial<Charges> & { reference?: string }): Promise<Result<ShipmentDetail>> {
+/**
+ * The two things the owner types on the review screen: the forwarder's charges, and the rate paid.
+ *
+ * They live on different rows — charges on the shipment, rate on the invoice — because they come from
+ * two different documents. One call, because to the owner it is one screen and one act.
+ */
+export async function setShipmentInputs(
+  shipmentId: string,
+  input: Partial<Charges> & { reference?: string; exchangeRate?: number | null },
+): Promise<Result<ShipmentDetail>> {
   const g = await gate()
   if (g === 'not_found' || g === 'forbidden') return { ok: false, reason: g }
 
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  if (charges.freightTotal !== undefined) patch.freight_total = Math.max(0, charges.freightTotal)
-  if (charges.dutiesTotal !== undefined) patch.duties_total = Math.max(0, charges.dutiesTotal)
-  if (charges.otherTotal !== undefined) patch.other_total = Math.max(0, charges.otherTotal)
-  if (charges.reference !== undefined) patch.reference = charges.reference.slice(0, 200) || null
-
   const db = createAdminClient()
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (input.freightTotal !== undefined) patch.freight_total = Math.max(0, input.freightTotal)
+  if (input.dutiesTotal !== undefined) patch.duties_total = Math.max(0, input.dutiesTotal)
+  if (input.otherTotal !== undefined) patch.other_total = Math.max(0, input.otherTotal)
+  if (input.reference !== undefined) patch.reference = input.reference.slice(0, 200) || null
+
   const { error } = await db.from('landed_cost_shipments').update(patch).eq('id', shipmentId).eq('tenant_id', g.tenantId)
   if (error) return { ok: false, reason: 'not_found', error: error.message }
+
+  // The rate belongs to the INVOICE, not the shipment: it is a fact about the document it was paid on,
+  // and phase 2 hangs several invoices — potentially bought at different rates — off one shipment.
+  if (input.exchangeRate !== undefined) {
+    const rate = input.exchangeRate === null || input.exchangeRate <= 0 ? null : input.exchangeRate
+    const { error: re } = await db.from('supplier_invoices')
+      .update({ exchange_rate: rate, updated_at: new Date().toISOString() })
+      .eq('shipment_id', shipmentId).eq('tenant_id', g.tenantId)
+    if (re) return { ok: false, reason: 'not_found', error: re.message }
+  }
 
   await reallocate(g.tenantId, shipmentId)
   return getShipment(shipmentId)

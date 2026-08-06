@@ -103,6 +103,23 @@ export interface SupplierInvoice {
   extractionError: string | null
   /** Anything that limited the matching, in the owner's words. Null when nothing did. */
   matchNote: string | null
+  /**
+   * Base currency per one unit of THIS invoice's currency — the rate the owner actually paid, typed by
+   * hand. Applies to line values only. Freight is never multiplied by it: freight arrives from the
+   * forwarder already in base currency, so there is nothing to convert.
+   *
+   * Null is ordinary for an invoice already in base currency. Null on a FOREIGN invoice blocks Apply.
+   */
+  exchangeRate: number | null
+  /**
+   * Freight/duty/other as printed on the SUPPLIER's invoice, in the invoice's currency.
+   *
+   * Evidence, never a value. Shown beside the forwarder's figures so the owner can spot the same
+   * shipment quoted twice; never written to the shipment's charges.
+   */
+  extractedFreight: number | null
+  extractedDuties: number | null
+  extractedOther: number | null
   extractionCostUsd: number | null
   createdAt: string
 }
