@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { requireCatalogTenant } from './session'
 import { enabledModulesOf } from '@/lib/modules'
+import { margin } from './cost-math'
 
 // What a product costs the business, and the margin that follows from it.
 //
@@ -73,10 +74,8 @@ const row = (r: Record<string, unknown>): ProductCost => ({
   updatedAt: (r.updated_at as string) ?? null,
 })
 
-// Margin against the selling price: what proportion of the price is not cost. Undefined without both
-// numbers, and undefined at a zero price rather than dividing by it.
-const margin = (price: number | null, cost: number | null): number | null =>
-  price === null || cost === null || price <= 0 ? null : ((price - cost) / price) * 100
+// Margin and the landed-cost formula now live in ./cost-math, isomorphic, so the client card and the
+// invoice approval preview compute exactly what this computes and what the generated column stores.
 
 // The tenant's own defaults. Nothing here is assumed: a tenant with no secondary currency gets null and
 // never sees that field.

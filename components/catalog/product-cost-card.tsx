@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ChevronDown, Lock } from 'lucide-react'
+import { landedCost, margin, markupAmount } from '@/lib/catalog/cost-math'
 
 // Cost & Margin for one product.
 //
@@ -144,7 +145,8 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   const markup = view.cost?.markupPercent ?? settings.markupPercent
 
   // Live preview while typing. The saved figure is always the database's generated column — this only
-  // has to agree with it, never replace it.
+  // has to agree with it, never replace it, which is why the arithmetic comes from lib/catalog/cost-math
+  // rather than being written out here for the third time.
   const primary = num(f.primary)
   // Whichever shape the form is in, this is the same number: the formula sums shipping and tariff
   // BEFORE applying markup, so one combined figure and two separate ones that add to it are
@@ -152,9 +154,8 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   const extras = settings.combineShippingAndDuties
     ? (num(f.landed) ?? 0)
     : (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)
-  const liveTotal = primary === null ? null : (primary + extras) * (1 + markup / 100)
-
-  const liveMargin = liveTotal === null || price === null || price <= 0 ? null : ((price - liveTotal) / price) * 100
+  const liveTotal = landedCost(primary, extras, 0, markup)
+  const liveMargin = margin(price, liveTotal)
 
   const save = async () => {
     setSaving(true); setErr(null); setSaved(false)
@@ -247,7 +248,7 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg bg-sunken/60 px-3 py-2.5">
-            <Readout label={`Markup (${markup}%)`} value={primary === null ? '—' : fmt((primary + extras) * (markup / 100), settings.baseCurrency)} />
+            <Readout label={`Markup (${markup}%)`} value={fmt(markupAmount(primary, extras, 0, markup), settings.baseCurrency)} />
             <Readout label="Total cost" value={fmt(liveTotal, settings.baseCurrency)} strong />
             <Readout label="Selling price" value={fmt(price, settings.baseCurrency)} />
             <Readout label="Margin" value={liveMargin === null ? '—' : `${liveMargin.toFixed(1)}%`} tone={marginTone(liveMargin)} strong />

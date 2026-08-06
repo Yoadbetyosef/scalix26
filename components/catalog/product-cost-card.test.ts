@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { splitLanded } from './product-cost-card'
+import { landedCost, margin } from '@/lib/catalog/cost-math'
 
 // Merging shipping and tariff into one input must not disturb the two columns underneath. The
 // database sums them BEFORE applying markup, so one combined figure and two separate ones that add
@@ -41,8 +42,11 @@ describe('splitting one landed-cost figure back into two columns', () => {
 // The claim the whole approach rests on: (cost + shipping + tariff) × markup is unchanged by how the
 // extras are divided, because the sum happens first.
 describe('the margin is identical either way', () => {
+  // Deliberately the shipped function rather than a local copy of the expression: a test that restates
+  // the formula only proves the restatement is self-consistent. This one fails if cost-math and the
+  // generated column ever drift apart.
   const computed = (cost: number, shipping: number, tariff: number, markup: number) =>
-    (cost + shipping + tariff) * (1 + markup / 100)
+    landedCost(cost, shipping, tariff, markup)!
 
   it('gives the same computed cost for a split and a combined figure', () => {
     const split = computed(1000, 100, 50, 10)
@@ -52,7 +56,17 @@ describe('the margin is identical either way', () => {
   })
 
   it('and the same margin against the same price', () => {
-    const margin = (price: number, cost: number) => ((price - cost) / price) * 100
     expect(margin(2000, computed(1000, 100, 50, 10))).toBe(margin(2000, computed(1000, 150, 0, 10)))
+  })
+
+  // NULL in, NULL out — the column's rule, and the reason a product with no cost reads blank
+  // rather than $0.00.
+  it('has no landed cost when the purchase price was never recorded', () => {
+    expect(landedCost(null, 150, 0, 10)).toBeNull()
+    expect(margin(2000, null)).toBeNull()
+  })
+
+  it('has no margin at a zero price rather than dividing by it', () => {
+    expect(margin(0, 1265)).toBeNull()
   })
 })

@@ -11,9 +11,17 @@ export interface LlmRate { inputPerM: number; outputPerM: number } // $ per 1M t
 
 export const LLM_RATES: Record<string, LlmRate> = {
   'claude-haiku-4-5': { inputPerM: 1.0, outputPerM: 5.0 }, // the model this app uses
+  // Supplier-invoice extraction (lib/invoices/extract.ts) — the one path where a misread digit becomes
+  // a wrong cost, becomes a wrong price, and nobody finds out. List rates, deliberately: Anthropic's
+  // introductory $2/$10 runs to 2026-08-31, and a table that expires silently would UNDER-report spend
+  // from September. Over-reporting by a third on a handful of invoices a month is the safe direction.
+  'claude-sonnet-5': { inputPerM: 3.0, outputPerM: 15.0 },
   'claude-sonnet-4-6': { inputPerM: 3.0, outputPerM: 15.0 },
   'claude-opus-4-8': { inputPerM: 5.0, outputPerM: 25.0 },
 }
+// The fallback is Haiku's rate, which is the CHEAPEST row in this table — so an unlisted model is
+// under-reported, not over. Adding a model without adding its row here is therefore silent revenue
+// leakage rather than a visible error. Add the row in the same change as the model.
 export const DEFAULT_LLM_RATE: LlmRate = { inputPerM: 1.0, outputPerM: 5.0 } // Haiku 4.5
 
 export function llmCost(model: string, inputTokens: number, outputTokens: number): number {
