@@ -97,6 +97,27 @@ export function allocate(charges: Charges, lines: Pick<InvoiceLine, 'id' | 'exte
   return lines.map((l) => byId.get(l.id) ?? { lineId: l.id, allocatedFreight: 0, allocatedDuties: 0 })
 }
 
+/**
+ * A line's allocated charge as a PER-UNIT figure.
+ *
+ * The allocation is computed per LINE — the whole line's share of the freight pool — because that is
+ * what the invoice weights are. But `product_costs` is per UNIT: `cost_primary` is what one costs,
+ * `computed_cost` is compared against `catalog_products.price` which is one unit's selling price, and
+ * the margin that comes out of it is a margin on one sale.
+ *
+ * So the line total has to be divided before it is written, or two sofas on one line would each land
+ * carrying both sofas' freight — a landed cost roughly double the truth, on a column nothing else
+ * cross-checks. The same division happens in SQL inside apply_shipment_costs; this is the version the
+ * approval screen previews with, and they must agree.
+ *
+ * A line with no quantity is treated as one unit: without a quantity there is nothing to divide by, and
+ * the line's own total is the best available answer for what its single unit cost.
+ */
+export function unitShare(lineTotal: number, quantity: number | null): number {
+  const q = quantity && quantity > 0 ? quantity : 1
+  return lineTotal / q
+}
+
 export interface Coverage {
   totalValue: number
   matchedValue: number

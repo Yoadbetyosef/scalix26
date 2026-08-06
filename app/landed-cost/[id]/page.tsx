@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, AlertTriangle, Check, ExternalLink, Search, X } from 'lucide-react'
-import { coverage } from '@/lib/invoices/allocate'
+import { coverage, unitShare } from '@/lib/invoices/allocate'
 import { MIN_COVERAGE, type InvoiceLine, type ShipmentDetail } from '@/lib/invoices/types'
 import { landedCost } from '@/lib/catalog/cost-math'
 
@@ -385,9 +385,18 @@ function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch }: {
   const unit = line.quantity && line.quantity > 0 ? line.extended / line.quantity : null
   const unitBase = unit !== null && rate !== null ? unit * rate : null
 
-  // What this line will do to the product's landed cost, computed with the same function the cost card
-  // and the generated column use — so the figure shown here is the figure the database will hold.
-  const preview = landedCost(unitBase, line.allocatedFreight, line.allocatedDuties, markup)
+  // What this line will do to the product's landed cost.
+  //
+  // PER UNIT, like everything in product_costs: the allocation is a whole line's share of the freight
+  // pool, but cost_primary is what one unit cost and margin is measured against one unit's selling
+  // price. apply_shipment_costs divides by the same quantity in SQL — unitShare is the shared
+  // definition so the preview and the write cannot disagree.
+  const preview = landedCost(
+    unitBase,
+    unitShare(line.allocatedFreight, line.quantity),
+    unitShare(line.allocatedDuties, line.quantity),
+    markup,
+  )
 
   const sameCurrency = invoiceCcy.toUpperCase() === baseCcy.toUpperCase()
 
