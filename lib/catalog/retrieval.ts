@@ -1,6 +1,16 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { groupProducts, speakableAnswer, tokenize, type Groupable, type ProductGroup } from './grouping'
 
+// ONE client for the whole module, built on first use and reused.
+//
+// createAdminClient() constructs a fresh supabase-js client every call — and a lookup made three or
+// four of them (website, inventory, the log, and the route's own tenant read). Measured against this
+// tenant, the database work is ~26ms while the endpoint reported 227ms server-side; the difference
+// was construction, not queries. A serverless container serves many calls, so building it once is
+// the whole saving.
+let adminClient: ReturnType<typeof createAdminClient> | null = null
+const admin = () => (adminClient ??= createAdminClient())
+
 // THE retrieval path. One implementation, three callers: the text pipeline's tool, the voice agent's
 // tool, and the tenant-facing test box in /catalog. A test surface that disagrees with the agent is
 // worse than no test surface, so there is deliberately no second implementation to drift from.
@@ -89,7 +99,7 @@ const tokenFilter = (titleColumn: string, skuColumn: string, t: string): string 
 const byDistinctiveness = (tokens: string[]): string[] => [...tokens].sort((a, b) => b.length - a.length)
 
 async function searchWebsite(tenantId: string, tokens: string[]): Promise<Row[]> {
-  const db = createAdminClient()
+  const db = admin()
   const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
     let q = db.from('catalog_ingested_products')
       .select('id, title, price, currency, sku, image_url, product_url, availability')
@@ -132,7 +142,7 @@ async function ladder<T>(run: (subset: string[]) => Promise<T[]>, tokens: string
 }
 
 async function searchInventory(tenantId: string, tokens: string[]): Promise<Row[]> {
-  const db = createAdminClient()
+  const db = admin()
   const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
     let q = db.from('catalog_products')
       .select('id, name, sku, price, availability_status, showroom_quantity, warehouse_quantity, storage_quantity, image_url')
@@ -199,7 +209,7 @@ function mergeRows(website: Row[], inventory: Row[]): Groupable[] {
 // The miss-rate log. Fire-and-forget: instrumentation must never delay a caller, and it must never be
 // the reason a lookup fails. Deferring embeddings is only honest while this keeps recording.
 function logRetrieval(tenantId: string, surface: 'voice' | 'text' | 'test', query: string, normalized: string, r: Omit<RetrievalResult, 'query' | 'groups' | 'say'>): void {
-  void createAdminClient().from('catalog_retrieval_log').insert({
+  void admin().from('catalog_retrieval_log').insert({
     tenant_id: tenantId, query: query.slice(0, 500), normalized: normalized.slice(0, 500), surface,
     matched: r.matched, groups: 0, resolved: r.resolved, clarifying: r.clarifying,
     latency_ms: Math.round(r.latencyMs), timed_out: r.timedOut, errored: r.errored,
