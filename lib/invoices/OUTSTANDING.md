@@ -101,8 +101,19 @@ behaviour for "put it back", but it means the record does not describe the state
 **A re-apply after editing the charges is allowed and correct**, but the old allocation on the products
 is simply overwritten, not reversed and re-applied. Since a product's `shipping_cost` is fully replaced
 rather than incremented, this is right — but it is only right because one product can carry one
-shipment's freight at a time. **Two different shipments containing the same product will overwrite each
-other**, and nothing warns about it. That is the largest known modelling gap in Phase 1.
+shipment's freight at a time. **Two different shipments containing the same product overwrite each
+other.** That is the largest known modelling gap in Phase 1.
+
+It is now WARNED but not fixed: `withPriorShipments()` in `store.ts` marks any line whose product
+already carries freight from an applied shipment, and the review screen names the earlier shipment, the
+amount, and the date on the line itself plus a summary above Apply. It deliberately does not block —
+reordering the same goods and wanting the newer freight is the common, correct case. What it removes is
+the silent version, where the second apply erases the first and the margin is wrong from then on with
+nothing on screen to say why.
+
+The real fix needs a decision Phase 1 does not make: whether a product's landed cost should reflect the
+most recent shipment, a weighted average across shipments still in stock, or per-batch costing. Those
+are different businesses' answers, not a missing feature.
 
 **Currency is guarded, not converted.** `apply_shipment_costs` refuses when the shipment's currency is
 not the tenant's base currency, and the screen says so before Apply. There is deliberately no FX

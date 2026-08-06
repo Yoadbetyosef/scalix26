@@ -93,6 +93,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   // Only a problem when there is something to write; a shipment with no charges has no currency to be
   // wrong about. The RPC re-checks this in SQL — this is the early, fixable version of the same guard.
   const wrongCurrency = charges > 0 && ccy.toUpperCase() !== settings.baseCurrency.toUpperCase()
+  const reorders = lines.filter((l) => l.status === 'matched' && l.priorShipment)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -154,6 +155,24 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
           {`This shipment's freight is recorded in ${ccy}, but your product costs are kept in ${settings.baseCurrency}. `}
           {`Nothing here converts currencies — re-enter the freight and duty above in ${settings.baseCurrency}.`}
         </p>
+      )}
+
+      {/* Reordering the same product is normal and usually the newer freight is the one you want — so
+          this warns and never blocks. What it prevents is the silent version: a second apply erasing
+          the first shipment's freight, and the margin on that product being wrong from then on with
+          nothing on screen to say why. Phase 2 fixes the modelling; this makes it a decision. */}
+      {reorders.length > 0 && !applied && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {`${reorders.length} product${reorders.length === 1 ? '' : 's'} on this invoice already carr${reorders.length === 1 ? 'ies' : 'y'} freight from an earlier shipment.`}
+          </p>
+          <p className="mt-1 text-sm text-amber-800">
+            A product holds one shipment&rsquo;s freight at a time, so applying this one replaces what the
+            earlier one put there rather than adding to it. If that is what you want — the same goods
+            reordered, at this shipment&rsquo;s freight — carry on. The affected lines are marked below.
+          </p>
+        </div>
       )}
 
       {/* THE coverage line. Not a footnote: it is what makes spreading freight over matched lines only
@@ -314,6 +333,17 @@ function Line({ line, ccy, baseCurrency, markup, invoiceCurrency, disabled, onPa
           )}
           {line.status === 'unmatched' && <p className="mt-1 text-xs text-amber-700">Not matched to a product</p>}
           {line.status === 'skipped' && <p className="mt-1 text-xs text-subtle">Skipped — takes no share of the freight</p>}
+
+          {/* A product can only carry one shipment's freight at a time, so applying REPLACES what an
+              earlier shipment put there. Named on the line rather than only in the summary, because the
+              owner deciding what to do about it is looking at this row. */}
+          {line.priorShipment && (
+            <p className="mt-1 text-xs text-amber-700">
+              {`Already carries ${money(line.priorShipment.amount, ccy)} from ${line.priorShipment.reference || 'an earlier shipment'}`}
+              {line.priorShipment.appliedAt && ` (${new Date(line.priorShipment.appliedAt).toLocaleDateString()})`}
+              {' — applying replaces it.'}
+            </p>
+          )}
         </div>
 
         <div className="shrink-0 text-right">

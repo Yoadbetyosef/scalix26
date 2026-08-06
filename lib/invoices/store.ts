@@ -313,6 +313,56 @@ export async function reallocate(tenantId: string, shipmentId: string): Promise<
   }
 }
 
+/**
+ * Mark any line whose product ALREADY carries freight from a different, applied shipment.
+ *
+ * Applying replaces a product's shipping_cost rather than adding to it. That is right for one shipment
+ * and wrong for two: reorder the same sofa next month and the second apply silently erases the first
+ * one's freight, leaving the margin on that product wrong from then on with nothing on screen to say
+ * so. Phase 2 fixes the modelling. This makes it visible in the meantime.
+ *
+ * Two queries rather than one two-level embedded filter: each is simple enough to predict, and this
+ * runs once per screen load.
+ */
+async function withPriorShipments(tenantId: string, invoiceId: string, lines: InvoiceLine[]): Promise<InvoiceLine[]> {
+  const productIds = [...new Set(lines.filter((l) => l.status === 'matched' && l.productId).map((l) => l.productId!))]
+  if (!productIds.length) return lines
+
+  const db = createAdminClient()
+
+  // Applied shipments only — a shipment still in review has written nothing to overwrite.
+  const { data: invoices } = await db.from('supplier_invoices')
+    .select('id, shipment_id, landed_cost_shipments!inner(reference, applied_at, status)')
+    .eq('tenant_id', tenantId).eq('landed_cost_shipments.status', 'applied').neq('id', invoiceId)
+
+  const shipmentOf = new Map<string, { id: string; reference: string | null; appliedAt: string | null }>()
+  for (const r of (invoices as Array<Record<string, unknown>> | null) ?? []) {
+    const s = r.landed_cost_shipments as { reference: string | null; applied_at: string | null }
+    shipmentOf.set(r.id as string, { id: r.shipment_id as string, reference: s.reference, appliedAt: s.applied_at })
+  }
+  if (!shipmentOf.size) return lines
+
+  const { data: prior } = await db.from('supplier_invoice_lines')
+    .select('invoice_id, product_id, allocated_freight, allocated_duties')
+    .eq('tenant_id', tenantId).eq('status', 'matched')
+    .in('invoice_id', [...shipmentOf.keys()]).in('product_id', productIds)
+
+  // Most recent apply wins the mention: that is the freight currently sitting on the product, and so
+  // the figure this shipment would actually replace.
+  const byProduct = new Map<string, NonNullable<InvoiceLine['priorShipment']>>()
+  for (const r of (prior as Array<Record<string, unknown>> | null) ?? []) {
+    const ship = shipmentOf.get(r.invoice_id as string)
+    if (!ship) continue
+    const amount = Number(r.allocated_freight ?? 0) + Number(r.allocated_duties ?? 0)
+    if (amount <= 0) continue
+    const pid = r.product_id as string
+    const seen = byProduct.get(pid)
+    if (!seen || (ship.appliedAt ?? '') > (seen.appliedAt ?? '')) byProduct.set(pid, { ...ship, amount })
+  }
+
+  return lines.map((l) => (l.productId && byProduct.has(l.productId) ? { ...l, priorShipment: byProduct.get(l.productId) } : l))
+}
+
 /** Everything the approval screen needs. */
 export async function getShipment(shipmentId: string): Promise<Result<ShipmentDetail>> {
   const g = await gate()
@@ -330,12 +380,14 @@ export async function getShipment(shipmentId: string): Promise<Result<ShipmentDe
     .eq('tenant_id', g.tenantId).eq('invoice_id', (inv as { id: string }).id).order('line_no')
 
   const settings = await getCostSettings(g.tenantId)
+  const rows = ((lines as Array<Record<string, unknown>> | null) ?? []).map(lineRow)
+
   return {
     ok: true,
     data: {
       shipment: shipmentRow(ship as Record<string, unknown>),
       invoice: invoiceRow(inv as Record<string, unknown>),
-      lines: ((lines as Array<Record<string, unknown>> | null) ?? []).map(lineRow),
+      lines: await withPriorShipments(g.tenantId, (inv as { id: string }).id, rows),
       settings: { baseCurrency: settings.baseCurrency, secondaryCurrency: settings.secondaryCurrency, markupPercent: settings.markupPercent },
     },
   }

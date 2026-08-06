@@ -125,6 +125,19 @@ export interface InvoiceLine {
   status: LineStatus
   allocatedFreight: number
   allocatedDuties: number
+  /**
+   * Another APPLIED shipment already put freight on this product.
+   *
+   * A product's shipping_cost is REPLACED by an apply, not added to — correct when one product carries
+   * one shipment's freight, wrong the moment the same sofa is reordered. Applying this shipment erases
+   * what the earlier one wrote, and the margin on that product is wrong from then on with nothing on
+   * screen to say so.
+   *
+   * The modelling fix is Phase 2. Until then this makes it a visible decision instead of a silent
+   * number: it does not block, because re-ordering the same product and wanting the newer freight is
+   * the common, correct case.
+   */
+  priorShipment?: { id: string; reference: string | null; appliedAt: string | null; amount: number } | null
 }
 
 /** What a shipment's approval screen needs, in one object. */
