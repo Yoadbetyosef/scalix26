@@ -205,12 +205,10 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
             </p>
           ) : null}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Field label={`Cost (${settings.baseCurrency})`}>
-              <input className={input} inputMode="decimal" value={f.primary} placeholder="—"
-                onChange={(e) => { setF((p) => ({ ...p, primary: e.target.value })); setSaved(false) }} />
-            </Field>
-
-            {/* Reference only — the supplier's own invoice. Never converted, never part of the total. */}
+            {/* FIRST on screen, and reference only. Order, not precedence: the supplier's invoice is
+                the piece of paper in front of the owner, so it is the first thing they type — but it
+                is never converted and never part of the total. cost_primary below still drives every
+                computed figure. Reordering this row must not be read as changing which one counts. */}
             {settings.secondaryCurrency && (
               <Field label={`Supplier invoice (${settings.secondaryCurrency})`}>
                 <input className={input} inputMode="decimal" value={f.secondary} placeholder="—"
@@ -218,18 +216,29 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
               </Field>
             )}
 
+            {/* The figure everything is computed from. */}
+            <Field label={`Cost (${settings.baseCurrency})`}>
+              <input className={input} inputMode="decimal" value={f.primary} placeholder="—"
+                onChange={(e) => { setF((p) => ({ ...p, primary: e.target.value })); setSaved(false) }} />
+            </Field>
+
+            {/* Labelled with the base currency, like the Cost field above. These feed the same
+                total, so they are in the same currency — but nothing said so, and this card is
+                deliberately shown to businesses whose supplier invoices arrive in another one. An
+                unlabelled box between "Cost (USD)" and "Supplier invoice (EUR)" is exactly where a
+                figure gets copied off the EUR invoice and silently added as USD. */}
             {settings.combineShippingAndDuties ? (
-              <Field label="Shipping &amp; duties">
+              <Field label={`Shipping & duties (${settings.baseCurrency})`}>
                 <input className={input} inputMode="decimal" value={f.landed} placeholder="0"
                   onChange={(e) => { setF((p) => ({ ...p, landed: e.target.value })); setSaved(false) }} />
               </Field>
             ) : (
               <>
-                <Field label="Shipping">
+                <Field label={`Shipping (${settings.baseCurrency})`}>
                   <input className={input} inputMode="decimal" value={f.shipping} placeholder="0"
                     onChange={(e) => { setF((p) => ({ ...p, shipping: e.target.value })); setSaved(false) }} />
                 </Field>
-                <Field label="Tariff">
+                <Field label={`Tariff (${settings.baseCurrency})`}>
                   <input className={input} inputMode="decimal" value={f.tariff} placeholder="0"
                     onChange={(e) => { setF((p) => ({ ...p, tariff: e.target.value })); setSaved(false) }} />
                 </Field>
@@ -248,8 +257,8 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
               leading space of a text node that follows an expression, which rendered "The EURfigure". */}
           {settings.secondaryCurrency && (
             <p className="text-xs text-subtle">
-              {`The ${settings.secondaryCurrency} figure is a reference note from the supplier’s invoice. `}
-              {`It is never converted and never counted in the total — record what you actually paid in ${settings.baseCurrency}.`}
+              {`Enter the supplier’s invoice in ${settings.secondaryCurrency} first — it is a reference note only, `}
+              {`never converted and never counted. Every figure the total is built from is recorded in ${settings.baseCurrency}.`}
             </p>
           )}
 
