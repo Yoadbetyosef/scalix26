@@ -76,11 +76,19 @@ export async function upsertSource(input: CreateSourceInput): Promise<{ source: 
     updated_at: new Date().toISOString(),
   }
 
+  // Deliberately NOT filtered on deleted_at. A disconnected source used to be invisible here, so
+  // reconnecting the same site inserted a parallel row — and because products are keyed on
+  // (tenant_id, source_id, external_id), the sync then wrote a second full copy of the catalogue and
+  // orphaned the first. One 9,179-product store became 18,358 rows, half of them dead weight the
+  // index still had to scan.
+  //
+  // Reviving the original row instead is also what makes deleteSource's promise true: the old
+  // products are still attached to it, and the diff engine reactivates them in place.
   const { data: existing } = await db.from('catalog_sources')
-    .select('id').eq('tenant_id', input.tenantId).eq('source_url', url).is('deleted_at', null).maybeSingle()
+    .select('id, deleted_at').eq('tenant_id', input.tenantId).eq('source_url', url).maybeSingle()
 
   const q = existing
-    ? db.from('catalog_sources').update(row).eq('id', existing.id as string)
+    ? db.from('catalog_sources').update({ ...row, deleted_at: null }).eq('id', existing.id as string)
     : db.from('catalog_sources').insert(row)
 
   const { data, error } = await q.select(SOURCE_COLUMNS).single()
@@ -116,11 +124,13 @@ export async function createCsvSource(
     updated_at: new Date().toISOString(),
   }
 
+  // Same as above: re-uploading a file whose source was disconnected must revive that source rather
+  // than start a second one beside it.
   const { data: existing } = await db.from('catalog_sources')
-    .select('id').eq('tenant_id', tenantId).eq('source_url', sourceUrl).is('deleted_at', null).maybeSingle()
+    .select('id').eq('tenant_id', tenantId).eq('source_url', sourceUrl).maybeSingle()
 
   const q = existing
-    ? db.from('catalog_sources').update(row).eq('id', existing.id as string)
+    ? db.from('catalog_sources').update({ ...row, deleted_at: null }).eq('id', existing.id as string)
     : db.from('catalog_sources').insert(row)
 
   const { data, error } = await q.select(SOURCE_COLUMNS).single()
