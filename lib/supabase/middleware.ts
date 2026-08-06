@@ -54,7 +54,11 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Public routes that don't need auth
-  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
+  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book',
+    // The voice agent's product lookup. Called by voice-server mid-call with the call's lead token
+    // and no session, exactly like /api/appointments/available. The route resolves the tenant from
+    // that token and gates on the inventory module itself — ONLY this path is public, not /api/catalog.
+    '/api/catalog/lookup', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
     // Partner OS public surface: referral redirect + click tracking, partner signup/login,
     // public demo pages + their data, and the public partner marketplace directory.
     '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
