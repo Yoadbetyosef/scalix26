@@ -53,13 +53,20 @@ const marginTone = (m: number | null) =>
 // One component for both a product and a sub-product. The only difference is which endpoint it talks
 // to, so that is the only thing parameterised — forking it would mean two copies of the permission
 // handling, the blank-vs-zero rule and the margin colouring, free to drift apart.
-export function ProductCostCard({ productId, variantId, compact }: { productId?: string; variantId?: string; compact?: boolean }) {
+export function ProductCostCard({ productId, variantId, compact, justCreated }: {
+  productId?: string; variantId?: string; compact?: boolean
+  /** Arriving straight from "Create product". Opens the card and names the next step, because a cost
+   *  row hangs off a product id and there is no id to hang it on until the product exists. Nothing is
+   *  missing when this is false — a product without a cost is an ordinary state, and edit has always
+   *  shown it that way. */
+  justCreated?: boolean
+}) {
   const endpoint = variantId
     ? `/api/catalog/variants/${variantId}/cost`
     : `/api/catalog/products/${productId}/cost`
   const [view, setView] = useState<View | null>(null)
   const [allowed, setAllowed] = useState<boolean | null>(null)   // null = still asking
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(Boolean(justCreated))
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -147,6 +154,13 @@ export function ProductCostCard({ productId, variantId, compact }: { productId?:
 
       {open && (
         <div className={`space-y-4 border-t border-hairline pt-3 ${compact ? 'px-3 pb-3' : 'px-4 pb-4'}`}>
+          {/* Reads as step two of making a product, and only until there is something to see. Not
+              styled as a warning: nothing has gone wrong, and a product with no cost is fine. */}
+          {justCreated && !saved && view.cost?.computedCost == null && (
+            <p className="text-sm text-subtle">
+              Product created. Add what it costs you and the margin appears here.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label={`Cost (${settings.baseCurrency})`}>
               <input className={input} inputMode="decimal" value={f.primary} placeholder="—"

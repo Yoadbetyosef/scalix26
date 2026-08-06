@@ -20,9 +20,11 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 const input = 'h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
 const area = 'w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent'
 
-export function ProductForm({ initial, initialFabric, onSubmit, submitLabel }: {
+export function ProductForm({ initial, initialFabric, onSubmit, submitLabel, justCreated }: {
   initial?: Partial<CatalogProduct>
   initialFabric?: FabricValue
+  /** Passed straight through to the cost card — see its own note. */
+  justCreated?: boolean
   onSubmit: (p: Record<string, unknown>) => Promise<void>
   submitLabel: string
 }) {
@@ -114,7 +116,7 @@ export function ProductForm({ initial, initialFabric, onSubmit, submitLabel }: {
           form there is nothing to attach it to yet, and a disabled card would be noise. The card also
           renders nothing at all unless this session is permitted to see costs; it asks the endpoint
           rather than being told, so there's no second copy of the rule here to fall out of date. */}
-      {initial?.id && <ProductCostCard productId={initial.id} />}
+      {initial?.id && <ProductCostCard productId={initial.id} justCreated={justCreated} />}
 
       {/* Everything else, folded away */}
       <details className="rounded-xl border border-hairline-strong bg-white p-4">

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { Package, Download } from 'lucide-react'
 import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, type CatalogProduct, type AvailabilityStatus, type MovementType } from '@/lib/catalog/types'
 import { ProductForm } from '@/components/catalog/product-form'
@@ -22,12 +22,16 @@ const fmt = (iso: string) => { try { return new Date(iso).toLocaleString() } cat
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>()
+  // Arriving from "Create product". The form is behind an edit toggle and the cost card lives inside
+  // it, so a product created a moment ago would land on a read-only page with nowhere to put its
+  // cost. Read once, on mount, so it never fights the user's own use of the toggle afterwards.
+  const justCreated = useSearchParams().get('created') === '1'
   const [product, setProduct] = useState<CatalogProduct | null>(null)
   const [movements, setMovements] = useState<CatalogMovement[]>([])
   const [qr, setQr] = useState<{ target: string; dataUrl: string | null } | null>(null)
   const [fabric, setFabric] = useState<FabricValue | null>(null)
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(justCreated)
   const [move, setMove] = useState<null | { type: MovementType; quantity: string; from_location: string; to_location: string; note: string }>(null)
   const [busy, setBusy] = useState(false)
   const { show, node: toast } = useToast()
@@ -79,7 +83,7 @@ export default function ProductDetailPage() {
       {toast}
       <button onClick={() => setEditing(false)} className="text-sm text-subtle hover:text-ink">← Cancel</button>
       <h1 className="mb-4 mt-2 text-2xl font-bold text-ink">Edit product</h1>
-      <ProductForm initial={product} initialFabric={fabric || undefined} onSubmit={saveEdit} submitLabel="Save changes" />
+      <ProductForm initial={product} initialFabric={fabric || undefined} onSubmit={saveEdit} submitLabel="Save changes" justCreated={justCreated} />
     </div>
   )
 
