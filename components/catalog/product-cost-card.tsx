@@ -53,13 +53,20 @@ const marginTone = (m: number | null) =>
 // One component for both a product and a sub-product. The only difference is which endpoint it talks
 // to, so that is the only thing parameterised — forking it would mean two copies of the permission
 // handling, the blank-vs-zero rule and the margin colouring, free to drift apart.
-export function ProductCostCard({ productId, variantId, compact, justCreated }: {
+export interface CostDraft { costPrimary: number | null; costSecondary: number | null; shippingCost: number; tariffCost: number }
+
+export function ProductCostCard({ productId, variantId, compact, justCreated, draft }: {
   productId?: string; variantId?: string; compact?: boolean
   /** Arriving straight from "Create product". Opens the card and names the next step, because a cost
    *  row hangs off a product id and there is no id to hang it on until the product exists. Nothing is
    *  missing when this is false — a product without a cost is an ordinary state, and edit has always
    *  shown it that way. */
   justCreated?: boolean
+  /** DRAFT MODE — the Add form, where no product exists yet and so no cost row can. The card asks the
+   *  settings endpoint instead of a product's, measures margin against the price being typed in the
+   *  form above, and hands its values up rather than saving them: they are written with the product,
+   *  in one transaction, so a cost can never be lost after a successful insert. */
+  draft?: { price: number | null; onChange: (v: CostDraft | null) => void }
 }) {
   const endpoint = variantId
     ? `/api/catalog/variants/${variantId}/cost`
@@ -79,6 +86,17 @@ export function ProductCostCard({ productId, variantId, compact, justCreated }: 
     let alive = true
     ;(async () => {
       try {
+        if (draft) {
+          // No product, so nothing to ask about one. The settings endpoint answers the only two
+          // questions the card has here: may this session see costs, and in what currency.
+          const rs = await fetch('/api/catalog/cost-settings')
+          if (!alive) return
+          if (!rs.ok) { setAllowed(false); return }   // 403 → no card, and the Add form is unaffected
+          const { settings } = await rs.json()
+          setAllowed(true)
+          setView({ settings, price: null, cost: null, marginPercent: null })
+          return
+        }
         const r = await fetch(endpoint)
         if (!alive) return
         if (r.status === 403) { setAllowed(false); return }
@@ -97,11 +115,31 @@ export function ProductCostCard({ productId, variantId, compact, justCreated }: 
       } catch { if (alive) setAllowed(false) }
     })()
     return () => { alive = false }
-  }, [endpoint])
+  }, [endpoint, draft])
+
+  // Draft mode hands its values up rather than saving them; the parent submits them with the product,
+  // which is what makes the two rows one transaction.
+  //
+  // In an effect, not during render: calling the parent's setter while rendering is invalid React, and
+  // keying it on the `draft` object would loop forever because the parent builds a fresh one each
+  // render. The field values are the real dependency, and onChange is a stable useState setter.
+  const onDraftChange = draft?.onChange
+  const combine = view?.settings.combineShippingAndDuties ?? false
+  useEffect(() => {
+    if (!onDraftChange) return
+    const split = splitLanded(combine, f, 0)
+    const p = num(f.primary)
+    const secondary = num(f.secondary)
+    const empty = p === null && secondary === null && split.shippingCost === 0 && split.tariffCost === 0
+    onDraftChange(empty ? null : { costPrimary: p, costSecondary: secondary, ...split })
+  }, [onDraftChange, combine, f])
 
   if (allowed !== true || !view) return null
 
-  const { settings, price } = view
+  const { settings } = view
+  // In draft mode the margin is measured against the price being typed in the form above, so the
+  // number moves as the owner decides what to charge — which is the moment they are deciding it.
+  const price = draft ? draft.price : view.price
   // Markup already snapshotted on this row; today's tenant default only applies to a first save.
   const markup = view.cost?.markupPercent ?? settings.markupPercent
 
@@ -115,6 +153,7 @@ export function ProductCostCard({ productId, variantId, compact, justCreated }: 
     ? (num(f.landed) ?? 0)
     : (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)
   const liveTotal = primary === null ? null : (primary + extras) * (1 + markup / 100)
+
   const liveMargin = liveTotal === null || price === null || price <= 0 ? null : ((price - liveTotal) / price) * 100
 
   const save = async () => {
@@ -156,11 +195,15 @@ export function ProductCostCard({ productId, variantId, compact, justCreated }: 
         <div className={`space-y-4 border-t border-hairline pt-3 ${compact ? 'px-3 pb-3' : 'px-4 pb-4'}`}>
           {/* Reads as step two of making a product, and only until there is something to see. Not
               styled as a warning: nothing has gone wrong, and a product with no cost is fine. */}
-          {justCreated && !saved && view.cost?.computedCost == null && (
+          {draft ? (
+            <p className="text-sm text-subtle">
+              Saved with the product. Leave it blank and you can add it afterwards.
+            </p>
+          ) : justCreated && !saved && view.cost?.computedCost == null ? (
             <p className="text-sm text-subtle">
               Product created. Add what it costs you and the margin appears here.
             </p>
-          )}
+          ) : null}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label={`Cost (${settings.baseCurrency})`}>
               <input className={input} inputMode="decimal" value={f.primary} placeholder="—"
@@ -211,13 +254,17 @@ export function ProductCostCard({ productId, variantId, compact, justCreated }: 
           )}
 
           {err && <p className="text-xs text-red-600">{err}</p>}
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={save} disabled={saving}
-              className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
-              {saving ? 'Saving…' : 'Save cost'}
-            </button>
-            {saved && <span className="text-xs text-emerald-700">Saved.</span>}
-          </div>
+          {/* No save of its own in draft mode: these values go with the product, in one transaction.
+              A button here would promise a second, separate write — the exact thing this avoids. */}
+          {!draft && (
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={save} disabled={saving}
+                className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
+                {saving ? 'Saving…' : 'Save cost'}
+              </button>
+              {saved && <span className="text-xs text-emerald-700">Saved.</span>}
+            </div>
+          )}
         </div>
       )}
     </section>

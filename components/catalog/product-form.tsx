@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { AVAILABILITY_STATUSES, AVAILABILITY_LABELS, PRODUCT_STATUSES, type CatalogProduct } from '@/lib/catalog/types'
 import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
 import { ProductNameField } from '@/components/catalog/product-name-field'
-import { ProductCostCard } from '@/components/catalog/product-cost-card'
+import { ProductCostCard, type CostDraft } from '@/components/catalog/product-cost-card'
 
 export type ProductInput = Partial<CatalogProduct> & { tagsText?: string }
 
@@ -35,6 +35,9 @@ export function ProductForm({ initial, initialFabric, onSubmit, submitLabel, jus
     ...initial,
     tagsText: (initial?.tags || []).join(', '),
   })
+  // Cost typed on the Add form, held here until submit so it can be written with the product rather
+  // than after it. Null means nothing was entered, which is an ordinary outcome.
+  const [costDraft, setCostDraft] = useState<CostDraft | null>(null)
   const [fabric, setFabric] = useState<FabricValue>(initialFabric || {
     fabric_category: null, fabric_family: null, fabric_name: null, fabric_composition: null, fabric_durability: null,
   })
@@ -56,6 +59,8 @@ export function ProductForm({ initial, initialFabric, onSubmit, submitLabel, jus
         location_notes: f.location_notes, ai_notes: f.ai_notes, internal_notes: f.internal_notes, image_url: f.image_url,
         tags: (f.tagsText || '').split(',').map((t) => t.trim()).filter(Boolean),
         ...fabric,
+        // Only ever sent from the create form; an existing product's cost has its own endpoint.
+        ...(initial?.id ? {} : { cost: costDraft }),
       })
     } catch (e2) { setErr((e2 as Error).message); setBusy(false) }
   }
@@ -116,7 +121,12 @@ export function ProductForm({ initial, initialFabric, onSubmit, submitLabel, jus
           form there is nothing to attach it to yet, and a disabled card would be noise. The card also
           renders nothing at all unless this session is permitted to see costs; it asks the endpoint
           rather than being told, so there's no second copy of the rule here to fall out of date. */}
-      {initial?.id && <ProductCostCard productId={initial.id} justCreated={justCreated} />}
+      {/* An existing product asks its own cost endpoint and saves on its own. A brand-new one has no
+          id to hang a cost row off, so the card runs in draft mode and its values ride along with the
+          product — written in one transaction, never as a second request that could fail on its own. */}
+      {initial?.id
+        ? <ProductCostCard productId={initial.id} justCreated={justCreated} />
+        : <ProductCostCard draft={{ price: Number.isFinite(Number(f.price)) && String(f.price ?? '').trim() !== '' ? Number(f.price) : null, onChange: setCostDraft }} />}
 
       {/* Everything else, folded away */}
       <details className="rounded-xl border border-hairline-strong bg-white p-4">

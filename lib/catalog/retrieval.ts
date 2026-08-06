@@ -26,7 +26,6 @@ const admin = () => (adminClient ??= createAdminClient())
 // TENANT ISOLATION: every query filters tenant_id first. There is no code path here that reads a row
 // without it.
 
-const CANDIDATE_LIMIT = 200     // pulled before ranking — a template family alone can be 30 rows
 const MATCH_LIMIT = 60          // kept after ranking, enough for grouping to see a whole family
 const GROUP_LIMIT = 3           // no caller wants a fourth option read to them
 // Under the ~300ms voice budget, with room for the round trip. Overridable per deployment so the

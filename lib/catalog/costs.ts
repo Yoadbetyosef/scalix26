@@ -92,6 +92,47 @@ export async function getCostSettings(tenantId: string): Promise<CostSettings> {
   }
 }
 
+// Settings alone, for a screen that has no product to ask about yet — the Add form. Goes through the
+// same gate as every other cost read, so a session that may not see costs gets 'forbidden' here
+// exactly as it would from a product's cost endpoint, and the card stays absent for the same reason.
+export async function getCostSettingsForSession(): Promise<CostResult<CostSettings>> {
+  const a = await costAccess()
+  if (a === 'not_found' || a === 'forbidden') return { ok: false, reason: a }
+  return { ok: true, data: await getCostSettings(a.tenantId) }
+}
+
+// Create a product and, if one was entered, its cost — in a single transaction.
+//
+// The whole reason this is one database call: two writes across two HTTP calls cannot be atomic, and a
+// cost lost after a successful product insert is the failure worth designing against. See
+// add_product_with_cost_rpc.sql, which also documents why this path uses the admin client while every
+// other cost write goes through the RLS-scoped one.
+//
+// Returns 'forbidden' if a cost is supplied by a session that may not record costs — the product is
+// not created either, because silently dropping the cost is the thing this exists to prevent.
+export async function createProductWithCost(
+  tenantId: string,
+  product: Record<string, unknown>,
+  cost: CostInput | null,
+  actorUserId: string | null,
+): Promise<CostResult<Record<string, unknown>>> {
+  if (cost) {
+    const a = await costAccess()
+    if (a === 'not_found' || a === 'forbidden') return { ok: false, reason: a }
+    if (a.tenantId !== tenantId) return { ok: false, reason: 'forbidden' }
+  }
+
+  const { data, error } = await createAdminClient().rpc('create_product_with_cost', {
+    p_tenant: tenantId,
+    p_product: product,
+    p_cost: cost ?? null,
+    p_actor: actorUserId,
+  })
+  if (error) throw new Error(error.message)
+  // The function returns the product row; PostgREST hands back a record, not an array.
+  return { ok: true, data: (Array.isArray(data) ? data[0] : data) as Record<string, unknown> }
+}
+
 // The single gate: the catalog module must be on AND this session must be allowed to see costs. An
 // operator (White Label partner) is refused here before a single row is read.
 async function costAccess(): Promise<{ tenantId: string; actorUserId: string } | 'not_found' | 'forbidden'> {
