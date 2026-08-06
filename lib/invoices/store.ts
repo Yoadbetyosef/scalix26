@@ -69,6 +69,7 @@ const invoiceRow = (r: Record<string, unknown>): SupplierInvoice => ({
   pageCount: r.page_count === null || r.page_count === undefined ? null : Number(r.page_count),
   status: r.status as SupplierInvoice['status'],
   extractionError: (r.extraction_error as string) ?? null,
+  matchNote: (r.match_note as string) ?? null,
   extractionCostUsd: r.extraction_cost_usd === null || r.extraction_cost_usd === undefined ? null : Number(r.extraction_cost_usd),
   createdAt: r.created_at as string,
 })
@@ -255,7 +256,15 @@ export async function rematch(tenantId: string, invoiceId: string): Promise<void
     .map((l) => ({ id: l.id as string, sku: (l.sku as string) ?? null, description: (l.description as string) ?? null }))
 
   if (!lines.length) return
-  const { matches } = await matchInvoiceLines(tenantId, lines)
+  const { matches, catalogSize, nameMatchingSkipped } = await matchInvoiceLines(tenantId, lines)
+
+  // Recorded whether or not it degraded, so a note left by an earlier run against a bigger catalogue
+  // does not outlive the condition that produced it.
+  await db.from('supplier_invoices').update({
+    match_note: nameMatchingSkipped
+      ? `Your catalogue has ${catalogSize.toLocaleString()} products — too many to compare by name, so only SKUs were matched. Lines below without a SKU will need matching by hand.`
+      : null,
+  }).eq('id', invoiceId).eq('tenant_id', tenantId)
 
   for (const line of lines) {
     const m = matches.get(line.id)

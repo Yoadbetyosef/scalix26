@@ -90,6 +90,9 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   const ccy = shipment.currency
   const charges = shipment.freightTotal + shipment.dutiesTotal + shipment.otherTotal
   const applied = shipment.status === 'applied'
+  // Only a problem when there is something to write; a shipment with no charges has no currency to be
+  // wrong about. The RPC re-checks this in SQL — this is the early, fixable version of the same guard.
+  const wrongCurrency = charges > 0 && ccy.toUpperCase() !== settings.baseCurrency.toUpperCase()
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -124,6 +127,12 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
       )}
       {err && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
 
+      {/* Matching that degraded without failing. Said plainly, because an unmatched line means something
+          different when names were never compared, and the owner would act differently on each. */}
+      {invoice.matchNote && (
+        <p className="mb-4 rounded-lg bg-sunken/70 px-4 py-3 text-sm text-subtle">{invoice.matchNote}</p>
+      )}
+
       {/* The charges being spread. Editable because a forwarder's bill often arrives separately from
           the invoice, and the owner is the one holding both. */}
       <section className="mb-4 grid grid-cols-2 gap-3 rounded-xl border border-hairline-strong bg-white p-4 sm:grid-cols-4">
@@ -136,6 +145,16 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
           <span className="text-base font-semibold text-ink">{money(charges, ccy)}</span>
         </div>
       </section>
+
+      {/* Nothing here converts currencies, so freight read off a forwarder's bill in another currency
+          cannot be written into base-currency cost columns. Said before Apply rather than only at it —
+          the charges above are editable, so this is a state the owner can fix in ten seconds. */}
+      {wrongCurrency && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {`This shipment's freight is recorded in ${ccy}, but your product costs are kept in ${settings.baseCurrency}. `}
+          {`Nothing here converts currencies — re-enter the freight and duty above in ${settings.baseCurrency}.`}
+        </p>
+      )}
 
       {/* THE coverage line. Not a footnote: it is what makes spreading freight over matched lines only
           an honest choice rather than a silent one. */}
@@ -192,11 +211,13 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
           </>
         ) : (
           <>
-            <button type="button" onClick={() => apply()} disabled={busy || below || cov.matchedLines === 0 || invoice.status === 'failed'}
+            <button type="button" onClick={() => apply()} disabled={busy || below || wrongCurrency || cov.matchedLines === 0 || invoice.status === 'failed'}
               className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
               {busy ? 'Applying…' : `Apply to ${cov.matchedLines} product${cov.matchedLines === 1 ? '' : 's'}`}
             </button>
-            {below && cov.matchedLines > 0 && (
+            {/* No override for a currency mismatch, unlike coverage: low coverage is a judgement the
+                owner is entitled to make, whereas writing EUR into a USD column is simply wrong. */}
+            {below && !wrongCurrency && cov.matchedLines > 0 && (
               // The override exists because sometimes the unmatched lines really are things the
               // business does not stock. It is an act, never a default.
               <button type="button" onClick={() => apply({ override: true })} disabled={busy}

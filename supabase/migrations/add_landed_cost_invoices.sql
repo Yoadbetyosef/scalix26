@@ -143,6 +143,15 @@ CREATE TABLE IF NOT EXISTS supplier_invoices (
     CHECK (status IN ('uploaded','extracting','extracted','failed')),
   extraction_error text,
 
+  -- Anything that limited the MATCHING, in the owner's words, shown on the approval screen.
+  --
+  -- Exists because matching can degrade without failing: above a catalogue size we will not pull into
+  -- memory, only SKUs are compared and names are not. "12 lines could not be matched" and "12 lines
+  -- could not be matched, and names were never compared" are different facts that call for different
+  -- actions, and a degradation the owner is not told about is indistinguishable from a catalogue that
+  -- genuinely did not contain the goods.
+  match_note      text,
+
   -- Every extraction's real spend, alongside the usage_events row lib/cost/track.ts writes. Kept here
   -- too because "what did this invoice cost to read" is a question about the invoice, and joining it
   -- back out of the meter by timestamp would be guesswork.
@@ -341,6 +350,7 @@ DECLARE
   v_total     numeric;   -- invoice value across every line
   v_matched   numeric;   -- invoice value across matched lines only
   v_matched_lines int;   -- how many lines that is, which is a different question
+  v_base      text;      -- the tenant's base currency, which the cost columns are denominated in
   v_charges   numeric;   -- freight + other + duties, as the shipment records them
   v_allocated numeric;   -- what the stored per-line allocation actually sums to
   v_before    jsonb;
@@ -394,7 +404,25 @@ BEGIN
       round(100 * v_matched / v_total, 1), round(100 * p_min_coverage, 1);
   END IF;
 
-  -- ── Guard 2: the allocation adds up. A rounding bug in the application would otherwise write an
+  -- ── Guard 2: the freight is denominated in the currency the cost columns are kept in. ────────────
+  --
+  -- shipping_cost and tariff_cost are base-currency columns — that is what the cost card's labels
+  -- promise and what computed_cost sums against cost_primary. Nothing in this system converts
+  -- currencies and no FX rate is stored anywhere, because a stored rate is a wrong rate. So a shipment
+  -- whose freight was read off a EUR forwarder's bill cannot be written into a USD column: the number
+  -- would land silently, look plausible, and be wrong by whatever the rate happens to be.
+  --
+  -- The charges are editable on the approval screen, so this is a fixable state and the message says
+  -- how. Only enforced when there is something to write — a shipment with no charges at all has no
+  -- currency problem.
+  SELECT COALESCE(cost_base_currency, 'USD') INTO v_base FROM tenants WHERE id = p_tenant;
+  IF (v_shipment.freight_total + v_shipment.other_total + v_shipment.duties_total) > 0
+     AND upper(v_shipment.currency) <> upper(v_base) THEN
+    RAISE EXCEPTION 'apply_shipment_costs: freight is recorded in % but product costs are kept in %. Nothing here converts currencies — re-enter the freight and duty in %.',
+      upper(v_shipment.currency), upper(v_base), upper(v_base);
+  END IF;
+
+  -- ── Guard 3: the allocation adds up. A rounding bug in the application would otherwise write an
   -- allocation that quietly loses or invents money; here it fails instead. One cent of slack, because
   -- largest-remainder distribution is exact and anything beyond a cent is a real defect.
   v_charges := v_shipment.freight_total + v_shipment.other_total + v_shipment.duties_total;

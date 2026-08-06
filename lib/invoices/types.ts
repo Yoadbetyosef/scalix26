@@ -101,6 +101,8 @@ export interface SupplierInvoice {
   pageCount: number | null
   status: InvoiceStatus
   extractionError: string | null
+  /** Anything that limited the matching, in the owner's words. Null when nothing did. */
+  matchNote: string | null
   extractionCostUsd: number | null
   createdAt: string
 }
