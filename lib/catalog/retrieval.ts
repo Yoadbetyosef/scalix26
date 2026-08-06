@@ -19,7 +19,9 @@ import { groupProducts, speakableAnswer, tokenize, type Groupable, type ProductG
 const CANDIDATE_LIMIT = 200     // pulled before ranking — a template family alone can be 30 rows
 const MATCH_LIMIT = 60          // kept after ranking, enough for grouping to see a whole family
 const GROUP_LIMIT = 3           // no caller wants a fourth option read to them
-export const RETRIEVAL_TIMEOUT_MS = 250   // under the ~300ms voice budget, with room for the round trip
+// Under the ~300ms voice budget, with room for the round trip. Overridable per deployment so the
+// budget can be tuned against real numbers rather than a guess baked into the source.
+export const RETRIEVAL_TIMEOUT_MS = Number(process.env.CATALOG_RETRIEVAL_TIMEOUT_MS) || 250
 
 export interface RetrievalResult {
   query: string
@@ -60,32 +62,41 @@ const variants = (t: string): string[] =>
   t.length > 3 && t.endsWith('s') ? [t, t.slice(0, -1)] : [t]
 
 // A caller saying "ring" is not naming a SKU. Searching the code column for ordinary words doubles
-// the predicate count for no recall — every one of those is another pattern the database evaluates
-// per row. Codes look like codes: they carry a digit, or they're a short all-caps token.
+// the predicate count for no recall. Codes look like codes: a digit, or a short token with no vowel pair.
 const looksLikeCode = (t: string): boolean => /\d/.test(t) || (t.length <= 6 && !/[aeiou]{2}/.test(t))
 
-const orFilter = (titleColumn: string, skuColumn: string, tokens: string[]): string => {
-  const parts: string[] = []
-  for (const t of tokens) {
-    for (const v of variants(t)) parts.push(`${titleColumn}.ilike.%${v}%`)
-    if (looksLikeCode(t)) parts.push(`${skuColumn}.ilike.%${t}%`)
-  }
+// One token → the OR of its spellings across the columns it could plausibly live in. Tokens are
+// ANDed by applying several of these, so the DATABASE does the narrowing.
+//
+// This has to happen in SQL. The alternative — fetch everything that matches any word, then rank in
+// JS — was measurably wrong: an unordered LIMIT over an OR matching thousands of rows returns an
+// arbitrary slice, and on "emerald cut halo ring" the emerald rows simply weren't in it. You cannot
+// rank what the database never sent.
+const tokenFilter = (titleColumn: string, skuColumn: string, t: string): string => {
+  const parts = variants(t).map((v) => `${titleColumn}.ilike.%${v}%`)
+  if (looksLikeCode(t)) parts.push(`${skuColumn}.ilike.%${t}%`)
   return parts.join(',')
 }
 
-// How many of the caller's words this row actually accounts for. The ranking signal.
-const coverage = (haystack: string, tokens: string[]): number =>
-  tokens.filter((t) => variants(t).some((v) => haystack.includes(v))).length
+// Distinctiveness, without asking the database for statistics: a longer word is a rarer word far more
+// often than not ("emerald" over "ring"), and it is the only signal available before the query runs.
+// Used to decide which word to give up FIRST when the full phrase finds nothing.
+const byDistinctiveness = (tokens: string[]): string[] => [...tokens].sort((a, b) => b.length - a.length)
 
 async function searchWebsite(tenantId: string, tokens: string[]): Promise<Row[]> {
   const db = createAdminClient()
-  const { data } = await db.from('catalog_ingested_products')
-    .select('id, title, price, currency, sku, image_url, product_url, availability')
-    .eq('tenant_id', tenantId)
-    .eq('is_active', true)
-    .or(orFilter('title', 'sku', tokens))
-    .limit(CANDIDATE_LIMIT)
-  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+  const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
+    let q = db.from('catalog_ingested_products')
+      .select('id, title, price, currency, sku, image_url, product_url, availability')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .limit(MATCH_LIMIT)
+    for (const t of subset) q = q.or(tokenFilter('title', 'sku', t))
+    const { data } = await q
+    return (data ?? []) as Array<Record<string, unknown>>
+  }
+  const rows = await ladder(run, tokens)
+  return rows.map((r) => ({
     id: r.id as string,
     title: (r.title as string) ?? '',
     price: r.price === null ? null : Number(r.price),
@@ -99,15 +110,32 @@ async function searchWebsite(tenantId: string, tokens: string[]): Promise<Row[]>
   }))
 }
 
+// Every word, then every word but the least distinctive, and so on. "pear shaped diamond ring" finds
+// nothing on a catalogue full of pear-shaped rings because no title says "shaped" — dropping that one
+// word finds them all. Stops at two words: below that the phrase stops being a request for a product.
+async function ladder<T>(run: (subset: string[]) => Promise<T[]>, tokens: string[]): Promise<T[]> {
+  const ordered = byDistinctiveness(tokens)
+  for (let keep = ordered.length; keep >= Math.min(2, ordered.length); keep--) {
+    const rows = await run(ordered.slice(0, keep))
+    if (rows.length) return rows
+  }
+  return []
+}
+
 async function searchInventory(tenantId: string, tokens: string[]): Promise<Row[]> {
   const db = createAdminClient()
-  const { data } = await db.from('catalog_products')
-    .select('id, name, sku, price, availability_status, showroom_quantity, warehouse_quantity, storage_quantity, image_url')
-    .eq('tenant_id', tenantId)
-    .neq('status', 'discontinued')
-    .or(orFilter('name', 'sku', tokens))
-    .limit(CANDIDATE_LIMIT)
-  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => {
+  const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
+    let q = db.from('catalog_products')
+      .select('id, name, sku, price, availability_status, showroom_quantity, warehouse_quantity, storage_quantity, image_url')
+      .eq('tenant_id', tenantId)
+      .neq('status', 'discontinued')
+      .limit(MATCH_LIMIT)
+    for (const t of subset) q = q.or(tokenFilter('name', 'sku', t))
+    const { data } = await q
+    return (data ?? []) as Array<Record<string, unknown>>
+  }
+  const rows = await ladder(run, tokens)
+  return rows.map((r) => {
     const onHand = Number(r.showroom_quantity ?? 0) + Number(r.warehouse_quantity ?? 0) + Number(r.storage_quantity ?? 0)
     return {
       id: r.id as string,
@@ -208,14 +236,9 @@ export async function retrieveProducts(
           website.status === 'fulfilled' ? website.value : [],
           inventory.status === 'fulfilled' ? inventory.value : [],
         )
-        // Rank by how much of what the caller said each row accounts for, then keep the top slice.
-        // Everything below the best coverage is a partial match on one stray word.
-        const scored = merged.map((r) => ({ r, score: coverage(`${r.title} ${r.sku ?? ''}`.toLowerCase(), tokens) }))
-        const best = scored.reduce((m, s2) => Math.max(m, s2.score), 0)
-        return scored
-          .filter((s2) => s2.score === best)
-          .slice(0, MATCH_LIMIT)
-          .map((s2) => s2.r)
+        // The database already required every word it could. This only orders what came back, so a
+        // longer, more complete title sorts above a shorter partial one.
+        return merged
       })(),
       new Promise<Groupable[]>((resolve) => setTimeout(() => { timedOut = true; resolve([]) }, RETRIEVAL_TIMEOUT_MS)),
     ])
