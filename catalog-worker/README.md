@@ -1,5 +1,9 @@
 # Catalog ingestion worker
 
+> **Picking this up later?** `OUTSTANDING.md` next to this file records what is known-incomplete:
+> the unexplained ~244ms in the retrieval path, the embeddings decision and where to read the data
+> behind it, the dead Twilio channels, and the small-catalogue path that has never run on real data.
+
 Reads a tenant's product catalogue from their own website and keeps a copy in step with it.
 
 This is a **separate Railway service**. It shares no process, no runtime and no request path with
