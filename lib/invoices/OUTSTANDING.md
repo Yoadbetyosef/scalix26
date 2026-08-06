@@ -49,10 +49,38 @@ Each of these is a number someone chose, not a number anything measured:
 | `MIN_COVERAGE` | 0.80 | `types.ts` | Blocks apply below 80% matched value. Never tested against a real match rate — if the deterministic ladder typically lands at 60% on real invoices, this becomes a wall the owner overrides every time, which trains them to ignore it. |
 | `MAX_INVOICE_PAGES` | 20 | `types.ts` | Chosen from "real invoices are 1–5 pages". Untested against a real furniture container manifest. |
 | `NAME_THRESHOLD` | 0.45 | `match-score.ts` | Trigram score below which a name match is refused. |
-| `AMBIGUITY_MARGIN` | 0.08 | `match-score.ts` | How far the best name match must beat the runner-up. |
+| `AMBIGUITY_MARGIN` | 0.08 | `match-score.ts` | How far the best name match must beat the runner-up. **Measured — see below.** |
 | `MAX_MATCH_CATALOG` | 10,000 | `match.ts` | Above this, only SKUs are matched. |
 
 The first real invoice produces evidence for all five at once. Look at them together, not one at a time.
+
+### `AMBIGUITY_MARGIN` does not measure what it looks like it measures
+
+Measured 6 Aug 2026 against the stage-1 synthetic invoice, using the shipped `similarity()`:
+
+```
+query: "Albero Side Table"          (an invoice line with no variant named)
+  "Albero Side Table — Oak"      0.7500
+  "Albero Side Table — Walnut"   0.6667
+  "Albero Side Table — Ash"      0.7500
+
+gap Oak vs Walnut = 0.0833   AMBIGUITY_MARGIN = 0.08   ->  MATCHES Oak, by 0.0033
+gap Oak vs Ash    = 0.0000                             ->  refuses, correctly
+```
+
+The invoice line does not say which variant it is, so the only correct answer is to refuse and ask. It
+refuses for Oak/Ash and matches for Oak/Walnut — and the thing that decides it is **the length of the
+variant suffix**, not how confusable the two products are. "Oak" is shorter than "Walnut", so it shares
+a higher proportion of trigrams with the unqualified query.
+
+That is the constant not measuring the quantity it is named for. Raising it to 0.10 would fix this one
+case and is exactly the wrong response: it would be tuning against a single synthetic example, and the
+next catalogue's variant names have different lengths again. What the case actually argues for is a
+different SHAPE of check — for instance, refusing when the top candidates share a common stem and
+differ only in a trailing qualifier, which is a structural fact rather than a distance.
+
+Do not act on this until it can be seen against real invoices alongside the other four constants. It is
+recorded here so the measurement is not re-derived, and so nobody "fixes" it by nudging the number.
 
 ## 4. Allocation by value is a proxy, and it will be wrong for some businesses
 
