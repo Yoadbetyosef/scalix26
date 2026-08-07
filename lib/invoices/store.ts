@@ -4,7 +4,7 @@ import { requireActiveBusinessContext, getActiveTenantId } from '@/lib/workspace
 import { enabledModulesOf } from '@/lib/modules'
 import { getCostSettings } from '@/lib/catalog/costs'
 import { allocate, coverage, type Charges } from './allocate'
-import { assess, divergenceSentence, projectCost, type Divergence } from './divergence'
+import { clearsGates, describe as describeDivergence, divergenceSentence, projectCost, type Divergence } from './divergence'
 import { matchInvoiceLines, suggestProducts } from './match'
 import { extractInvoice, extendedOf } from './extract'
 import {
@@ -59,6 +59,7 @@ const shipmentRow = (r: Record<string, unknown>): Shipment => ({
   id: r.id as string,
   reference: (r.reference as string) ?? null,
   currency: (r.currency as string) || 'USD',
+  commissionPercent: r.commission_percent === null || r.commission_percent === undefined ? null : Number(r.commission_percent),
   freightTotal: Number(r.freight_total ?? 0),
   dutiesTotal: Number(r.duties_total ?? 0),
   otherTotal: Number(r.other_total ?? 0),
@@ -445,15 +446,17 @@ async function withDivergence(
   tenantId: string,
   lines: InvoiceLine[],
   exchangeRate: number,
-): Promise<{ lines: InvoiceLine[]; divergences: Divergence[] }> {
+  /** The commission this apply would WRITE. Null means every row keeps its own snapshot. */
+  shipmentCommission: number | null,
+): Promise<{ lines: InvoiceLine[]; divergences: Divergence[]; affected: Divergence[] }> {
   const matched = lines.filter((l) => l.status === 'matched' && l.productId)
   const productIds = [...new Set(matched.map((l) => l.productId!))]
-  if (!productIds.length) return { lines, divergences: [] }
+  if (!productIds.length) return { lines, divergences: [], affected: [] }
 
   const db = createAdminClient()
   const [{ data: costs }, { data: products }] = await Promise.all([
     db.from('product_costs')
-      .select('product_id, cost_primary, shipping_cost, tariff_cost, markup_percent')
+      .select('product_id, cost_primary, shipping_cost, tariff_cost, markup_percent, commission_percent')
       .eq('tenant_id', tenantId).is('variant_id', null).in('product_id', productIds),
     db.from('catalog_products')
       .select('id, name, price').eq('tenant_id', tenantId).in('id', productIds),
@@ -464,6 +467,7 @@ async function withDivergence(
     shippingCost: Number(r.shipping_cost ?? 0),
     tariffCost: Number(r.tariff_cost ?? 0),
     markupPercent: Number(r.markup_percent ?? 0),
+    commissionPercent: Number(r.commission_percent ?? 0),
   }] as const)))
   const productOf = new Map((((products as Array<Record<string, unknown>> | null) ?? []).map((r) =>
     [r.id as string, { name: (r.name as string | null) ?? null, price: r.price === null || r.price === undefined ? null : Number(r.price) }] as const)))
@@ -473,13 +477,13 @@ async function withDivergence(
     // Grouped exactly as the RPC groups — every line of this invoice pointing at the product, together.
     const own = matched.filter((l) => l.productId === pid)
     const prior = own.find((l) => l.priorShipment)?.priorShipment ?? null
-    const d = assess({
+    const d = describeDivergence({
       productId: pid,
       productName: productOf.get(pid)?.name ?? own[0]?.productName ?? null,
       current: costOf.get(pid) ?? null,
       next: projectCost(own.map((l) => ({
         extended: l.extended, quantity: l.quantity, allocatedFreight: l.allocatedFreight, allocatedDuties: l.allocatedDuties,
-      })), exchangeRate),
+      })), exchangeRate, shipmentCommission ?? costOf.get(pid)?.commissionPercent ?? 0),
       price: productOf.get(pid)?.price ?? null,
       priorQuantity: prior?.quantity ?? null,
       exchangeRate,
@@ -487,10 +491,36 @@ async function withDivergence(
     if (d) byProduct.set(pid, d)
   }
 
+  const bySize = (a: Divergence, b: Divergence) => Math.abs(b.delta) - Math.abs(a.delta)
+  // `affected` is every product whose cost this apply would move at all; `divergences` is the subset
+  // worth putting on screen. Everything below reads one or the other deliberately — never both as if
+  // they were the same list.
+  const affected = [...byProduct.values()].filter((d) => d.delta !== 0).sort(bySize)
+  const flagged = affected.filter(clearsGates)
+  const flaggedIds = new Set(flagged.map((d) => d.productId))
+
   return {
-    lines: lines.map((l) => (l.productId && byProduct.has(l.productId) ? { ...l, divergence: byProduct.get(l.productId) } : l)),
-    divergences: [...byProduct.values()].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
+    lines: lines.map((l) => (l.productId && flaggedIds.has(l.productId) ? { ...l, divergence: byProduct.get(l.productId) } : l)),
+    divergences: flagged,
+    affected,
   }
+}
+
+/**
+ * Every product this apply would move, flagged or not.
+ *
+ * Deliberately re-runs withDivergence rather than caching `affected` on ShipmentDetail: the record has
+ * to describe the database at the moment of the write, and a value carried from a screen build is as
+ * old as the request that produced it.
+ */
+async function affectedByApply(tenantId: string, detail: ShipmentDetail): Promise<Divergence[]> {
+  const r = await withDivergence(
+    tenantId,
+    detail.lines,
+    rateOf(detail.invoice, detail.settings.baseCurrency),
+    detail.shipment.commissionPercent,
+  )
+  return r.affected
 }
 
 /** The rate this invoice's purchase prices convert at. 1 for a base-currency invoice, matching the RPC. */
@@ -520,16 +550,22 @@ export async function getShipment(shipmentId: string): Promise<Result<ShipmentDe
 
   const invoice = invoiceRow(inv as Record<string, unknown>)
   const withPrior = withSharedProducts(await withPriorShipments(g.tenantId, (inv as { id: string }).id, rows))
-  const div = await withDivergence(g.tenantId, withPrior, rateOf(invoice, settings.baseCurrency))
+  const shipment = shipmentRow(ship as Record<string, unknown>)
+  const div = await withDivergence(g.tenantId, withPrior, rateOf(invoice, settings.baseCurrency), shipment.commissionPercent)
 
   return {
     ok: true,
     data: {
-      shipment: shipmentRow(ship as Record<string, unknown>),
+      shipment,
       invoice,
       lines: div.lines,
       divergences: div.divergences,
-      settings: { baseCurrency: settings.baseCurrency, secondaryCurrency: settings.secondaryCurrency, markupPercent: settings.markupPercent },
+      settings: {
+        baseCurrency: settings.baseCurrency,
+        secondaryCurrency: settings.secondaryCurrency,
+        markupPercent: settings.markupPercent,
+        commissionPercent: settings.commissionPercent,
+      },
     },
   }
 }
@@ -791,6 +827,10 @@ export async function applyShipment(
   const divergences = current.data.divergences
   const currency = current.data.settings.baseCurrency
 
+  // Everything this apply would move, not just what cleared the thresholds. Recomputed here rather
+  // than carried on ShipmentDetail because it is only ever needed at the moment of the write.
+  const affected = await affectedByApply(g.tenantId, current.data)
+
   if (divergences.length && !opts.acknowledgeDivergence) {
     return {
       ok: false,
@@ -811,8 +851,22 @@ export async function applyShipment(
     // What was on screen when he pressed the button, in the words it was on screen in. Six months from
     // now "why is this sofa's margin 19%" is answerable from this row alone — which products moved, by
     // how much, and that somebody was told before it happened.
-    p_divergence: divergences.length
-      ? divergences.map((d) => ({
+    // ── WHAT THIS APPLY DID, and separately WHAT WE SHOWED ──────────────────────────────────────
+    //
+    // Every product whose cost moves is recorded. `shown` carries the sentence for the ones that
+    // cleared both thresholds and were therefore on screen; it is null for the rest.
+    //
+    // Those two were the same list until commission arrived. A 25% commission moves every product on
+    // a shipment by the same proportion, but the $5 floor means only purchase prices above ~18.18
+    // clear it — so a third of a shipment can change without being flagged. Recording only the
+    // flagged ones would leave those with no before-figure anywhere: applied_before is deliberately
+    // first-write-wins and does not re-snapshot on a re-apply.
+    //
+    // So the record answers "what happened" and the `shown` field answers "what was read". Claiming
+    // the second for a row that was never on screen would be a false artefact, which is worse than
+    // a missing one.
+    p_divergence: affected.length
+      ? affected.map((d) => ({
           productId: d.productId,
           productName: d.productName,
           previousCost: d.previousCost,
@@ -823,7 +877,8 @@ export async function applyShipment(
           previousMargin: d.previousMargin,
           nextMargin: d.nextMargin,
           shapes: d.shapes.map((sh) => ({ kind: sh.kind, factor: sh.factor })),
-          shown: divergenceSentence(d, currency),
+          flagged: clearsGates(d),
+          shown: clearsGates(d) ? divergenceSentence(d, currency) : null,
         }))
       : null,
   })

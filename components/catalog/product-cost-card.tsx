@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, Lock } from 'lucide-react'
 import Link from 'next/link'
-import { landedCost, margin, markupAmount } from '@/lib/catalog/cost-math'
+import { commissionAmount, landedCost, margin, markupAmount, subtotalBeforeMarkup } from '@/lib/catalog/cost-math'
 
 // Cost & Margin for one product.
 //
@@ -15,10 +15,10 @@ import { landedCost, margin, markupAmount } from '@/lib/catalog/cost-math'
 // Nothing about currency or markup is written here. Both arrive from tenant settings, and a business
 // with no secondary currency never sees that column at all.
 
-interface Settings { markupPercent: number; baseCurrency: string; secondaryCurrency: string | null; combineShippingAndDuties: boolean }
+interface Settings { markupPercent: number; commissionPercent: number; baseCurrency: string; secondaryCurrency: string | null; combineShippingAndDuties: boolean }
 interface Cost {
   costPrimary: number | null; costSecondary: number | null
-  shippingCost: number; tariffCost: number; markupPercent: number
+  shippingCost: number; tariffCost: number; markupPercent: number; commissionPercent: number
   computedCost: number | null; updatedAt: string | null
 }
 interface Previous { costPrimary: number | null; shippingCost: number; tariffCost: number; computedCost: number | null }
@@ -149,6 +149,8 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   const price = draft ? draft.price : view.price
   // Markup already snapshotted on this row; today's tenant default only applies to a first save.
   const markup = view.cost?.markupPercent ?? settings.markupPercent
+  // Same snapshot rule. A row bought under a 25% supplier term keeps it when the default later moves.
+  const commission = view.cost?.commissionPercent ?? settings.commissionPercent
 
   // Live preview while typing. The saved figure is always the database's generated column — this only
   // has to agree with it, never replace it, which is why the arithmetic comes from lib/catalog/cost-math
@@ -160,7 +162,11 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   const extras = settings.combineShippingAndDuties
     ? (num(f.landed) ?? 0)
     : (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)
-  const liveTotal = landedCost(primary, extras, 0, markup)
+  const components = {
+    costPrimary: primary, shippingCost: extras, tariffCost: 0,
+    markupPercent: markup, commissionPercent: commission,
+  }
+  const liveTotal = landedCost(components)
   const liveMargin = margin(price, liveTotal)
 
   const save = async () => {
@@ -254,7 +260,20 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg bg-sunken/60 px-3 py-2.5">
-            <Readout label={`Markup (${markup}%)`} value={fmt(markupAmount(primary, extras, 0, markup), settings.baseCurrency)} />
+            {/* Commission sits directly under the product cost and BEFORE shipping, because it is a
+                percentage of the line above it while markup is a percentage of the running subtotal.
+                Listed after shipping, a reader computes 25% of 120 and gets 165 — the wrong answer.
+                Hidden at 0% so a business with no supplier commission never sees a row of noise. */}
+            {commission > 0 && (
+              <Readout label={`Supplier commission (${commission}%)`}
+                value={fmt(commissionAmount(components), settings.baseCurrency)} />
+            )}
+            {/* The number markup is a percentage OF. Without it the markup figure is a proportion of
+                something that appears nowhere on the card. */}
+            {commission > 0 && (
+              <Readout label="Landed before markup" value={fmt(subtotalBeforeMarkup(components), settings.baseCurrency)} />
+            )}
+            <Readout label={`Markup (${markup}%)`} value={fmt(markupAmount(components), settings.baseCurrency)} />
             <Readout label="Total cost" value={fmt(liveTotal, settings.baseCurrency)} strong />
             <Readout label="Selling price" value={fmt(price, settings.baseCurrency)} />
             <Readout label="Margin" value={liveMargin === null ? '—' : `${liveMargin.toFixed(1)}%`} tone={marginTone(liveMargin)} strong />

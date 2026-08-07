@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { allocate, coverage, unitShare, type Charges } from './allocate'
+// commissionPercent is 0 throughout: these allocate tests predate commission and are about the
+// FREIGHT denominator, which commission does not touch. See cost-math.test.ts for the three-term
+// golden vectors.
 import { landedCost } from '@/lib/catalog/cost-math'
 
 // The allocation decides what every product on a shipment costs, so the properties that matter are
@@ -140,9 +143,13 @@ describe('a EUR invoice against a USD business', () => {
     // Everything below is PER UNIT, because that is what product_costs holds.
     const a = allocate(charges(150, 50), [line('a', 2000)])
     const unitUsd = (2000 / 2) * RATE                    // 1,080 USD — the only thing converted
-    const landed = landedCost(
-      unitUsd, unitShare(a[0].allocatedFreight, 2), unitShare(a[0].allocatedDuties, 2), 10,
-    )
+    const landed = landedCost({
+      costPrimary: unitUsd,
+      shippingCost: unitShare(a[0].allocatedFreight, 2),
+      tariffCost: unitShare(a[0].allocatedDuties, 2),
+      markupPercent: 10,
+      commissionPercent: 0,
+    })
     // (1080 + 75 + 25) x 1.1 = 1180 x 1.1
     expect(landed).toBeCloseTo(1298, 10)
   })
@@ -154,8 +161,8 @@ describe('a EUR invoice against a USD business', () => {
     const a = allocate(charges(150, 50), [line('a', 2000)])
     const f = unitShare(a[0].allocatedFreight, 2)
     const d = unitShare(a[0].allocatedDuties, 2)
-    const right = landedCost(1000 * RATE, f, d, 10)!
-    const wrong = landedCost(1000 * RATE, f * RATE, d * RATE, 10)!
+    const right = landedCost({ costPrimary: 1000 * RATE, shippingCost: f, tariffCost: d, markupPercent: 10, commissionPercent: 0 })!
+    const wrong = landedCost({ costPrimary: 1000 * RATE, shippingCost: f * RATE, tariffCost: d * RATE, markupPercent: 10, commissionPercent: 0 })!
     expect(wrong).toBeGreaterThan(right)
     expect(wrong - right).toBeCloseTo(100 * (RATE - 1) * 1.1, 10)
   })
@@ -174,7 +181,7 @@ describe('a EUR invoice against a USD business', () => {
     // ends up with a share of the shipment and no total or margin — with nothing on screen saying why.
     const a = allocate(charges(150, 50), [line('a', 2000)])
     expect(a[0].allocatedFreight).toBe(150)
-    expect(landedCost(null, unitShare(a[0].allocatedFreight, 2), unitShare(a[0].allocatedDuties, 2), 10)).toBeNull()
+    expect(landedCost({ costPrimary: null, shippingCost: unitShare(a[0].allocatedFreight, 2), tariffCost: unitShare(a[0].allocatedDuties, 2), markupPercent: 10, commissionPercent: 0 })).toBeNull()
   })
 })
 
@@ -184,14 +191,14 @@ describe('what the owner sees on the approval screen', () => {
     // of its duty lands at (1000 + 150 + 50) x 1.10. The approval preview computes this with the same
     // function the cost card uses, so the number it shows is the number the database will hold.
     const a = allocate(charges(150, 50), [line('a', 100)])
-    expect(landedCost(1000, a[0].allocatedFreight, a[0].allocatedDuties, 10)).toBe(1320)
+    expect(landedCost({ costPrimary: 1000, shippingCost: a[0].allocatedFreight, tariffCost: a[0].allocatedDuties, markupPercent: 10, commissionPercent: 0 })).toBe(1320)
   })
 
   it('leaves landed cost unknown when the purchase price was never recorded', () => {
     // Freight and duty still land; the total stays blank rather than implying the goods were free.
     const a = allocate(charges(150), [line('a', 100)])
     expect(a[0].allocatedFreight).toBe(150)
-    expect(landedCost(null, a[0].allocatedFreight, 0, 10)).toBeNull()
+    expect(landedCost({ costPrimary: null, shippingCost: a[0].allocatedFreight, tariffCost: 0, markupPercent: 10, commissionPercent: 0 })).toBeNull()
   })
 })
 
@@ -212,8 +219,8 @@ describe('the allocation is written per unit, not per line', () => {
   it('overstates landed cost by the quantity if the line total is used directly', () => {
     // 20 cushions at 80 EUR taking 290.91 of freight. Per unit that is 14.55; using the line total
     // would put twentyfold the freight on every single cushion — plausible-looking, and wrong.
-    const perUnit = landedCost(80, unitShare(290.91, 20), 0, 10)!
-    const perLine = landedCost(80, 290.91, 0, 10)!
+    const perUnit = landedCost({ costPrimary: 80, shippingCost: unitShare(290.91, 20), tariffCost: 0, markupPercent: 10, commissionPercent: 0 })!
+    const perLine = landedCost({ costPrimary: 80, shippingCost: 290.91, tariffCost: 0, markupPercent: 10, commissionPercent: 0 })!
     expect(perUnit).toBeCloseTo(104.0, 1)
     expect(perLine).toBeCloseTo(408.0, 1)
     expect(perLine / perUnit).toBeGreaterThan(3.9)

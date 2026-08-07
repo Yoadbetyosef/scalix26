@@ -13,15 +13,15 @@ const base = {
   priorQuantity: null,
   exchangeRate: 1,
 }
-const row = (costPrimary: number | null, shippingCost = 0, tariffCost = 0, markupPercent = 0) =>
-  ({ costPrimary, shippingCost, tariffCost, markupPercent })
-const next = (costPrimary: number, shippingCost = 0, tariffCost = 0, quantity = 1) =>
-  ({ costPrimary, shippingCost, tariffCost, quantity })
+const row = (costPrimary: number | null, shippingCost = 0, tariffCost = 0, markupPercent = 0, commissionPercent = 0) =>
+  ({ costPrimary, shippingCost, tariffCost, markupPercent, commissionPercent })
+const next = (costPrimary: number, shippingCost = 0, tariffCost = 0, quantity = 1, commissionPercent = 0) =>
+  ({ costPrimary, shippingCost, tariffCost, quantity, commissionPercent })
 
 describe('projectCost — mirrors the per_product CTE', () => {
   it('divides everything by the same quantity', () => {
     // 2 sofas at 4,000 taking 1,454.55 freight: 8,000/2 = 4,000 unit, 1,454.55/2 = 727.275 unit.
-    const p = projectCost([{ extended: 8000, quantity: 2, allocatedFreight: 1454.55, allocatedDuties: 200 }], 1)
+    const p = projectCost([{ extended: 8000, quantity: 2, allocatedFreight: 1454.55, allocatedDuties: 200 }], 1, 0)
     expect(p.costPrimary).toBe(4000)
     expect(p.shippingCost).toBeCloseTo(727.275, 6)
     expect(p.tariffCost).toBe(100)
@@ -29,7 +29,7 @@ describe('projectCost — mirrors the per_product CTE', () => {
   })
 
   it('treats a missing or zero quantity as one unit, like COALESCE(NULLIF(sum(qty),0),1)', () => {
-    const p = projectCost([{ extended: 500, quantity: null, allocatedFreight: 50, allocatedDuties: 0 }], 1)
+    const p = projectCost([{ extended: 500, quantity: null, allocatedFreight: 50, allocatedDuties: 0 }], 1, 0)
     expect(p.costPrimary).toBe(500)
     expect(p.shippingCost).toBe(50)
     expect(p.quantity).toBe(0)
@@ -37,7 +37,7 @@ describe('projectCost — mirrors the per_product CTE', () => {
 
   it('converts the purchase price at the rate and leaves freight alone', () => {
     // Freight arrives from the forwarder already in base currency — add_landed_cost_invoices_2.sql.
-    const p = projectCost([{ extended: 200, quantity: 20, allocatedFreight: 54.92, allocatedDuties: 0 }], 1.2)
+    const p = projectCost([{ extended: 200, quantity: 20, allocatedFreight: 54.92, allocatedDuties: 0 }], 1.2, 0)
     expect(p.costPrimary).toBeCloseTo(12, 6)
     expect(p.shippingCost).toBeCloseTo(2.746, 6)
   })
@@ -46,7 +46,7 @@ describe('projectCost — mirrors the per_product CTE', () => {
     const p = projectCost([
       { extended: 100, quantity: 5, allocatedFreight: 10, allocatedDuties: 0 },
       { extended: 300, quantity: 15, allocatedFreight: 30, allocatedDuties: 0 },
-    ], 1)
+    ], 1, 0)
     expect(p.costPrimary).toBe(20)
     expect(p.shippingCost).toBe(2)
   })
@@ -210,5 +210,53 @@ describe('sentences', () => {
   it('does not claim a collapse when nothing has a margin', () => {
     const d = assess({ ...base, current: row(100), next: next(140), price: null })!
     expect(divergenceHeadline([d])).toBe('Applying this shipment moves a cost materially')
+  })
+})
+
+describe('commission is the one input that legitimately differs between the two sides', () => {
+  // markup_percent is held constant across a comparison because the RPC never updates it. Commission
+  // is the opposite: a shipment that states a supplier's term OVERWRITES the row's snapshot, so the
+  // move is real and must be shown. This is what makes the 25% backfill visible rather than silent.
+  const base = { productId: 'p1', productName: 'RAJA sofa', priorQuantity: null, exchangeRate: 1 }
+
+  it('flags a product whose cost moves only because commission was added', () => {
+    // Nothing about the goods changed — same purchase price, same freight. Only the term.
+    // (832.80 + 190.58) x 1.1 = 1125.718  ->  (832.80 x 1.25 + 190.58) x 1.1 = 1354.738
+    const d = assess({
+      ...base,
+      current: row(832.8, 190.58, 0, 10, 0),
+      next: next(832.8, 190.58, 0, 1, 25),
+      price: 2000,
+    })!
+    expect(d.previousCost).toBeCloseTo(1125.718, 6)
+    expect(d.nextCost).toBeCloseTo(1354.738, 6)
+    expect(d.deltaRelative * 100).toBeCloseTo(20.3446, 3)
+  })
+
+  it('names no shape for it — a commission change is not a data-entry error', () => {
+    // The ratio is 1.25, which is not a decimal place, not the 1.2 exchange rate (outside tolerance),
+    // and not a pack. Reporting a shape here would be the machine guessing at something it can see
+    // perfectly well: the owner set the term.
+    const d = assess({
+      ...base, current: row(832.8, 190.58, 0, 10, 0), next: next(832.8, 190.58, 0, 1, 25), price: 2000,
+    })!
+    expect(d.shapes).toEqual([])
+  })
+
+  it('does NOT flag the cheap rows, and that is the gap option (a) closes', () => {
+    // 12.00 cushion: (12 + 2.746) x 1.1 = 16.2206 -> 19.5206. +20.34% clears the relative gate, but
+    // the delta is 3.30, under the 5.00 floor. 38 of PRIMAVERA's 126 rows are in this position — they
+    // still change, so applyShipment records them as done-not-shown rather than not at all.
+    const d = assess({
+      ...base, current: row(12, 2.746, 0, 10, 0), next: next(12, 2.746, 0, 1, 25), price: 40,
+    })
+    expect(d).toBeNull()
+  })
+
+  it('holds commission steady when the shipment states no term', () => {
+    // Re-applying a shipment with no commission of its own must not sweep in today's tenant default.
+    expect(assess({
+      ...base, current: row(832.8, 190.58, 0, 10, 25), next: next(832.8, 190.58, 0, 1, 25), price: 2000,
+    })).toBeNull()
   })
 })

@@ -51,6 +51,7 @@ export interface CostRow {
   shippingCost: number
   tariffCost: number
   markupPercent: number
+  commissionPercent: number
 }
 
 /** What the apply would write for one product, per unit, already converted. Mirrors the RPC's CTE. */
@@ -59,6 +60,8 @@ export interface ProjectedCost {
   shippingCost: number
   tariffCost: number
   quantity: number
+  /** What the apply would WRITE — the shipment's term when it states one, else the row's own. */
+  commissionPercent: number
 }
 
 export type ShapeKind = 'decimal' | 'currency' | 'pack'
@@ -113,6 +116,7 @@ export interface DivergenceInput {
 export function projectCost(
   lines: Array<{ extended: number; quantity: number | null; allocatedFreight: number; allocatedDuties: number }>,
   exchangeRate: number,
+  commissionPercent: number,
 ): ProjectedCost {
   const qtySum = lines.reduce((n, l) => n + (l.quantity ?? 0), 0)
   const qty = qtySum === 0 ? 1 : qtySum
@@ -121,6 +125,7 @@ export function projectCost(
     shippingCost: lines.reduce((n, l) => n + l.allocatedFreight, 0) / qty,
     tariffCost: lines.reduce((n, l) => n + l.allocatedDuties, 0) / qty,
     quantity: qtySum,
+    commissionPercent,
   }
 }
 
@@ -200,20 +205,58 @@ export function shapes(
  * overwritten) and a reorder at a stable price (the wallpaper case this exists to avoid).
  */
 export function assess(input: DivergenceInput): Divergence | null {
+  const d = describe(input)
+  return d && clearsGates(d) ? d : null
+}
+
+/**
+ * Does this move clear both thresholds — i.e. is it worth SHOWING?
+ *
+ * Separate from `describe` because "what this apply did" and "what we showed you" are two different
+ * records that happened to coincide until commission arrived. A 25% commission moves every product on
+ * a shipment by the same proportion, but the $5 floor means only the ones above ~18.18 of purchase
+ * price clear it — so 38 of PRIMAVERA's 126 rows change without being flagged. They are still recorded;
+ * they are just not claimed to have been read.
+ */
+export function clearsGates(d: Divergence): boolean {
+  return Math.abs(d.delta) >= DIVERGENCE_ABSOLUTE && Math.abs(d.deltaRelative) >= DIVERGENCE_RELATIVE
+}
+
+/**
+ * The same arithmetic with no thresholds applied: what this apply would do to this product's cost.
+ *
+ * Returns null only when there is genuinely nothing to say — no cost row to overwrite, no purchase
+ * price on it, or a previous cost of zero that no percentage can be taken against.
+ */
+export function describe(input: DivergenceInput): Divergence | null {
   const { current, next } = input
   if (!current || current.costPrimary === null) return null
 
   // markup_percent is deliberately absent from the RPC's UPDATE, so an existing row keeps its snapshot
   // and both sides of this comparison carry the same one. Using today's default here would show a
   // margin change that the apply is not going to cause.
-  const previousCost = landedCost(current.costPrimary, current.shippingCost, current.tariffCost, current.markupPercent)
-  const nextCost = landedCost(next.costPrimary, next.shippingCost, next.tariffCost, current.markupPercent)
+  //
+  // COMMISSION IS THE OPPOSITE, and that asymmetry is the point. A shipment that states a commission
+  // WILL overwrite the row's snapshot, so the two sides carry different values and the resulting move
+  // is real — it is exactly what makes the commission backfill visible instead of silent.
+  const previousCost = landedCost({
+    costPrimary: current.costPrimary,
+    shippingCost: current.shippingCost,
+    tariffCost: current.tariffCost,
+    markupPercent: current.markupPercent,
+    commissionPercent: current.commissionPercent,
+  })
+  const nextCost = landedCost({
+    costPrimary: next.costPrimary,
+    shippingCost: next.shippingCost,
+    tariffCost: next.tariffCost,
+    markupPercent: current.markupPercent,
+    commissionPercent: next.commissionPercent,
+  })
   if (previousCost === null || nextCost === null || previousCost <= 0) return null
 
   const delta = nextCost - previousCost
   const deltaRelative = delta / previousCost
-  if (Math.abs(delta) < DIVERGENCE_ABSOLUTE) return null
-  if (Math.abs(deltaRelative) < DIVERGENCE_RELATIVE) return null
 
   const price = input.price && input.price > 0 ? input.price : null
   return {

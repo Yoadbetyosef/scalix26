@@ -386,6 +386,65 @@ that sounded like a miss: **a failure wearing the costume of a different outcome
 out of all three is in §7c — but the narrower version worth stating here is that *the success path is
 not the only path with a shape*.
 
+## 7f. Bundled lines: a product with a real $0.00 cost
+
+The B&N invoice has two `SET OF CUSHIONS` lines printed at **0.00 EUR**, because the cushions are
+included in the price of the chair they belong to. The invoice is honest and the extraction is correct.
+
+But those two became products, and a product carrying $0.00 landed cost and a **100% margin** is wrong
+on screen regardless of anything else. The commission backfill does not touch them (25% of zero is
+zero), and they are already wrong today, so this is logged rather than solved. Product ids
+`7d7defea…` and `a1b4a036…`, YDC.
+
+Two questions to answer when it is picked up, neither of which is about arithmetic:
+
+1. **Should a line genuinely bundled into another product become a product at all?** It has no
+   independent cost and no independent price, so it will always show a fake margin. The alternatives
+   are a bundled-into relationship, or simply not creating it — and "don't create it" loses the fact
+   that the cushions exist, which the voice agent may well be asked about.
+2. **If it should exist, what does the card show?** Zero and unknown are different facts and the card
+   cannot currently tell them apart. `cost_primary = 0` renders as `$0.00`; `cost_primary IS NULL`
+   renders blank. Neither says "included in the price of something else", which is the true answer.
+
+Note this is the same distinction the cost card already gets right elsewhere — NULL-in-NULL-out exists
+precisely so "free" and "not yet entered" never look alike. This is a third state neither covers.
+
+## 7g. Commission: why per-shipment, and what the backfill actually did
+
+The formula gained a third term on 7 Aug 2026 — see `add_cost_commission.sql` for the arithmetic and
+why commission multiplies `cost_primary` alone.
+
+**The design mistake worth recording** is that the first plan put commission on the tenant only, with
+per-shipment listed as "the natural upgrade when it varies." That was reasoned from an assumption that
+there was one supplier. There were already two — PRIMAVERA and B&N — and nothing in the data said
+whether they carried the same rate. They do, both 25%, but **the column exists because it could not be
+known**, and that stays true for the next supplier. Checking the data changed the schema.
+
+**Measured before running anything** (all 206 rows, YDC):
+
+| Shipment | Products | Per-row change | Spread | Landed total |
+|---|---|---|---|---|
+| PRIMAVERA 866/4/2026 | 126 | 20.3390% – 20.3488% | 0.0099pp | 57,226.47 → 68,868.87 |
+| B&N BN-1356 | 80 (78 computable) | 17.2751% – 17.2817% | 0.0067pp | 19,984.10 → 23,437.22 |
+
+Uniform within each shipment because **freight is allocated by line value**, so `shipping / cost` is
+constant across a shipment and the commission's proportional effect is identical on every product in
+it. The two shipments differ from each other for the same reason — different freight-to-goods ratios.
+The residual hundredths of a percentage point are largest-remainder freight rounding to whole cents,
+not bad inputs. **Any future backfill that is NOT uniform within a shipment has something wrong with
+its inputs, and that is the check to run first.**
+
+**"What this apply did" and "what we showed you" are two different records.** They coincided until
+commission arrived. 20.34% clears the relative gate on every PRIMAVERA row, but the $5 absolute floor
+needs a purchase price above 18.18 — so **38 of 126 changed without being flagged**. `divergence_ack`
+therefore records every affected product with a `flagged` boolean and a `shown` sentence that is null
+for the unflagged ones. Claiming a row was read when it was never on screen would be a false artefact,
+which is worse than a missing one — the same reasoning as the timeout that must not sound like a miss.
+
+`applied_before` is deliberately first-write-wins and does NOT re-snapshot on a re-apply, which is why
+the record above had to carry the full set: without it those 38 rows would have no before-figure
+anywhere.
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so

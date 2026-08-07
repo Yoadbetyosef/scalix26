@@ -46,7 +46,7 @@ describe('the margin is identical either way', () => {
   // the formula only proves the restatement is self-consistent. This one fails if cost-math and the
   // generated column ever drift apart.
   const computed = (cost: number, shipping: number, tariff: number, markup: number) =>
-    landedCost(cost, shipping, tariff, markup)!
+    landedCost({ costPrimary: cost, shippingCost: shipping, tariffCost: tariff, markupPercent: markup, commissionPercent: 0 })!
 
   it('gives the same computed cost for a split and a combined figure', () => {
     const split = computed(1000, 100, 50, 10)
@@ -62,7 +62,7 @@ describe('the margin is identical either way', () => {
   // NULL in, NULL out — the column's rule, and the reason a product with no cost reads blank
   // rather than $0.00.
   it('has no landed cost when the purchase price was never recorded', () => {
-    expect(landedCost(null, 150, 0, 10)).toBeNull()
+    expect(landedCost({ costPrimary: null, shippingCost: 150, tariffCost: 0, markupPercent: 10, commissionPercent: 0 })).toBeNull()
     expect(margin(2000, null)).toBeNull()
   })
 

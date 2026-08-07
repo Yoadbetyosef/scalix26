@@ -20,6 +20,8 @@ import { costProvenance, type CostProvenance } from './cost-provenance'
 
 export interface CostSettings {
   markupPercent: number
+  /** Today's default for NEW cost rows. Existing rows carry their own snapshot; see cost-math.ts. */
+  commissionPercent: number
   baseCurrency: string
   secondaryCurrency: string | null
   // Businesses that import are quoted one figure for shipping and duties and pay one figure, so the
@@ -39,6 +41,8 @@ export interface ProductCost {
   shippingCost: number
   tariffCost: number
   markupPercent: number
+  /** The supplier commission snapshotted on THIS row; see cost-math.ts for why it is goods-only. */
+  commissionPercent: number
   computedCost: number | null   // null when nothing has been recorded — never 0
   updatedAt: string | null
 }
@@ -77,6 +81,7 @@ const row = (r: Record<string, unknown>): ProductCost => ({
   shippingCost: Number(r.shipping_cost ?? 0),
   tariffCost: Number(r.tariff_cost ?? 0),
   markupPercent: Number(r.markup_percent ?? 0),
+  commissionPercent: Number(r.commission_percent ?? 0),
   computedCost: r.computed_cost === null || r.computed_cost === undefined ? null : Number(r.computed_cost),
   updatedAt: (r.updated_at as string) ?? null,
 })
@@ -88,10 +93,11 @@ const row = (r: Record<string, unknown>): ProductCost => ({
 // never sees that field.
 export async function getCostSettings(tenantId: string): Promise<CostSettings> {
   const { data } = await createAdminClient()
-    .from('tenants').select('cost_markup_percent, cost_base_currency, cost_secondary_currency, enabled_modules')
+    .from('tenants').select('cost_markup_percent, cost_commission_percent, cost_base_currency, cost_secondary_currency, enabled_modules')
     .eq('id', tenantId).maybeSingle()
   return {
     markupPercent: Number(data?.cost_markup_percent ?? 10),
+    commissionPercent: Number(data?.cost_commission_percent ?? 0),
     baseCurrency: (data?.cost_base_currency as string) || 'USD',
     secondaryCurrency: (data?.cost_secondary_currency as string) || null,
     combineShippingAndDuties: enabledModulesOf(data ?? {}).includes('landed_cost'),
@@ -216,10 +222,16 @@ export async function saveCost(target: CostTarget, input: CostInput): Promise<Co
 
   const col = targetColumn(target)
   const sb = await createClient()
-  const { data: existing } = await sb.from('product_costs').select('id, markup_percent').eq(col, target.id).maybeSingle()
+  const { data: existing } = await sb.from('product_costs').select('id, markup_percent, commission_percent').eq(col, target.id).maybeSingle()
   // Keep the markup already snapshotted on an existing row; only a brand-new row takes today's default.
   // Identical for a variant — the snapshot rule doesn't change with what the row describes.
-  const markup = existing ? Number(existing.markup_percent) : (await getCostSettings(a.tenantId)).markupPercent
+  //
+  // Commission follows the same rule HERE, on a hand-edited cost, because nothing about typing a new
+  // purchase price says the supplier's term changed. The one place a snapshot is deliberately
+  // overwritten is an apply that carries a shipment-level commission — see add_cost_commission.sql.
+  const defaults = existing ? null : await getCostSettings(a.tenantId)
+  const markup = existing ? Number(existing.markup_percent) : defaults!.markupPercent
+  const commission = existing ? Number(existing.commission_percent ?? 0) : defaults!.commissionPercent
 
   const fields = {
     cost_primary: input.costPrimary ?? null,
@@ -227,6 +239,7 @@ export async function saveCost(target: CostTarget, input: CostInput): Promise<Co
     shipping_cost: input.shippingCost ?? 0,
     tariff_cost: input.tariffCost ?? 0,
     markup_percent: markup,
+    commission_percent: commission,
     updated_at: new Date().toISOString(),
     updated_by: a.actorUserId,
   }

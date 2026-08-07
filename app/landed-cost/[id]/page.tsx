@@ -349,6 +349,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
         {lines.map((l) => (
           <Line key={l.id} line={l} invoiceCcy={inv} baseCcy={base} markup={settings.markupPercent}
             rate={foreign ? invoice.exchangeRate : 1} disabled={applied || busy} onPatch={patchLine}
+            commission={shipment.commissionPercent ?? settings.commissionPercent}
             picked={picked.has(l.id)}
             name={names[l.id]}
             onPick={(on) => setPicked((p) => { const n = new Set(p); if (on) n.add(l.id); else n.delete(l.id); return n })}
@@ -512,8 +513,8 @@ function Charge({ label, value, id, field, ccy, disabled, onSaved }: {
   )
 }
 
-function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch, picked, name, onPick, onRename }: {
-  line: InvoiceLine; invoiceCcy: string; baseCcy: string; markup: number; rate: number | null
+function Line({ line, invoiceCcy, baseCcy, markup, commission, rate, disabled, onPatch, picked, name, onPick, onRename }: {
+  line: InvoiceLine; invoiceCcy: string; baseCcy: string; markup: number; commission: number; rate: number | null
   disabled: boolean
   onPatch: (id: string, body: { productId?: string | null; skip?: boolean }) => void
   picked: boolean
@@ -542,12 +543,13 @@ function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch, pick
   // pool, but cost_primary is what one unit cost and margin is measured against one unit's selling
   // price. apply_shipment_costs divides by the same quantity in SQL — unitShare is the shared
   // definition so the preview and the write cannot disagree.
-  const preview = landedCost(
-    unitBase,
-    unitShare(line.allocatedFreight, line.quantity),
-    unitShare(line.allocatedDuties, line.quantity),
-    markup,
-  )
+  const preview = landedCost({
+    costPrimary: unitBase,
+    shippingCost: unitShare(line.allocatedFreight, line.quantity),
+    tariffCost: unitShare(line.allocatedDuties, line.quantity),
+    markupPercent: markup,
+    commissionPercent: commission,
+  })
 
   const sameCurrency = invoiceCcy.toUpperCase() === baseCcy.toUpperCase()
 

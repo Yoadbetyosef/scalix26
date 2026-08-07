@@ -29,6 +29,7 @@ export interface PreviousCost {
   shippingCost: number
   tariffCost: number
   markupPercent: number
+  commissionPercent: number
   /** Recomputed with the same function the generated column mirrors — never stored, never read back. */
   computedCost: number | null
 }
@@ -107,7 +108,17 @@ export async function costProvenance(tenantId: string, productId: string): Promi
           shippingCost: n(before.shippingCost),
           tariffCost: n(before.tariffCost),
           markupPercent: n(before.markupPercent),
-          computedCost: landedCost(nn(before.costPrimary), n(before.shippingCost), n(before.tariffCost), n(before.markupPercent)),
+          commissionPercent: n(before.commissionPercent),
+          // Snapshots captured before commission existed have no key here, so n() reads 0 — which is
+          // arithmetically what those rows carried. The recomputed figure therefore still matches what
+          // computed_cost held at the time.
+          computedCost: landedCost({
+            costPrimary: nn(before.costPrimary),
+            shippingCost: n(before.shippingCost),
+            tariffCost: n(before.tariffCost),
+            markupPercent: n(before.markupPercent),
+            commissionPercent: n(before.commissionPercent),
+          }),
         }
       : null,
   }

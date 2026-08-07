@@ -81,6 +81,20 @@ export interface Shipment {
   id: string
   reference: string | null
   currency: string
+  /**
+   * The supplier's commission on the goods for THIS shipment, or null to leave every product's own
+   * snapshot alone.
+   *
+   * Per shipment rather than per tenant because a commission is a SUPPLIER term, and a shipment belongs
+   * to exactly one supplier. That was not a hypothetical: the first two invoices uploaded came from
+   * PRIMAVERA and B&N, and nothing in the data said whether they carried the same rate. They do — but
+   * the reason this column exists is that it could not be known, and that stays true for the next
+   * supplier.
+   *
+   * Stated => authoritative for the products this shipment carries, overwriting their snapshots.
+   * Null   => existing rows keep their snapshot; new rows take the tenant default. The markup rule.
+   */
+  commissionPercent: number | null
   freightTotal: number
   dutiesTotal: number
   otherTotal: number
@@ -187,8 +201,8 @@ export interface ShipmentDetail {
   lines: InvoiceLine[]
   /** Every flagged product, largest move first. The same objects hang off their lines. */
   divergences: Divergence[]
-  /** Base currency + markup, so the preview can predict the resulting landed cost per product. */
-  settings: { baseCurrency: string; secondaryCurrency: string | null; markupPercent: number }
+  /** Base currency + markup + commission, so the preview can predict the resulting landed cost. */
+  settings: { baseCurrency: string; secondaryCurrency: string | null; markupPercent: number; commissionPercent: number }
 }
 
 /** An earlier upload that looks like this one. Shown, never used to block — see lib/invoices/store.ts. */
