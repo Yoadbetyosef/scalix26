@@ -124,6 +124,65 @@ which a general model already produces correctly. That is roughly 20–40 tokens
 Selecting them is the same corpus-frequency computation §1b needs for rung ordering: which tokens are
 catalogue-distinctive rather than common English. One mechanism, two consumers — worth building once.
 
+### Built: keyterms, with the cap as the design and not a footnote
+
+`lib/catalog/terms.ts` computes the catalogue's own vocabulary — one function, two consumers, because
+it is one question: is this word the catalogue's or the language's. `/api/catalog/keyterms` serves it;
+voice-server fetches once at call setup and passes `agent.listen.provider.keyterms`.
+
+Three states, all reported, none silent:
+
+| state | when | what is sent |
+|---|---|---|
+| `ok` | every distinctive term fits | all of them |
+| `truncated` | more terms than budget | the most-used, with `dropped` counted |
+| `disabled` | selected terms would cover < 50% of products | **nothing**, with the numbers to explain why |
+
+`disabled` is the one that matters. Smith HVAC has 9,179 products; 350 slots would boost a sliver while
+every other product stayed exactly as broken, and the feature would read as configured and working. A
+partial fix that looks total is worse than an absent one that says so — the owner stops looking for the
+real problem. Size alone is not the disqualifier: 5,000 products under 40 brand names covers fine.
+
+Both numbers are judgements, exposed on the endpoint so they can move with data. The word budget (350)
+stands in for Deepgram's 500-TOKEN cap because subword tokens are not countable from here; being wrong
+low costs a few unboosted terms, being wrong high returns an error and the call gets NO keyterms, so
+the asymmetry picks the number.
+
+### Still to measure: does damage survive boosting?
+
+The evidence for whether the edit-distance net is needed at all, and it should be read the same way as
+the embeddings decision — from data, not instinct. After keyterms have been live for a while:
+
+```sql
+-- Miss queries that look like a mangled catalogue term rather than a product we don't sell.
+-- Needs: CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
+SELECT l.query, count(*) AS times
+FROM catalog_retrieval_log l
+WHERE NOT l.resolved AND NOT l.timed_out AND NOT l.errored AND l.surface = 'voice'
+  AND l.created_at > now() - interval '14 days'
+  AND EXISTS (
+    SELECT 1 FROM catalog_products p, unnest(string_to_array(lower(p.name), ' ')) term
+    WHERE p.tenant_id = l.tenant_id AND length(term) > 3
+      AND levenshtein(lower(split_part(l.query, ' ', 1)), term) BETWEEN 1 AND 2
+  )
+GROUP BY l.query ORDER BY times DESC;
+```
+
+A non-empty result after boosting means keyterms were not enough and the second net is earned. An
+empty one means every failure we saw was boostable, and Levenshtein would be machinery for a problem
+that no longer exists.
+
+### Flux can narrow keyterms mid-call — the answer for large catalogues, later
+
+Flux accepts a `Configure` control message that replaces the keyterm list mid-stream, without
+reconnecting. So a `disabled` tenant could in principle start with no boosting, and after the caller's
+first turn swap in terms drawn from what they actually said — 9,179 products cannot be boosted at once,
+but the forty relevant to "I'm looking for a deadbolt" can.
+
+Not built, and not worth building now: it needs a term index keyed by what a caller might say, which is
+most of a retrieval system, to serve tenants who do not have this problem yet. Recorded because it is
+the shape of the eventual answer and it should not be re-derived.
+
 ## 1b. Token distinctiveness is measured by string length, and that is not a proxy for anything
 
 **RECALL, not performance** — filed deliberately, because the ladder-floor entry above sat under a
