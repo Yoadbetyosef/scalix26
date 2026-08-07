@@ -445,6 +445,49 @@ which is worse than a missing one — the same reasoning as the timeout that mus
 the record above had to carry the full set: without it those 38 rows would have no before-figure
 anywhere.
 
+## 7h. DESIGN RULE — never restate code from memory; extract it and assert the edits
+
+Companion to §7c. That rule is about not guessing at facts you cannot see; this one is about not
+guessing at code you already have.
+
+**The rule.** When a change requires restating something that already exists — a `CREATE OR REPLACE`
+body, a copied config, a duplicated constant — do not retype it. **Read the original text
+programmatically, apply each edit as an explicit string replacement, and assert that every replacement
+actually matched.** A replacement that silently finds nothing is the failure mode, so the assertion is
+the point, not decoration.
+
+**The near-miss.** `add_cost_commission.sql` has to restate `create_product_with_cost`, because
+`CREATE OR REPLACE` has no partial form. The first draft was written from memory and dropped the block
+that restores `name`, `status`, `availability_status`, the four quantity columns, `tags` and
+`qr_code_token` after `jsonb_populate_record`. Running it would have made **every product creation
+violate NOT NULL** and lose its QR token.
+
+**Why it would have passed review.** It read as authoritative. It had the right signature, the right
+guards, plausible comments, and the two intended changes clearly marked. Nobody re-derives a function
+body that looks complete — the same reason the comment claiming `bestMatch` "REPORTED" degraded
+matching survived, and the same reason the `ladder()` comment still cites `pear shaped diamond ring` as
+a phrase the floor fix rescued when it does not. **A restatement that drifts is more dangerous than a
+fragment, because a fragment advertises that it is incomplete.**
+
+**What the pattern looks like:**
+
+```python
+orig = Path('supabase/migrations/add_product_with_cost_rpc.sql').read_text()
+fn   = orig[orig.index('CREATE OR REPLACE FUNCTION create_product_with_cost('):][:...]
+
+before = fn
+fn = fn.replace(OLD_DECLARE, NEW_DECLARE)
+assert fn != before            # <- the whole point
+```
+
+Four edits, four assertions. If the source file is later reformatted, the migration generator fails
+loudly instead of emitting a function with a missing block.
+
+**The general shape.** Any time correctness depends on text being identical to text somewhere else, the
+copy must be produced mechanically. That covers restated SQL functions, the SQL↔TS formula mirror in
+`cost-math.ts` (defended by golden vectors instead, since a generated column cannot call TypeScript),
+and any future "paste this config into both places."
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so
