@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ChevronDown, Lock } from 'lucide-react'
+import Link from 'next/link'
 import { landedCost, margin, markupAmount } from '@/lib/catalog/cost-math'
 
 // Cost & Margin for one product.
@@ -20,7 +21,12 @@ interface Cost {
   shippingCost: number; tariffCost: number; markupPercent: number
   computedCost: number | null; updatedAt: string | null
 }
-interface View { settings: Settings; price: number | null; cost: Cost | null; marginPercent: number | null }
+interface Previous { costPrimary: number | null; shippingCost: number; tariffCost: number; computedCost: number | null }
+interface Provenance {
+  shipmentId: string; reference: string | null; supplierName: string | null
+  invoiceNumber: string | null; appliedAt: string; previous: Previous | null
+}
+interface View { settings: Settings; price: number | null; cost: Cost | null; marginPercent: number | null; provenance?: Provenance | null }
 
 const input = 'h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
 const num = (s: string): number | null => { const t = s.trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) && n >= 0 ? n : null }
@@ -260,6 +266,32 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
             <p className="text-xs text-subtle">
               {`Enter the supplier’s invoice in ${settings.secondaryCurrency} first — it is a reference note only, `}
               {`never converted and never counted. Every figure the total is built from is recorded in ${settings.baseCurrency}.`}
+            </p>
+          )}
+
+          {/* Where this number came from, and what it replaced.
+              
+              The question an owner asks about a cost is "why did this change?", and until now the card
+              could not answer it: a figure that arrived from a supplier invoice looked exactly like one
+              typed by hand, and a reorder overwrote the previous one without trace. Both facts were
+              already in the database and simply unread — see lib/catalog/cost-provenance.ts.
+              
+              Absent for a hand-typed cost, which is most of them. Nothing is claimed when nothing is
+              known. */}
+          {view.provenance && (
+            <p className="text-xs text-subtle">
+              {'From '}
+              <Link href={`/landed-cost/${view.provenance.shipmentId}`} className="font-medium text-accent underline">
+                {view.provenance.reference
+                  || [view.provenance.supplierName, view.provenance.invoiceNumber].filter(Boolean).join(' ')
+                  || 'a supplier invoice'}
+              </Link>
+              {`, applied ${new Date(view.provenance.appliedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.`}
+              {/* Only after a reorder. The previous figure beside the current one is the whole answer —
+                  "was 14.20, is 16.22" needs no explanation and no memory of last month. */}
+              {view.provenance.previous?.computedCost != null && (
+                <span>{` Was ${fmt(view.provenance.previous.computedCost, settings.baseCurrency)} before this shipment.`}</span>
+              )}
             </p>
           )}
 

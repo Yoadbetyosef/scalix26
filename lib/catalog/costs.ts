@@ -3,6 +3,7 @@ import { requireActiveBusinessContext } from '@/lib/workspace'
 import { requireCatalogTenant } from './session'
 import { enabledModulesOf } from '@/lib/modules'
 import { margin } from './cost-math'
+import { costProvenance, type CostProvenance } from './cost-provenance'
 
 // What a product costs the business, and the margin that follows from it.
 //
@@ -47,6 +48,12 @@ export interface ProductCostView {
   price: number | null          // the selling price, for the margin figure
   cost: ProductCost | null      // null when no cost has been recorded yet
   marginPercent: number | null  // null when either side is unknown
+  /**
+   * Which supplier invoice put this number here, and what it replaced.
+   *
+   * Null for a hand-typed cost, which is most of them. Reading nothing new — see cost-provenance.ts.
+   */
+  provenance: CostProvenance | null
 }
 
 // Which thing a cost row describes. Both live in one table, so the formula, the RLS policy and the
@@ -176,6 +183,14 @@ export async function getCost(target: CostTarget): Promise<CostResult<ProductCos
   const sb = await createClient()
   const { data } = await sb.from('product_costs').select('*').eq(targetColumn(target), target.id).maybeSingle()
   const cost = data ? row(data as Record<string, unknown>) : null
+
+  // Attribution only for a product, and only when there IS a cost to attribute. A variant's costs are
+  // never written by a shipment, and a product with no cost row has nothing to explain — skipping both
+  // keeps this off the common path rather than querying to learn there is nothing to say.
+  const provenance = cost && target.kind === 'product'
+    ? await costProvenance(a.tenantId, target.id)
+    : null
+
   return {
     ok: true,
     data: {
@@ -183,6 +198,7 @@ export async function getCost(target: CostTarget): Promise<CostResult<ProductCos
       price,
       cost,
       marginPercent: margin(price, cost?.computedCost ?? null),
+      provenance,
     },
   }
 }

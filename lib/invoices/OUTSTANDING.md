@@ -221,6 +221,58 @@ Two things follow, and the second matters more:
   the word that survived. Anything that depends on the whole phrase arriving correctly will fail on
   the phone regularly, and silently.
 
+## 7b. Buying the same product twice: LATEST WINS, and why weighted average would be wrong
+
+Settled 7 Aug 2026. `product_costs` holds one row per product, so it can express exactly one cost, and
+a second shipment REPLACES the first one's figure rather than accumulating with it. That is the chosen
+behaviour, not a limitation being tolerated.
+
+**Latest wins** is right for this business. An importer prices from replacement cost — what the next one
+costs is the number that decides what to charge — and every figure on the product traces to one document
+he can hold. That last property is the same one that made blending three cushion lines unacceptable: a
+weighted average is a number that appears on no piece of paper, and rejecting it there while adopting it
+here would be inconsistent.
+
+### Weighted average is not merely unbuilt — it would be WRONG with the data we keep
+
+Someone will ask for it, and "we didn't build it" is the wrong answer. The right one:
+
+Proper weighted-average cost is computed over units **ON HAND**. It answers "what did the stock I still
+own cost me", which is why accountants use it. Computing it needs to know how many units remain from
+each purchase — cost layers tied to receipts.
+
+**We deliberately do not record receipt.** A supplier invoice is issued at SHIPMENT and the container is
+at sea for weeks; writing stock from an invoice would have the voice agent promise a caller a sofa
+that is mid-Atlantic (see §7). So the only average available to us is over **every unit ever purchased**,
+including ones sold two years ago.
+
+That is not weighted-average cost. It is "mean price historically paid" — a different and less useful
+number wearing an accounting label, and the label is what makes it dangerous: it would be trusted as
+though it meant the thing it is named after.
+
+Doing it properly is an inventory-costing subsystem — cost layers, receipts, consumption — not two
+columns on `product_costs`. If that is ever wanted, it starts with recording receipt separately from
+invoicing, and that is the decision to make first.
+
+### Cost-per-shipment does not remove the decision either
+
+Dropping the partial unique index and adding `shipment_id` would preserve every shipment's figure. But
+the cost card and the margin still need ONE number, so latest-or-average would still have to be chosen
+on top. It is a retention change, not a third option — and retention is already handled, below.
+
+### History is preserved, and now visible
+
+Nothing is lost when a reorder overwrites a cost:
+
+- `supplier_invoice_lines.allocated_freight` / `_duties` — permanent, per shipment. Shipment 1 keeps
+  what it allocated to a product forever.
+- `landed_cost_shipments.applied_before` — a snapshot of `product_costs` before that shipment first
+  landed, so shipment 2's snapshot IS shipment 1's contribution. Captured on FIRST apply only, by
+  design; a re-apply does not re-snapshot, so the chain holds as long as each shipment applies once.
+
+Both were unread until `lib/catalog/cost-provenance.ts`. The cost card now says which invoice set the
+figure and what it replaced, which was a display gap rather than a data-model one.
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so
