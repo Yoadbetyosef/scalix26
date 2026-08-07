@@ -54,14 +54,27 @@ to a different URL-building style fails loudly instead of passing on an empty se
 constructs one that way, the guard goes blind. The `expect(paths.length).toBeGreaterThanOrEqual(4)`
 check is the tripwire for that, not a solution to it.
 
-### The cleaner shape, not taken
+### The eventual shape: an `/api/voice/*` namespace
 
-Every voice-called route under one prefix — `/api/voice/*` — would make a single allowlist entry cover
-all of them and make the requirement obvious from the path. Not done because moving
-`/api/catalog/lookup`, `/api/appointments/available`, `/api/appointments/book` and the payment link
-means changing voice-server and the app in lockstep, and voice-server deploys separately from Vercel:
-there is a window where one side has moved and the other has not, and the symptom of that window is
-exactly the silent failure above. Worth doing when the two can be deployed together, not before.
+Every route voice-server calls under one prefix. One allowlist entry covers all of them, the
+requirement becomes obvious from the path itself, and a new voice route is public by construction
+rather than by remembering — which is the only version of this that needs no test at all.
+
+Today that is nine routes across five unrelated prefixes: `/api/catalog/lookup`,
+`/api/catalog/keyterms`, `/api/appointments/available`, `/api/appointments/book`,
+`/api/stripe/connect/payment-link`, `/api/conversations/voice`, `/api/leads/inbound/`,
+`/api/analytics/call`, `/api/webhooks/twilio/voice/handoff-fallback`.
+
+**Why not now: the deploy window would produce this exact failure.** voice-server runs on Railway and
+the app on Vercel; they deploy separately and never atomically. Moving a route means the app serves the
+new path while voice-server still calls the old one, or the reverse — and the symptom of a voice-server
+calling a path the app no longer serves is a 404 or a redirect, swallowed by the same catch, presenting
+as the same silent nothing this section is about. The migration would reproduce the bug it fixes.
+
+It is doable safely, just not cheaply: serve both paths for a release (rewrites from the old to the
+new), deploy voice-server onto the new ones, confirm from the logs that nothing hits the old paths, then
+remove them. Three coordinated deploys to remove a class of bug that a test now catches — worth doing
+when something else already requires touching both sides, not on its own.
 
 ---
 

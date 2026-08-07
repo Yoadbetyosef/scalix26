@@ -60,12 +60,25 @@ const COMMON = new Set([
 const hasDigit = (t: string): boolean => /\d/.test(t)
 
 /**
- * Two-character tokens are abbreviations, not names: `pl`, `gr`, `wb`, `ii` all appeared in the first
- * real list. They are the WORST thing to boost — short enough to collide with ordinary speech, so
- * telling the model to expect them invites it to hear them where they were not said.
+ * ── A KEYTERM LIST CAN MAKE TRANSCRIPTION WORSE. DO NOT RELAX THIS TO RAISE COVERAGE. ───────────────
  *
- * This costs the genuinely two-letter product name. That trade is worth it: a spurious boost damages
- * every call, a missing one damages the calls about that product.
+ * Boosting is not free and it is not one-directional. Telling the model to expect a word makes it more
+ * willing to hear that word — everywhere, for the whole call, not only when the caller meant it. A term
+ * that collides with ordinary speech therefore costs accuracy on every sentence, including the ones
+ * that had nothing to do with the catalogue.
+ *
+ * Two-character tokens are the clearest case. `pl`, `gr`, `wb`, `ii` all appeared in the first real
+ * list off YDC's 131 products, and every one of them is a fragment that sounds like part of something
+ * else. Boosting `pl` does not merely waste a slot; it invites "pl" into sentences where nobody said it.
+ *
+ * The tempting change, when coverage looks low, is to loosen this and gain a few percent. Resist it:
+ * coverage measures products we MIGHT help, and the cost of a bad term is paid on calls that were
+ * working fine. A missing term damages the calls about that product; a spurious one damages all of them.
+ *
+ * The same asymmetry justifies the COMMON list above being conservative in the OTHER direction — there,
+ * an over-inclusion merely wastes a slot. Here it does harm. They are not the same trade.
+ *
+ * This does cost the genuinely two-letter product name, and that is accepted.
  */
 const MIN_TERM_LENGTH = 3
 
