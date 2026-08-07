@@ -273,6 +273,53 @@ Nothing is lost when a reorder overwrites a cost:
 Both were unread until `lib/catalog/cost-provenance.ts`. The cost card now says which invoice set the
 figure and what it replaced, which was a display gap rather than a data-model one.
 
+## 7c. DESIGN RULE — don't classify, characterise
+
+This is a rule, not a note about the divergence flag. It has bitten this feature three times, in three
+different places, and each time it looked like a different problem.
+
+**The rule.** When the data cannot settle a question, do not have the machine guess at the answer. Name
+what the data *does* show, in terms specific enough to act on, and leave the judgement to the person
+holding the document. A machine guessing at something it cannot see gets ignored the moment it is wrong
+twice — and then it is worse than silence, because the screen looks like it is watching something.
+
+**The three times:**
+
+1. **The catalog banner.** A banner that shows on every visit is furniture. Anything that always fires
+   stops being read, so it has to fire on a state that is actually sometimes false.
+2. **The reorder notice.** It fires on OVERLAP — "this product already has a cost from an earlier
+   shipment" — which is true of every repeat order by construction. By the third shipment it is
+   wallpaper, and the one time it matters it is skimmed past with the rest.
+3. **The divergence flag** (this one). It would have been easy to write "probably a data-entry error"
+   next to a 40% move. It cannot be known: timber going up 40% and an extraction misreading 1,386 as
+   1,886 are *identical in this data*, and the invoice PDF is the only arbiter. So the flag reports the
+   magnitude, and where the ratio lands on a recognisable shape it names the shape as a question.
+
+**The general shape of the failure.** Always-true signals and confident-but-unknowable verdicts are the
+same bug at two different levels. Both teach the reader that the screen's warnings do not carry
+information, and once that is learned it applies to every warning on the page, including the correct
+ones. The cost of a false positive is not the one alert — it is the credibility of the next hundred.
+
+**What characterising looks like in practice.** Compare:
+
+> ✗ "Probably a data-entry error (confidence: medium)."
+> ✓ "These two figures differ by almost exactly the 1.2 exchange rate — one of them may already be
+>    converted while the other is not."
+
+The second is a question the owner answers in two seconds by looking at the paper. The first is a
+machine's opinion about a document it has already read as well as it can.
+
+**And never say which one is wrong.** The corollary, learned before the code was written: if shipment 1
+carried the error, the flag fires on shipment 2's *correct* figure. A message asserting which figure is
+wrong sends the owner to "fix" the right number. Every shape note is therefore phrased as a
+disagreement between two figures — `divergence.test.ts` asserts that, so a future rewrite that quietly
+becomes a verdict fails the suite.
+
+**Related, and the reason to be careful about relaxing thresholds.** The divergence gate is 10% AND $5
+in base currency, both required. The absolute floor is not a refinement — it is what stops every alert
+coming from cheap SKUs, which are most of the lines on a real invoice. Raising sensitivity to "catch
+more" is the direct route back to wallpaper.
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so

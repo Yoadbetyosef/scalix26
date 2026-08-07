@@ -3,6 +3,7 @@
 // next/headers and can never be imported by a client component; this is its shared half.)
 
 import { INVOICE_EXTENSIONS, MAX_INVOICE_BYTES, extensionOf } from '@/lib/orders/attachment-types'
+import type { Divergence } from './divergence'
 
 // Deliberately re-exported rather than redefined. `INVOICE_EXTENSIONS` already exists for the public
 // factory hand-off and encodes the same judgement this feature needs — an invoice is a document or a
@@ -156,7 +157,18 @@ export interface InvoiceLine {
    * number: it does not block, because re-ordering the same product and wanting the newer freight is
    * the common, correct case.
    */
-  priorShipment?: { id: string; reference: string | null; appliedAt: string | null; amount: number } | null
+  priorShipment?: { id: string; reference: string | null; appliedAt: string | null; amount: number; quantity: number | null } | null
+  /**
+   * Applying this shipment would move this product's cost enough to matter — and, if it has a price,
+   * would move its margin with it.
+   *
+   * Attached per PRODUCT, so every line pointing at the same product carries the same object, which is
+   * correct: the RPC groups by product and writes one figure for all of them.
+   *
+   * Absent is the common and quiet case. See lib/invoices/divergence.ts for what "enough to matter"
+   * means and why the flag's subject is the margin rather than the cost.
+   */
+  divergence?: Divergence | null
   /**
    * How many OTHER lines on this same invoice point at the same product.
    *
@@ -173,6 +185,8 @@ export interface ShipmentDetail {
   shipment: Shipment
   invoice: SupplierInvoice
   lines: InvoiceLine[]
+  /** Every flagged product, largest move first. The same objects hang off their lines. */
+  divergences: Divergence[]
   /** Base currency + markup, so the preview can predict the resulting landed cost per product. */
   settings: { baseCurrency: string; secondaryCurrency: string | null; markupPercent: number }
 }

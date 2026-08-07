@@ -4,6 +4,7 @@ import { requireActiveBusinessContext, getActiveTenantId } from '@/lib/workspace
 import { enabledModulesOf } from '@/lib/modules'
 import { getCostSettings } from '@/lib/catalog/costs'
 import { allocate, coverage, type Charges } from './allocate'
+import { assess, divergenceSentence, projectCost, type Divergence } from './divergence'
 import { matchInvoiceLines, suggestProducts } from './match'
 import { extractInvoice, extendedOf } from './extract'
 import {
@@ -20,6 +21,18 @@ import {
 export const INVOICE_BUCKET = 'supplier-invoices'
 
 export type Result<T> = { ok: true; data: T } | { ok: false; reason: 'not_found' | 'forbidden'; error?: string }
+
+/**
+ * The apply's extra answer, and ONLY the apply's.
+ *
+ * 'divergence' is not a failure — it is the write asking to be confirmed, carrying the flagged products
+ * so the caller can show what it is asking about rather than a bare refusal. Deliberately NOT folded
+ * into Result<T>: widening the shared type made every unrelated route stop compiling, which was the
+ * type system pointing out that no other caller can ever receive this.
+ */
+export type ApplyResult =
+  | Result<ShipmentDetail>
+  | { ok: false; reason: 'divergence'; error: string; divergences: Divergence[] }
 
 /**
  * The single gate. Three things must hold before a row is read: a resolvable active workspace, the
@@ -351,7 +364,8 @@ async function withPriorShipments(tenantId: string, invoiceId: string, lines: In
     .select('id, shipment_id, landed_cost_shipments!inner(reference, applied_at, status)')
     .eq('tenant_id', tenantId).eq('landed_cost_shipments.status', 'applied').neq('id', invoiceId)
 
-  const shipmentOf = new Map<string, { id: string; reference: string | null; appliedAt: string | null }>()
+  type PriorShip = { id: string; reference: string | null; appliedAt: string | null }
+  const shipmentOf = new Map<string, PriorShip>()
   for (const r of (invoices as Array<Record<string, unknown>> | null) ?? []) {
     const s = r.landed_cost_shipments as { reference: string | null; applied_at: string | null }
     shipmentOf.set(r.id as string, { id: r.shipment_id as string, reference: s.reference, appliedAt: s.applied_at })
@@ -359,21 +373,36 @@ async function withPriorShipments(tenantId: string, invoiceId: string, lines: In
   if (!shipmentOf.size) return lines
 
   const { data: prior } = await db.from('supplier_invoice_lines')
-    .select('invoice_id, product_id, allocated_freight, allocated_duties')
+    .select('invoice_id, product_id, quantity, allocated_freight, allocated_duties')
     .eq('tenant_id', tenantId).eq('status', 'matched')
     .in('invoice_id', [...shipmentOf.keys()]).in('product_id', productIds)
+
+  // Accumulated per (product, invoice) BEFORE the most-recent comparison, because a product can appear
+  // on several lines of one invoice — a split delivery, two colours of one SKU. Comparing line by line
+  // would keep whichever line was read first and report a fraction of what that shipment actually put
+  // on the product. The quantity matters for the same reason and for one more: the pack-size shape in
+  // divergence.ts reads it, and a partial count would invent a pack error that is not there.
+  const perInvoice = new Map<string, { pid: string; ship: PriorShip; amount: number; quantity: number }>()
+  for (const r of (prior as Array<Record<string, unknown>> | null) ?? []) {
+    const ship = shipmentOf.get(r.invoice_id as string)
+    if (!ship) continue
+    const pid = r.product_id as string
+    const key = `${pid}:${r.invoice_id as string}`
+    const acc = perInvoice.get(key) ?? { pid, ship, amount: 0, quantity: 0 }
+    acc.amount += Number(r.allocated_freight ?? 0) + Number(r.allocated_duties ?? 0)
+    acc.quantity += Number(r.quantity ?? 0)
+    perInvoice.set(key, acc)
+  }
 
   // Most recent apply wins the mention: that is the freight currently sitting on the product, and so
   // the figure this shipment would actually replace.
   const byProduct = new Map<string, NonNullable<InvoiceLine['priorShipment']>>()
-  for (const r of (prior as Array<Record<string, unknown>> | null) ?? []) {
-    const ship = shipmentOf.get(r.invoice_id as string)
-    if (!ship) continue
-    const amount = Number(r.allocated_freight ?? 0) + Number(r.allocated_duties ?? 0)
-    if (amount <= 0) continue
-    const pid = r.product_id as string
-    const seen = byProduct.get(pid)
-    if (!seen || (ship.appliedAt ?? '') > (seen.appliedAt ?? '')) byProduct.set(pid, { ...ship, amount })
+  for (const acc of perInvoice.values()) {
+    if (acc.amount <= 0) continue
+    const seen = byProduct.get(acc.pid)
+    if (!seen || (acc.ship.appliedAt ?? '') > (seen.appliedAt ?? '')) {
+      byProduct.set(acc.pid, { ...acc.ship, amount: acc.amount, quantity: acc.quantity || null })
+    }
   }
 
   return lines.map((l) => (l.productId && byProduct.has(l.productId) ? { ...l, priorShipment: byProduct.get(l.productId) } : l))
@@ -400,6 +429,76 @@ function withSharedProducts(lines: InvoiceLine[]): InvoiceLine[] {
     l.productId && (count.get(l.productId) ?? 0) > 1 ? { ...l, sharesProductWith: count.get(l.productId)! - 1 } : l)
 }
 
+/**
+ * What applying this shipment would do to the margin on products that already have a cost.
+ *
+ * Reads the cost row this apply would overwrite and the product's selling price, projects what the RPC
+ * would write, and asks divergence.ts whether the move clears both gates. Nothing here decides anything
+ * — the arithmetic is in the isomorphic module so the approval screen previews exactly what the apply
+ * gate enforces.
+ *
+ * Costs only, never variants: apply_shipment_costs writes rows with variant_id NULL and a variant's
+ * cost is never touched by a shipment, so a variant row read here would be compared against a figure
+ * this apply is not going to change.
+ */
+async function withDivergence(
+  tenantId: string,
+  lines: InvoiceLine[],
+  exchangeRate: number,
+): Promise<{ lines: InvoiceLine[]; divergences: Divergence[] }> {
+  const matched = lines.filter((l) => l.status === 'matched' && l.productId)
+  const productIds = [...new Set(matched.map((l) => l.productId!))]
+  if (!productIds.length) return { lines, divergences: [] }
+
+  const db = createAdminClient()
+  const [{ data: costs }, { data: products }] = await Promise.all([
+    db.from('product_costs')
+      .select('product_id, cost_primary, shipping_cost, tariff_cost, markup_percent')
+      .eq('tenant_id', tenantId).is('variant_id', null).in('product_id', productIds),
+    db.from('catalog_products')
+      .select('id, name, price').eq('tenant_id', tenantId).in('id', productIds),
+  ])
+
+  const costOf = new Map((((costs as Array<Record<string, unknown>> | null) ?? []).map((r) => [r.product_id as string, {
+    costPrimary: r.cost_primary === null || r.cost_primary === undefined ? null : Number(r.cost_primary),
+    shippingCost: Number(r.shipping_cost ?? 0),
+    tariffCost: Number(r.tariff_cost ?? 0),
+    markupPercent: Number(r.markup_percent ?? 0),
+  }] as const)))
+  const productOf = new Map((((products as Array<Record<string, unknown>> | null) ?? []).map((r) =>
+    [r.id as string, { name: (r.name as string | null) ?? null, price: r.price === null || r.price === undefined ? null : Number(r.price) }] as const)))
+
+  const byProduct = new Map<string, Divergence>()
+  for (const pid of productIds) {
+    // Grouped exactly as the RPC groups — every line of this invoice pointing at the product, together.
+    const own = matched.filter((l) => l.productId === pid)
+    const prior = own.find((l) => l.priorShipment)?.priorShipment ?? null
+    const d = assess({
+      productId: pid,
+      productName: productOf.get(pid)?.name ?? own[0]?.productName ?? null,
+      current: costOf.get(pid) ?? null,
+      next: projectCost(own.map((l) => ({
+        extended: l.extended, quantity: l.quantity, allocatedFreight: l.allocatedFreight, allocatedDuties: l.allocatedDuties,
+      })), exchangeRate),
+      price: productOf.get(pid)?.price ?? null,
+      priorQuantity: prior?.quantity ?? null,
+      exchangeRate,
+    })
+    if (d) byProduct.set(pid, d)
+  }
+
+  return {
+    lines: lines.map((l) => (l.productId && byProduct.has(l.productId) ? { ...l, divergence: byProduct.get(l.productId) } : l)),
+    divergences: [...byProduct.values()].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
+  }
+}
+
+/** The rate this invoice's purchase prices convert at. 1 for a base-currency invoice, matching the RPC. */
+function rateOf(invoice: SupplierInvoice, baseCurrency: string): number {
+  if (invoice.currency.toUpperCase() === baseCurrency.toUpperCase()) return 1
+  return invoice.exchangeRate && invoice.exchangeRate > 0 ? invoice.exchangeRate : 1
+}
+
 /** Everything the approval screen needs. */
 export async function getShipment(shipmentId: string): Promise<Result<ShipmentDetail>> {
   const g = await gate()
@@ -419,12 +518,17 @@ export async function getShipment(shipmentId: string): Promise<Result<ShipmentDe
   const settings = await getCostSettings(g.tenantId)
   const rows = ((lines as Array<Record<string, unknown>> | null) ?? []).map(lineRow)
 
+  const invoice = invoiceRow(inv as Record<string, unknown>)
+  const withPrior = withSharedProducts(await withPriorShipments(g.tenantId, (inv as { id: string }).id, rows))
+  const div = await withDivergence(g.tenantId, withPrior, rateOf(invoice, settings.baseCurrency))
+
   return {
     ok: true,
     data: {
       shipment: shipmentRow(ship as Record<string, unknown>),
-      invoice: invoiceRow(inv as Record<string, unknown>),
-      lines: withSharedProducts(await withPriorShipments(g.tenantId, (inv as { id: string }).id, rows)),
+      invoice,
+      lines: div.lines,
+      divergences: div.divergences,
       settings: { baseCurrency: settings.baseCurrency, secondaryCurrency: settings.secondaryCurrency, markupPercent: settings.markupPercent },
     },
   }
@@ -654,11 +758,22 @@ export async function setShipmentInputs(
  * Write the allocation onto the products.
  *
  * One RPC, one transaction — see add_landed_cost_invoices.sql for why this path uses the admin client
- * while every other cost write goes through the RLS-scoped one. Every guard the RPC applies (coverage,
- * allocation totals, tenancy) is re-derived in SQL rather than trusted from here, so a bug in this file
- * can fail the apply but cannot corrupt a cost row.
+ * while every other cost write goes through the RLS-scoped one. Coverage, allocation totals and tenancy
+ * are re-derived in SQL rather than trusted from here, so a bug in this file can fail the apply but
+ * cannot corrupt a cost row.
+ *
+ * ── THE ONE GUARD THAT IS NOT RE-DERIVED IN SQL ─────────────────────────────────────────────────────
+ *
+ * The divergence gate below lives here and only here. The RPC could in principle recompute which costs
+ * move materially, but it could never recompute the fact the gate is actually about — that a human was
+ * shown the sentence and went ahead anyway. So the RPC RECORDS the acknowledgement; it does not enforce
+ * it. Said plainly because the alternative is a comment above this function claiming every guard is in
+ * SQL, which would be false the day this shipped.
  */
-export async function applyShipment(shipmentId: string, opts: { override?: boolean; reapply?: boolean } = {}): Promise<Result<ShipmentDetail>> {
+export async function applyShipment(
+  shipmentId: string,
+  opts: { override?: boolean; reapply?: boolean; acknowledgeDivergence?: boolean } = {},
+): Promise<ApplyResult> {
   const g = await gate()
   if (g === 'not_found' || g === 'forbidden') return { ok: false, reason: g }
 
@@ -668,6 +783,23 @@ export async function applyShipment(shipmentId: string, opts: { override?: boole
   // longer covers its charges — and be refused for a reason the owner did not cause and cannot see.
   await reallocate(g.tenantId, shipmentId)
 
+  // Recomputed here too, from the database, for the same reason and one more: the screen's copy is as
+  // old as the tab. What is acknowledged has to be what is about to happen, not what was true when the
+  // page loaded — otherwise the record says he saw a figure he did not see.
+  const current = await getShipment(shipmentId)
+  if (!current.ok) return current
+  const divergences = current.data.divergences
+  const currency = current.data.settings.baseCurrency
+
+  if (divergences.length && !opts.acknowledgeDivergence) {
+    return {
+      ok: false,
+      reason: 'divergence',
+      error: divergences.map((d) => divergenceSentence(d, currency)).join(' '),
+      divergences,
+    }
+  }
+
   const { error } = await createAdminClient().rpc('apply_shipment_costs', {
     p_tenant: g.tenantId,
     p_shipment: shipmentId,
@@ -676,6 +808,24 @@ export async function applyShipment(shipmentId: string, opts: { override?: boole
     // enforces rather than as a boolean this file could forget to check.
     p_min_coverage: opts.override ? 0 : MIN_COVERAGE,
     p_reapply: Boolean(opts.reapply),
+    // What was on screen when he pressed the button, in the words it was on screen in. Six months from
+    // now "why is this sofa's margin 19%" is answerable from this row alone — which products moved, by
+    // how much, and that somebody was told before it happened.
+    p_divergence: divergences.length
+      ? divergences.map((d) => ({
+          productId: d.productId,
+          productName: d.productName,
+          previousCost: d.previousCost,
+          nextCost: d.nextCost,
+          delta: d.delta,
+          deltaRelative: d.deltaRelative,
+          price: d.price,
+          previousMargin: d.previousMargin,
+          nextMargin: d.nextMargin,
+          shapes: d.shapes.map((sh) => ({ kind: sh.kind, factor: sh.factor })),
+          shown: divergenceSentence(d, currency),
+        }))
+      : null,
   })
   if (error) return { ok: false, reason: 'not_found', error: error.message }
   return getShipment(shipmentId)

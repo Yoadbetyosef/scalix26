@@ -4,6 +4,7 @@ import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, AlertTriangle, Check, ExternalLink, Search, X } from 'lucide-react'
 import { coverage, unitShare } from '@/lib/invoices/allocate'
+import { divergenceHeadline, divergenceSentence } from '@/lib/invoices/divergence'
 import { MIN_COVERAGE, type InvoiceLine, type ShipmentDetail } from '@/lib/invoices/types'
 import { landedCost } from '@/lib/catalog/cost-math'
 
@@ -44,6 +45,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   const [busy, setBusy] = useState(false)
   const [fileUrl, setFileUrl] = useState<string | null>(null)
   const [confirmReapply, setConfirmReapply] = useState(false)
+  const [confirmDivergence, setConfirmDivergence] = useState(false)
   // Lines the owner has ticked to become products, and any name they retyped first. Kept here rather
   // than per-row so "create these six" is one request and one recomputed allocation.
   const [picked, setPicked] = useState<Set<string>>(new Set())
@@ -66,6 +68,13 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   useEffect(() => {
     fetch(`/api/invoices/shipments/${id}/file`).then((r) => r.json()).then((j) => setFileUrl(j.url ?? null)).catch(() => {})
   }, [id])
+
+  /** Pull the shipment again. Used when the server saw something this tab did not. */
+  async function reload() {
+    const r = await fetch(`/api/invoices/shipments/${id}`)
+    const j = await r.json()
+    if (r.ok) setD(j)
+  }
 
   const cov = useMemo(() => coverage(d?.lines ?? []), [d])
   const below = cov.ratio < MIN_COVERAGE
@@ -96,22 +105,29 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
-  async function apply(opts: { override?: boolean; reapply?: boolean } = {}) {
+  async function apply(opts: { override?: boolean; reapply?: boolean; acknowledgeDivergence?: boolean } = {}) {
     setBusy(true); setErr(null)
     try {
       const r = await fetch(`/api/invoices/shipments/${id}/apply`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts),
       })
       const j = await r.json()
+      // The server recomputes divergence from the database at the moment of the write, so it can flag
+      // something this tab never rendered — a cost edited elsewhere while this page sat open. Reload
+      // and ask, rather than reporting it as a failure the owner cannot act on.
+      if (r.status === 409 && j.needsAcknowledgement) {
+        await reload(); setConfirmDivergence(true)
+        throw new Error('Costs changed while this page was open — see below before applying.')
+      }
       if (!r.ok) throw new Error(j.error || 'Could not apply this shipment.')
-      setD(j); setConfirmReapply(false)
+      setD(j); setConfirmReapply(false); setConfirmDivergence(false)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
   if (err && !d) return <p className="mx-auto max-w-5xl px-4 py-8 text-sm text-red-700">{err}</p>
   if (!d) return <p className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted">Loading…</p>
 
-  const { shipment, invoice, lines, settings } = d
+  const { shipment, invoice, lines, divergences, settings } = d
   const base = settings.baseCurrency              // what the cost columns are kept in — USD
   const inv = invoice.currency                    // what the supplier's paper is written in — EUR
   const foreign = inv.toUpperCase() !== base.toUpperCase()
@@ -121,6 +137,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   const reorders = lines.filter((l) => l.status === 'matched' && l.priorShipment)
   const shared = lines.filter((l) => (l.sharesProductWith ?? 0) > 0)
   const creatable = lines.filter((l) => l.status === 'unmatched')
+  const collapsing = divergences.filter((x) => x.nextMargin !== null && x.previousMargin !== null && x.nextMargin < x.previousMargin)
 
   // Belt-and-braces. The shipment's currency is now always the tenant's base — freight comes from the
   // forwarder in base currency and is never seeded from the invoice — so this should not fire. It is
@@ -236,6 +253,44 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
         </p>
       )}
 
+      {/* ── The cost moved enough to move the margin. ───────────────────────────────────────────────
+          
+          Distinct from the reorder notice above it, and the distinction is the point. That one fires
+          on OVERLAP — this product has a cost from an earlier shipment — which is true of every repeat
+          order and becomes wallpaper by the third one. This fires on DIVERGENCE: the number is about
+          to move materially, and if the product has a price, its margin moves with it.
+          
+          The subject is the margin, not the cost. A cost rising is not the harm; a price that didn't
+          move with it is. See lib/invoices/divergence.ts.
+          
+          Never says which of the two figures is wrong — it cannot know, and a message that picked one
+          would send the owner to correct the correct number. */}
+      {divergences.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {divergenceHeadline(divergences)}
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {divergences.map((x) => (
+              <li key={x.productId} className="text-sm text-amber-900">
+                {divergenceSentence(x, base)}
+                {/* The shapes are questions, not verdicts. Each one names a way the two figures could
+                    disagree and leaves the invoice to settle it. */}
+                {x.shapes.map((sh) => (
+                  <span key={sh.kind} className="mt-0.5 block text-xs text-amber-800">{sh.note}</span>
+                ))}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-amber-800">
+            {collapsing.length > 0
+              ? 'Applying is fine if the new figures are right — but the selling prices above have not moved, so check them too.'
+              : 'Applying is fine if the new figures are right. Compare them against the invoice first.'}
+          </p>
+        </div>
+      )}
+
       {reorders.length > 0 && !applied && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
@@ -345,7 +400,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
               <span className="flex items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 {`This overwrites the shipping and duty on all ${cov.matchedLines} matched products with the figures above.`}
-                <button type="button" onClick={() => apply({ override: below, reapply: true })} disabled={busy}
+                <button type="button" onClick={() => apply({ override: below, reapply: true, acknowledgeDivergence: true })} disabled={busy}
                   className="font-semibold underline">Overwrite</button>
                 <button type="button" onClick={() => setConfirmReapply(false)} className="underline">Cancel</button>
               </span>
@@ -358,15 +413,34 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
           </>
         ) : (
           <>
-            <button type="button" onClick={() => apply()} disabled={busy || blocked}
-              className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
-              {busy ? 'Applying…' : `Apply to ${cov.matchedLines} product${cov.matchedLines === 1 ? '' : 's'}`}
-            </button>
+            {/* One extra press when a margin is about to move, and the press is the record: the
+                server refuses without the acknowledgement and stores what was on screen when it came.
+                Six months on, "why is this sofa's margin 19%" is answerable from the shipment row. */}
+            {confirmDivergence && divergences.length > 0 ? (
+              <span className="flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {collapsing.length > 0
+                  ? `This applies the new costs and leaves ${collapsing.length === 1 ? 'that product' : 'those products'} priced as ${collapsing.length === 1 ? 'it is' : 'they are'}.`
+                  : 'This applies the new costs shown above.'}
+                <button type="button" onClick={() => apply({ override: below, acknowledgeDivergence: true })} disabled={busy}
+                  className="font-semibold underline">{busy ? 'Applying…' : 'Apply anyway'}</button>
+                <button type="button" onClick={() => setConfirmDivergence(false)} className="underline">Cancel</button>
+              </span>
+            ) : (
+              <button type="button"
+                onClick={() => (divergences.length ? setConfirmDivergence(true) : apply())}
+                disabled={busy || blocked}
+                className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
+                {busy ? 'Applying…' : `Apply to ${cov.matchedLines} product${cov.matchedLines === 1 ? '' : 's'}`}
+              </button>
+            )}
             {/* Coverage is the only thing here with an override — it is a judgement the owner is
                 entitled to make. A missing rate and a mis-denominated freight figure are not
                 judgements, they are wrong numbers, and there is no button for those. */}
             {below && !rateMissing && !wrongFreightCurrency && cov.matchedLines > 0 && (
-              <button type="button" onClick={() => apply({ override: true })} disabled={busy}
+              <button type="button"
+                onClick={() => (divergences.length ? setConfirmDivergence(true) : apply({ override: true }))}
+                disabled={busy}
                 className="text-sm font-medium text-amber-800 underline">
                 Apply anyway, at {(cov.ratio * 100).toFixed(0)}% coverage
               </button>
