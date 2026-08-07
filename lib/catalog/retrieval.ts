@@ -55,6 +55,8 @@ export interface RetrievalResult {
    *  a differently-worded second query. */
   groupIds: string[]
   latencyMs: number
+  /** Per-stage milliseconds. Diagnostic; see add_catalog_retrieval_3.sql for how to read the spread. */
+  stages: Record<string, number | number[]>
   /** Answered on fewer tokens than the caller used — a narrower question than the one asked. */
   partial: boolean
   queryTokens: number
@@ -113,9 +115,9 @@ const tokenFilter = (titleColumn: string, skuColumn: string, t: string): string 
 const byDistinctiveness = (tokens: string[]): string[] => [...tokens].sort((a, b) => b.length - a.length)
 
 /** Rows, plus how many tokens the rung that found them used — 0 when nothing was found at any width. */
-interface Found { rows: Row[]; kept: number }
+interface Found { rows: Row[]; kept: number; ms: number[] }
 
-async function searchWebsite(tenantId: string, tokens: string[]): Promise<Found> {
+async function searchWebsite(tenantId: string, tokens: string[], ms: number[] = []): Promise<Found> {
   const db = admin()
   const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
     let q = db.from('catalog_ingested_products')
@@ -127,8 +129,8 @@ async function searchWebsite(tenantId: string, tokens: string[]): Promise<Found>
     const { data } = await q
     return (data ?? []) as Array<Record<string, unknown>>
   }
-  const { rows, kept } = await ladder(run, tokens)
-  return { kept, rows: rows.map((r) => ({
+  const { rows, kept } = await ladder(run, tokens, ms)
+  return { kept, ms, rows: rows.map((r) => ({
     id: r.id as string,
     title: (r.title as string) ?? '',
     price: r.price === null ? null : Number(r.price),
@@ -145,7 +147,12 @@ async function searchWebsite(tenantId: string, tokens: string[]): Promise<Found>
 // Every word, then every word but the least distinctive, and so on. "pear shaped diamond ring" finds
 // nothing on a catalogue full of pear-shaped rings because no title says "shaped" — dropping that one
 // word finds them all. Stops at two words: below that the phrase stops being a request for a product.
-async function ladder<T>(run: (subset: string[]) => Promise<T[]>, tokens: string[]): Promise<{ rows: T[]; kept: number }> {
+async function ladder<T>(
+  run: (subset: string[]) => Promise<T[]>,
+  tokens: string[],
+  /** One entry per rung attempted, in order. The array length IS the rung count. */
+  ms?: number[],
+): Promise<{ rows: T[]; kept: number }> {
   // Two rungs, not the whole ladder: every rung is a round trip, and on the live-call path a third
   // one costs more than the recall it buys. Full phrase, then the phrase minus its least distinctive
   // word — which is the drop that rescued "pear shaped diamond ring".
@@ -167,13 +174,15 @@ async function ladder<T>(run: (subset: string[]) => Promise<T[]>, tokens: string
   const ordered = byDistinctiveness(tokens)
   const floor = Math.max(1, ordered.length - 1)
   for (let keep = ordered.length; keep >= floor; keep--) {
+    const t0 = Date.now()
     const rows = await run(ordered.slice(0, keep))
+    ms?.push(Date.now() - t0)
     if (rows.length) return { rows, kept: keep }
   }
   return { rows: [], kept: 0 }
 }
 
-async function searchInventory(tenantId: string, tokens: string[]): Promise<Found> {
+async function searchInventory(tenantId: string, tokens: string[], ms: number[] = []): Promise<Found> {
   const db = admin()
   const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
     let q = db.from('catalog_products')
@@ -192,8 +201,8 @@ async function searchInventory(tenantId: string, tokens: string[]): Promise<Foun
     const { data } = await q
     return (data ?? []) as Array<Record<string, unknown>>
   }
-  const { rows, kept } = await ladder(run, tokens)
-  return { kept, rows: rows.map((r) => {
+  const { rows, kept } = await ladder(run, tokens, ms)
+  return { kept, ms, rows: rows.map((r) => {
     const onHand = Number(r.showroom_quantity ?? 0) + Number(r.warehouse_quantity ?? 0) + Number(r.storage_quantity ?? 0)
     // A draft came off a supplier invoice: bought and shipped, not priced, and not yet on the shelf.
     // Its price and its stock are both suppressed here rather than downstream — the row that reaches
@@ -260,12 +269,13 @@ function logRetrieval(tenantId: string, surface: 'voice' | 'text' | 'test', quer
     // What separates a lexical narrowing we already handle from a product we genuinely do not have —
     // and therefore what keeps the miss list from arguing for embeddings it does not need.
     partial: r.partial, query_tokens: r.queryTokens, matched_tokens: r.matchedTokens,
+    stages: r.stages,
   }).then(() => {}, () => {})
 }
 
 const MISS: Omit<RetrievalResult, 'query'> = {
   groups: [], say: '', resolved: false, clarifying: false, matched: 0, groupIds: [], latencyMs: 0,
-  partial: false, queryTokens: 0, matchedTokens: 0, timedOut: false, errored: false,
+  partial: false, queryTokens: 0, matchedTokens: 0, stages: {}, timedOut: false, errored: false,
 }
 
 /**
@@ -281,7 +291,12 @@ export async function retrieveProducts(
    * forward number. Only affects how a DRAFT's sentence ends: offering a transfer the agent cannot
    * perform is worse than offering a callback, so it is read rather than assumed.
    */
-  opts?: { canTransfer?: boolean },
+  opts?: {
+    canTransfer?: boolean
+    /** Stages the CALLER already timed — the tenant lookup and agent read happen before this runs and
+     *  are invisible from in here, yet they are part of what a caller waits for. */
+    preStages?: Record<string, number>
+  },
 ): Promise<RetrievalResult> {
   const started = Date.now()
   const tokens = tokenize(query).map(escape).filter(Boolean).slice(0, 8)
@@ -295,6 +310,11 @@ export async function retrieveProducts(
   // How many of the caller's tokens the answer actually rests on. Fewer than they said means we
   // answered a narrower question than they asked — see `partial` below and in the log.
   let keptTokens = 0
+  // Filled in place by the ladders. Declared out here so a TIMEOUT still reports what the rungs cost
+  // up to the moment it fired — the timed-out calls are exactly the ones worth measuring, and a
+  // result assembled only on the success path would omit every one of them.
+  const webMs: number[] = []
+  const invMs: number[] = []
   let rows: Groupable[] = []
   try {
     // A stalled lookup is worse than a miss: the caller hears silence either way, and the miss at
@@ -304,12 +324,12 @@ export async function retrieveProducts(
         // One table failing must not blank the other — but both failing is an outage, and it is
         // recorded as one rather than quietly logged as "no such product".
         const [website, inventory] = await Promise.allSettled([
-          searchWebsite(tenantId, tokens),
-          searchInventory(tenantId, tokens),
+          searchWebsite(tenantId, tokens, webMs),
+          searchInventory(tenantId, tokens, invMs),
         ])
         if (website.status === 'rejected' && inventory.status === 'rejected') errored = true
-        const w = website.status === 'fulfilled' ? website.value : { rows: [], kept: 0 }
-        const i = inventory.status === 'fulfilled' ? inventory.value : { rows: [], kept: 0 }
+        const w = website.status === 'fulfilled' ? website.value : { rows: [], kept: 0, ms: [] }
+        const i = inventory.status === 'fulfilled' ? inventory.value : { rows: [], kept: 0, ms: [] }
         // The WIDEST rung that answered: if the full phrase matched in either table, the answer is
         // not partial, even if the other table needed a narrower one to find anything.
         keptTokens = Math.max(w.kept, i.kept)
@@ -322,7 +342,9 @@ export async function retrieveProducts(
     ])
   } catch { rows = []; errored = true }
 
+  const groupStarted = Date.now()
   const groups = groupProducts(rows, GROUP_LIMIT)
+  const groupMs = Date.now() - groupStarted
   const latencyMs = Date.now() - started
   const resolved = groups.length > 0
   const clarifying = resolved && groups[0].count > 1
@@ -348,6 +370,13 @@ export async function retrieveProducts(
     partial,
     queryTokens: tokens.length,
     matchedTokens: keptTokens,
+    stages: {
+      ...(opts?.preStages ?? {}),
+      website: webMs,
+      inventory: invMs,
+      group: groupMs,
+      total: latencyMs,
+    },
     timedOut,
     errored,
   }

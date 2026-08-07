@@ -57,6 +57,41 @@ The budget itself is tunable without a deploy: `CATALOG_RETRIEVAL_TIMEOUT_MS` (d
 
 ---
 
+## 1b. Token distinctiveness is measured by string length, and that is not a proxy for anything
+
+**RECALL, not performance** — filed deliberately, because the ladder-floor entry above sat under a
+latency heading for weeks and a real caller hit it.
+
+`lib/catalog/retrieval.ts`:
+
+```js
+const byDistinctiveness = (tokens) => [...tokens].sort((a, b) => b.length - a.length)
+```
+
+The ladder drops the *least* distinctive token first, so this decides which word survives when the full
+phrase matches nothing. Measured 7 Aug 2026: `rosa raja` missed 3/3 against a tenant holding eight RAJA
+products. `rosa` and `raja` are both four characters, so the sort is a coin toss, and it kept the word
+that matches nothing while discarding the one that matches eight.
+
+**Length was never a proxy for distinctiveness.** It correlated by accident on the phrases that were
+tested — in jewellery, "platinum" happens to be longer and rarer than "ring" — and the correlation
+breaks the moment two tokens are the same length, or a short word is the rare one.
+
+The signal that is actually available is **how many products a token matches**. `raja` matches eight,
+`rosa` matches zero. A token matching nothing is the one to drop, and that is knowable from the data
+rather than guessed from the spelling.
+
+**This matters most against transcription damage, which is the normal condition rather than an edge
+case.** STT garbage is *by definition* a word that matches nothing in the catalogue — `Vaja`, `Rosa`,
+`Solphine` were all produced by the phone line in a single call. Corpus frequency identifies that
+class automatically; string length is a coin toss on exactly the input it most needs to get right.
+Every phone call carries some damage, so a rescue rung that keeps the garbage word and drops the real
+one fails routinely and silently.
+
+Not built. It needs a cheap frequency signal — a per-token count query, or a cached term list refreshed
+on sync — and adding a round trip to decide the rung order is the wrong trade on a path already
+fighting its budget. Decide it alongside the per-stage numbers from `add_catalog_retrieval_3.sql`.
+
 ## 2. Embeddings — deferred, with the condition to revisit
 
 No vector search, no pgvector, no embedding vendor. The reasoning: on catalogues whose titles spell
