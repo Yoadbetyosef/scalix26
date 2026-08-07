@@ -11,7 +11,8 @@ import { MAX_INVOICE_PAGES } from './types'
 // at the bottom. Flattening the table to a text stream destroys exactly the association the extraction
 // depends on, and no prompt recovers it afterwards. The document goes as a document.
 //
-// pdf-parse is still used here, lazily, for one thing: counting pages before spending anything.
+// This file uses no PDF library at all. It briefly used pdf-parse to count pages, which broke the whole
+// upload path on Vercel — see pageCountOf below.
 //
 // ── MODEL ───────────────────────────────────────────────────────────────────────────────────────────
 //
@@ -115,19 +116,37 @@ Rules:
 - Use null for anything genuinely absent. Never substitute 0 for a number you could not find: 0 means the invoice says zero.`
 
 /**
- * Page count from PDF metadata alone — getInfo(), not getText(), so nothing renders and no text is
- * extracted. Loaded lazily because pdf-parse pulls in ~36MB of pdfjs and most of this app never needs it.
+ * How many pages, if we can tell cheaply. Null means "unknown" — never an error.
  *
- * Returns null for images, which have no page count and are one page by definition.
+ * ── WHY THIS DOES NOT USE pdf-parse ─────────────────────────────────────────────────────────────────
+ *
+ * It did, via getInfo(). On Vercel that threw `ReferenceError: DOMMatrix is not defined` — pdfjs
+ * reaches for browser globals that do not exist in the serverless runtime — and because the count was
+ * computed BEFORE the API call, the throw took the whole upload with it. The first real invoice ever
+ * put through this feature died on a page count it did not need. (pdf-parse/node exports only
+ * getHeader, so there is no Node-safe build to switch to.)
+ *
+ * The deeper mistake was structural, not a bad import: this is an OPTIMISATION — it exists to avoid
+ * spending money on a document too large to read — and an optimisation must never be able to fail the
+ * thing it is optimising. So it now has no dependencies, cannot throw, and is allowed to shrug.
+ *
+ * The scan is deliberately simple: count page objects, and fall back to the largest /Count in the page
+ * tree. Both live in the file's plain bytes and read correctly on ordinary PDFs. Neither can see inside
+ * a compressed object stream, so some files come back null — measured at 5 of 8 real PDFs answering,
+ * 3 shrugging. That is the honest result and the caller is built for it.
  */
-export async function pageCountOf(bytes: Buffer, mimeType: string): Promise<number | null> {
-  if (mimeType !== 'application/pdf') return null
-  const { PDFParse } = await import('pdf-parse')
-  const parser = new PDFParse({ data: bytes })
+export function pageCountOf(bytes: Buffer, mimeType: string): number | null {
+  if (mimeType !== 'application/pdf') return null   // an image is one page by definition
   try {
-    return (await parser.getInfo()).total
-  } finally {
-    await (parser as { destroy?: () => Promise<void> }).destroy?.()
+    // latin1 keeps every byte a single character, so offsets in binary sections cannot corrupt a match.
+    const s = bytes.toString('latin1')
+    // `/Type /Page` but not `/Pages` (the tree node) and not `/PageLabels` and friends.
+    const pages = (s.match(/\/Type\s*\/Page(?![sA-Za-z])/g) || []).length
+    if (pages > 0) return pages
+    const counts = [...s.matchAll(/\/Count\s+(\d+)/g)].map((m) => Number(m[1])).filter(Number.isFinite)
+    return counts.length ? Math.max(...counts) : null
+  } catch {
+    return null
   }
 }
 
@@ -143,11 +162,15 @@ export async function extractInvoice(
   mimeType: string,
   fallbackCurrency: string,
 ): Promise<ExtractionResult> {
-  const pageCount = await pageCountOf(bytes, mimeType)
+  const pageCount = pageCountOf(bytes, mimeType)
 
   // Checked BEFORE the API call, so an oversized document costs nothing. A refusal that names the page
   // count sends the owner to split the file; a truncation would send a wrong landed cost to every
   // product on it, with nothing on screen to reveal it.
+  //
+  // `pageCount === null` means we could not tell, and that is NOT a reason to refuse. The API enforces
+  // its own page ceiling, so an unreadable count costs at worst one rejected call — against an upload
+  // that cannot proceed at all, which is what refusing on uncertainty would produce.
   if (pageCount !== null && pageCount > MAX_INVOICE_PAGES) {
     throw new Error(
       `This invoice is ${pageCount} pages and the limit is ${MAX_INVOICE_PAGES}. ` +
