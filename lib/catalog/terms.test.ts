@@ -5,6 +5,14 @@ import { distinctiveTerms, planKeyterms, termsIn, KEYTERM_WORD_BUDGET, MIN_KEYTE
 // English speech model will and will not produce. It produced "Vaja", "Roger Solphine" and "Rosa raja"
 // for "RAJA" across two calls; it has never had trouble with "sofa".
 
+// Unique nonsense words WITHOUT digits — the filter strips anything carrying one, so a fixture built
+// from `WORD${i}` produces an empty term list and tests nothing.
+const word = (i: number): string => {
+  let out = '', n = i
+  do { out = String.fromCharCode(97 + (n % 26)) + out; n = Math.floor(n / 26) } while (n > 0)
+  return `zz${out}`
+}
+
 const YDC = [
   'RAJA E CORNER', 'RAJA TERMINAL MAX R', 'RAJA 2,5 PL',
   'RAJA STOOL 60X60', 'RAJA STOOL 135X85', 'RAJA STOOL 80X50',
@@ -58,17 +66,17 @@ describe('the 500-token cap — the thing to design around', () => {
     expect(p.state).toBe('ok')
     expect(p.dropped).toBe(0)
     expect(p.keyterms).toContain('raja')
-    // 11 of 12, not all of them: "Marble Console Top" is three ordinary English words, so it has
-    // nothing to boost and is legitimately uncovered. Coverage measures products we can HELP, and a
-    // product the model already transcribes correctly is not a gap.
-    expect(p.coverage).toBeCloseTo(11 / 12, 5)
+    // 10 of 12. "Marble Console Top" and "Linen Scatter Cushion" are ordinary English throughout, so
+    // they have nothing to boost and are legitimately uncovered. Coverage measures products we can
+    // HELP; one the model already transcribes correctly is not a gap.
+    expect(p.coverage).toBeCloseTo(10 / 12, 5)
   })
 
   it('truncates to the most-used terms and says how many were dropped', () => {
     // One shared name across many products, plus a long tail of one-offs.
     const many = [
-      ...Array.from({ length: 40 }, (_, i) => `RAJA VARIANT${i} SOFA`),
-      ...Array.from({ length: KEYTERM_WORD_BUDGET + 60 }, (_, i) => `RAJA UNIQUEWORD${i}X SOFA`),
+      ...Array.from({ length: 40 }, (_, i) => `RAJA ${word(i)} SOFA`),
+      ...Array.from({ length: KEYTERM_WORD_BUDGET + 60 }, (_, i) => `RAJA ${word(1000 + i)} SOFA`),
     ]
     const p = planKeyterms(many)
     expect(p.state).toBe('truncated')
@@ -82,7 +90,7 @@ describe('the 500-token cap — the thing to design around', () => {
     // 9,179 products with no shared vocabulary: 350 slots would cover a few percent, every other
     // product stays exactly as broken, and the feature reads as configured. Saying nothing is
     // honest; saying "on" while doing nothing is the failure being designed against.
-    const huge = Array.from({ length: 5000 }, (_, i) => `UNIQUEBRAND${i} SOFA`)
+    const huge = Array.from({ length: 5000 }, (_, i) => `${word(i)} SOFA`)
     const p = planKeyterms(huge)
     expect(p.state).toBe('disabled')
     expect(p.keyterms).toEqual([])
@@ -95,7 +103,7 @@ describe('the 500-token cap — the thing to design around', () => {
   it('stays enabled for a large catalogue that shares its vocabulary', () => {
     // Size alone is not the disqualifier — coverage is. 5,000 products under 40 brand names is
     // perfectly boostable.
-    const shared = Array.from({ length: 5000 }, (_, i) => `BRANDNAME${i % 40} SOFA`)
+    const shared = Array.from({ length: 5000 }, (_, i) => `${word(i % 40)} SOFA`)
     const p = planKeyterms(shared)
     expect(p.state).toBe('ok')
     expect(p.coverage).toBe(1)
@@ -124,5 +132,41 @@ describe('tokenizing a product name', () => {
 
   it('splits on punctuation and case-folds', () => {
     expect(termsIn('Albero Side Table — Oak')).toEqual(['albero', 'side', 'table', 'oak'])
+  })
+})
+
+// Read off the first real list produced from YDC's 131 products. A third of it was noise, and noise
+// here is not merely wasteful — boosting a two-letter fragment tells the model to expect it.
+describe('what the first real catalogue taught the filter', () => {
+  it('drops two-letter abbreviations', () => {
+    // pl, gr, wb, ii all appeared. Short enough to collide with ordinary speech, so boosting them
+    // invites the model to hear them where they were not said.
+    const terms = distinctiveTerms(['RAJA 2,5 PL', 'GR SOFA', 'WB II CHAIR']).map((t) => t.term)
+    for (const junk of ['pl', 'gr', 'wb', 'ii']) expect(terms).not.toContain(junk)
+    expect(terms).toContain('raja')
+  })
+
+  it('drops model codes and anything carrying a digit', () => {
+    // "e45" is not a word a caller says; they say "the Albero".
+    const terms = distinctiveTerms(['ALBERO E45', 'NOMARO EPL 3']).map((t) => t.term)
+    expect(terms).not.toContain('e45')
+    expect(terms).toContain('albero')
+    expect(terms).toContain('nomaro')
+  })
+
+  it('drops the ordinary English that leaked through the first pass', () => {
+    const terms = distinctiveTerms([
+      'Scatter Cushion', 'Accent Chair', 'Swivel Stool', 'RAJA TERMINAL', 'Side Table', 'Two Seat Sofa',
+    ]).map((t) => t.term)
+    for (const w of ['scatter', 'accent', 'swivel', 'terminal', 'side', 'two']) {
+      expect(terms).not.toContain(w)
+    }
+    expect(terms).toContain('raja')
+  })
+
+  it('keeps the non-English furniture words, which are exactly what gets mangled', () => {
+    // "divan"/"diwan"/"obrotowy" are furniture terms a general English model has no reason to produce.
+    const terms = distinctiveTerms(['DIWAN OBROTOWY', 'DIVAN VELUTTO']).map((t) => t.term)
+    for (const w of ['diwan', 'obrotowy', 'divan', 'velutto']) expect(terms).toContain(w)
   })
 })

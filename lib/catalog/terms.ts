@@ -47,10 +47,27 @@ const COMMON = new Set([
   'green', 'red', 'yellow', 'pink', 'purple', 'orange', 'gold', 'silver', 'navy', 'charcoal',
   // commerce
   'price', 'sale', 'stock', 'item', 'product', 'model', 'series', 'collection', 'edition', 'size',
+  // Added after reading the first real list off YDC's 131 products — every one of these leaked through
+  // as "distinctive" and would have spent a slot teaching Deepgram a word it already has.
+  'side', 'scatter', 'accent', 'swivel', 'terminal', 'daybed', 'sleeper', 'modular', 'upholstered',
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
 ])
 
-/** Dimensions, article numbers and bare quantities. Boosting "135x85" helps nobody. */
-const isMeasurement = (t: string): boolean => /^[\d.,x×/-]+$/i.test(t) || /^\d/.test(t)
+/**
+ * Dimensions, article numbers and model codes. Boosting "135x85" or "e45" helps nobody — a caller says
+ * "the RAJA stool", not its part number, and a digit-bearing token cannot be pronounced as a word.
+ */
+const hasDigit = (t: string): boolean => /\d/.test(t)
+
+/**
+ * Two-character tokens are abbreviations, not names: `pl`, `gr`, `wb`, `ii` all appeared in the first
+ * real list. They are the WORST thing to boost — short enough to collide with ordinary speech, so
+ * telling the model to expect them invites it to hear them where they were not said.
+ *
+ * This costs the genuinely two-letter product name. That trade is worth it: a spurious boost damages
+ * every call, a missing one damages the calls about that product.
+ */
+const MIN_TERM_LENGTH = 3
 
 /**
  * Words worth comparing, from a product name. Lowercased, punctuation dropped.
@@ -83,7 +100,7 @@ export function distinctiveTerms(names: string[]): Term[] {
   for (const name of names) {
     // Per product, not per occurrence: a word repeated in one title is still one product.
     for (const t of new Set(termsIn(name))) {
-      if (COMMON.has(t) || isMeasurement(t)) continue
+      if (t.length < MIN_TERM_LENGTH || COMMON.has(t) || hasDigit(t)) continue
       counts.set(t, (counts.get(t) ?? 0) + 1)
     }
   }

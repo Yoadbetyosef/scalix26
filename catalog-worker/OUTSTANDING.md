@@ -10,6 +10,61 @@ tenant (Smith HVAC / naturesparkle.com, 9,179 products); no customers depend on 
 
 ---
 
+## 0. PATTERN: a route voice-server calls, missing from the middleware allowlist
+
+**Three occurrences. The third was found by the test written after the second, and it was already live
+in production.**
+
+| route | found | state |
+|---|---|---|
+| `/api/catalog/lookup` | during the retrieval build | fixed then |
+| `/api/catalog/keyterms` | 7 Aug 2026, before first use | fixed same day |
+| `/api/stripe/connect/payment-link` | 7 Aug 2026, **by the test** | **had never worked on a call** |
+
+### Why it is invisible every time
+
+```
+middleware 307s to /auth/login  →  voice-server receives an HTML login page
+→  JSON.parse throws            →  the catch swallows it
+→  the agent behaves exactly as it did before the feature existed
+```
+
+Nothing errors. Nothing logs. There is no failed request to find, because the request succeeded — it
+returned a login page. Every one of these handlers has a sensible fallback ("I can check with the team
+and get back to you"), and that fallback is indistinguishable from the feature working and finding
+nothing. The payment-link tool sat broken for however long the Payment Collection feature has shipped.
+
+**This is the same class as the ladder floor**: the incident was recorded, the CLASS was not. Fixing
+`/api/catalog/lookup` did not prevent `/api/catalog/keyterms`, because what got written down was "this
+route needs to be public" rather than "routes voice-server calls need to be public, and the failure
+looks like success."
+
+### The structural answer, built
+
+`lib/supabase/public-routes.test.ts` reads every `${appUrl}/…` path out of **voice-server's source**
+and asserts each is covered by a `PUBLIC_ROUTES` prefix. `PUBLIC_ROUTES` is exported from
+`lib/supabase/middleware.ts` for exactly this.
+
+Reading the source rather than a maintained list is the point. A hand-kept "routes voice-server calls"
+list would drift the same way the allowlist did — the failure mode IS forgetting, and a second thing to
+remember does not fix forgetting. The test also asserts the regex still finds something, so a refactor
+to a different URL-building style fails loudly instead of passing on an empty set.
+
+**What it does not cover:** a URL built by concatenation or from a variable path. If voice-server ever
+constructs one that way, the guard goes blind. The `expect(paths.length).toBeGreaterThanOrEqual(4)`
+check is the tripwire for that, not a solution to it.
+
+### The cleaner shape, not taken
+
+Every voice-called route under one prefix — `/api/voice/*` — would make a single allowlist entry cover
+all of them and make the requirement obvious from the path. Not done because moving
+`/api/catalog/lookup`, `/api/appointments/available`, `/api/appointments/book` and the payment link
+means changing voice-server and the app in lockstep, and voice-server deploys separately from Vercel:
+there is a window where one side has moved and the other has not, and the symptom of that window is
+exactly the silent failure above. Worth doing when the two can be deployed together, not before.
+
+---
+
 ## 1. ~244ms of the retrieval path is outside the database
 
 The measured position, on a clean table after `VACUUM ANALYZE`:
