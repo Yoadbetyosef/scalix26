@@ -57,6 +57,73 @@ The budget itself is tunable without a deploy: `CATALOG_RETRIEVAL_TIMEOUT_MS` (d
 
 ---
 
+## 1a. SPEECH-TO-TEXT IS THE BINDING CONSTRAINT ON PHONE CATALOG ANSWERS
+
+Bigger than latency. Bigger than the ladder. Established 7 Aug 2026 by a call that resolved it:
+
+> The caller asked for a "RAJA sofa" and the agent could not find it. The caller then **spelled it
+> out — R-A-J-A** — and the agent found it instantly, named the RAJA 2,5, correctly refused to quote a
+> price, and offered a callback. Exactly the designed answer.
+
+Everything downstream works. What never happened was "RAJA" reaching us as `raja`. Across two calls the
+tool received `Vaja soda`, `Raja soda`, `Roger Solphine`, `Rosa raja`, `Raja sofa`.
+
+**Do not credit the ladder floor or partial matching with solving this.** Both were real bugs and both
+are correctly fixed, but neither was the binding constraint — a two-token query that never contains the
+right token cannot be rescued by dropping a token.
+
+**Every product name that is not an English word has this problem, which for an importer is most of
+them.** RAJA, PARKAWAY, CAVALLO, NOMARO, JASIEK are Polish furniture names; a general English model has
+no reason to produce any of them. This is the normal condition for this tenant, not an edge case.
+
+### Measured: which repair actually works
+
+Real observed damage against the intended word (7 Aug 2026):
+
+| heard | target | soundex | levenshtein | trigram |
+|---|---|---|---|---|
+| `vaja` | raja | V200 vs R200 — **no match** | **1** | 0.25 |
+| `rosa` | raja | R200 == R200 match | 2 | 0.11 |
+| `yashek` | jasiek | Y220 vs J220 — **no match** | **2** | 0.08 |
+| `parka way` | parkaway | match | 1 | 0.58 |
+| `cavalo` | cavallo | match | 1 | 0.67 |
+| `no maro` | nomaro | match | 1 | 0.50 |
+
+**Soundex fails on the two cases that matter most**, and for a structural reason: it anchors on the
+first letter, and substituting the initial consonant is exactly what the phone line does — `r`→`v`,
+`j`→`y`. The J/Y confusion is what an English model does to a Polish name every time.
+
+**Trigram similarity fails on all the hard ones** (0.25, 0.11, 0.08 — far under the 0.45 threshold),
+because it compares SPELLING and the damage is PHONETIC.
+
+**Edit distance catches every observed case at ≤2**, including both that soundex misses. If a repair is
+built on our side, it should be Levenshtein against a distinctive-token list — not Soundex, and not a
+lower trigram threshold. Note `sofa`/`soda` is also distance 1, which is the other half of the same
+call.
+
+### The two layers, and why the order is not arbitrary
+
+**Deepgram `keyterms` fixes it at the source.** `agent.listen.provider.keyterms` is an array of plain
+strings, supported on Flux v2 — which is what voice-server already runs — capped at 500 tokens, and
+updatable mid-stream on Flux via the Configure control message. No separate charge is documented.
+
+**Fuzzy matching fixes it after the damage,** and only for retrieval. The transcript stored in
+`conversations`, the lead capture, and the model's own reading of what the caller said all keep the
+wrong word. Keyterms improves every one of those; a fuzzy fallback improves exactly one.
+
+That asymmetry is why keyterms goes first even though both are wanted. What a fallback buys that
+keyterms cannot is coverage of words nobody anticipated — a product added after the call started, a
+supplier name, a caller's own approximation.
+
+### Do not send the whole catalogue as keyterms
+
+500 tokens is the cap, and 131 product names would both exceed it and dilute the boost. Send the
+DISTINCTIVE tokens only — RAJA, CAVALLO, NOMARO, JASIEK, PARKAWAY — not "stool", "sofa" or "table",
+which a general model already produces correctly. That is roughly 20–40 tokens for this tenant.
+
+Selecting them is the same corpus-frequency computation §1b needs for rung ordering: which tokens are
+catalogue-distinctive rather than common English. One mechanism, two consumers — worth building once.
+
 ## 1b. Token distinctiveness is measured by string length, and that is not a proxy for anything
 
 **RECALL, not performance** — filed deliberately, because the ladder-floor entry above sat under a
