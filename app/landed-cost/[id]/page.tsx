@@ -396,13 +396,40 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
               <Check className="h-4 w-4" /> Applied {shipment.appliedAt && new Date(shipment.appliedAt).toLocaleString()}
             </p>
             {confirmReapply ? (
-              <span className="flex items-center gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {`This overwrites the shipping and duty on all ${cov.matchedLines} matched products with the figures above.`}
-                <button type="button" onClick={() => apply({ override: below, reapply: true, acknowledgeDivergence: true })} disabled={busy}
-                  className="font-semibold underline">Overwrite</button>
-                <button type="button" onClick={() => setConfirmReapply(false)} className="underline">Cancel</button>
-              </span>
+              /* The sentences and the button that acknowledges them live in ONE block, deliberately.
+                 
+                 They were separated before: the banner rendered elsewhere on the page and this button
+                 sent acknowledgeDivergence unconditionally, on the reasoning that "the banner is
+                 visible above." That let the client assert something about its own rendering that the
+                 server could not check — and on 7 Aug 2026 a stale tab produced exactly that: 166
+                 products' costs moved with a record claiming their sentences had been read, when the
+                 banner was never on screen. Rendering them together makes the claim structurally
+                 true rather than merely usually true. */
+              <div className="flex flex-col gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                <p className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {`This overwrites the shipping and duty on all ${cov.matchedLines} matched products with the figures above.`}
+                </p>
+                {divergences.length > 0 && (
+                  <>
+                    <p className="font-medium">{divergenceHeadline(divergences)}:</p>
+                    <ul className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                      {divergences.map((x) => <li key={x.productId}>{divergenceSentence(x, base)}</li>)}
+                    </ul>
+                  </>
+                )}
+                <p className="flex items-center gap-3">
+                  {/* Only ever true from inside this block. If the tab is stale and the server finds
+                      a divergence this list does not contain, the apply is refused and comes back
+                      with the real one rather than being recorded as acknowledged. */}
+                  <button type="button"
+                    onClick={() => apply({ override: below, reapply: true, acknowledgeDivergence: divergences.length > 0 })}
+                    disabled={busy} className="font-semibold underline">
+                    {busy ? 'Applying…' : 'Overwrite'}
+                  </button>
+                  <button type="button" onClick={() => setConfirmReapply(false)} className="underline">Cancel</button>
+                </p>
+              </div>
             ) : (
               <button type="button" onClick={() => setConfirmReapply(true)}
                 className="h-10 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-ink hover:bg-sunken/50">

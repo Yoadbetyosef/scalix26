@@ -488,6 +488,51 @@ copy must be produced mechanically. That covers restated SQL functions, the SQL�
 `cost-math.ts` (defended by golden vectors instead, since a generated column cannot call TypeScript),
 and any future "paste this config into both places."
 
+## 7i. The false artefact we created, and how
+
+On 7 Aug 2026 both YDC shipments were re-applied to add the 25% supplier commission. The costs wrote
+correctly. **The audit record claimed a review that never happened**, on 166 flagged products.
+
+**How.** `divergence_ack` entries carried one field, `shown`, holding the sentence for that product —
+and its presence was read as "the owner saw this." Two things then had to be true for that to hold: the
+banner had to render, and the acknowledgement had to be sent only after it did. Neither was enforced.
+The re-apply button sent `acknowledgeDivergence: true` unconditionally, on the reasoning that *the
+banner is visible above it*. A tab loaded before the deploy held an empty `divergences` list, so no
+banner rendered, and the flag went anyway.
+
+**Why the numbers survived.** The server recomputes divergence from the database at the moment of the
+write rather than trusting the request — so the record's figures are correct and complete despite the
+client being stale. That decision is the only reason this is a correctable record rather than a lost
+one.
+
+**The category error.** One field meant three things:
+
+| Fact | Who can know it |
+|---|---|
+| Did this move clear both thresholds? | **Server** — derived from the numbers beside it |
+| What is the wording for this row? | **Server** — regenerable at any time |
+| Did a human see it and go ahead? | **Client only**, and only after a confirm step |
+
+They are now three fields: `flagged`, `sentence`, `acknowledged`. The first two are reproducible; the
+third is a claim, and it is recorded as one. **Conflating "was worth showing" with "was shown" is what
+made the false artefact possible; splitting them is what makes it impossible rather than unlikely.**
+
+**The structural fix.** The sentences and the button that acknowledges them now live in one block, so
+they cannot be separated by a layout change or a stale fetch. And `acknowledged` is false for unflagged
+rows unconditionally — they were never rendered, so no request can claim they were.
+
+**The correction.** `correct_divergence_ack_2026_08_07.sql` sets `acknowledged: false` and nulls the
+sentences on both records, leaving every number untouched, and writes a `correction` block into the
+record saying when and why. Not left alone: a missing artefact prompts a question, a false one ends the
+enquiry, and keeping it to avoid the discomfort of amending an audit trail would preserve a lie in
+order to protect the principle the lie already breaks. There is no down statement — restoring `shown`
+would restore the claim.
+
+**The general rule.** Whenever a record asserts that a human did something, the assertion must be
+produced by the same code path that gave them the chance to do it. If the two can drift — a banner
+here, a flag there — they eventually will, and the record will be confidently wrong rather than
+silent. Related: §7c (don't classify, characterise) and §7h (extract, don't restate).
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so

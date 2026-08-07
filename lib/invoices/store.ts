@@ -851,35 +851,52 @@ export async function applyShipment(
     // What was on screen when he pressed the button, in the words it was on screen in. Six months from
     // now "why is this sofa's margin 19%" is answerable from this row alone — which products moved, by
     // how much, and that somebody was told before it happened.
-    // ── WHAT THIS APPLY DID, and separately WHAT WE SHOWED ──────────────────────────────────────
+    // ── THREE DIFFERENT FACTS, THREE DIFFERENT FIELDS ───────────────────────────────────────────
     //
-    // Every product whose cost moves is recorded. `shown` carries the sentence for the ones that
-    // cleared both thresholds and were therefore on screen; it is null for the rest.
+    // Every product whose cost moves is recorded — that is what `entries` is. Within an entry:
     //
-    // Those two were the same list until commission arrived. A 25% commission moves every product on
+    //   flagged      — did this move clear both thresholds. SERVER-DERIVED from the numbers beside
+    //                  it, so it is reproducible and cannot be wrong about itself.
+    //   sentence     — the wording for this row, when there is one. Deliberately NOT called `shown`:
+    //                  it is the text that exists, not a claim that anyone read it.
+    //   acknowledged — a human was shown this and went ahead. A CLAIM ONLY THE CLIENT CAN MAKE, and
+    //                  only from the block that renders the sentences beside the button.
+    //
+    // These were two fields until 7 Aug 2026, when `shown` carried both the wording and the
+    // assertion that it had been displayed. A stale tab then moved 166 products' costs with a record
+    // saying their sentences had been read while the banner was never on screen — a false artefact,
+    // which is worse than a missing one, and the exact failure the server-side recompute exists to
+    // prevent. Conflating "was worth showing" with "was shown" is how it became possible; splitting
+    // them is what makes it impossible rather than unlikely.
+    //
+    // Why every affected product and not just the flagged ones: a 25% commission moves everything on
     // a shipment by the same proportion, but the $5 floor means only purchase prices above ~18.18
-    // clear it — so a third of a shipment can change without being flagged. Recording only the
-    // flagged ones would leave those with no before-figure anywhere: applied_before is deliberately
-    // first-write-wins and does not re-snapshot on a re-apply.
-    //
-    // So the record answers "what happened" and the `shown` field answers "what was read". Claiming
-    // the second for a row that was never on screen would be a false artefact, which is worse than
-    // a missing one.
+    // clear it — so a third of a shipment changes unflagged. Recording only the flagged ones would
+    // leave those with no before-figure anywhere, because applied_before is first-write-wins and
+    // does not re-snapshot on a re-apply.
     p_divergence: affected.length
-      ? affected.map((d) => ({
-          productId: d.productId,
-          productName: d.productName,
-          previousCost: d.previousCost,
-          nextCost: d.nextCost,
-          delta: d.delta,
-          deltaRelative: d.deltaRelative,
-          price: d.price,
-          previousMargin: d.previousMargin,
-          nextMargin: d.nextMargin,
-          shapes: d.shapes.map((sh) => ({ kind: sh.kind, factor: sh.factor })),
-          flagged: clearsGates(d),
-          shown: clearsGates(d) ? divergenceSentence(d, currency) : null,
-        }))
+      ? {
+          entries: affected.map((d) => {
+            const flagged = clearsGates(d)
+            return {
+              productId: d.productId,
+              productName: d.productName,
+              previousCost: d.previousCost,
+              nextCost: d.nextCost,
+              delta: d.delta,
+              deltaRelative: d.deltaRelative,
+              price: d.price,
+              previousMargin: d.previousMargin,
+              nextMargin: d.nextMargin,
+              shapes: d.shapes.map((sh) => ({ kind: sh.kind, factor: sh.factor })),
+              flagged,
+              sentence: flagged ? divergenceSentence(d, currency) : null,
+              // Unflagged rows were never rendered, so they can never be acknowledged — regardless of
+              // what the request asked for.
+              acknowledged: flagged && opts.acknowledgeDivergence === true,
+            }
+          }),
+        }
       : null,
   })
   if (error) return { ok: false, reason: 'not_found', error: error.message }
