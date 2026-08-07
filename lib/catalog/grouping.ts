@@ -19,6 +19,14 @@ export interface Groupable {
   imageUrl: string | null
   source: 'inventory' | 'website' | 'both'
   inStock?: number | null          // physical inventory only
+  /**
+   * A DRAFT product: bought, on its way, deliberately not priced yet.
+   *
+   * Distinct from `price === null`, which means "no price recorded" — a website row we could not read
+   * a price from. A draft is a different fact and gets a different sentence: the business knows about
+   * it and can talk about it, it simply has no price to quote.
+   */
+  notPriced?: boolean
 }
 
 export interface ProductGroup {
@@ -34,6 +42,16 @@ export interface ProductGroup {
   inStock: number | null
   exampleUrl: string | null
   source: 'inventory' | 'website' | 'both'
+  /**
+   * Members that are drafts — on order, not priced.
+   *
+   * The range is computed over priced members ONLY, so without this a draft in a mixed group would
+   * simply vanish from the answer: a caller would hear a price range that silently excluded a product
+   * the business has actually bought. Counting them here is what lets the sentence mention them.
+   */
+  notPricedCount: number
+  /** Their distinguishing attribute where the vocabulary found one ("walnut"), so they can be named. */
+  notPricedValues: string[]
 }
 
 // ── Tokens ──────────────────────────────────────────────────────────────────────────────────────────
@@ -198,7 +216,10 @@ export function groupProducts(rows: Groupable[], limit = 3): ProductGroup[] {
 
   const clusters = clusterByStem(rows)
   const groups: ProductGroup[] = clusters.map(({ stem, members }) => {
+    // The range is built ONLY from members that carry a price. Drafts are excluded here and counted
+    // below — never silently dropped, which is what would happen if the filter were the whole story.
     const prices = members.map((m) => m.price).filter((p): p is number => p !== null)
+    const drafts = members.filter((m) => m.notPriced)
     const { axis, values } = members.length > 1 ? pickAxis(members) : { axis: null, values: [] }
     const stock = members.map((m) => m.inStock).filter((n): n is number => typeof n === 'number')
     const sources = new Set(members.map((m) => m.source))
@@ -216,6 +237,11 @@ export function groupProducts(rows: Groupable[], limit = 3): ProductGroup[] {
       inStock: stock.length ? stock.reduce((s, n) => s + n, 0) : null,
       exampleUrl: members.find((m) => m.productUrl)?.productUrl ?? null,
       source: sources.size > 1 ? 'both' : ([...sources][0] ?? 'website'),
+      notPricedCount: drafts.length,
+      // Only when the vocabulary explains the spread — otherwise the drafts are counted, not named.
+      notPricedValues: axis
+        ? [...new Set(drafts.map((m) => attributeIn(m.title, VOCABULARY.find((a) => a.axis === axis)!)).filter((v): v is string => Boolean(v)))]
+        : [],
     }
   })
 
@@ -236,19 +262,69 @@ const money = (n: number, currency: string): string => {
 // A line the agent can say almost verbatim. Supplied alongside the structured fields rather than
 // instead of them — the model may rephrase, but it should never have to compute a price range from
 // raw rows while a caller waits.
-export function speakableAnswer(g: ProductGroup): string {
-  const single = g.count === 1 || g.priceMin === g.priceMax
+export interface SayOptions {
+  /**
+   * Whether this agent can actually put the caller through to a person.
+   *
+   * Read from the agent's configured forward number. Offering a transfer the agent cannot perform is
+   * worse than offering a callback, so the handoff sentence branches on it rather than assuming.
+   */
+  canTransfer?: boolean
+}
+
+/**
+ * How a draft is described. Never a price, never an availability claim.
+ *
+ * "On its way to us" is the only true statement: these products come from supplier invoices, which are
+ * issued at SHIPMENT — the container is at sea for weeks. "We have it" would be false, and hiding it
+ * entirely would make the agent say "we don't stock that" about goods the business has bought and paid
+ * for. Both are worse than this.
+ */
+const draftClause = (subject: string, opts?: SayOptions): string =>
+  `${subject} on its way to us — it isn't priced yet, so ` +
+  (opts?.canTransfer
+    ? `let me put you through to someone who can price it.`
+    : `let me take your number and have someone call you back with the figure.`)
+
+/** "the walnut one", "the walnut and oak ones", or a plain count when nothing distinguishes them. */
+function draftSubject(g: ProductGroup): string {
+  const v = g.notPricedValues
+  if (v.length === 1) return `the ${v[0]} one is`
+  if (v.length > 1) return `the ${v.slice(0, -1).join(', ')} and ${v[v.length - 1]} ones are`
+  if (g.notPricedCount === 1) return `one more version is`
+  return `${g.notPricedCount} more versions are`
+}
+
+export function speakableAnswer(g: ProductGroup, opts?: SayOptions): string {
+  const priced = g.count - g.notPricedCount
+
+  // EVERY member is a draft. There is no range to give, and the whole answer is the draft sentence —
+  // not a range with a caveat bolted on.
+  if (priced === 0 && g.notPricedCount > 0) {
+    const subject = g.count === 1 ? `The ${g.label} is` : `${g.count} versions of the ${g.label} are`
+    return draftClause(subject, opts).replace(' on its way', g.count === 1 ? ' on its way' : ' on their way')
+  }
+
+  // Priced members exist but carry no price at all — the pre-existing "we couldn't read a price" case,
+  // which is a different fact from a draft and keeps its own wording.
   if (g.priceMin === null) {
+    const single = g.count === 1
     return single ? `We have the ${g.label}, but I don't have a price for it here.`
       : `We have ${g.count} versions of the ${g.label}, but I don't have prices for them here.`
   }
-  if (single) return `The ${g.label} is ${money(g.priceMin, g.currency)}.`
+
+  // A draft sitting inside a priced group. The range covers the priced members only, so the drafts
+  // MUST be named — otherwise the caller hears a range that quietly excluded a real product.
+  const tail = g.notPricedCount > 0 ? ` And ${draftClause(draftSubject(g), opts)}` : ''
+
+  const single = priced === 1 || g.priceMin === g.priceMax
+  if (single) return `The ${g.label} is ${money(g.priceMin, g.currency)}.${tail}`
 
   const range = `${money(g.priceMin, g.currency)} to ${money(g.priceMax as number, g.currency)}`
   // With an axis we can ask a real question. Without one — and this is the common case the
   // vocabulary will keep missing — the range plus "a few versions" is still a good answer.
   if (g.axis) {
-    return `The ${g.label} runs from ${range} depending on the ${g.axis}. Which one were you looking at?`
+    return `The ${g.label} runs from ${range} depending on the ${g.axis}. Which one were you looking at?${tail}`
   }
-  return `There are a few versions of the ${g.label}, from ${range}. Do you know which one you're after?`
+  return `There are a few versions of the ${g.label}, from ${range}. Do you know which one you're after?${tail}`
 }

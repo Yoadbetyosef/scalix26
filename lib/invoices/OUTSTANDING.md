@@ -170,9 +170,36 @@ that is mid-Atlantic.
 would otherwise put every draft in front of a live phone agent in one action — precisely the failure
 the status was added to prevent.
 
-**`inactive` is still surfaced to the voice agent.** `retrieval.ts` excludes `discontinued` and `draft`
-only. Whether an inactive product should be quotable is a real question and a separate decision that
-affects existing tenants; it was deliberately not changed while adding `draft`.
+**Drafts ARE surfaced to the voice agent — deliberately, after a reversal.** They were briefly excluded
+on the reasoning "no price, so hide it". That was wrong: knowing about a product and being able to
+quote it are different things, and hiding a draft makes the agent say "we don't stock that" about goods
+the business has bought and paid for. They now come back with no price, no availability, no stock and
+`not_priced: true`, and `speakableAnswer` supplies the finished sentence. See `toToolPayload`.
+
+The guarantee is structural only as far as OUR number goes: omitting the field means the model cannot
+read out a price we hold. It cannot stop the model inventing one from world knowledge — that is what
+the supplied `say` is for, with the prompt instruction as a second layer rather than the only one.
+
+**`inactive` is still surfaced to the voice agent.** `retrieval.ts` excludes `discontinued` only.
+Whether an inactive product should be quotable is a real question and a separate decision that affects
+existing tenants; it was deliberately not changed while adding `draft`.
+
+### Bulk-created products need a naming pass
+
+Nobody hand-edits 126 names. The real Primavera invoice produced three products called just `FABRIC`
+(SKUs 1341545, 1341546, 1341547) and more like them — supplier shorthand that is fine on an invoice
+line and useless as a catalogue name.
+
+**This is a usability problem, not a correctness one**, and the distinction matters because the obvious
+worry is wrong. The next invoice from that supplier still matches correctly: `exact_sku` is the first
+rung and those SKUs are distinct, so the name is never consulted. It only degrades for a line with no
+SKU or a changed one — and there, three products named identically score identically, the gap is zero,
+and `AMBIGUITY_MARGIN` refuses. The result is *unmatched*, not *wrongly matched*: the safe direction,
+and the same guard that correctly refused Oak/Ash.
+
+What it actually costs is a catalogue the owner cannot navigate, and 126 products he has to rename
+before any of them can be sold. Worth a bulk-rename surface, or a better default name than the raw
+description — but neither is urgent and neither fixes a wrong number.
 
 ## 8. Smaller things worth knowing
 

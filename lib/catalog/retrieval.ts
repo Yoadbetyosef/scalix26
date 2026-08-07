@@ -1,3 +1,14 @@
+// ── COST IS STRUCTURALLY UNREACHABLE FROM THIS FILE, AND MUST STAY THAT WAY ─────────────────────────
+//
+// Nothing here reads `product_costs`, and neither query selects `cost_primary` or `computed_cost`. That
+// is not an accident of what was needed — it is the reason a caller can never be told what the business
+// paid. Cost visibility is gated by canViewCosts on an authenticated session; this path runs on a lead
+// token from a phone call, with no session at all.
+//
+// Do not add a join to `product_costs` here, and do not select a cost column "just for the margin" —
+// there is no margin to show a caller. If some future feature needs cost near retrieval, it belongs on
+// an authenticated route that goes through lib/catalog/costs.ts, not on the tool the agent calls.
+
 import { createAdminClient } from '@/lib/supabase/server'
 import { groupProducts, speakableAnswer, tokenize, type Groupable, type ProductGroup } from './grouping'
 
@@ -144,16 +155,16 @@ async function searchInventory(tenantId: string, tokens: string[]): Promise<Row[
   const db = admin()
   const run = async (subset: string[]): Promise<Array<Record<string, unknown>>> => {
     let q = db.from('catalog_products')
-      .select('id, name, sku, price, availability_status, showroom_quantity, warehouse_quantity, storage_quantity, image_url')
+      .select('id, name, sku, price, status, availability_status, showroom_quantity, warehouse_quantity, storage_quantity, image_url')
       .eq('tenant_id', tenantId)
-      // The only place a product becomes something the agent can SAY to a caller, so it is the only
-      // place `draft` has to be excluded. A draft has a cost and no selling price: surfacing one means
-      // telling a caller "yes, we stock that" with no price to quote.
+      // Drafts ARE included, deliberately.
       //
-      // Written as an explicit exclusion list rather than `.eq('active')` on purpose — `inactive` is
-      // surfaced to callers today, and whether it should be is a separate decision about existing
-      // tenants that must not ride along inside the draft change.
-      .not('status', 'in', '(discontinued,draft)')
+      // They were briefly excluded on the reasoning "no price, so hide it". That was wrong: knowing
+      // about a product and being able to quote it are different things. Hiding a draft makes the agent
+      // say "we don't stock that" about goods the business has bought and paid for — worse than saying
+      // nothing. What must never happen is a PRICE or an availability claim, and that is enforced
+      // structurally in toToolPayload below, not by hoping the model behaves.
+      .neq('status', 'discontinued')
       .limit(MATCH_LIMIT)
     for (const t of subset) q = q.or(tokenFilter('name', 'sku', t))
     const { data } = await q
@@ -162,17 +173,22 @@ async function searchInventory(tenantId: string, tokens: string[]): Promise<Row[
   const rows = await ladder(run, tokens)
   return rows.map((r) => {
     const onHand = Number(r.showroom_quantity ?? 0) + Number(r.warehouse_quantity ?? 0) + Number(r.storage_quantity ?? 0)
+    // A draft came off a supplier invoice: bought and shipped, not priced, and not yet on the shelf.
+    // Its price and its stock are both suppressed here rather than downstream — the row that reaches
+    // grouping simply has no number to leak.
+    const draft = r.status === 'draft'
     return {
       id: r.id as string,
       title: (r.name as string) ?? '',
-      price: r.price === null ? null : Number(r.price),
+      price: draft ? null : (r.price === null ? null : Number(r.price)),
       currency: 'USD',
       sku: (r.sku as string) ?? null,
-      availability: (r.availability_status as string) ?? null,
+      availability: draft ? null : ((r.availability_status as string) ?? null),
       productUrl: null,
       imageUrl: (r.image_url as string) ?? null,
       source: 'inventory' as const,
-      inStock: onHand,
+      inStock: draft ? null : onHand,
+      notPriced: draft,
       normalizedKey: mergeKey(r.sku as string | null, r.name as string),
     }
   })
@@ -234,6 +250,12 @@ export async function retrieveProducts(
   tenantId: string,
   query: string,
   surface: 'voice' | 'text' | 'test' = 'text',
+  /**
+   * Whether this agent can actually put the caller through to a person — the agent's configured
+   * forward number. Only affects how a DRAFT's sentence ends: offering a transfer the agent cannot
+   * perform is worse than offering a callback, so it is read rather than assumed.
+   */
+  opts?: { canTransfer?: boolean },
 ): Promise<RetrievalResult> {
   const started = Date.now()
   const tokens = tokenize(query).map(escape).filter(Boolean).slice(0, 8)
@@ -277,7 +299,7 @@ export async function retrieveProducts(
   const result: RetrievalResult = {
     query,
     groups,
-    say: resolved ? speakableAnswer(groups[0]) : noMatch(query),
+    say: resolved ? speakableAnswer(groups[0], { canTransfer: opts?.canTransfer }) : noMatch(query),
     resolved,
     clarifying,
     matched: rows.length,
@@ -295,24 +317,65 @@ export async function retrieveProducts(
 const noMatch = (query: string): string =>
   `I don't see ${query.trim() ? `"${query.trim()}"` : 'that'} in our catalog. I can check with the team and get back to you.`
 
-/** Compact JSON for a tool result — small, because the model reads it mid-sentence. */
+/**
+ * Compact JSON for a tool result — small, because the model reads it mid-sentence.
+ *
+ * ── WHY THE DRAFT BRANCH OMITS FIELDS RATHER THAN NULLING THEM ──────────────────────────────────────
+ *
+ * A model cannot read out a number that is not in front of it. That is the only guarantee available
+ * here, and it is worth more than any instruction: JSON.stringify drops `undefined` keys entirely, so a
+ * fully-draft group arrives carrying no `price`, no `price_from`, no `price_to`, no `currency`.
+ *
+ * `not_priced: true` rather than `price: null` for the same reason — a null is a hole the model may
+ * feel invited to fill, a flag is a fact it can state.
+ *
+ * `availability` and `in_stock` are omitted too, and that is the half people miss: those are the fields
+ * that would let it say "we have it". A draft's goods are on a ship. `status: "on_order"` is the only
+ * availability claim that is true.
+ *
+ * What this CANNOT prevent is invention from world knowledge — the model knows what a sofa costs. That
+ * is what `say` is for: a finished, correct sentence it can speak instead of composing one.
+ *
+ * ── COST NEVER APPEARS HERE, AND MUST NOT ───────────────────────────────────────────────────────────
+ *
+ * There is no cost in this file at all: nothing in lib/catalog/retrieval.ts reads `product_costs`, and
+ * neither query selects `cost_primary` or `computed_cost`. A caller cannot be told what the business
+ * paid because the number is never fetched on this path. Do not add a join to `product_costs` here —
+ * that would move a canViewCosts-gated figure onto an unauthenticated phone call.
+ */
 export function toToolPayload(r: RetrievalResult): string {
   if (!r.resolved) return JSON.stringify({ found: false, say: r.say })
   return JSON.stringify({
     found: true,
     say: r.say,
-    matches: r.groups.map((g) => ({
-      product: g.label,
-      versions: g.count,
-      price: g.priceMin === g.priceMax ? g.priceMin : undefined,
-      price_from: g.priceMin !== g.priceMax ? g.priceMin : undefined,
-      price_to: g.priceMin !== g.priceMax ? g.priceMax : undefined,
-      currency: g.currency,
-      varies_by: g.axis ?? undefined,
-      options: g.axisValues.length ? g.axisValues : undefined,
-      availability: g.availability ?? undefined,
-      in_stock: g.inStock ?? undefined,
-      sku: g.sku ?? undefined,
-    })),
+    matches: r.groups.map((g) => {
+      const allDraft = g.notPricedCount === g.count && g.count > 0
+      if (allDraft) {
+        return {
+          product: g.label,
+          versions: g.count,
+          not_priced: true,
+          status: 'on_order',
+          sku: g.sku ?? undefined,
+        }
+      }
+      return {
+        product: g.label,
+        versions: g.count,
+        price: g.priceMin === g.priceMax ? g.priceMin : undefined,
+        price_from: g.priceMin !== g.priceMax ? g.priceMin : undefined,
+        price_to: g.priceMin !== g.priceMax ? g.priceMax : undefined,
+        currency: g.currency,
+        varies_by: g.axis ?? undefined,
+        options: g.axisValues.length ? g.axisValues : undefined,
+        availability: g.availability ?? undefined,
+        in_stock: g.inStock ?? undefined,
+        sku: g.sku ?? undefined,
+        // A mixed group: the price fields describe the PRICED members only. Saying how many are not
+        // priced is what stops the range reading as though it covered everything.
+        not_priced_versions: g.notPricedCount || undefined,
+        not_priced_status: g.notPricedCount ? 'on_order' : undefined,
+      }
+    }),
   })
 }

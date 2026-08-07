@@ -38,7 +38,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ found: false, say: "I don't have a product list in front of me, but I can have someone call you back." })
   }
 
-  const result = await retrieveProducts(tenant.id as string, query, 'voice')
+  // Can this agent actually transfer? Read, not assumed — a draft answer that offers to put the caller
+  // through when no forward number is configured promises something the model has no tool to do
+  // (voice-server only offers transfer_to_human when a number exists). One indexed read on a path that
+  // already has a hard budget; a failure here just means the answer offers a callback instead.
+  const { data: agent } = await db
+    .from('ai_employees').select('forward_to_phone').eq('tenant_id', tenant.id).maybeSingle()
+  const canTransfer = Boolean(agent?.forward_to_phone)
+
+  const result = await retrieveProducts(tenant.id as string, query, 'voice', { canTransfer })
   return NextResponse.json({
     ...JSON.parse(toToolPayload(result)),
     // Server-side timings: the only honest measurement of this path, since it excludes whatever
