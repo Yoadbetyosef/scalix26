@@ -2,6 +2,50 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { enforce, clientIp } from '@/lib/ratelimit'
 
+// Public routes that don't need auth — no session required to reach them.
+//
+// EXPORTED, and that is load-bearing rather than tidy. lib/supabase/public-routes.test.ts reads every
+// URL voice-server constructs against the app and asserts each one is covered here.
+//
+// Routes the voice agent calls have now shipped missing from this list more than once, and the failure
+// is invisible every time: middleware 307s to /auth/login, voice-server parses a login page as JSON,
+// the catch swallows it, and the agent behaves exactly as it did before the feature existed. Nothing
+// errors and nothing logs, because the request SUCCEEDED — it returned a login page.
+export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book',
+    // The voice agent's product lookup. Called by voice-server mid-call with the call's lead token
+    // and no session, exactly like /api/appointments/available. The route resolves the tenant from
+    // that token and gates on the inventory module itself — ONLY this path is public, not /api/catalog.
+    '/api/catalog/lookup',
+    // The AI's "send me a payment link" tool. voice-server has always called this and it has NEVER
+    // been allowlisted, so every attempt on every call 307'd to a login page the handler then failed
+    // to parse — the Payment Collection feature has never worked over the phone. Found by
+    // lib/supabase/public-routes.test.ts.
+    //
+    // Safe to open for the same reason as the lookup above, and no more: the route's own gate is the
+    // lead token (`lead_intake_token` -> tenant, 404 otherwise). The middleware redirect was never
+    // enforcing that gate — it was breaking the route, not protecting it.
+    '/api/stripe/connect/payment-link', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
+    // Partner OS public surface: referral redirect + click tracking, partner signup/login,
+    // public demo pages + their data, and the public partner marketplace directory.
+    '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
+    // White Label client-invite acceptance (recipient is not yet authenticated).
+    '/invite/', '/api/invite/',
+    // External order-approval: the factory/customer has no Scalix account — the secure token in the URL is
+    // the sole credential (validated server-side in the route). Only these two prefixes are opened.
+    '/approval/', '/api/approval/',
+    // Public studio product page: the QR token in the URL is the sole capability (scanned by a customer /
+    // supplier with no account). Server looks up by token; only public-safe fields are rendered.
+    '/p/',
+    // Public studio document page (quote / invoice / production order): the token in the URL is the sole
+    // capability — the owner shares the link with a client/supplier who has no Scalix account.
+    '/d/',
+    // Scheduled jobs: Vercel/external cron requests carry NO user session, so they must bypass the
+    // login redirect to reach the route — where cronAuthorized (the fail-closed CRON_SECRET bearer)
+    // is the real gate. These are NOT open: a request without the secret gets 401 at the route.
+    // (drip/reviews/mailbox/email-process are already covered above via /api/drip, /api/mailbox,
+    //  /api/reviews/*, /api/webhooks.)
+    '/api/brain/cron', '/api/partner/cron', '/api/learning/run', '/api/cron/']
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -53,32 +97,7 @@ export async function updateSession(request: NextRequest) {
     return res
   }
 
-  // Public routes that don't need auth
-  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book',
-    // The voice agent's product lookup. Called by voice-server mid-call with the call's lead token
-    // and no session, exactly like /api/appointments/available. The route resolves the tenant from
-    // that token and gates on the inventory module itself — ONLY this path is public, not /api/catalog.
-    '/api/catalog/lookup', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
-    // Partner OS public surface: referral redirect + click tracking, partner signup/login,
-    // public demo pages + their data, and the public partner marketplace directory.
-    '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
-    // White Label client-invite acceptance (recipient is not yet authenticated).
-    '/invite/', '/api/invite/',
-    // External order-approval: the factory/customer has no Scalix account — the secure token in the URL is
-    // the sole credential (validated server-side in the route). Only these two prefixes are opened.
-    '/approval/', '/api/approval/',
-    // Public studio product page: the QR token in the URL is the sole capability (scanned by a customer /
-    // supplier with no account). Server looks up by token; only public-safe fields are rendered.
-    '/p/',
-    // Public studio document page (quote / invoice / production order): the token in the URL is the sole
-    // capability — the owner shares the link with a client/supplier who has no Scalix account.
-    '/d/',
-    // Scheduled jobs: Vercel/external cron requests carry NO user session, so they must bypass the
-    // login redirect to reach the route — where cronAuthorized (the fail-closed CRON_SECRET bearer)
-    // is the real gate. These are NOT open: a request without the secret gets 401 at the route.
-    // (drip/reviews/mailbox/email-process are already covered above via /api/drip, /api/mailbox,
-    //  /api/reviews/*, /api/webhooks.)
-    '/api/brain/cron', '/api/partner/cron', '/api/learning/run', '/api/cron/']
+  const publicRoutes = PUBLIC_ROUTES
   const adminRoutes = ['/admin', '/api/admin']
 
   const isAdminRoute = adminRoutes.some(r => pathname.startsWith(r))
