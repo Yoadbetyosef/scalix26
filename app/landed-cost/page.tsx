@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Upload, FileText, AlertTriangle, ChevronRight, Ship } from 'lucide-react'
+import { readJson } from '@/lib/http/read-response'
 import { INVOICE_ACCEPT_ATTR, invoiceFileError, type DuplicateWarning, type Shipment, type SupplierInvoice } from '@/lib/invoices/types'
 
 // Shipments: a supplier invoice, read, with its freight spread across the products it carried.
@@ -37,9 +38,8 @@ export default function LandedCostPage() {
     ;(async () => {
       try {
         const r = await fetch('/api/invoices/shipments')
-        const d = await r.json()
+        const d = await readJson<{ shipments: Array<Shipment & { invoice: SupplierInvoice | null }> }>(r, 'Could not load your shipments.')
         if (!alive) return
-        if (!r.ok) throw new Error(d.error || 'Could not load shipments.')
         setRows(d.shipments || [])
       } catch (e) { if (alive) setErr((e as Error).message) } finally { if (alive) setLoading(false) }
     })()
@@ -57,8 +57,9 @@ export default function LandedCostPage() {
       const body = new FormData()
       body.append('file', file)
       const r = await fetch('/api/invoices/shipments', { method: 'POST', body })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d.error || 'Could not read that invoice.')
+      // Not r.json(): an oversized file is refused by the edge with plain text, before this route
+      // exists as far as the platform is concerned. See lib/http/read-response.ts.
+      const d = await readJson<{ shipmentId: string; duplicate: DuplicateWarning | null }>(r, 'Could not read that invoice.')
       // Shown, never used to block: re-uploading after a failed extraction is legitimate, and the
       // owner is the one who knows which of the two they meant.
       if (d.duplicate) setDupe(d.duplicate)

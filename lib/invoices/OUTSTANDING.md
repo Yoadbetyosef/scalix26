@@ -320,6 +320,72 @@ in base currency, both required. The absolute floor is not a refinement — it i
 coming from cheap SKUs, which are most of the lines on a real invoice. Raising sensitivity to "catch
 more" is the direct route back to wallpaper.
 
+## 7d. Uploads are capped at ~4.5 MB by the platform, not by us
+
+**Measured 7 Aug 2026** against the production deployment, by posting bodies of increasing size and
+watching where the answer stopped coming from our code:
+
+```
+4,194,304 bytes (4.00 MiB) -> 307  (reached middleware — accepted)
+4,400,000 bytes (4.20 MiB) -> 307  (accepted)
+4,500,000 bytes (4.29 MiB) -> 413  Request Entity Too Large / FUNCTION_PAYLOAD_TOO_LARGE
+4,600,000 bytes            -> 413
+```
+
+The rejection happens at the edge, **before routing, auth, or any handler**. No code in this repository
+can catch it, log it, retry it, or turn it into a sentence. Vercel has announced 100 MB bodies on Fluid
+Compute; this project does not have it. Re-measure before believing otherwise — do not raise a limit
+because a changelog says so.
+
+**`MAX_INVOICE_BYTES` was 20 MB, which was a promise the platform does not keep.** A 6 MB invoice passed
+`invoiceFileError` at the file picker, uploaded, and died at the edge with a message nothing here wrote.
+The check said yes and the platform said no — worse than a low limit honestly stated, because the person
+had already waited for the upload. Now 4 MB: the platform ceiling less multipart overhead (boundary,
+part headers, filename), which is real and would otherwise fail a file sized exactly at the limit.
+
+Two features shared the broken promise, not one — the owner-facing supplier-invoice upload, and the
+**public factory hand-off** in `lib/orders/approvals.ts`, where the person hitting it is a supplier with
+no support channel and a token for a URL.
+
+**`MAX_ATTACHMENT_BYTES` (50 MB) is still unreachable and deliberately NOT lowered.** Order attachments
+accept CAD, video and archives, which genuinely exceed 4.5 MB. Lowering the number would disable the
+feature rather than fix it. A 12 MB `.blend` still fails — now with a sentence instead of a parse error,
+but it fails. **The honest fix for both is a direct-to-storage signed upload that never passes through a
+function.** There is no such path anywhere in this app today: every upload streams its bytes through a
+Vercel function. That is the work, not a bigger number.
+
+## 7e. We parse the success shape and let every other shape surface as noise
+
+The 413 above reached the owner as:
+
+```
+Unexpected token 'R', "Request En"... is not valid JSON
+```
+
+That names none of: the file, its size, the limit, or what to do. The cause is a pattern repeated at
+**187 call sites** in `app/` and `components/`:
+
+```ts
+const r = await fetch(url)
+const d = await r.json()            // assumes a JSON body
+if (!r.ok) throw new Error(d.error) // never reached — r.json() already threw
+```
+
+It handles exactly one shape: a response one of our own routes produced. The responses that are **not**
+ours are not exotic — 413 at the edge, a 307 from middleware on an expired session, 504 on duration,
+502 on a crash, 429 from a rate limiter upstream of the handler. None are reachable from inside a
+handler, so none can be made to return our `{ error }` shape. The only place they can become a sentence
+is in the client.
+
+`lib/http/read-response.ts` is that place. It is applied to the **landed-cost feature only** so far.
+**The other ~180 call sites still have the original bug** and will keep showing parse errors for any
+non-JSON response. Sweeping them is mechanical but wide, and it is not done.
+
+This is the same fault as the middleware 307 swallowed as an empty result, and as the retrieval timeout
+that sounded like a miss: **a failure wearing the costume of a different outcome.** The rule that comes
+out of all three is in §7c — but the narrower version worth stating here is that *the success path is
+not the only path with a shape*.
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so

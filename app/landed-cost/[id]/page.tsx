@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, AlertTriangle, Check, ExternalLink, Search, X } from 'lucide-react'
+import { readJson, type HttpError } from '@/lib/http/read-response'
 import { coverage, unitShare } from '@/lib/invoices/allocate'
 import { divergenceHeadline, divergenceSentence } from '@/lib/invoices/divergence'
 import { MIN_COVERAGE, type InvoiceLine, type ShipmentDetail } from '@/lib/invoices/types'
@@ -55,10 +56,8 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch(`/api/invoices/shipments/${id}`)
-        const j = await r.json()
+        const j = await readJson<ShipmentDetail>(await fetch(`/api/invoices/shipments/${id}`), 'Could not load this shipment.')
         if (!alive) return
-        if (!r.ok) throw new Error(j.error || 'Could not load this shipment.')
         setD(j)
       } catch (e) { if (alive) setErr((e as Error).message) }
     })()
@@ -71,9 +70,9 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
 
   /** Pull the shipment again. Used when the server saw something this tab did not. */
   async function reload() {
-    const r = await fetch(`/api/invoices/shipments/${id}`)
-    const j = await r.json()
-    if (r.ok) setD(j)
+    try {
+      setD(await readJson<ShipmentDetail>(await fetch(`/api/invoices/shipments/${id}`), 'Could not reload this shipment.'))
+    } catch { /* the caller is already reporting why it reloaded */ }
   }
 
   const cov = useMemo(() => coverage(d?.lines ?? []), [d])
@@ -85,10 +84,8 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
       const r = await fetch(`/api/invoices/lines/${lineId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Could not update that line.')
       // The whole shipment comes back, not the line: changing one match moves every other line's share.
-      setD(j)
+      setD(await readJson<ShipmentDetail>(r, 'Could not update that line.'))
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -99,8 +96,7 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lineIds: [...picked], names }),
       })
-      const j = await r.json()
-      if (!r.ok) throw new Error(j.error || 'Could not create those products.')
+      const j = await readJson<ShipmentDetail>(r, 'Could not create those products.')
       setD(j); setPicked(new Set()); setNames({})
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -111,17 +107,19 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
       const r = await fetch(`/api/invoices/shipments/${id}/apply`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts),
       })
-      const j = await r.json()
+      const j = await readJson<ShipmentDetail>(r, 'Could not apply this shipment.')
+      setD(j); setConfirmReapply(false); setConfirmDivergence(false)
+    } catch (e) {
       // The server recomputes divergence from the database at the moment of the write, so it can flag
       // something this tab never rendered — a cost edited elsewhere while this page sat open. Reload
-      // and ask, rather than reporting it as a failure the owner cannot act on.
-      if (r.status === 409 && j.needsAcknowledgement) {
+      // and ask, rather than reporting it as a failure the owner cannot act on. readJson carries the
+      // status and body on the Error so this stays a branch on shape, not on message text.
+      const h = e as HttpError
+      if (h.status === 409 && h.body?.needsAcknowledgement) {
         await reload(); setConfirmDivergence(true)
-        throw new Error('Costs changed while this page was open — see below before applying.')
-      }
-      if (!r.ok) throw new Error(j.error || 'Could not apply this shipment.')
-      setD(j); setConfirmReapply(false); setConfirmDivergence(false)
-    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+        setErr('Costs changed while this page was open — see below before applying.')
+      } else setErr(h.message)
+    } finally { setBusy(false) }
   }
 
   if (err && !d) return <p className="mx-auto max-w-5xl px-4 py-8 text-sm text-red-700">{err}</p>
