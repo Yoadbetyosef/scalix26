@@ -201,6 +201,26 @@ What it actually costs is a catalogue the owner cannot navigate, and 126 product
 before any of them can be sold. Worth a bulk-rename surface, or a better default name than the raw
 description — but neither is urgent and neither fixes a wrong number.
 
+### Product names that aren't English words get mangled by the phone
+
+From the same call. Six lookups reached the tool; four carried transcription damage:
+
+```
+Vaja soda · Raja soda · Roger Solphine · Rosa raja · Raja sofa · Raja Sofa
+```
+
+The model passed on exactly what it heard, faithfully. "RAJA" is not a word English speech-to-text
+expects, and no amount of retrieval quality fixes a name that never arrives intact.
+
+Two things follow, and the second matters more:
+
+- It is a **second and sharper argument for the naming pass** than the catalogue being hard to read.
+  `RAJA 2,5 PL` is not only unreadable on screen, it is unsayable and unhearable on a phone.
+- **Partial matching is not a nicety.** It is how the system stays useful when transcription is
+  imperfect, which is always: "Rosa raja" loses a word to the line and still finds the RAJA items on
+  the word that survived. Anything that depends on the whole phrase arriving correctly will fail on
+  the phone regularly, and silently.
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so

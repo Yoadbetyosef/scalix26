@@ -36,10 +36,19 @@ rather than slow: `"how much is the emerald cut halo ring"` resolved at 245ms wh
 build were guesses against bad measurements and one of them made latency worse.
 
 **One unverified hypothesis, recorded so it isn't re-derived:** every 2-token phrase landed at
-96–129ms and every multi-token phrase at 188–251ms. Two-token phrases run exactly one query (the
-ladder floor prevents a second rung); longer ones can run two. That is *consistent with* a PostgREST
+96–129ms and every multi-token phrase at 188–251ms. Two-token phrases ran exactly one query (the
+ladder floor prevented a second rung); longer ones can run two. That is *consistent with* a PostgREST
 round trip from Vercel costing ~100ms. It is correlation only — do not act on it without the
 per-stage numbers.
+
+> **UPDATE, 7 Aug 2026 — that ladder-floor observation was a RECALL BUG, not a latency note.**
+> A caller asked for a "RAJA sofa"; the tenant holds eight RAJA products including the 2.5-seater they
+> wanted, and the agent said "I'm not seeing it in the system". Tokens are ANDed, so the query needed
+> one product matching both words, and the floor stopped it retrying on "raja" alone. Fixed to
+> `Math.max(1, n - 1)` — the stated intent — which changes n = 2 only.
+>
+> The latency figures above are now stale for two-token phrases: a two-token MISS costs a second round
+> trip and lands in the multi-token band. Re-measure before drawing anything from those numbers.
 
 **Also unexplained:** 19ms planning for a 0.8ms execution on a clean 9,179-row table. If PostgREST
 re-plans per request that is ~38ms of the budget across two queries. Might be an SQL-editor artifact.
