@@ -280,19 +280,26 @@ export interface SayOptions {
  * entirely would make the agent say "we don't stock that" about goods the business has bought and paid
  * for. Both are worse than this.
  */
-const draftClause = (subject: string, opts?: SayOptions): string =>
-  `${subject} on its way to us — it isn't priced yet, so ` +
+const draftClause = (subject: string, plural: boolean, opts?: SayOptions): string =>
+  `${subject} on ${plural ? 'their' : 'its'} way to us — ${plural ? "they aren't" : "it isn't"} priced yet, so ` +
   (opts?.canTransfer
-    ? `let me put you through to someone who can price it.`
-    : `let me take your number and have someone call you back with the figure.`)
+    ? `let me put you through to someone who can price ${plural ? 'them' : 'it'}.`
+    : `let me take your number and have someone call you back with the ${plural ? 'figures' : 'figure'}.`)
 
-/** "the walnut one", "the walnut and oak ones", or a plain count when nothing distinguishes them. */
-function draftSubject(g: ProductGroup): string {
+/**
+ * "the walnut one", "the walnut and oak ones", or a plain count when nothing distinguishes them.
+ *
+ * Returns the plurality alongside the words rather than leaving the caller to patch the sentence
+ * afterwards — an earlier version fixed "on its way" with a string replace and left "it isn't priced
+ * yet" behind it, which a live call surfaced as "2 versions ... are on their way to us — it isn't
+ * priced yet". Agreement has to be decided once, where the subject is chosen.
+ */
+function draftSubject(g: ProductGroup): { subject: string; plural: boolean } {
   const v = g.notPricedValues
-  if (v.length === 1) return `the ${v[0]} one is`
-  if (v.length > 1) return `the ${v.slice(0, -1).join(', ')} and ${v[v.length - 1]} ones are`
-  if (g.notPricedCount === 1) return `one more version is`
-  return `${g.notPricedCount} more versions are`
+  if (v.length === 1) return { subject: `the ${v[0]} one is`, plural: false }
+  if (v.length > 1) return { subject: `the ${v.slice(0, -1).join(', ')} and ${v[v.length - 1]} ones are`, plural: true }
+  if (g.notPricedCount === 1) return { subject: `one more version is`, plural: false }
+  return { subject: `${g.notPricedCount} more versions are`, plural: true }
 }
 
 export function speakableAnswer(g: ProductGroup, opts?: SayOptions): string {
@@ -301,8 +308,9 @@ export function speakableAnswer(g: ProductGroup, opts?: SayOptions): string {
   // EVERY member is a draft. There is no range to give, and the whole answer is the draft sentence —
   // not a range with a caveat bolted on.
   if (priced === 0 && g.notPricedCount > 0) {
-    const subject = g.count === 1 ? `The ${g.label} is` : `${g.count} versions of the ${g.label} are`
-    return draftClause(subject, opts).replace(' on its way', g.count === 1 ? ' on its way' : ' on their way')
+    const plural = g.count > 1
+    const subject = plural ? `${g.count} versions of the ${g.label} are` : `The ${g.label} is`
+    return draftClause(subject, plural, opts)
   }
 
   // Priced members exist but carry no price at all — the pre-existing "we couldn't read a price" case,
@@ -315,7 +323,8 @@ export function speakableAnswer(g: ProductGroup, opts?: SayOptions): string {
 
   // A draft sitting inside a priced group. The range covers the priced members only, so the drafts
   // MUST be named — otherwise the caller hears a range that quietly excluded a real product.
-  const tail = g.notPricedCount > 0 ? ` And ${draftClause(draftSubject(g), opts)}` : ''
+  const draft = draftSubject(g)
+  const tail = g.notPricedCount > 0 ? ` And ${draftClause(draft.subject, draft.plural, opts)}` : ''
 
   const single = priced === 1 || g.priceMin === g.priceMax
   if (single) return `The ${g.label} is ${money(g.priceMin, g.currency)}.${tail}`

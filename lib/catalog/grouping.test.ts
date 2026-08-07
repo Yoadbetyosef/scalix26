@@ -242,3 +242,29 @@ describe('a mixed group — the case that would have shipped broken', () => {
     if (g.axis) expect(g.axisValues).not.toContain('walnut')
   })
 })
+
+// Caught by a real lookup against 126 drafts, not by the tests above: the sentence read
+// "2 versions ... are on their way to us — it isn't priced yet". Plurality was being patched with a
+// string replace after the fact instead of decided once.
+describe('the draft sentence agrees with itself', () => {
+  const two = () => groupProducts([draft('1', 'RAJA Corner Stool Wide'), draft('2', 'RAJA Corner Stool Narrow')])[0]
+
+  it('keeps every verb and pronoun plural for several drafts', () => {
+    const say = speakableAnswer(two())
+    expect(say).toMatch(/are on their way/)
+    expect(say).toMatch(/they aren't priced yet/)
+    expect(say).not.toMatch(/\bit isn't\b|\bits way\b/)
+  })
+
+  it('keeps every verb and pronoun singular for one', () => {
+    const say = speakableAnswer(groupProducts([draft('1', 'RAJA Sofa')])[0])
+    expect(say).toMatch(/is on its way/)
+    expect(say).toMatch(/it isn't priced yet/)
+    expect(say).not.toMatch(/they aren't|their way/)
+  })
+
+  it('agrees in the transfer wording too', () => {
+    expect(speakableAnswer(two(), { canTransfer: true })).toMatch(/price them\./)
+    expect(speakableAnswer(two(), { canTransfer: false })).toMatch(/call you back with the figures\./)
+  })
+})
