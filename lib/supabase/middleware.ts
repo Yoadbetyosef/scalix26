@@ -58,7 +58,17 @@ export async function updateSession(request: NextRequest) {
     // The voice agent's product lookup. Called by voice-server mid-call with the call's lead token
     // and no session, exactly like /api/appointments/available. The route resolves the tenant from
     // that token and gates on the inventory module itself — ONLY this path is public, not /api/catalog.
-    '/api/catalog/lookup', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
+    '/api/catalog/lookup',
+    // The keyterm list voice-server fetches at call setup, so Deepgram is told the product names a
+    // general speech model has never heard. Same auth as the lookup above — a lead token, no session,
+    // tenant resolved from the token — and it returns product NAMES only: no prices, no costs, no stock.
+    //
+    // Missing from this list is not a quiet degradation. The fetch 307s to /auth/login, voice-server
+    // parses the login page as JSON, fails, and skips keyterms silently — which is exactly the
+    // pre-existing behaviour, so nothing looks broken and every call stays mis-transcribed. That is
+    // how /api/catalog/lookup shipped 307ing once already.
+    '/api/catalog/keyterms',
+    '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
     // Partner OS public surface: referral redirect + click tracking, partner signup/login,
     // public demo pages + their data, and the public partner marketplace directory.
     '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
