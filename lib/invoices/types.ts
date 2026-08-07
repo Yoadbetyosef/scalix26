@@ -72,7 +72,9 @@ export const MIN_COVERAGE = 0.8
 export type ShipmentStatus = 'draft' | 'extracting' | 'review' | 'applied' | 'failed'
 export type InvoiceStatus = 'uploaded' | 'extracting' | 'extracted' | 'failed'
 export type LineStatus = 'unmatched' | 'matched' | 'skipped'
-export type MatchMethod = 'exact_sku' | 'normalized_sku' | 'name_trigram' | 'manual'
+// 'created' — this line did not match a product, it MADE one. Stronger than 'manual' (the owner
+// picking an existing product from a shortlist): true by construction. rematch() leaves both alone.
+export type MatchMethod = 'exact_sku' | 'normalized_sku' | 'name_trigram' | 'manual' | 'created'
 
 export interface Shipment {
   id: string
@@ -155,6 +157,15 @@ export interface InvoiceLine {
    * the common, correct case.
    */
   priorShipment?: { id: string; reference: string | null; appliedAt: string | null; amount: number } | null
+  /**
+   * How many OTHER lines on this same invoice point at the same product.
+   *
+   * They do not overwrite each other — apply_shipment_costs groups by product, so their costs merge
+   * into one quantity-weighted average and their freight sums. Correct for one product listed twice;
+   * wrong, and worse than an overwrite, when the matcher put different products on one row: an average
+   * is a number that appears on no piece of paper. Nothing downstream can tell the cases apart.
+   */
+  sharesProductWith?: number
 }
 
 /** What a shipment's approval screen needs, in one object. */

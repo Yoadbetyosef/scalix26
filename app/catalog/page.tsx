@@ -14,6 +14,10 @@ const badge: Record<AvailabilityStatus, string> = {
   special_order: 'bg-violet-50 text-violet-700',
 }
 const FILTERS: { key: string; label: string; test: (p: CatalogProduct) => boolean }[] = [
+  // First, because it is the only filter that describes WORK rather than a state of the shelves.
+  // A draft came off a supplier invoice: it has a cost and no selling price, so the AI will never
+  // quote it. Without somewhere to find them, 126 of these are invisible work.
+  { key: 'needs_pricing', label: 'Needs pricing', test: (p) => p.status === 'draft' },
   { key: 'in_stock', label: 'In stock', test: (p) => p.availability_status === 'in_stock' },
   { key: 'out_of_stock', label: 'Out of stock', test: (p) => p.availability_status === 'out_of_stock' },
   { key: 'incoming', label: 'Incoming', test: (p) => p.availability_status === 'incoming' || p.incoming_quantity > 0 },
@@ -175,7 +179,11 @@ export default function CatalogListPage() {
                     <td className="px-3 py-3 text-right tabular-nums text-subtle">{p.warehouse_quantity}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-subtle">{p.storage_quantity}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-subtle">{p.incoming_quantity}{p.expected_arrival_date ? '' : ''}</td>
-                    <td className="px-3 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge[p.availability_status]}`}>{AVAILABILITY_LABELS[p.availability_status]}</span></td>
+                    <td className="px-3 py-3">{p.status === 'draft' ? (
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700" title="Created from a supplier invoice. It has a cost but no selling price, so the AI will never quote it.">Needs pricing</span>
+                    ) : (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge[p.availability_status]}`}>{AVAILABILITY_LABELS[p.availability_status]}</span>
+                    )}</td>
                     <td className="px-3 py-3 text-right">
                       <button onClick={(e) => del(p, e)} aria-label={`Delete ${p.name}`} title="Delete" className="rounded-lg p-2 text-muted hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </td>
@@ -219,7 +227,9 @@ export default function CatalogListPage() {
                   </div>
                   <div className="text-xs text-subtle">{p.sku || '—'}{p.category ? ` · ${p.category}` : ''}</div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge[p.availability_status]}`}>{AVAILABILITY_LABELS[p.availability_status]}</span>
+                    {p.status === 'draft'
+                      ? <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">Needs pricing</span>
+                      : <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge[p.availability_status]}`}>{AVAILABILITY_LABELS[p.availability_status]}</span>}
                     <span className="text-[11px] text-muted">Showroom {p.showroom_quantity} · Wh {p.warehouse_quantity} · St {p.storage_quantity}{p.incoming_quantity ? ` · In ${p.incoming_quantity}` : ''}</span>
                   </div>
                   {p.expected_arrival_date && p.incoming_quantity > 0 && <div className="mt-0.5 text-[11px] text-amber-600">Arrives {p.expected_arrival_date}</div>}

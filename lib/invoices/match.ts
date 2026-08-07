@@ -7,6 +7,19 @@ import { bestMatch, tokenize, type Candidate, type ScoredMatch } from './match-s
 // candidates in front of it, which is the part that has to know about PostgREST.
 
 /**
+ * Which products an invoice may match against.
+ *
+ * `draft` is here deliberately, and it is the half of the design people delete by accident. A draft was
+ * created FROM a supplier invoice; the next invoice from that supplier lists the same goods again. If
+ * drafts were unmatchable, every repeat invoice would create a second copy of every product on it —
+ * the precise failure that creating them from lines was meant to end.
+ *
+ * The voice agent excludes drafts (lib/catalog/retrieval.ts). The matcher includes them. That asymmetry
+ * is the point, not an inconsistency.
+ */
+const MATCHABLE = ['active', 'draft'] as const
+
+/**
  * PostgREST returns at most 1,000 rows per request regardless of `limit`, so a plain select against a
  * large catalogue silently returns a truncated set. That page cap has already produced one wrong answer
  * in this codebase — the orphan cleanup reported 1,000 rows when there were 9,179 — so matching pages
@@ -48,7 +61,7 @@ export async function matchInvoiceLines(tenantId: string, lines: LineInput[]): P
 
   const { count } = await db.from('catalog_products')
     .select('id', { count: 'exact', head: true })
-    .eq('tenant_id', tenantId).eq('status', 'active')
+    .eq('tenant_id', tenantId).in('status', MATCHABLE)
 
   const catalogSize = count ?? 0
   const nameMatchingSkipped = catalogSize > MAX_MATCH_CATALOG
@@ -72,7 +85,7 @@ async function wholeCatalog(tenantId: string): Promise<Candidate[]> {
   for (let from = 0; from < MAX_MATCH_CATALOG; from += PAGE) {
     const { data } = await db.from('catalog_products')
       .select('id, name, sku')
-      .eq('tenant_id', tenantId).eq('status', 'active')
+      .eq('tenant_id', tenantId).in('status', MATCHABLE)
       .order('id')
       .range(from, from + PAGE - 1)
     const page = (data as Candidate[] | null) ?? []
@@ -97,7 +110,7 @@ async function candidatesBySku(tenantId: string, lines: LineInput[]): Promise<Ca
   for (let i = 0; i < skus.length; i += 100) {
     const { data } = await db.from('catalog_products')
       .select('id, name, sku')
-      .eq('tenant_id', tenantId).eq('status', 'active')
+      .eq('tenant_id', tenantId).in('status', MATCHABLE)
       .in('sku', skus.slice(i, i + 100))
     out.push(...((data as Candidate[] | null) ?? []))
   }
@@ -119,7 +132,7 @@ export async function suggestProducts(tenantId: string, line: LineInput, limit =
   for (const w of words) {
     const { data } = await db.from('catalog_products')
       .select('id, name, sku')
-      .eq('tenant_id', tenantId).eq('status', 'active')
+      .eq('tenant_id', tenantId).in('status', MATCHABLE)
       .ilike('name', `%${w}%`)
       .limit(limit)
     for (const c of (data as Candidate[] | null) ?? []) seen.set(c.id, c)

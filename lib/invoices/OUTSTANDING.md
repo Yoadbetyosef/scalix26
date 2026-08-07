@@ -82,6 +82,30 @@ differ only in a trailing qualifier, which is a structural fact rather than a di
 Do not act on this until it can be seen against real invoices alongside the other four constants. It is
 recorded here so the measurement is not re-derived, and so nobody "fixes" it by nudging the number.
 
+### The name rung fires on lines whose SKU matched nothing
+
+Measured 6 Aug 2026 on a real 133-line Primavera invoice (EUR, 37,084). Three separate lines —
+`SCATTER CUSHION 45X45`, SKUs **1343095**, **1343109**, **1343122** — all matched the one seeded
+product *Linen Scatter Cushion 45x45* at 0.72 each.
+
+Every one of those lines carried a SKU. None of those SKUs is in the catalogue. `bestMatch` tries
+exact SKU → normalised SKU → name, and when both SKU rungs miss it falls through to the name rung as
+though nothing had been learned.
+
+**That is the bug in the reasoning, not the threshold.** A line carrying a definite SKU that matches
+nothing is *evidence the product is not in the catalogue* — the supplier has told us their identifier
+for the goods and we do not hold it. Treating that as no evidence, and then matching on a description
+that happens to share trigrams with something else, is how three distinct products become one.
+
+The candidate rule: **when a line has a SKU and no SKU rung matches, do not name-match.** Unmatched is
+the honest answer, and the owner can still match or create by hand. Like the Oak case above this is a
+change of SHAPE rather than a number, and like Oak it should be decided against several real invoices
+rather than the one that produced it.
+
+Both findings are the same underlying fault seen twice: the matcher is confident on a *structural
+coincidence* — suffix length in Oak's case, shared trigrams in this one — where it has no evidence
+about meaning.
+
 ## 4. Allocation by value is a proxy, and it will be wrong for some businesses
 
 Freight is apportioned by line extended value. Freight actually correlates with **weight and volume**,
@@ -120,7 +144,37 @@ the same gap `lib/catalog/retrieval.ts` has, recorded in `catalog-worker/OUTSTAN
 The riskiest untested path is `createShipmentFromFile()`'s cleanup: it removes the storage object and
 the shipment row on an insert failure, and that unwind has never run.
 
-## 7. Smaller things worth knowing
+## 7. Products created from invoice lines
+
+**The SKU stored is the SUPPLIER's, unprefixed.** That is deliberate: it is what makes the next invoice
+from that supplier match these rows exactly instead of creating a second copy of all 133. Prefixing
+(`PRIM-1343095`) would remove the collision risk and destroy the matching, which is the whole benefit.
+
+Two costs come with it, both accepted:
+
+- **Cross-supplier collision.** Two suppliers using the same numbering scheme would produce two
+  products competing for one SKU. Theoretical until there is a second supplier doing it; 133 duplicate
+  drafts per repeat invoice is certain. Taken knowingly.
+- **Assigning his own SKUs later would break matching.** The moment the tenant renumbers a product to
+  their own scheme, that product stops matching its supplier's invoices and the next one creates a
+  draft duplicate. There is no second column for a supplier SKU today. If tenants start renumbering,
+  that is the fix — not a prefix.
+
+**Quantity is NOT written as stock.** The invoice says twenty were bought; having twenty is a different
+fact about a different moment, and belongs in `catalog_movements`. It matters more here than it would
+elsewhere: this tenant imports furniture from Europe, and a supplier invoice is issued at SHIPMENT —
+the container is at sea for weeks. Auto-receiving would have the voice agent promise a caller a sofa
+that is mid-Atlantic.
+
+**Promotion out of `draft` is explicit, never automatic on a price appearing.** A bulk price import
+would otherwise put every draft in front of a live phone agent in one action — precisely the failure
+the status was added to prevent.
+
+**`inactive` is still surfaced to the voice agent.** `retrieval.ts` excludes `discontinued` and `draft`
+only. Whether an inactive product should be quotable is a real question and a separate decision that
+affects existing tenants; it was deliberately not changed while adding `draft`.
+
+## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so
 the snapshot always describes the world before this shipment ever touched it. That is the right

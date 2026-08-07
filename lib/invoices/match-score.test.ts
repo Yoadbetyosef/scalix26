@@ -106,3 +106,24 @@ describe('scoring primitives', () => {
     expect(tokenize('Set of 2 x Oak Chairs, natural')).toEqual(['oak', 'chairs', 'natural'])
   })
 })
+
+// Measured on a real 133-line invoice: three lines with three DIFFERENT SKUs, none of them in the
+// catalogue, all name-matched to one product at 0.72. Recorded as a characterisation test — it pins
+// what the matcher does TODAY, which is not what it should do. See OUTSTANDING.md.
+describe('the name rung fires even when a line SKU matched nothing (known, unfixed)', () => {
+  const catalog = [p('P2', 'Linen Scatter Cushion 45x45', 'YDC-CUS-L45')]
+
+  it('matches on description despite a SKU that identifies nothing', () => {
+    const m = bestMatch({ sku: '1343095', description: 'SCATTER CUSHION 45X45' }, catalog)
+    // The supplier told us their identifier and we do not hold it — evidence the product is absent.
+    // The ladder treats it as no evidence at all and matches on shared trigrams instead.
+    expect(m?.productId).toBe('P2')
+    expect(m?.method).toBe('name_trigram')
+  })
+
+  it('sends three distinct products to the same row', () => {
+    const ids = ['1343095', '1343109', '1343122']
+      .map((sku) => bestMatch({ sku, description: 'SCATTER CUSHION 45X45' }, catalog)?.productId)
+    expect(new Set(ids).size).toBe(1)   // three lines, one product — costs then average into one figure
+  })
+})

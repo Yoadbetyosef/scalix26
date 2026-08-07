@@ -34,6 +34,7 @@ const METHOD: Record<string, string> = {
   normalized_sku: 'SKU matched once punctuation is ignored',
   name_trigram: 'Matched on name',
   manual: 'You chose this',
+  created: 'Created from this line',
 }
 
 export default function ShipmentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -43,6 +44,10 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   const [busy, setBusy] = useState(false)
   const [fileUrl, setFileUrl] = useState<string | null>(null)
   const [confirmReapply, setConfirmReapply] = useState(false)
+  // Lines the owner has ticked to become products, and any name they retyped first. Kept here rather
+  // than per-row so "create these six" is one request and one recomputed allocation.
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [names, setNames] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let alive = true
@@ -78,6 +83,19 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
+  async function createProducts() {
+    setBusy(true); setErr(null)
+    try {
+      const r = await fetch('/api/invoices/lines/create-products', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineIds: [...picked], names }),
+      })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Could not create those products.')
+      setD(j); setPicked(new Set()); setNames({})
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
   async function apply(opts: { override?: boolean; reapply?: boolean } = {}) {
     setBusy(true); setErr(null)
     try {
@@ -101,6 +119,8 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
   const charges = shipment.freightTotal + shipment.dutiesTotal + shipment.otherTotal
   const applied = shipment.status === 'applied'
   const reorders = lines.filter((l) => l.status === 'matched' && l.priorShipment)
+  const shared = lines.filter((l) => (l.sharesProductWith ?? 0) > 0)
+  const creatable = lines.filter((l) => l.status === 'unmatched')
 
   // Belt-and-braces. The shipment's currency is now always the tenant's base — freight comes from the
   // forwarder in base currency and is never seeded from the invoice — so this should not fire. It is
@@ -230,6 +250,25 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
+      {/* Several lines landing on ONE product. They do not overwrite each other — the apply groups by
+          product, so their costs merge into a quantity-weighted average and their freight sums. Right
+          for one product listed twice; wrong when the matcher put different products on one row, and
+          worse than an overwrite because the average appears on no piece of paper. */}
+      {shared.length > 0 && !applied && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {`${shared.length} lines are matched to the same product as another line.`}
+          </p>
+          <p className="mt-1 text-sm text-amber-800">
+            Their costs will be <strong>averaged into one figure</strong>, not kept separately — so the
+            stored cost will be a number that appears on no line of the invoice. That is right when one
+            product genuinely appears twice. If these are different products, match them separately or
+            create them below.
+          </p>
+        </div>
+      )}
+
       {/* THE coverage line. Not a footnote: it is what makes spreading freight over matched lines only
           an honest choice rather than a silent one. */}
       <section className={`mb-4 rounded-xl border px-4 py-3 ${below ? 'border-amber-200 bg-amber-50' : 'border-hairline-strong bg-white'}`}>
@@ -256,9 +295,45 @@ export default function ShipmentPage({ params }: { params: Promise<{ id: string 
       <ul className="divide-y divide-hairline rounded-xl border border-hairline-strong bg-white">
         {lines.map((l) => (
           <Line key={l.id} line={l} invoiceCcy={inv} baseCcy={base} markup={settings.markupPercent}
-            rate={foreign ? invoice.exchangeRate : 1} disabled={applied || busy} onPatch={patchLine} />
+            rate={foreign ? invoice.exchangeRate : 1} disabled={applied || busy} onPatch={patchLine}
+            picked={picked.has(l.id)}
+            name={names[l.id]}
+            onPick={(on) => setPicked((p) => { const n = new Set(p); if (on) n.add(l.id); else n.delete(l.id); return n })}
+            onRename={(v) => setNames((n) => ({ ...n, [l.id]: v }))} />
         ))}
       </ul>
+
+      {/* Creating products from unmatched lines. For a business setting up from scratch this is the
+          whole point — the invoices ARE the catalogue. Deliberately NOT a one-click "create all": the
+          owner ticks what they want, because a catalogue full of rows nobody chose still has to be
+          cleaned by hand, and this is the one moment the description and the price are both in front
+          of them. Same rule the catalog ingestion module holds itself to. */}
+      {!applied && creatable.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-hairline-strong bg-white px-4 py-3">
+          <div>
+            <p className="text-sm text-ink">
+              {picked.size === 0
+                ? `${creatable.length} line${creatable.length === 1 ? '' : 's'} matched nothing in your catalogue.`
+                : `${picked.size} selected.`}
+            </p>
+            <p className="mt-0.5 text-xs text-subtle">
+              {`New products are created with their cost and no selling price, so they are never quoted `}
+              {`until you price them. Their name can be edited on each line first.`}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" disabled={busy}
+              onClick={() => setPicked(picked.size === creatable.length ? new Set() : new Set(creatable.map((l) => l.id)))}
+              className="text-sm font-medium text-accent underline">
+              {picked.size === creatable.length ? 'Clear' : `Select all ${creatable.length}`}
+            </button>
+            <button type="button" onClick={createProducts} disabled={busy || picked.size === 0}
+              className="h-10 rounded-lg border border-hairline-strong px-4 text-sm font-semibold text-ink hover:bg-sunken/50 disabled:opacity-40">
+              {busy ? 'Creating…' : `Create ${picked.size || ''} product${picked.size === 1 ? '' : 's'}`.replace('  ', ' ')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {applied ? (
@@ -365,10 +440,14 @@ function Charge({ label, value, id, field, ccy, disabled, onSaved }: {
   )
 }
 
-function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch }: {
+function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch, picked, name, onPick, onRename }: {
   line: InvoiceLine; invoiceCcy: string; baseCcy: string; markup: number; rate: number | null
   disabled: boolean
   onPatch: (id: string, body: { productId?: string | null; skip?: boolean }) => void
+  picked: boolean
+  name: string | undefined
+  onPick: (on: boolean) => void
+  onRename: (v: string) => void
 }) {
   const [picking, setPicking] = useState(false)
   const [suggestions, setSuggestions] = useState<Array<{ id: string; name: string; sku: string | null }>>([])
@@ -403,6 +482,12 @@ function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch }: {
   return (
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
+        {/* Only unmatched lines can become products, so only they get a checkbox. */}
+        {!disabled && line.status === 'unmatched' && (
+          <input type="checkbox" checked={picked} onChange={(e) => onPick(e.target.checked)}
+            aria-label={`Create a product from line ${line.lineNo}`}
+            className="mt-1 h-4 w-4 shrink-0 rounded border-hairline-strong accent-accent" />
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-ink">{line.description || `Line ${line.lineNo}`}</p>
           <p className="mt-0.5 text-xs text-muted">
@@ -420,11 +505,24 @@ function Line({ line, invoiceCcy, baseCcy, markup, rate, disabled, onPatch }: {
               {line.productSku && <span className="text-muted"> ({line.productSku})</span>}
               <span className="text-subtle">
                 {` · ${METHOD[line.matchMethod ?? ''] ?? 'Matched'}`}
+                {(line.sharesProductWith ?? 0) > 0 && ` · shared with ${line.sharesProductWith} other line${line.sharesProductWith === 1 ? '' : 's'}, costs averaged`}
                 {line.matchMethod === 'name_trigram' && line.matchConfidence !== null && ` (${Math.round(line.matchConfidence * 100)}%)`}
               </span>
             </p>
           )}
-          {line.status === 'unmatched' && <p className="mt-1 text-xs text-amber-700">Not matched to a product</p>}
+          {line.status === 'unmatched' && !picked && <p className="mt-1 text-xs text-amber-700">Not matched to a product</p>}
+
+          {/* The name decides whether the catalogue is usable, and this is the one moment the supplier's
+              description and its price are both on screen. Defaults to the raw description, unedited —
+              their shorthand is better evidence than our title-casing. */}
+          {picked && (
+            <label className="mt-2 block">
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Product name</span>
+              <input className="h-9 w-full max-w-md rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent"
+                value={name ?? line.description ?? ''} onChange={(e) => onRename(e.target.value)} />
+              {line.sku && <span className="mt-1 block text-xs text-subtle">{`SKU ${line.sku} — kept as the supplier wrote it, so their next invoice matches this product instead of creating another.`}</span>}
+            </label>
+          )}
           {line.status === 'skipped' && <p className="mt-1 text-xs text-subtle">Skipped — takes no share of the freight</p>}
 
           {line.priorShipment && (

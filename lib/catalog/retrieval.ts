@@ -146,7 +146,14 @@ async function searchInventory(tenantId: string, tokens: string[]): Promise<Row[
     let q = db.from('catalog_products')
       .select('id, name, sku, price, availability_status, showroom_quantity, warehouse_quantity, storage_quantity, image_url')
       .eq('tenant_id', tenantId)
-      .neq('status', 'discontinued')
+      // The only place a product becomes something the agent can SAY to a caller, so it is the only
+      // place `draft` has to be excluded. A draft has a cost and no selling price: surfacing one means
+      // telling a caller "yes, we stock that" with no price to quote.
+      //
+      // Written as an explicit exclusion list rather than `.eq('active')` on purpose — `inactive` is
+      // surfaced to callers today, and whether it should be is a separate decision about existing
+      // tenants that must not ride along inside the draft change.
+      .not('status', 'in', '(discontinued,draft)')
       .limit(MATCH_LIMIT)
     for (const t of subset) q = q.or(tokenFilter('name', 'sku', t))
     const { data } = await q

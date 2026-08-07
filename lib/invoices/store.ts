@@ -265,9 +265,10 @@ export async function rematch(tenantId: string, invoiceId: string): Promise<void
     .eq('tenant_id', tenantId).eq('invoice_id', invoiceId)
 
   const lines = ((data as Array<Record<string, unknown>> | null) ?? [])
-    // A manual match and a deliberate skip are the owner's decisions; re-running the ladder over them
-    // would quietly undo the work they did on the screen in front of them.
-    .filter((l) => l.match_method !== 'manual' && l.status !== 'skipped')
+    // A manual match, a CREATED product and a deliberate skip are all the owner's decisions; re-running
+    // the ladder over them would quietly undo the work they did on the screen in front of them. A
+    // 'created' line is the strongest of the three — it points at a product that exists because of it.
+    .filter((l) => l.match_method !== 'manual' && l.match_method !== 'created' && l.status !== 'skipped')
     .map((l) => ({ id: l.id as string, sku: (l.sku as string) ?? null, description: (l.description as string) ?? null }))
 
   if (!lines.length) return
@@ -378,6 +379,27 @@ async function withPriorShipments(tenantId: string, invoiceId: string, lines: In
   return lines.map((l) => (l.productId && byProduct.has(l.productId) ? { ...l, priorShipment: byProduct.get(l.productId) } : l))
 }
 
+/**
+ * Flag every line that shares its product with another line on the SAME invoice.
+ *
+ * apply_shipment_costs groups by product, so those lines do not race — they MERGE. The cost row ends up
+ * holding a quantity-weighted average across all of them, with their freight summed onto it.
+ *
+ * That is right for the case it was written for: one product genuinely listed twice (a split delivery,
+ * two colours of one SKU). It is wrong, and worse than an overwrite, when the matcher put three
+ * different products on one row — overwriting would at least leave one real price, whereas the average
+ * is a number that appears on no piece of paper. Nothing downstream can tell those two cases apart, so
+ * the owner is shown it and decides.
+ */
+function withSharedProducts(lines: InvoiceLine[]): InvoiceLine[] {
+  const count = new Map<string, number>()
+  for (const l of lines) {
+    if (l.status === 'matched' && l.productId) count.set(l.productId, (count.get(l.productId) ?? 0) + 1)
+  }
+  return lines.map((l) =>
+    l.productId && (count.get(l.productId) ?? 0) > 1 ? { ...l, sharesProductWith: count.get(l.productId)! - 1 } : l)
+}
+
 /** Everything the approval screen needs. */
 export async function getShipment(shipmentId: string): Promise<Result<ShipmentDetail>> {
   const g = await gate()
@@ -402,7 +424,7 @@ export async function getShipment(shipmentId: string): Promise<Result<ShipmentDe
     data: {
       shipment: shipmentRow(ship as Record<string, unknown>),
       invoice: invoiceRow(inv as Record<string, unknown>),
-      lines: await withPriorShipments(g.tenantId, (inv as { id: string }).id, rows),
+      lines: withSharedProducts(await withPriorShipments(g.tenantId, (inv as { id: string }).id, rows)),
       settings: { baseCurrency: settings.baseCurrency, secondaryCurrency: settings.secondaryCurrency, markupPercent: settings.markupPercent },
     },
   }
@@ -460,6 +482,107 @@ export async function setLineMatch(lineId: string, productId: string | null, ski
   }).eq('id', lineId).eq('tenant_id', g.tenantId)
 
   const shipmentId = ((line as Record<string, unknown>).supplier_invoices as { shipment_id: string }).shipment_id
+  await reallocate(g.tenantId, shipmentId)
+  return getShipment(shipmentId)
+}
+
+/**
+ * Turn unmatched invoice lines into products.
+ *
+ * For a business setting up from scratch the invoices ARE the catalogue — they are the only record of
+ * what was bought. This is the step that lets one become the other.
+ *
+ * ── WHAT IT DELIBERATELY DOES NOT DO ────────────────────────────────────────────────────────────────
+ *
+ * NO COST ROW. The product is created; the cost lands when the shipment is applied, through the same
+ * path as every other matched line. Two ways for a cost to be written is two ways for them to disagree —
+ * and a cost written now, before the forwarder's freight is even entered, would be wrong anyway.
+ *
+ * NO STOCK. The invoice says twenty were bought; having twenty is a different fact about a different
+ * moment, and lives in catalog_movements. This tenant imports furniture from Europe: an invoice is
+ * issued at SHIPMENT, and the container is at sea for weeks. Auto-receiving would have the voice agent
+ * promise a caller a sofa that is mid-Atlantic.
+ *
+ * NO SELLING PRICE — which is exactly why they are created `draft`. See lib/catalog/types.ts.
+ *
+ * The SKU is the SUPPLIER's, stored unprefixed. That is what makes their next invoice match these rows
+ * exactly instead of creating a second copy of all of them. It borrows their namespace, which is a real
+ * cost recorded in OUTSTANDING.md.
+ */
+export async function createProductsFromLines(
+  lineIds: string[],
+  names: Record<string, string> = {},
+): Promise<Result<ShipmentDetail>> {
+  const g = await gate()
+  if (g === 'not_found' || g === 'forbidden') return { ok: false, reason: g }
+
+  // Creating products needs the catalog module too. The review screen is gated on `landed_cost` alone,
+  // and making rows for a tenant with no catalogue to see them in would be a quiet mess.
+  const db = createAdminClient()
+  const { data: t } = await db.from('tenants').select('enabled_modules').eq('id', g.tenantId).maybeSingle()
+  if (!t || !enabledModulesOf(t).includes('inventory')) {
+    return { ok: false, reason: 'not_found', error: 'Turn on the Inventory module to create products from an invoice.' }
+  }
+  if (!lineIds.length) return { ok: false, reason: 'not_found', error: 'No lines selected.' }
+
+  const { data: rows } = await db.from('supplier_invoice_lines')
+    .select('id, line_no, description, sku, invoice_id, status, supplier_invoices!inner(shipment_id)')
+    .eq('tenant_id', g.tenantId).in('id', lineIds)
+  const lines = (rows as Array<Record<string, unknown>> | null) ?? []
+  if (!lines.length) return { ok: false, reason: 'not_found' }
+
+  const shipmentId = (lines[0].supplier_invoices as { shipment_id: string }).shipment_id
+
+  // Existing SKUs first — including drafts. Two lines carrying the same SKU must not become two
+  // products, and a SKU already in the catalogue means the line should have matched rather than created.
+  const skus = [...new Set(lines.map((l) => (l.sku as string)?.trim()).filter(Boolean))] as string[]
+  const existing = new Map<string, string>()
+  if (skus.length) {
+    const { data: found } = await db.from('catalog_products')
+      .select('id, sku').eq('tenant_id', g.tenantId).in('status', ['active', 'draft']).in('sku', skus)
+    for (const p of (found as Array<{ id: string; sku: string }> | null) ?? []) {
+      existing.set(p.sku.trim().toLowerCase(), p.id)
+    }
+  }
+
+  for (const line of lines) {
+    if (line.status === 'matched') continue           // already points somewhere; leave it alone
+    const id = line.id as string
+    const sku = ((line.sku as string) ?? '').trim() || null
+    const key = sku?.toLowerCase()
+
+    // Already exists — from an earlier selection in this same batch, or from the catalogue. Point the
+    // line at it rather than creating a duplicate.
+    let productId = key ? existing.get(key) : undefined
+
+    if (!productId) {
+      // The name the owner typed on the review screen wins; the raw description is the fallback. It is
+      // NOT cleaned up or title-cased — the supplier's shorthand is better evidence than our guess, and
+      // the screen gave them the chance to fix it with the line in front of them.
+      const name = (names[id] ?? (line.description as string) ?? '').trim().slice(0, 200) || 'Untitled'
+      const { data: created, error } = await db.from('catalog_products').insert({
+        tenant_id: g.tenantId,
+        name,
+        sku,
+        status: 'draft',                              // in the catalogue, never quotable — see migration 4
+        internal_notes: `Created from supplier invoice line ${line.line_no ?? ''}`.trim(),
+      }).select('id').single()
+      if (error) return { ok: false, reason: 'not_found', error: error.message }
+      productId = (created as { id: string }).id
+      if (key) existing.set(key, productId)
+    }
+
+    await db.from('supplier_invoice_lines').update({
+      product_id: productId,
+      // Not 'manual': the owner picked nothing from a shortlist, this line MADE the product it points
+      // at. True by construction, and rematch() must leave it alone the way it leaves 'manual' alone.
+      match_method: 'created',
+      match_confidence: null,
+      status: 'matched',
+      updated_at: new Date().toISOString(),
+    }).eq('id', id).eq('tenant_id', g.tenantId)
+  }
+
   await reallocate(g.tenantId, shipmentId)
   return getShipment(shipmentId)
 }
