@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/admin/auth'
 import { createHmac, randomBytes } from 'crypto'
-import { metaScopeParam } from '@/lib/meta/scopes'
 
 // Admin-only Meta connect for the App Review screencast. Mirrors the production
 // /api/auth/meta/connect flow — same HMAC state, same nonce cookie, same shared callback — so the
@@ -34,12 +33,20 @@ export async function GET(req: NextRequest) {
   const state = `${payloadB64}.${sig}`
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL!
+  // Same Login-for-Business shape as production — see app/api/auth/meta/connect/route.ts. This route
+  // exists to SHOW Meta the real integration, so a demo that used the old scope-based dialog would be
+  // demonstrating a flow the app no longer has.
+  const configId = process.env.META_CONFIG_ID
+  if (!configId) return NextResponse.json({ error: 'META_CONFIG_ID must be set' }, { status: 500 })
+
   const oauthUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
   oauthUrl.searchParams.set('client_id', appId)
+  // The SHARED production callback, deliberately: the demo must exercise the real one.
   oauthUrl.searchParams.set('redirect_uri', `${baseUrl}/api/auth/meta/callback`)
-  oauthUrl.searchParams.set('scope', metaScopeParam())
+  oauthUrl.searchParams.set('config_id', configId)
   oauthUrl.searchParams.set('state', state)
   oauthUrl.searchParams.set('response_type', 'code')
+  oauthUrl.searchParams.set('override_default_response_type', 'true')
 
   const response = NextResponse.redirect(oauthUrl.toString())
   response.cookies.set('meta_oauth_nonce', nonce, {
