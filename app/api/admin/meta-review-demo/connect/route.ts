@@ -2,26 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isAdmin } from '@/lib/admin/auth'
 import { createHmac, randomBytes } from 'crypto'
+import { metaScopeParam } from '@/lib/meta/scopes'
 
 // Admin-only Meta connect for the App Review screencast. Mirrors the production
-// /api/auth/meta/connect flow (same HMAC state, same nonce cookie, same shared callback, and now
-// the SAME scopes) so the recording reflects the app's real Facebook-Login / Messenger-API-for-
-// Instagram implementation. Kept as a separate admin route only so the demo page can drive it;
-// the production connect flow — and every real user's integration — is untouched.
+// /api/auth/meta/connect flow — same HMAC state, same nonce cookie, same shared callback — so the
+// recording reflects the app's real Facebook-Login / Messenger-API-for-Instagram implementation.
+// Kept as a separate admin route only so the demo page can drive it.
 //
-// These are exactly the permissions the codebase uses (Facebook Page access token → me/accounts →
-// graph.facebook.com/me/messages). The Instagram messaging permission is instagram_manage_messages
-// — NOT instagram_business_manage_messages, which belongs to the Instagram-Login product this app
-// does not implement.
-const DEMO_SCOPES = [
-  'pages_show_list',
-  'pages_read_engagement',
-  'pages_manage_metadata',
-  'pages_messaging',
-  'instagram_basic',
-  'instagram_manage_messages',
-  'business_management',
-]
+// The scopes are IMPORTED, not restated. This route used to hold its own copy of the list with a
+// comment promising it was the same as production's; both copies then asked for two permissions that
+// were never submitted to Meta, and the promise was the only thing keeping them together. A demo of
+// the integration that requests permissions the integration does not have is worse than no demo.
+// See lib/meta/scopes.ts.
 
 export async function GET(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard`)
@@ -45,7 +37,7 @@ export async function GET(req: NextRequest) {
   const oauthUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
   oauthUrl.searchParams.set('client_id', appId)
   oauthUrl.searchParams.set('redirect_uri', `${baseUrl}/api/auth/meta/callback`)
-  oauthUrl.searchParams.set('scope', DEMO_SCOPES.join(','))
+  oauthUrl.searchParams.set('scope', metaScopeParam())
   oauthUrl.searchParams.set('state', state)
   oauthUrl.searchParams.set('response_type', 'code')
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createHmac, randomBytes } from 'crypto'
+import { metaScopeParam } from '@/lib/meta/scopes'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -27,15 +28,7 @@ export async function GET(req: NextRequest) {
   const oauthUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
   oauthUrl.searchParams.set('client_id', appId)
   oauthUrl.searchParams.set('redirect_uri', redirectUri)
-  oauthUrl.searchParams.set('scope', [
-    'pages_manage_metadata',
-    'pages_messaging',
-    'instagram_basic',
-    'instagram_manage_messages',
-    'pages_read_engagement',
-    'pages_show_list',
-    'business_management',
-  ].join(','))
+  oauthUrl.searchParams.set('scope', metaScopeParam())
   oauthUrl.searchParams.set('state', state)
   oauthUrl.searchParams.set('response_type', 'code')
 
