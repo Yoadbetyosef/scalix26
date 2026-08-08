@@ -105,6 +105,59 @@ i.kept)`, so a website-only hit at a narrower rung sets `partial`.
   drafts are priced, they will be priced from the corrected commission-inclusive cost, which is the
   right order.
 
+### 0e-2. The Facebook connect has never worked. For anyone. Including me.
+
+Found 7 Aug 2026 when a tenant tried to connect a Facebook Page.
+
+The app is a **Facebook Login for Business** app. That flow is driven by a CONFIGURATION created in
+Meta's dashboard and invoked with `config_id`; Meta's documentation states plainly that "config_id has
+replaced scope (which should not be used)". Our code sent `scope` and no `config_id`, so Facebook
+answered every single attempt with:
+
+> Feature Unavailable — Facebook Login is currently unavailable for this app, since we are updating
+> additional details for this app. Please try again later.
+
+**The Configurations tab was empty.** No configuration had ever existed, which means this flow has
+never completed for any tenant since the app became Login for Business. Not degraded — never worked.
+
+**This is the fourth instance of the pattern, and the worst one.** The other three —
+payment links on a phone call, the voice-server 307, the seven-scope request — at least worked for the
+developer. This one **failed for everyone, including the person who built it**, and still went
+unnoticed for months. The reason is the part to keep:
+
+> Nobody tried until a customer did.
+
+The failure mode was never "works for me, breaks for them". It was "nobody exercised this path at all,
+and nothing in the system is capable of noticing an onboarding step that no one completes." A
+zero-success-rate integration and a not-yet-used integration are indistinguishable from the inside.
+That is what §0e-3 exists to fix.
+
+Fixed by sending `config_id` and `override_default_response_type=true` and dropping `scope`. The
+`override_default_response_type` flag is not optional for a system-user configuration — without it the
+dialog can fall back to the implicit grant, which system-user tokens do not support.
+
+**One thing remains unverified and must be watched on the first real connect.** The token exchange is
+unchanged under Login for Business, but the configuration issues a SYSTEM-USER token, and Meta's
+documentation does not say whether `GET /me/accounts` enumerates Pages for one. The documented
+alternatives are business-scoped (`/{business-id}/client_pages`, `/{system-user-id}/assigned_pages`).
+The callback still calls `/me/accounts` — switching it on an untested assumption would trade a known
+unknown for an unknown one — but a zero-page result now logs loudly and says the result is ambiguous,
+because "this business has no Pages" and "this is the wrong edge" look identical otherwise.
+
+### 0e-3. Nothing records that a tenant tried to connect anything
+
+There is no persistent log of a failed — or attempted — integration connect. `console.error` in the
+callback (ephemeral, unqueried) and a `?meta_error=` toast that vanishes on reload. No row is written.
+**You cannot answer "how many tenants started a Facebook connect and gave up."**
+
+And for the failure above it is worse than missing: it happened on Facebook's side, before any redirect
+back, so the tenant never reached our callback. **A perfect error log in the callback would have shown
+zero.**
+
+The only instrument that can see a provider-side failure is a record written when the attempt STARTS —
+a row at `/api/auth/meta/connect` reconciled against an outcome at the callback, so "started, never
+came back" becomes a number. Not built; needs a decision on whether it is per-tenant or platform-wide.
+
 ### 0f. BUSINESS-BLOCKING, not technical
 
 These cannot be solved in this repository and are waiting on decisions outside it.

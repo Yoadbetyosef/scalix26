@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { META_SCOPES, metaScopeParam } from './scopes'
+import { META_SCOPES } from './scopes'
 
 // These assertions exist because the drift they guard against was invisible: two hardcoded lists asked
 // for two permissions that were never submitted to Meta, nothing failed at build or test time, and a
@@ -33,21 +33,25 @@ describe('META_SCOPES', () => {
     for (const needed of APPROVED) expect(META_SCOPES).toContain(needed)
   })
 
-  it('formats as the OAuth dialog expects — comma separated, no spaces', () => {
-    expect(metaScopeParam()).toBe(APPROVED.join(','))
-    expect(metaScopeParam()).not.toMatch(/\s/)
-  })
-
   it('has no duplicates', () => {
     expect(new Set(META_SCOPES).size).toBe(META_SCOPES.length)
   })
 })
 
-describe('there is only one list', () => {
-  it('is a rule enforced by imports, not by a comment', () => {
-    // Both connect routes import metaScopeParam(). If a third copy appears, this test cannot catch it
-    // — but the file it would have to duplicate says why not to, and this suite is what a reviewer is
-    // pointed at. The mechanism is the shared module; this documents the intent beside it.
-    expect(typeof metaScopeParam()).toBe('string')
+describe('nothing sends this list any more', () => {
+  it('is not referenced by either connect route', async () => {
+    // Under Facebook Login for Business the dialog is driven by config_id and Meta's dashboard holds
+    // the permissions. A route that still sent `scope` would be the old, broken shape — the one that
+    // produced "Feature Unavailable" and blocked every tenant. This asserts the shape, not the list.
+    const { readFileSync } = await import('fs')
+    for (const f of [
+      'app/api/auth/meta/connect/route.ts',
+      'app/api/admin/meta-review-demo/connect/route.ts',
+    ]) {
+      const src = readFileSync(f, 'utf8')
+      expect(src).toContain("searchParams.set('config_id'")
+      expect(src).toContain("searchParams.set('override_default_response_type', 'true')")
+      expect(src).not.toMatch(/searchParams\.set\('scope'/)
+    }
   })
 })

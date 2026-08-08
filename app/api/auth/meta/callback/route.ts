@@ -68,7 +68,22 @@ export async function GET(req: NextRequest) {
   }
   const { access_token: userToken } = await tokenRes.json()
 
-  // Fetch pages managed by this user (page access tokens are long-lived by default)
+  // Fetch the Pages this token can reach, with their long-lived Page access tokens.
+  //
+  // ── UNVERIFIED UNDER A SYSTEM-USER TOKEN ────────────────────────────────────────────────────────
+  //
+  // The token exchange itself is unchanged by Login for Business — same /oauth/access_token endpoint,
+  // same { access_token } response — so nothing above this line needed touching. THIS call is the one
+  // that might behave differently: the configuration issues a SYSTEM-USER token, tied to the client's
+  // business portfolio rather than to a person, and Meta's Login-for-Business documentation does not
+  // state whether /me/accounts enumerates Pages for one. The documented alternatives for a system user
+  // are the business-scoped edges (/{business-id}/client_pages, /{system-user-id}/assigned_pages).
+  //
+  // It is left as /me/accounts because that is what this integration has always used and switching it
+  // on an untested assumption would trade a known unknown for an unknown one. What IS changed is the
+  // diagnostics: an empty list no longer looks like "this person administers no Pages", because under
+  // a system-user token it could equally mean "this edge is the wrong one". The first real connect
+  // settles it, and the log line below says which of the two happened.
   const pagesRes = await fetch(
     `https://graph.facebook.com/v21.0/me/accounts?access_token=${userToken}&fields=id,name,access_token,instagram_business_account{id,name,username}`
   )
@@ -80,6 +95,14 @@ export async function GET(req: NextRequest) {
   const pages: MetaPage[] = pagesData.data || []
 
   if (pages.length === 0) {
+    // Loud, and specific about the ambiguity, because a silent "no pages" is how this class of bug
+    // hides: the tenant sees a plausible message and stops, and nobody learns that the token was fine
+    // and the edge was wrong.
+    console.error(
+      '[meta/callback] /me/accounts returned ZERO pages. Under a system-user token this may mean the ' +
+      'edge is wrong rather than that the business has no Pages — check /{business-id}/client_pages. ' +
+      'Raw response:', JSON.stringify(pagesData).slice(0, 800),
+    )
     return NextResponse.redirect(`${baseUrl}/ai-employees/${payload.agentId}?meta_error=no_pages`)
   }
 
