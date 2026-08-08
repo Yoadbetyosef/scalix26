@@ -95,6 +95,10 @@ i.kept)`, so a website-only hit at a narrower rung sets `partial`.
   landed cost and 100% margin. Wrong on screen, untouched by the commission backfill, and already wrong
   before it. See §7f for the two questions to settle first — whether a bundled line should be a product
   at all, and what the card shows if it should.
+
+  **These two are also why B&N's `divergence_ack` holds 78 entries for 80 products.** The record only
+  contains products whose cost actually moved, and 25% of zero is zero. Not a discrepancy — but it
+  looks like one, so check it against this before treating it as a bug.
 - **203 of the 206 affected products are drafts with no price.** That is the draft mechanism working,
   and it is why the commission backfill needed almost no price review: exactly **one** product on both
   shipments has a selling price (BERNARD DINING ARMCHAIR, $650, margin 52.4% → 44.2%). When those
