@@ -653,6 +653,40 @@ produced by the same code path that gave them the chance to do it. If the two ca
 here, a flag there — they eventually will, and the record will be confidently wrong rather than
 silent. Related: §7c (don't classify, characterise) and §7h (extract, don't restate).
 
+## 7j. DESIGN RULE — a comment asserting two things are in sync is a claim nothing checks
+
+Third companion to §7c (don't classify, characterise) and §7h (extract, don't restate). Those are about
+not guessing; this one is about not *promising*.
+
+**The rule.** When correctness depends on two things agreeing, a comment saying they agree is worth
+nothing — it is a claim with no mechanism behind it, and it decays silently while continuing to read as
+verification. **The fix is always to make them one thing, never to correct the comment.** If they
+genuinely cannot be merged (SQL and TypeScript, a schema and a provider's dashboard), the substitute is
+a test that fails when they diverge — not better prose.
+
+**Three instances in three days, each of which read as authoritative:**
+
+1. **`match.ts` claimed degraded matching "is REPORTED".** `rematch()` discarded the flag. The comment
+   described an intention; nothing carried it. Fixed by adding `supplier_invoices.match_note` — i.e. by
+   building the mechanism the comment had asserted.
+2. **`ladder()` cites "pear shaped diamond ring" as the phrase the floor fix rescued.** Tested against
+   the real 9,279-row catalogue on 7 Aug: it still returns nothing at both rungs, because
+   `byDistinctiveness` drops the SHORTEST token and the junk word is not the shortest. The comment
+   documents an outcome that never happened. **Still unfixed** — see §0d.
+3. **The Meta App Review demo route said it used "the SAME scopes" as production, and that these were
+   "exactly the permissions the codebase uses".** Both false. Two hardcoded arrays had drifted together
+   to seven permissions when only five were ever submitted to Meta, and a tenant was blocked from
+   connecting Facebook for months. Fixed by deleting both arrays and importing `lib/meta/scopes.ts` —
+   one list, with each entry naming the Graph call that needs it.
+
+**Why this failure mode is worse than an absent comment.** An absent comment prompts someone to check.
+A confident one ends the enquiry — the reader takes the claim as the verification and moves on. Every
+instance above survived multiple readings by people who were looking carefully at the surrounding code.
+
+**The tell.** Any comment containing "same as", "matches", "in sync with", "mirrors", "kept in step
+with", or naming a specific outcome ("this rescued X") is asserting a fact about code somewhere else.
+Either make it structural, or put it under test. Grep for those phrases before believing them.
+
 ## 8. Smaller things worth knowing
 
 **`applied_before` records the FIRST apply only.** Re-applying deliberately does not overwrite it, so
