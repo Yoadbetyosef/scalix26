@@ -3,8 +3,124 @@
 Written 6 Aug 2026, at the point Phase 1 was built. Everything below is known-incomplete or
 known-unknown. What works is in the code comments and in `add_landed_cost_invoices.sql`.
 
-**State.** Code-complete, build green, lint clean, 376 tests passing. **Nothing has run against a real
-database or a real invoice.** Read the first two sections before believing anything else here.
+**State, 7 Aug 2026 (end of day).** Build green, 501 tests passing. All migrations run except the one
+named in §0. Two real invoices extracted, matched and applied against production; 206 real cost rows
+written and verified. **The header sentence that used to sit here — "nothing has run against a real
+database or a real invoice" — was true on 6 Aug and is now obsolete; §1 and §2 below are kept for the
+reasoning they record, not as a description of today.**
+
+Read §0 first. It is the resume point.
+
+---
+
+## 0. WHERE THIS STANDS — read this first
+
+Written 7 Aug 2026 so this does not have to be reconstructed from a chat thread.
+
+### 0a. Done and verified
+
+- Supplier invoice → shipment → allocation → apply, end to end, against production.
+- Two shipments applied for Your Design Collective: **PRIMAVERA 866/4/2026** (126 products) and
+  **B&N BN-1356** (80). All 206 `product_costs` rows carry `commission_percent = 25`.
+- Freight allocation verified uniform per shipment: B&N **44.6815%** ideal, actual 44.6615–44.7173%;
+  max rounding on any line **half a cent**; allocation totals to charges exactly. The deviation
+  signature is the proof — the largest deviations are all the smallest lines, which is what rounding
+  looks like and is not what a bug looks like.
+- Migrations applied: `add_landed_cost_invoices` 1–5, `add_catalog_retrieval` 2–3, `add_cost_commission`.
+- `CATALOG_RETRIEVAL_TIMEOUT_MS = 450` set on Vercel Production **and** Preview. Note for next time: a
+  branch-scoped variable cannot be widened to Production — Vercel errors with *"Environment Variables
+  with gitBranch can only be used with target=preview"* — so it must be deleted and recreated.
+
+### 0b. PENDING migration — one
+
+`supabase/migrations/correct_divergence_ack_2026_08_07.sql`. Corrects the false acknowledgement
+described in §7i. Idempotent, no down statement. Nothing else is unrun.
+
+### 0c. The merge sequence — steps 1–3 done, 4–7 outstanding
+
+`feat/landed-cost-invoices` is **not merged**. `main` is at `02cd45a` (the payment-link fix) and does
+not contain this feature at all.
+
+| # | Step | State |
+|---|---|---|
+| 1 | Disable auto-deploy on the Railway production voice-server (`scalix26`, root `/voice-server`, watching `main`) | **DONE** — "Auto deploy is disabled" |
+| 2 | `CATALOG_RETRIEVAL_TIMEOUT_MS = 450` on Production + Preview | **DONE** |
+| 3 | ~~Delete the diagnostic 2000ms preview var~~ — superseded: the var was deleted and recreated at 450 for both targets | **DONE** |
+| 4 | One partial-match test call | **OUTSTANDING** |
+| 5 | Merge to `main` | OUTSTANDING |
+| 6 | Deploy voice-server manually (auto-deploy is off, so this will NOT happen on merge) | OUTSTANDING |
+| 7 | Revert YDC's Twilio webhook off the branch service | OUTSTANDING |
+
+**Step 4, ready to run.** Call Smith HVAC and say, verbatim:
+
+> **"Do you have a princess solitaire platinum ring in size seven?"**
+
+Verified against the live catalog on 7 Aug: tokenises to five terms
+(`solitaire > princess > platinum > ring > size`; the "7" is dropped as a single character). Rung 1,
+all five ANDed → **0 rows**. Rung 2, dropping "size" → **60 rows**. So it exercises the partial-match
+sentence against a real 9,279-row catalog rather than a synthetic one.
+
+Smith HVAC is the right tenant despite the name: naturesparkle.com is connected to it as a **website**
+source, so its 9,279 rows live in `catalog_ingested_products`, and partial matching covers that table
+— `searchWebsite` and `searchInventory` call the same `ladder()`, and `keptTokens = max(w.kept,
+i.kept)`, so a website-only hit at a narrower rung sets `partial`.
+
+### 0d. Parked from the catalog/voice work
+
+- **The ladder's length proxy is wrong, and now demonstrably so.** `byDistinctiveness` sorts by string
+  length, so the rung drops the SHORTEST token, not the least distinctive one. Confirmed 7 Aug against
+  the real catalog: `ladder()`'s own comment cites *"pear shaped diamond ring"* as the phrase the floor
+  fix rescued, and that phrase **still returns nothing at both rungs**, because the junk word
+  ("shaped") is not the shortest one ("ring" is). Filed as **recall, not performance**. The comment is
+  inaccurate and should be corrected in the same change. Related: §1b, the Oak/Walnut suffix-length
+  finding — the same fault, that a structural coincidence is being read as evidence.
+- **Keyterm coverage sits ~3 points above the disabled threshold** (`MIN_KEYTERM_COVERAGE = 0.5`,
+  `KEYTERM_WORD_BUDGET = 350` in `lib/catalog/terms.ts`). That is a thin margin: a catalogue with
+  slightly more common words tips to `disabled` and the whole feature silently stops helping. **Do not
+  relax the distinctiveness filter to raise coverage** — that was considered and rejected; the filter
+  is what makes the terms worth sending. If the margin needs widening, the budget is the lever.
+- **Per-stage timings were instrumented and never read.** `catalog_retrieval_log.stages` (added in
+  `add_catalog_retrieval_3.sql`) has been collecting per-rung milliseconds since 7 Aug. The ~150ms per
+  rung remains unexplained, and 450ms was chosen without this data. Read it before tuning again.
+- **Embeddings: undecided.** Raised as the alternative layer to keyterms + phonetic matching, and
+  deliberately not chosen — keyterms were built first because they were measurable. Still open, and
+  the honest position is that nothing has been measured that would justify the cost.
+- **`/api/voice/*` namespace.** Logged as the eventual shape for the voice endpoints so the middleware
+  allowlist stops being a per-route decision. Not started.
+
+### 0e. Data problems in YDC's catalogue
+
+- **Two zero-cost rows** — the B&N `SET OF CUSHIONS` lines, invoiced at 0.00 EUR because the cushions
+  are included in the price of the chair. Product ids `7d7defea…` and `a1b4a036…`. They show $0.00
+  landed cost and 100% margin. Wrong on screen, untouched by the commission backfill, and already wrong
+  before it. See §7f for the two questions to settle first — whether a bundled line should be a product
+  at all, and what the card shows if it should.
+- **203 of the 206 affected products are drafts with no price.** That is the draft mechanism working,
+  and it is why the commission backfill needed almost no price review: exactly **one** product on both
+  shipments has a selling price (BERNARD DINING ARMCHAIR, $650, margin 52.4% → 44.2%). When those
+  drafts are priced, they will be priced from the corrected commission-inclusive cost, which is the
+  right order.
+
+### 0f. BUSINESS-BLOCKING, not technical
+
+These cannot be solved in this repository and are waiting on decisions outside it.
+
+- **Twilio second-account reconciliation.** The numbers and the approved messaging brand are not all in
+  one account. Until that is reconciled, A2P registration cannot proceed cleanly. **Parked
+  deliberately**, not forgotten.
+- **The approved brand is SOLE_PROPRIETOR.** That carries throughput limits a Standard Business Brand
+  would not, and it constrains what SMS volume the platform can promise. A business decision about
+  which entity registers, not a code change.
+
+### 0g. Platform limits worth remembering
+
+- **Uploads cap at 4.5 MB**, measured (§7d), not read off a doc page. A **6.3 MB** invoice failed at
+  Vercel's edge with `FUNCTION_PAYLOAD_TOO_LARGE`, and the client surfaced it as
+  `Unexpected token 'R', "Request En"... is not valid JSON` because it called `r.json()` on a plain-text
+  body. `MAX_INVOICE_BYTES` is now 4 MB and `lib/http/read-response.ts` turns non-JSON responses into
+  sentences — **but only for the landed-cost feature; ~180 other call sites still have the original
+  bug** (§7e). The real fix for large invoices is a direct-to-storage signed upload, which does not
+  exist anywhere in this app.
 
 ---
 
