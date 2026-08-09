@@ -15,7 +15,7 @@ import { enabledModulesOf, effectiveModules } from '@/lib/modules'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 import type { Lead } from '@/types'
 
-async function getDashboardData(tenantId: string) {
+export async function getDashboardData(tenantId: string) {
   // Admin (true service-role) client + explicit tenant_id on every query (verified) → works for the
   // owner tenant AND for a White Label partner operating a client workspace. NOTE: createServiceClient
   // is the cookie-based SSR client — in operator mode it downgrades to the partner's JWT and RLS scopes

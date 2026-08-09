@@ -1,0 +1,472 @@
+'use client'
+
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
+
+// Rudi's face. A reproduction of the reference's canvas engine.
+//
+// ── WHAT DIFFERS FROM THE REFERENCE, AND WHY ────────────────────────────────────────────────────────
+//
+// ONE thing: the level. The reference opens the real microphone with getUserMedia and reads an
+// analyser. In the app the level arrives through `Rudi.level(0..1)` from the voice layer instead —
+// so this component never asks for a microphone, never holds a MediaStream, and cannot prompt a
+// permission dialog on a preview screen. Everything downstream of the number is unchanged: the same
+// attack/decay smoothing, the same per-bar envelope, the same meter geometry.
+//
+// When no level has been supplied, the meter falls back to the reference's own synthetic envelope
+// rather than sitting flat — a dead meter reads as broken, and this screen is a design preview.
+//
+// Everything else is the reference: the scan sweep and node network at idle, the sweep cutting to
+// zero on the same frame that listening begins, the white veil and monochrome meter while listening,
+// the video crossfading in while speaking with no scan and no overlay at all.
+
+export type RudiState = 'idle' | 'listening' | 'speaking'
+
+/** The control surface the voice layer drives. Same shape as the reference's `window.Rudi`. */
+export interface RudiHandle {
+  /** Start speaking and hold for exactly `ms`. Call stopSpeaking() when the audio really ends. */
+  speak: (text?: string, ms?: number) => void
+  stopSpeaking: () => void
+  listen: () => void
+  stopListening: () => void
+  /** External audio level, 0..1. Drives the meter while listening. */
+  level: (v: number) => void
+  state: () => RudiState
+}
+
+interface Props {
+  handleRef?: RefObject<RudiHandle | null>
+  onStateChange?: (s: RudiState) => void
+  /** Collapsed (idle > 60s): still frame, slow band, no network, no video. */
+  minimised?: boolean
+  className?: string
+  onClick?: () => void
+}
+
+interface Node { x: number; y: number }
+
+const IW = 680
+const IH = 907
+const STILL = '/v2/rudi-still.webp'
+const VIDEO = '/v2/rudi-speaking.mp4'
+const NODES = '/v2/rudi-nodes.json'
+
+// The reference's three-stop ramp: cyan → violet → pink.
+const STOPS: [number, [number, number, number]][] = [
+  [0, [34, 211, 238]],
+  [0.5, [139, 92, 246]],
+  [1, [255, 46, 147]],
+]
+function hue(t: number): [number, number, number] {
+  let i = 0
+  while (i < STOPS.length - 2 && t > STOPS[i + 1][0]) i++
+  const f = (t - STOPS[i][0]) / (STOPS[i + 1][0] - STOPS[i][0])
+  const a = STOPS[i][1]
+  const b = STOPS[i + 1][1]
+  return [
+    (a[0] + (b[0] - a[0]) * f) | 0,
+    (a[1] + (b[1] - a[1]) * f) | 0,
+    (a[2] + (b[2] - a[2]) * f) | 0,
+  ]
+}
+const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
+
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick }: Props) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [state, setStateRaw] = useState<RudiState>('idle')
+
+  // Everything the render loop touches lives in refs. The loop must not re-subscribe when a number
+  // changes — re-creating the rAF chain on every level update would stutter the animation.
+  const stateRef = useRef<RudiState>('idle')
+  const levelRef = useRef<number | null>(null)
+  const smoothedRef = useRef(0)
+  const speakEndRef = useRef(0)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const minRef = useRef(minimised)
+
+  useEffect(() => { minRef.current = minimised }, [minimised])
+
+  const setState = useCallback((s: RudiState) => {
+    stateRef.current = s
+    setStateRaw(s)
+    onStateChange?.(s)
+  }, [onStateChange])
+
+  // ── The control surface ─────────────────────────────────────────────────────────────────────────
+  useImperativeHandle(handleRef, (): RudiHandle => ({
+    speak(text?: string, ms?: number) {
+      speakEndRef.current = performance.now() + (ms ?? 6000)
+      if (stateRef.current !== 'speaking') setState('speaking')
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => {
+        if (stateRef.current === 'speaking') setState('idle')
+      }, Math.max(300, speakEndRef.current - performance.now()))
+    },
+    stopSpeaking() {
+      speakEndRef.current = 0
+      if (timerRef.current) clearTimeout(timerRef.current)
+      if (stateRef.current === 'speaking') setState('idle')
+    },
+    listen() { if (stateRef.current !== 'listening') setState('listening') },
+    stopListening() { if (stateRef.current === 'listening') setState('idle') },
+    level(v: number) { levelRef.current = Math.min(1, Math.max(0, v)) },
+    state() { return stateRef.current },
+  }), [setState])
+
+  // ── The render loop ─────────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    let raf = 0
+    let disposed = false
+    let CW = 0, CH = 0, S = 1, DX = 0, DY = 0, DW = 0, DH = 0
+    let img: HTMLImageElement | null = null
+    let pts: Node[] = []
+    let edges: number[] = []
+    let raw: [number, number][] = []
+    let scanA = 1
+    let micA = 0
+    let vidA = 0
+    const LV = new Float32Array(72)
+
+    // A second canvas for the sweep band, composited with 'lighter' — the reference's approach, and
+    // the reason the band glows through the portrait instead of sitting on top of it.
+    const sweep = document.createElement('canvas')
+    const sctx = sweep.getContext('2d')
+
+    function fit() {
+      const r = canvas!.getBoundingClientRect()
+      const d = Math.min(2, window.devicePixelRatio || 1)
+      CW = Math.round(r.width * d)
+      CH = Math.round(r.height * d)
+      if (CW === 0 || CH === 0) return
+      canvas!.width = CW; canvas!.height = CH
+      sweep.width = CW; sweep.height = CH
+      S = Math.max(CW / IW, CH / IH)
+      DW = IW * S; DH = IH * S
+      DX = (CW - DW) / 2
+      // 0.54 rather than 0.5: the reference biases the crop downward so the face sits high.
+      DY = (CH - DH) * 0.54
+    }
+
+    // Nearest-neighbour graph over the mesh, rebuilt on resize because the points are in canvas space.
+    function buildNet() {
+      pts = raw.map(([x, y]) => ({ x: DX + x * S, y: DY + y * S }))
+      edges = []
+      const cell = 42
+      const map = new Map<string, number[]>()
+      pts.forEach((p, i) => {
+        const k = `${(p.x / cell) | 0},${(p.y / cell) | 0}`
+        const arr = map.get(k)
+        if (arr) arr.push(i); else map.set(k, [i])
+      })
+      for (let i = 0; i < pts.length; i++) {
+        const gx = (pts[i].x / cell) | 0
+        const gy = (pts[i].y / cell) | 0
+        const cand: number[] = []
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+          const arr = map.get(`${gx + a},${gy + b}`)
+          if (arr) cand.push(...arr)
+        }
+        const near: [number, number][] = []
+        for (const q of cand) {
+          if (q <= i) continue
+          const dx = pts[q].x - pts[i].x, dy = pts[q].y - pts[i].y
+          const dd = dx * dx + dy * dy
+          if (dd < 3600 && dd > 16) near.push([dd, q])
+        }
+        near.sort((x, y) => x[0] - y[0])
+        for (let n = 0; n < Math.min(2, near.length); n++) edges.push(i, near[n][1])
+      }
+    }
+
+    /** The meter's envelope. Real level when the voice layer supplies one; the reference's synthetic
+     *  wobble when it does not, because a flat meter reads as broken rather than as silent. */
+    function envelope(now: number): number {
+      const real = levelRef.current
+      if (real === null) {
+        return 0.26 + 0.74 * Math.pow(Math.abs(Math.sin(now / 300)), 0.8) * (0.55 + 0.45 * Math.abs(Math.sin(now / 97)))
+      }
+      // Same attack/decay as the reference's mic smoothing: fast up, slow down.
+      const s = smoothedRef.current
+      smoothedRef.current = s + (real - s) * (real > s ? 0.55 : 0.14)
+      return 0.04 + smoothedRef.current * 1.15
+    }
+
+    function draw(now: number) {
+      if (disposed || !img) return
+      const st = stateRef.current
+      ctx!.setTransform(1, 0, 0, 1, 0, 0)
+      ctx!.clearRect(0, 0, CW, CH)
+
+      // ── Collapsed: still frame, one slow band, nothing else. ────────────────────────────────────
+      if (minRef.current) {
+        ctx!.drawImage(img, DX, DY, DW, DH)
+        const v = videoRef.current
+        if (v && !v.paused) v.pause()
+        if (!reduced) {
+          const bp = (now % 5200) / 5200
+          if (bp < 0.34) {
+            const by = (bp / 0.34) * CH
+            const hc = hue(bp / 0.34)
+            const g = ctx!.createLinearGradient(0, by - 30, 0, by + 6)
+            g.addColorStop(0, rgba(hc, 0))
+            g.addColorStop(1, rgba(hc, 0.22))
+            ctx!.fillStyle = g
+            ctx!.fillRect(0, by - 30, CW, 36)
+          }
+          raf = requestAnimationFrame(draw)
+        }
+        return
+      }
+
+      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150) : st === 'listening' ? 1.22 : 1
+      // Listening runs the band nearly three times faster — the design's way of saying "attending".
+      const period = st === 'listening' ? 1300 : 3600
+      const prog = (now % period) / period
+      const band = prog * CH
+      const hc = hue(prog)
+
+      // Ambient bloom behind the portrait.
+      const g = ctx!.createRadialGradient(CW / 2, CH * 0.4, 20, CW / 2, CH * 0.4, CH * 0.6)
+      g.addColorStop(0, rgba(hc, 0.24 * pulse))
+      g.addColorStop(1, rgba(hc, 0))
+      ctx!.fillStyle = g
+      ctx!.fillRect(0, 0, CW, CH)
+
+      // A breath: ±1% scale on a 3.2s cycle, so the still never looks frozen.
+      const br = 1 + 0.01 * Math.sin(now / 3200)
+      ctx!.drawImage(img, DX - (DW * (br - 1)) / 2, DY - (DH * (br - 1)) / 2, DW * br, DH * br)
+
+      // ── The state transitions ───────────────────────────────────────────────────────────────────
+      // scanA snaps to 0 the moment we leave idle — on the SAME frame, not eased — and eases back in
+      // over ~20 frames when idle returns. That asymmetry is the design: attention is instant,
+      // relaxation is gradual.
+      scanA = st === 'idle' ? scanA + (1 - scanA) * 0.05 : 0
+      micA += ((st === 'listening' ? 1 : 0) - micA) * 0.22
+      const vTarget = st === 'idle' ? 0 : 1
+      vidA += (vTarget - vidA) * 0.075
+
+      const vid = videoRef.current
+      if (vid && vid.readyState >= 2) {
+        if (vTarget && vid.paused) { try { vid.currentTime = 0; void vid.play() } catch { /* autoplay refused */ } }
+        if (!vTarget && vidA < 0.02 && !vid.paused) vid.pause()
+        if (vidA > 0.006) {
+          ctx!.globalAlpha = vidA
+          ctx!.drawImage(vid, DX, DY, DW, DH)
+          ctx!.globalAlpha = 1
+        }
+      }
+
+      // ── Scan sweep: 18 displaced slices of the portrait, brightest at the band. ─────────────────
+      for (let sl = 0; sl < 18; sl++) {
+        const sy = band - 96 + sl * 12
+        if (sy < 0 || sy > CH - 13) continue
+        const fall = Math.max(0, 1 - Math.abs(sy - band) / 104) * scanA
+        if (fall < 0.02) continue
+        const off = Math.sin(now / 140 + sl * 0.9) * 11 * fall * (st === 'idle' ? 1 : 2.2)
+        const sry = (sy - DY) / S
+        if (sry < 0 || sry > IH - 13 / S) continue
+        ctx!.drawImage(img, 0, sry, IW, 13 / S, DX + off - 16, sy, DW + 32, 13)
+        ctx!.globalCompositeOperation = 'lighter'
+        ctx!.globalAlpha = 0.26 * fall
+        ctx!.drawImage(img, 0, sry, IW, 13 / S, DX + off * 2.8 - 16, sy, DW + 32, 13)
+        ctx!.globalAlpha = 1
+        ctx!.globalCompositeOperation = 'source-over'
+      }
+
+      // ── Listening: white veil + monochrome level meter. ────────────────────────────────────────
+      if (micA > 0.01) {
+        ctx!.fillStyle = `rgba(250,250,252,${(0.6 * micA).toFixed(3)})`
+        ctx!.fillRect(0, 0, CW, CH)
+
+        const wN = 52
+        const wW = CW * 0.56
+        const wX = (CW - wW) / 2
+        const wY = CH * 0.52
+        const gap = wW / wN
+        const env = envelope(now)
+
+        ctx!.strokeStyle = `rgba(14,14,17,${(0.13 * micA).toFixed(3)})`
+        ctx!.lineWidth = 1
+        ctx!.beginPath()
+        ctx!.moveTo(wX - CW * 0.06, wY)
+        ctx!.lineTo(wX + wW + CW * 0.06, wY)
+        ctx!.stroke()
+        ctx!.strokeStyle = `rgba(14,14,17,${(0.3 * micA).toFixed(3)})`
+        for (const ex of [wX - CW * 0.06, wX + wW + CW * 0.06]) {
+          ctx!.beginPath()
+          ctx!.moveTo(ex, wY - CH * 0.012)
+          ctx!.lineTo(ex, wY + CH * 0.012)
+          ctx!.stroke()
+        }
+        for (let wi = 0; wi < wN; wi++) {
+          const edge = Math.pow(Math.sin((wi / (wN - 1)) * Math.PI), 0.45)
+          const tgt = env * edge * (0.2 + 0.8 * Math.pow(Math.abs(Math.sin(wi * 3.1 + now / 62)), 1.5))
+          LV[wi] += (tgt - LV[wi]) * (tgt > LV[wi] ? 0.6 : 0.22)
+          const hgt = Math.max(1.5, LV[wi] * CH * 0.105) * micA
+          ctx!.fillStyle = `rgba(14,14,17,${(0.78 * micA).toFixed(3)})`
+          ctx!.fillRect(wX + wi * gap, wY - hgt, 2.2, hgt * 2)
+        }
+        ctx!.font = '11px ui-monospace,Menlo,monospace'
+        ctx!.textAlign = 'center'
+        ctx!.fillStyle = `rgba(14,14,17,${(0.42 * micA).toFixed(3)})`
+        ctx!.fillText('LISTENING', CW / 2, wY + CH * 0.075)
+        ctx!.textAlign = 'left'
+      }
+
+      // Speaking (and the tail of listening) draws no network and no band at all.
+      if (scanA < 0.02) { raf = requestAnimationFrame(draw); return }
+
+      // ── The node network, banded into three hue groups by height. ──────────────────────────────
+      ctx!.globalCompositeOperation = 'lighter'
+      ctx!.lineWidth = 0.8
+      for (let hb = 0; hb < 3; hb++) {
+        ctx!.strokeStyle = rgba(hue(hb / 2), Number((0.5 * scanA).toFixed(3)))
+        ctx!.beginPath()
+        for (let e = 0; e < edges.length; e += 2) {
+          const A = pts[edges[e]], B = pts[edges[e + 1]]
+          if (Math.abs(A.y - band) > 96) continue
+          if ((((A.y / CH) * 2.999) | 0) !== hb) continue
+          ctx!.moveTo(A.x, A.y)
+          ctx!.lineTo(B.x, B.y)
+        }
+        ctx!.stroke()
+      }
+      for (let i = 0; i < pts.length; i++) {
+        const { x, y } = pts[i]
+        const dd = Math.abs(y - band)
+        if (dd > 96) continue
+        const al = Math.pow(1 - dd / 96, 2) * 0.95 * scanA * (0.55 + 0.45 * Math.sin((x + y) * 0.05 + now / 210))
+        if (al < 0.04) continue
+        ctx!.fillStyle = rgba(hue(Math.min(1, y / CH)), Number(al.toFixed(3)))
+        ctx!.fillRect(x - 1.2, y - 1.2, 2.4, 2.4)
+      }
+      ctx!.globalCompositeOperation = 'source-over'
+
+      // ── The band itself, drawn offscreen then composited with 'lighter'. ───────────────────────
+      if (sctx) {
+        sctx.setTransform(1, 0, 0, 1, 0, 0)
+        sctx.clearRect(0, 0, CW, CH)
+        const lg = sctx.createLinearGradient(0, band - 46, 0, band + 10)
+        lg.addColorStop(0, rgba(hc, 0))
+        lg.addColorStop(0.72, rgba(hc, Number((0.18 * scanA).toFixed(3))))
+        lg.addColorStop(0.96, rgba(hc, Number((0.55 * scanA).toFixed(3))))
+        lg.addColorStop(1, rgba(hc, 0))
+        sctx.fillStyle = lg
+        sctx.fillRect(0, band - 46, CW, 56)
+        sctx.fillStyle = `rgba(255,255,255,${(0.8 * scanA).toFixed(3)})`
+        sctx.fillRect(0, band - 1.2, CW, 1.6)
+        ctx!.globalCompositeOperation = 'lighter'
+        ctx!.drawImage(sweep, 0, 0)
+        ctx!.globalCompositeOperation = 'source-over'
+      }
+
+      raf = requestAnimationFrame(draw)
+    }
+
+    /** One static frame — reduced motion, hidden tab, hero off-screen. */
+    function drawStill() {
+      if (!img || CW === 0) return
+      ctx!.setTransform(1, 0, 0, 1, 0, 0)
+      ctx!.clearRect(0, 0, CW, CH)
+      ctx!.drawImage(img, DX, DY, DW, DH)
+    }
+
+    // ── Run / pause ─────────────────────────────────────────────────────────────────────────────
+    // Paused when the tab is hidden OR the hero has scrolled out of view. Both are checked because
+    // they are different absences and either one alone leaves the loop burning frames nobody sees.
+    let visible = !document.hidden
+    let onScreen = true
+    let running = false
+
+    function start() {
+      if (running || reduced || disposed) return
+      running = true
+      raf = requestAnimationFrame(draw)
+    }
+    function stop() {
+      running = false
+      if (raf) cancelAnimationFrame(raf)
+      raf = 0
+      const v = videoRef.current
+      if (v && !v.paused) v.pause()
+    }
+    function sync() {
+      if (visible && onScreen) start()
+      else { stop(); drawStill() }
+    }
+
+    const onVisibility = () => { visible = !document.hidden; sync() }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    const io = new IntersectionObserver(
+      ([entry]) => { onScreen = entry.isIntersecting; sync() },
+      { threshold: 0.01 },
+    )
+    io.observe(canvas)
+
+    const onResize = () => { fit(); if (raw.length) buildNet(); if (!running) drawStill() }
+    window.addEventListener('resize', onResize)
+
+    // Load the still and the mesh, then begin. Both are static files under /public/v2 — no base64
+    // anywhere in this component.
+    const image = new Image()
+    image.onload = () => {
+      if (disposed) return
+      img = image
+      fit()
+      if (raw.length) buildNet()
+      if (reduced) drawStill()
+      else sync()
+    }
+    image.src = STILL
+
+    fetch(NODES)
+      .then((r) => r.json())
+      .then((d: { points: [number, number][] }) => {
+        if (disposed) return
+        raw = d.points || []
+        if (img) { buildNet() }
+      })
+      .catch(() => { /* no network overlay; the sweep and portrait still render */ })
+
+    return () => {
+      disposed = true
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('resize', onResize)
+      io.disconnect()
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
+
+  return (
+    <>
+      {/* Off-screen source for the speaking crossfade. Never displayed directly — the loop samples it
+          into the canvas — so it carries no controls and no layout. Absent under reduced motion. */}
+      <video
+        ref={videoRef}
+        src={VIDEO}
+        muted
+        loop
+        playsInline
+        preload="auto"
+        aria-hidden
+        style={{ position: 'absolute', width: 2, height: 2, opacity: 0, pointerEvents: 'none', top: 0, left: 0 }}
+      />
+      <canvas
+        ref={canvasRef}
+        className={className}
+        onClick={onClick}
+        role="img"
+        aria-label={`Rudi, ${state}`}
+      />
+    </>
+  )
+}
