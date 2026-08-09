@@ -247,33 +247,102 @@
 .v2-dline p { flex: 1; font-size: 15px; font-weight: 450; }
 
 /* ── Composer ─────────────────────────────────────────────────────────────────────────────────── */
-.v2-composer { margin-top: 26px; }
+/* ONE control in two states. .v2-ctl owns the geometry so the pill and the field are the same shape
+   in the same place; only the skin changes. They are stacked, not swapped, so nothing reflows and
+   nothing below them moves when the morph happens. */
+.v2-composer { position: relative; margin-top: 26px; height: 50px; max-width: 560px; }
+.v2-composer[data-full] { max-width: none; }
+
+.v2-ctl {
+  position: absolute; inset: 0 auto 0 0; height: 50px;
+  border-radius: var(--v2-radius-pill);
+  display: flex; align-items: center; gap: 10px;
+  transition: opacity 0.22s var(--v2-ease), transform 0.22s var(--v2-ease);
+}
+.v2-composer[data-full] .v2-ctl { right: 0; }
+.v2-ctl[data-hidden] { opacity: 0; transform: scale(0.985); pointer-events: none; }
+
+/* ── Voice face ────────────────────────────────────────────────────────────────────────────────── */
+/* The gradient's origin follows the pointer through --gx/--gy, set by the magnet. */
 .v2-talk {
-  position: relative; height: 50px; padding: 0 24px 0 16px; border-radius: var(--v2-radius-pill);
-  display: inline-flex; align-items: center; gap: 10px; color: #fff;
-  background: var(--v2-grad-2); box-shadow: 0 4px 20px rgba(139, 92, 246, 0.42);
-  transition: transform 0.1s, box-shadow 0.2s; overflow: hidden;
+  padding: 0 24px 0 16px; color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  background: radial-gradient(135% 190% at var(--gx, 50%) var(--gy, 50%), #ff2e93 0%, #8b5cf6 46%, #22d3ee 100%);
+  box-shadow: 0 6px 26px rgba(139, 92, 246, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  overflow: hidden; will-change: transform;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s, filter 0.25s, opacity 0.22s;
 }
-.v2-talk:active { transform: scale(0.97); }
-.v2-talk[data-on="true"] { box-shadow: 0 4px 28px rgba(255, 46, 147, 0.5); }
-.v2-talk svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 1.8; stroke-linecap: round; }
-.v2-talk .v2-kbd {
-  font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em;
-  padding: 3px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.2);
+.v2-composer[data-full] .v2-talk { justify-content: center; }
+.v2-talk:hover { filter: brightness(1.08); box-shadow: 0 10px 34px rgba(139, 92, 246, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+/* While magnetised the transform must track the pointer, so the long settle curve is swapped for a
+   short linear one. Releasing restores the curve above and the button eases home. */
+.v2-talk[data-mag="true"] { transition: transform 0.09s linear, box-shadow 0.3s, filter 0.25s; }
+.v2-talk[data-down="true"] { transform: scale(0.952) !important; box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35); }
+.v2-talk[data-pop="true"] { animation: v2-pop 0.52s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes v2-pop { 0% { transform: scale(0.952) } 55% { transform: scale(1.03) } 100% { transform: scale(1) } }
+
+/* Listening / speaking: the fill drops to ink and a ring pulses out. */
+.v2-talk[data-on] { background: var(--v2-ink); color: #fff; }
+.v2-talk::after {
+  content: ''; position: absolute; inset: -5px; border-radius: 30px;
+  border: 1.5px solid rgba(139, 92, 246, 0.7); opacity: 0; pointer-events: none;
 }
-.v2-tin {
-  display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 8px 0 14px;
-  border-radius: var(--v2-radius-pill); background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.22); max-width: 520px;
+.v2-talk[data-on]::after { opacity: 1; animation: v2-ring 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+@keyframes v2-ring { 0% { transform: scale(1); opacity: 0.75 } 100% { transform: scale(1.24); opacity: 0 } }
+
+.v2-mic {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%; flex: none;
+  background: rgba(255, 255, 255, 0.18);
 }
-.v2-tin input { flex: 1; color: #fff; font-size: 15px; }
+.v2-talk[data-on] .v2-mic { background: rgba(255, 255, 255, 0.16); }
+.v2-talk svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.v2-kbd {
+  margin-left: 4px; font-family: var(--v2-mono); font-size: 10px; padding: 2px 6px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.18); border: 1px solid rgba(255, 255, 255, 0.22);
+}
+/* The label lags the button — 42% of its offset — so the pill leads and the words catch up. */
+.v2-talk .v2-lab, .v2-talk .v2-mic, .v2-talk .v2-kbd {
+  display: inline-flex; transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.v2-talk[data-mag="true"] .v2-lab,
+.v2-talk[data-mag="true"] .v2-mic,
+.v2-talk[data-mag="true"] .v2-kbd { transition: transform 0.16s linear; }
+.v2-shine { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.v2-shine i {
+  position: absolute; top: -40%; left: -30%; width: 22%; height: 180%; transform: rotate(18deg);
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.5), rgba(255,255,255,0));
+  opacity: 0; transition: opacity 0.2s;
+}
+.v2-talk:hover .v2-shine i { opacity: 1; animation: v2-sweep 1.1s cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes v2-sweep { 0% { left: -30% } 100% { left: 110% } }
+
+/* ── Text face ─────────────────────────────────────────────────────────────────────────────────── */
+/* Same geometry, gradient BORDER instead of gradient fill. The border is a masked pseudo-element
+   because a gradient cannot be a border-color, and 1.5px is the reference's weight. */
+.v2-tin { right: 0; padding: 0 8px 0 10px; background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(6px); }
+.v2-tin::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px;
+  background: var(--v2-grad);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  pointer-events: none;
+}
+.v2-tin input { flex: 1; min-width: 0; color: #fff; font-size: 15px; }
 .v2-tin input::placeholder { color: rgba(255, 255, 255, 0.42); }
-.v2-tin svg { width: 15px; height: 15px; stroke: rgba(255, 255, 255, 0.7); fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.v2-mic-btn { background: rgba(255, 255, 255, 0.12); }
+.v2-mic-btn svg { width: 14px; height: 14px; stroke: rgba(255, 255, 255, 0.8); fill: none; stroke-width: 1.8; stroke-linecap: round; }
 .v2-send {
   width: 38px; height: 38px; border-radius: 50%; flex: none;
   display: flex; align-items: center; justify-content: center; background: var(--v2-grad-2);
 }
-.v2-send svg { stroke: #fff; }
+.v2-send svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+/* What the owner typed, echoed above the caption. ONE mono line — never a scrolling transcript. */
+.v2-you {
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42); margin-bottom: 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 620px;
+}
 
 /* ── Right column ─────────────────────────────────────────────────────────────────────────────── */
 .v2-side { padding: 26px 22px 22px; border-left: 1px solid var(--v2-line); overflow-y: auto; }
@@ -291,8 +360,12 @@
   transition: border-color 0.12s; position: relative; overflow: hidden;
 }
 .v2-card:hover { border-color: var(--v2-violet-edge); }
-.v2-card p { font-size: 15px; font-weight: 500; }
-.v2-card > span { display: block; margin-top: 4px; font-size: 13px; color: var(--v2-ink-45); }
+.v2-card p { font-size: 15px; font-weight: 500; line-height: 1.3; }
+.v2-card > span { display: block; margin-top: 4px; font-size: 13px; color: var(--v2-ink-45); line-height: 1.35; }
+/* An empty state is a card too — same border, same radius, same shadow — so a quiet column reads as
+   answered rather than as unrendered. Only the ink is lighter. */
+.v2-card[data-empty] p { color: var(--v2-ink-55); font-weight: 450; }
+.v2-dempty { font-size: 15px; color: var(--v2-ink-45); padding: 4px 0 6px; }
 .v2-blk { margin-top: 30px; }
 .v2-item { width: 100%; text-align: left; }
 .v2-item p { font-size: 14.5px; font-weight: 450; line-height: 1.35; }
@@ -325,6 +398,75 @@
 /* Disabled action buttons. /v2 is read-only; these render so the layout is honest about what the
    real screen has, and cannot fire. */
 .v2 button[disabled] { cursor: not-allowed; opacity: 0.55; }
+
+/* ── Interaction layer ───────────────────────────────────────────────────────────────────────── */
+
+/* The custom cursor. mix-blend-mode: difference keeps the small dot visible against both the lit and
+   the shadowed halves of the portrait without needing to know which it is over. It swells over the
+   media only; everywhere else it is hidden and the native cursor is back. */
+.v2-cur {
+  position: fixed; left: 0; top: 0; z-index: 90; pointer-events: none;
+  transform: translate(-50%, -50%);
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #fff; mix-blend-mode: difference; opacity: 0;
+  display: flex; align-items: center; justify-content: center; border: 1px solid transparent;
+  transition: width 0.38s var(--v2-ease), height 0.38s var(--v2-ease),
+              background 0.3s, border-color 0.3s, opacity 0.25s;
+}
+.v2-cur[data-on] {
+  opacity: 1; width: 84px; height: 84px;
+  background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.75);
+  mix-blend-mode: normal;
+}
+.v2-cur em {
+  font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.18em; font-style: normal;
+  color: #fff; opacity: 0; transition: opacity 0.25s;
+}
+.v2-cur[data-on] em { opacity: 1; }
+
+/* Shortcut badges: present in the DOM, revealed on hover. */
+.v2-kb {
+  font-family: var(--v2-mono); font-size: 9.5px; color: rgba(14, 14, 17, 0.3);
+  border: 1px solid rgba(0, 0, 0, 0.12); border-radius: 4px; padding: 1px 5px;
+  margin-left: 8px; opacity: 0; transition: opacity 0.14s;
+}
+.v2-nav:hover .v2-kb { opacity: 1; }
+
+/* Command palette. */
+.v2-pal {
+  position: fixed; inset: 0; z-index: 95; display: flex;
+  align-items: flex-start; justify-content: center; padding-top: 14vh;
+  background: rgba(14, 14, 17, 0.38); backdrop-filter: blur(3px);
+}
+.v2-palbox {
+  width: min(560px, 90vw); background: var(--v2-paper); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 30px 80px rgba(14, 14, 17, 0.3), 0 0 0 1px rgba(14, 14, 17, 0.08);
+}
+.v2-palbox input { width: 100%; padding: 19px 22px; font-size: 17px; }
+.v2-palbox input::placeholder { color: rgba(14, 14, 17, 0.32); }
+.v2-pallist { max-height: 320px; overflow-y: auto; border-top: 1px solid var(--v2-line); }
+.v2-palrow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 22px; font-size: 14.5px; cursor: pointer;
+}
+.v2-palrow[data-on] { background: var(--v2-violet-wash); }
+.v2-palrow em {
+  font-family: var(--v2-mono); font-size: 10px; font-style: normal;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--v2-ink-42);
+}
+.v2-palempty { padding: 18px 22px; font-size: 14px; color: var(--v2-ink-45); }
+.v2-palfoot {
+  display: flex; gap: 18px; padding: 11px 22px; border-top: 1px solid var(--v2-line);
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--v2-ink-40);
+}
+
+/* Reduced motion drops the cursor and the magnet entirely — both are pure motion. The hooks bail on
+   the same query, so this is belt and braces rather than the only guard. */
+@media (prefers-reduced-motion: reduce) {
+  .v2-cur { display: none; }
+  .v2-face { cursor: pointer; }
+}
 
 /* ── Mobile ───────────────────────────────────────────────────────────────────────────────────── */
 .v2-mobile { display: none; }

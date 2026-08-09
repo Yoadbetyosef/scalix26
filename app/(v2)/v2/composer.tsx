@@ -1,16 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RudiState } from './rudi-canvas'
 import { rudiState } from './rudi-line'
 
-// One control that switches between voice and typing.
+// ONE control, not two.
 //
-// The reference treats these as two faces of a single control rather than two controls: the Talk
-// button and the text field occupy the same slot, and a small mic glyph inside the field switches
-// back. That is why this is one component with a mode, not a button beside an input.
+// The first version put a separate "TYPE" label beside the pill, which made typing a second control
+// competing with the first. The reference has no such affordance: the pill and the field are the same
+// object in two states. Same position, same height, same radius — the fill becomes a 1.5px gradient
+// border and the label becomes a caret. Nothing moves.
 //
-// READ-ONLY. Send is rendered because the layout is dishonest without it, and disabled because /v2
+// Entering text mode: type any letter, or "/", anywhere on the page. Leaving it: Esc, or the mic glyph
+// on the left. Enter sends.
+//
+// READ-ONLY: send is rendered because the control is dishonest without it, and disabled because /v2
 // writes nothing.
 
 const MicIcon = () => (
@@ -20,71 +24,111 @@ const MicIcon = () => (
   </svg>
 )
 
-interface Props {
+export interface ComposerProps {
   state: RudiState
   onTalk: () => void
-  /** Mobile stretches the control to the full width of the sticky bar. */
+  /** Mobile stretches the control across the sticky bar. */
   full?: boolean
+  /** What the owner typed, echoed above the caption as one mono line. */
+  onSubmit?: (text: string) => void
+  /** Lifted so the shell can suppress the Space shortcut while typing. */
+  onTypingChange?: (typing: boolean) => void
+  /** Magnetic pull, desktop only. Supplied by the shell so the physics live in one place. */
+  buttonRef?: (el: HTMLButtonElement | null) => void
 }
 
-export function Composer({ state, onTalk, full = false }: Props) {
+export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange, buttonRef }: ComposerProps) {
   const [typing, setTyping] = useState(false)
   const [value, setValue] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  if (typing) {
-    return (
-      <div className="v2-composer">
-        <div className="v2-tin" style={full ? { maxWidth: 'none' } : undefined}>
-          <button
-            type="button"
-            className="v2-mtog"
-            onClick={() => setTyping(false)}
-            title="Switch to voice"
-            aria-label="Switch to voice"
-            style={{ display: 'flex', flex: 'none' }}
-          >
-            <MicIcon />
-          </button>
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="Type to Rudi…"
-            autoComplete="off"
-            aria-label="Type to Rudi"
-          />
-          <button type="button" className="v2-send" disabled title="v2 preview" aria-label="Send">
-            <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12h13M13 6l6 6-6 6" /></svg>
-          </button>
-        </div>
-      </div>
-    )
+  useEffect(() => { onTypingChange?.(typing) }, [typing, onTypingChange])
+
+  // Any letter, digit or "/" opens the field and lands in it. The reference's behaviour: you start
+  // typing and the control is already there, rather than reaching for a control first.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (typing) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const printable = e.key.length === 1 && /[\w/]/.test(e.key)
+      if (!printable) return
+      e.preventDefault()
+      setTyping(true)
+      setValue(e.key === '/' ? '' : e.key)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [typing])
+
+  useEffect(() => { if (typing) inputRef.current?.focus() }, [typing])
+
+  const leave = () => { setTyping(false); setValue('') }
+
+  const submit = () => {
+    const text = value.trim()
+    if (!text) { leave(); return }
+    onSubmit?.(text)
+    setValue('')
+    // Stays in text mode after sending — the reference keeps the field open so a second line follows
+    // the first without reaching for the control again.
   }
 
   return (
-    <div className="v2-composer" style={full ? undefined : { display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="v2-composer" data-full={full || undefined}>
+      {/* Both faces share .v2-ctl, which owns the geometry. Only the skin differs. */}
       <button
+        ref={buttonRef}
         type="button"
-        className="v2-talk"
-        data-on={state !== 'idle'}
+        className="v2-ctl v2-talk"
+        data-on={state !== 'idle' || undefined}
+        data-hidden={typing || undefined}
         onClick={onTalk}
-        style={full ? { width: '100%', justifyContent: 'center' } : undefined}
+        aria-hidden={typing}
+        tabIndex={typing ? -1 : 0}
       >
-        <MicIcon />
-        <span>{rudiState(state)}</span>
+        <span className="v2-mic"><MicIcon /></span>
+        <span className="v2-lab">{rudiState(state)}</span>
         {!full && <span className="v2-kbd">SPACE</span>}
+        <span className="v2-shine" aria-hidden><i /></span>
       </button>
-      {!full && (
+
+      <div className="v2-ctl v2-tin" data-hidden={!typing || undefined}>
         <button
           type="button"
-          onClick={() => setTyping(true)}
-          title="Switch to typing"
-          aria-label="Switch to typing"
-          className="v2-mono"
-          style={{ color: 'rgba(255,255,255,.45)', padding: '8px 4px' }}
+          className="v2-mic v2-mic-btn"
+          onClick={leave}
+          title="Switch to voice"
+          aria-label="Switch to voice"
+          tabIndex={typing ? 0 : -1}
         >
-          Type
+          <MicIcon />
         </button>
-      )}
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit() }
+            if (e.key === 'Escape') { e.preventDefault(); leave() }
+          }}
+          placeholder="Type to Rudi…"
+          autoComplete="off"
+          aria-label="Type to Rudi"
+          tabIndex={typing ? 0 : -1}
+        />
+        <button
+          type="button"
+          className="v2-send"
+          disabled
+          title="v2 preview"
+          aria-label="Send"
+          tabIndex={-1}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12h13M13 6l6 6-6 6" /></svg>
+        </button>
+      </div>
     </div>
   )
 }

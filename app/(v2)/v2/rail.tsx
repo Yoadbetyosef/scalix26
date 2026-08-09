@@ -16,25 +16,31 @@ interface Props {
   businessName: string
   primary: NavItem[]
   groups: Group[]
-  /** Seven bars, newest last. Null when the series does not exist. */
-  pulse?: number[] | null
-  pulseLabel?: string | null
+  /** Which primary row the 1-4 shortcut last selected. */
+  activeIndex?: number | null
 }
+
+// The bottom pulse strip is deliberately ABSENT. It needs a 7-day series and a missed-call count, and
+// the missed count has no source — logged under MISSING. Drawing it with invented bars would be the
+// one thing on this screen that was not true.
 
 const Chevron = () => (
   <svg viewBox="0 0 24 24" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
 )
 
-function Nav({ item, on }: { item: NavItem; on?: boolean }) {
+function Nav({ item, on, shortcut }: { item: NavItem; on?: boolean; shortcut?: number }) {
   return (
     <button type="button" className="v2-nav" data-on={on || undefined} data-out={item.out || undefined}>
       <span>{item.label}</span>
       {item.badge ? <em>{item.badge}</em> : item.count ? <em>{item.count}</em> : null}
+      {/* Revealed on hover — the shortcut is discoverable from the row it belongs to rather than from
+          a help screen nobody opens. */}
+      {shortcut && <span className="v2-kb">{shortcut}</span>}
     </button>
   )
 }
 
-export function Rail({ businessName, primary, groups, pulse, pulseLabel }: Props) {
+export function Rail({ businessName, primary, groups, activeIndex = null }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({ [groups[0]?.id ?? '']: true })
 
   return (
@@ -44,7 +50,9 @@ export function Rail({ businessName, primary, groups, pulse, pulseLabel }: Props
         <span><i />Rudi · on duty</span>
       </div>
 
-      {primary.map((item, i) => <Nav key={item.label} item={item} on={i === 0} />)}
+      {primary.map((item, i) => (
+        <Nav key={item.label} item={item} on={i === (activeIndex ?? 0)} shortcut={i + 1} />
+      ))}
 
       {groups.map((g) => (
         <div key={g.id}>
@@ -64,17 +72,6 @@ export function Rail({ businessName, primary, groups, pulse, pulseLabel }: Props
         </div>
       ))}
 
-      {/* The pulse strip. Rendered only when there is a real series behind it — see MISSING. */}
-      {pulse && pulse.length > 0 && (
-        <div className="v2-pulse">
-          <div className="v2-spark">
-            {pulse.map((h, i) => (
-              <i key={i} data-on={i === pulse.length - 1 || undefined} style={{ height: `${Math.max(6, h)}%` }} />
-            ))}
-          </div>
-          {pulseLabel && <p>{pulseLabel}</p>}
-        </div>
-      )}
     </aside>
   )
 }
