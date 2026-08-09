@@ -6,6 +6,7 @@ import { Composer } from './composer'
 import { Rail } from './rail'
 import { Sheet, type NeedsItem, type NowItem, type Tile } from './sheet'
 import type { RudiSegment } from './rudi-line'
+import { useIsMobile } from './use-breakpoint'
 
 // The interactive shell. Everything below the data boundary — the page hands it real numbers and
 // this owns state, the idle timer, and the Rudi handle.
@@ -30,11 +31,20 @@ export interface HomeData {
 /** After this long with no interaction the hero collapses and the animation stops. */
 const IDLE_MS = 60_000
 
+/** How long the demo holds `listening` before Rudi answers. The reference's own value. */
+const LISTEN_MS = 2500
+
+/** The reference's three demo durations. Deliberately far apart so `speak(ms)` holding for EXACTLY
+ *  ms is verifiable by watching: 2.2s is over before you finish reading, 15s is unmistakably long. */
+const DEMO_MS = [2200, 6500, 15000]
+
 export function HomeClient({ data }: { data: HomeData }) {
   const rudi = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [minimised, setMinimised] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const demoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isMobile = useIsMobile()
 
   // The idle collapse. Restarts on any deliberate interaction, and is suspended entirely while Rudi
   // is listening or speaking — collapsing mid-sentence would be the screen interrupting itself.
@@ -57,9 +67,26 @@ export function HomeClient({ data }: { data: HomeData }) {
     wake()
     const r = rudi.current
     if (!r) return
-    if (r.state() === 'idle') r.listen()
-    else { r.stopListening(); r.stopSpeaking() }
+    if (demoTimer.current) { clearTimeout(demoTimer.current); demoTimer.current = null }
+
+    if (r.state() === 'idle') {
+      r.listen()
+      // The demo chain, standing in for the voice layer: hold listening, then answer for one of three
+      // durations. When the real layer arrives it calls Rudi.speak(text, ms) on the first audio chunk
+      // and Rudi.stopSpeaking() when the stream ends, and this block is the only thing that goes.
+      demoTimer.current = setTimeout(() => {
+        demoTimer.current = null
+        if (rudi.current?.state() !== 'listening') return
+        const ms = DEMO_MS[Math.floor(Math.random() * DEMO_MS.length)]
+        rudi.current.speak(undefined, ms)
+      }, LISTEN_MS)
+    } else {
+      r.stopListening()
+      r.stopSpeaking()
+    }
   }, [wake])
+
+  useEffect(() => () => { if (demoTimer.current) clearTimeout(demoTimer.current) }, [])
 
   // Space toggles, matching the SPACE affordance printed on the button. Ignored while typing.
   useEffect(() => {
@@ -76,6 +103,8 @@ export function HomeClient({ data }: { data: HomeData }) {
     ? [{ text: 'Rudi is speaking.', accent: true } as RudiSegment]
     : state === 'listening' ? [] : data.line
 
+  // ONE canvas, in ONE tree. See use-breakpoint.ts: rendering the hero into both trees and hiding one
+  // with CSS gave two canvases racing for the same imperative ref, and the hidden one won.
   const hero = (
     <>
       <RudiCanvas
@@ -89,9 +118,12 @@ export function HomeClient({ data }: { data: HomeData }) {
     </>
   )
 
-  return (
-    <>
-      {/* ── Desktop ─────────────────────────────────────────────────────────────────────────────── */}
+  // Nothing until the breakpoint is measured — one frame of the wrong layout is worse than one frame
+  // of none, and the canvas would size itself against a viewport it is about to leave.
+  if (isMobile === null) return <div className="v2-app" aria-hidden />
+
+  if (!isMobile) {
+    return (
       <div className="v2-app">
         <Rail
           businessName={data.businessName}
@@ -169,11 +201,13 @@ export function HomeClient({ data }: { data: HomeData }) {
               </div>
             )}
           </div>
-        </aside>
+      </aside>
       </div>
+    )
+  }
 
-      {/* ── Mobile ──────────────────────────────────────────────────────────────────────────────── */}
-      <div className="v2-mobile">
+  return (
+    <div className="v2-mobile">
         <div className="v2-frame">{hero}</div>
         <div className="v2-top">
           <b>{data.businessName}</b>
@@ -192,10 +226,9 @@ export function HomeClient({ data }: { data: HomeData }) {
           monthLabel={data.monthLabel}
           monthStats={data.monthStats}
         />
-        <div className="v2-sticky">
-          <Composer state={state} onTalk={toggleTalk} full />
-        </div>
+      <div className="v2-sticky">
+        <Composer state={state} onTalk={toggleTalk} full />
       </div>
-    </>
+    </div>
   )
 }

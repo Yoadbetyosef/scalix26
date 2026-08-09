@@ -103,7 +103,12 @@
   width: 100%; height: 100%;
   display: grid;
   grid-template-columns: var(--v2-rail-w) 1fr var(--v2-side-w);
+  /* Explicit, not implicit. An `auto` row sizes to the tallest column's CONTENT, so a short rail and
+     a short right column left the stage shorter than the viewport and the hero letterboxed inside it.
+     100% pins the single row to the grid's own height. */
+  grid-template-rows: 100%;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* ── Left rail ────────────────────────────────────────────────────────────────────────────────── */
@@ -179,14 +184,21 @@
 }
 
 /* ── Stage ────────────────────────────────────────────────────────────────────────────────────── */
-.v2-stage { position: relative; overflow: hidden; background: var(--v2-stage); }
+.v2-stage { position: relative; overflow: hidden; background: var(--v2-stage); min-width: 0; min-height: 0; }
 .v2-home { position: absolute; inset: 0; transition: opacity 0.3s, transform 0.3s; }
-.v2-face { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+/* Full-bleed: the canvas IS the centre column, top to bottom and edge to edge. The custom cursor
+   replaces the native one over the media only — the rail and the right column keep theirs. */
+.v2-face {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  display: block; z-index: 1; cursor: none;
+}
 .v2-face {
   transition: left var(--v2-collapse) var(--v2-ease), bottom var(--v2-collapse) var(--v2-ease),
               width var(--v2-collapse) var(--v2-ease), height var(--v2-collapse) var(--v2-ease),
               border-radius var(--v2-collapse), box-shadow var(--v2-collapse);
 }
+/* The scrim. 62% of the height, three stops, transparent at the top — the caption is white and the
+   portrait is lit from below, so without this the text sits on a bright shoulder and disappears. */
 .v2-scrim {
   position: absolute; left: 0; right: 0; bottom: 0; height: 62%; z-index: 2; pointer-events: none;
   background: linear-gradient(180deg, rgba(10, 10, 13, 0), rgba(10, 10, 13, 0.42) 44%, rgba(10, 10, 13, 0.88));
