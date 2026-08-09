@@ -38,6 +38,8 @@ interface Props {
   onStateChange?: (s: RudiState) => void
   /** Collapsed (idle > 60s): still frame, slow band, no network, no video. */
   minimised?: boolean
+  /** True only when a real microphone is feeding level(). Drives LISTENING vs LISTENING · DEMO. */
+  micLive?: boolean
   className?: string
   onClick?: () => void
 }
@@ -47,6 +49,9 @@ interface Node { x: number; y: number }
 const IW = 680
 const IH = 907
 const STILL = '/v2/rudi-still.webp'
+/** The stage ground. Matches --v2-stage in v2-tokens.css; a literal because the canvas cannot read
+ *  a custom property, and the two must move together if either changes. */
+const STAGE_BG = '#0d0d10'
 const VIDEO = '/v2/rudi-speaking.mp4'
 const NODES = '/v2/rudi-nodes.json'
 
@@ -70,7 +75,7 @@ function hue(t: number): [number, number, number] {
 }
 const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick }: Props) {
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLive = false, className, onClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setStateRaw] = useState<RudiState>('idle')
@@ -83,8 +88,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
   const speakEndRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minRef = useRef(minimised)
+  const micLiveRef = useRef(micLive)
 
   useEffect(() => { minRef.current = minimised }, [minimised])
+  useEffect(() => { micLiveRef.current = micLive; if (!micLive) levelRef.current = null }, [micLive])
 
   const setState = useCallback((s: RudiState) => {
     stateRef.current = s
@@ -124,6 +131,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
 
     let raf = 0
     let disposed = false
+    // Reported to the console so the time to first canvas draw is a number rather than an impression.
+    let firstDraw = 0
+    let vidRequested = false
+    const t0 = performance.now()
     let CW = 0, CH = 0, S = 1, DX = 0, DY = 0, DW = 0, DH = 0
     let img: HTMLImageElement | null = null
     let pts: Node[] = []
@@ -154,7 +165,18 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       DY = (CH - DH) * 0.54
     }
 
-    // Nearest-neighbour graph over the mesh, rebuilt on resize because the points are in canvas space.
+    // Built ONCE per canvas size and memoised on it. The points live in canvas space so a genuine
+    // size change does invalidate them — but a resize event that reports the same dimensions (which
+    // is most of them: scrollbars, devtools, an address bar retracting) must not pay for a rebuild.
+    let netKey = ''
+    function ensureNet() {
+      const key = `${CW}x${CH}x${raw.length}`
+      if (key === netKey || !raw.length || !CW) return
+      netKey = key
+      buildNet()
+    }
+
+    // Nearest-neighbour graph over the mesh. Never called from the render loop — only from ensureNet.
     function buildNet() {
       pts = raw.map(([x, y]) => ({ x: DX + x * S, y: DY + y * S }))
       edges = []
@@ -252,14 +274,23 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       const vTarget = st === 'idle' ? 0 : 1
       vidA += (vTarget - vidA) * 0.075
 
+      // ── THE VIDEO IS OPTIONAL, ALWAYS ────────────────────────────────────────────────────────
+      //
+      // Nothing waits on it. It is not fetched until the first time she speaks, and if it is not
+      // decodable yet she speaks over the still — the crossfade simply has nothing to fade to. The
+      // rule is that a missing video costs a texture and never a frame, because the alternative is
+      // the black screen this was reported as.
       const vid = videoRef.current
-      if (vid && vid.readyState >= 2) {
-        if (vTarget && vid.paused) { try { vid.currentTime = 0; void vid.play() } catch { /* autoplay refused */ } }
-        if (!vTarget && vidA < 0.02 && !vid.paused) vid.pause()
-        if (vidA > 0.006) {
-          ctx!.globalAlpha = vidA
-          ctx!.drawImage(vid, DX, DY, DW, DH)
-          ctx!.globalAlpha = 1
+      if (vid) {
+        if (vTarget && !vidRequested) { vidRequested = true; vid.load() }
+        if (vid.readyState >= 2) {
+          if (vTarget && vid.paused) { try { vid.currentTime = 0; void vid.play() } catch { /* autoplay refused */ } }
+          if (!vTarget && vidA < 0.02 && !vid.paused) vid.pause()
+          if (vidA > 0.006) {
+            ctx!.globalAlpha = vidA
+            ctx!.drawImage(vid, DX, DY, DW, DH)
+            ctx!.globalAlpha = 1
+          }
         }
       }
 
@@ -316,7 +347,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         ctx!.font = '11px ui-monospace,Menlo,monospace'
         ctx!.textAlign = 'center'
         ctx!.fillStyle = `rgba(14,14,17,${(0.42 * micA).toFixed(3)})`
-        ctx!.fillText('LISTENING', CW / 2, wY + CH * 0.075)
+        // Says which it is. A meter that moves on a synthetic envelope while claiming to hear you is
+        // the same class of lie as a record claiming a review that never happened.
+        ctx!.fillText(micLiveRef.current ? 'LISTENING' : 'LISTENING · DEMO', CW / 2, wY + CH * 0.075)
         ctx!.textAlign = 'left'
       }
 
@@ -370,11 +403,20 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       raf = requestAnimationFrame(draw)
     }
 
+    /** The token stage colour. Down before any fetch resolves, so the canvas is never transparent
+     *  over a bare region — "black for a minute" is what an unpainted canvas looks like. */
+    function paintGround() {
+      if (!ctx || CW === 0) return
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.fillStyle = STAGE_BG
+      ctx.fillRect(0, 0, CW, CH)
+    }
+
     /** One static frame — reduced motion, hidden tab, hero off-screen. */
     function drawStill() {
-      if (!img || CW === 0) return
-      ctx!.setTransform(1, 0, 0, 1, 0, 0)
-      ctx!.clearRect(0, 0, CW, CH)
+      if (CW === 0) return
+      paintGround()
+      if (!img) return
       ctx!.drawImage(img, DX, DY, DW, DH)
     }
 
@@ -411,33 +453,59 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     )
     io.observe(canvas)
 
-    const onResize = () => { fit(); if (raw.length) buildNet(); if (!running) drawStill() }
+    const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
 
-    // Load the still and the mesh, then begin. Both are static files under /public/v2 — no base64
-    // anywhere in this component.
+    // ── FIRST PAINT ──────────────────────────────────────────────────────────────────────────────
+    //
+    // The ground colour goes down before anything is fetched, so the stage is never bare. Then the
+    // still paints the moment its bitmap is DECODED — decode() rather than onload, because onload
+    // fires when the bytes have arrived and the first drawImage can then still block on decoding a
+    // 680x907 image. Nothing in this path waits on the video, the mesh, or the network build.
+    fit()
+    paintGround()
+
     const image = new Image()
-    image.onload = () => {
+    // Static, same-origin, and the only thing standing between the visitor and a picture.
+    image.fetchPriority = 'high'
+    image.decoding = 'async'
+    image.src = STILL
+
+    const ready = typeof image.decode === 'function'
+      ? image.decode().catch(() => new Promise<void>((res) => { image.onload = () => res(); image.onerror = () => res() }))
+      : new Promise<void>((res) => { image.onload = () => res(); image.onerror = () => res() })
+
+    ready.then(() => {
       if (disposed) return
       img = image
       fit()
-      if (raw.length) buildNet()
-      if (reduced) drawStill()
-      else sync()
-    }
-    image.src = STILL
+      drawStill()                       // <- the picture is on screen HERE, before any effect starts
+      firstDraw = performance.now()
+      if (!reduced) sync()
+    })
 
+    // The mesh is an ENHANCEMENT and is fetched after the still is on its way. A failure costs the
+    // node overlay and nothing else — the portrait and the sweep are unaffected.
     fetch(NODES)
       .then((r) => r.json())
       .then((d: { points: [number, number][] }) => {
         if (disposed) return
         raw = d.points || []
-        if (img) { buildNet() }
+        netKey = ''                     // force one build at the current size
+        ensureNet()
       })
-      .catch(() => { /* no network overlay; the sweep and portrait still render */ })
+      .catch(() => { /* no node overlay; everything else renders */ })
+
+    // One line, once, naming the two numbers that matter.
+    const report = setTimeout(() => {
+      if (firstDraw) {
+        console.info(`[v2] first canvas draw ${Math.round(firstDraw - t0)}ms after mount`)
+      }
+    }, 3000)
 
     return () => {
       disposed = true
+      clearTimeout(report)
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('resize', onResize)
@@ -450,13 +518,18 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     <>
       {/* Off-screen source for the speaking crossfade. Never displayed directly — the loop samples it
           into the canvas — so it carries no controls and no layout. Absent under reduced motion. */}
+      {/* preload="none" — the bytes are not requested until the first speak calls load(). width and
+          height are stated so the browser can size it without fetching, and it is off the layout
+          entirely. Sampled into the canvas, never displayed. */}
       <video
         ref={videoRef}
         src={VIDEO}
+        width={IW}
+        height={IH}
         muted
         loop
         playsInline
-        preload="auto"
+        preload="none"
         aria-hidden
         style={{ position: 'absolute', width: 2, height: 2, opacity: 0, pointerEvents: 'none', top: 0, left: 0 }}
       />

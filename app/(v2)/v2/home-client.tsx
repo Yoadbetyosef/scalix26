@@ -5,7 +5,8 @@ import { RudiCanvas, type RudiHandle, type RudiState } from './rudi-canvas'
 import { Composer } from './composer'
 import { Rail } from './rail'
 import { Sheet, type NeedsItem, type NowItem, type Tile } from './sheet'
-import type { RudiSegment } from './rudi-line'
+import { rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
+import { hasSpeechRecognition, listenForText, openMic, say, type MicHandle, type TranscriptHandle } from './voice'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
 
@@ -27,24 +28,18 @@ export interface HomeData {
   tiles: Tile[]
   /** Recent activity, newest first. Shown behind the collapsed hero. */
   recent: { time: string; text: string }[]
+  /** Everything the local reply function answers from. Real numbers, already on the page. */
+  facts: ReplyFacts
 }
 
 /** After this long with no interaction the hero collapses and the animation stops. */
 const IDLE_MS = 60_000
-
-/** How long the demo holds `listening` before Rudi answers. The reference's own value. */
-const LISTEN_MS = 2500
-
-/** The reference's three demo durations. Deliberately far apart so `speak(ms)` holding for EXACTLY
- *  ms is verifiable by watching: 2.2s is over before you finish reading, 15s is unmistakably long. */
-const DEMO_MS = [2200, 6500, 15000]
 
 export function HomeClient({ data }: { data: HomeData }) {
   const rudi = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [minimised, setMinimised] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const demoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMobile = useIsMobile()
   // Two lines, never three. `said` is what the owner typed, echoed once above the caption; the reply
   // REPLACES the caption rather than appending to it. There is deliberately no transcript array —
@@ -54,6 +49,13 @@ export function HomeClient({ data }: { data: HomeData }) {
   const [jump, setJump] = useState<number | null>(null)
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
+  const mic = useRef<MicHandle | null>(null)
+  const transcript = useRef<TranscriptHandle | null>(null)
+  const stopSay = useRef<(() => void) | null>(null)
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Only true when audio is actually flowing. The canvas prints LISTENING · DEMO otherwise, so the
+  // meter never implies it is hearing something it is not.
+  const [micLive, setMicLive] = useState(false)
   const palette = usePalette()
   useMagnet(talkEl, typing)
 
@@ -74,30 +76,75 @@ export function HomeClient({ data }: { data: HomeData }) {
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 
+  /** Tear down every listening resource. Safe to call twice. */
+  const endListening = useCallback(() => {
+    if (pauseTimer.current) { clearTimeout(pauseTimer.current); pauseTimer.current = null }
+    transcript.current?.stop(); transcript.current = null
+    mic.current?.stop(); mic.current = null
+    setMicLive(false)
+    rudi.current?.level(0)
+  }, [])
+
+  /** Answer, out loud, for exactly as long as the voice actually runs. */
+  const answer = useCallback((heard: string) => {
+    endListening()
+    const text = rudiReply(heard, data.facts)
+    setReply([{ text }])
+    stopSay.current?.()
+    // speak() is driven by the utterance's OWN onstart/onend — not by an estimate — which is the
+    // whole reason the duration API exists. A very long ms is passed as a ceiling so a browser that
+    // never fires onend cannot strand the video; onend arriving first always wins.
+    stopSay.current = say(
+      text,
+      () => rudi.current?.speak(text, 120_000),
+      () => rudi.current?.stopSpeaking(),
+    )
+  }, [data.facts, endListening])
+
+  const beginListening = useCallback(async () => {
+    rudi.current?.listen()
+
+    // The meter first: it is the feedback that the click worked, and it must not wait on permission.
+    const handle = await openMic((v) => rudi.current?.level(v))
+    if (rudi.current?.state() !== 'listening') { handle?.stop(); return }
+    mic.current = handle
+    setMicLive(!!handle)
+    // Denied or unavailable: level(null-equivalent) is never set, so the canvas keeps its synthetic
+    // envelope and labels itself DEMO. Nothing else changes.
+
+    if (hasSpeechRecognition()) {
+      transcript.current = listenForText(
+        (text) => setSaid(text || null),
+        (finalText) => answer(finalText),
+      )
+    }
+    // No SpeechRecognition (Safari, Firefox): keep the meter, skip the transcript, and answer after a
+    // 3s pause so the loop still completes.
+    if (!transcript.current) {
+      pauseTimer.current = setTimeout(() => answer(''), 3000)
+    }
+  }, [answer])
+
   const toggleTalk = useCallback(() => {
     wake()
     const r = rudi.current
     if (!r) return
-    if (demoTimer.current) { clearTimeout(demoTimer.current); demoTimer.current = null }
-
     if (r.state() === 'idle') {
-      r.listen()
-      // The demo chain, standing in for the voice layer: hold listening, then answer for one of three
-      // durations. When the real layer arrives it calls Rudi.speak(text, ms) on the first audio chunk
-      // and Rudi.stopSpeaking() when the stream ends, and this block is the only thing that goes.
-      demoTimer.current = setTimeout(() => {
-        demoTimer.current = null
-        if (rudi.current?.state() !== 'listening') return
-        const ms = DEMO_MS[Math.floor(Math.random() * DEMO_MS.length)]
-        rudi.current.speak(undefined, ms)
-      }, LISTEN_MS)
+      setSaid(null)
+      setReply(null)
+      void beginListening()
     } else {
+      endListening()
+      stopSay.current?.(); stopSay.current = null
       r.stopListening()
       r.stopSpeaking()
     }
-  }, [wake])
+  }, [wake, beginListening, endListening])
 
-  useEffect(() => () => { if (demoTimer.current) clearTimeout(demoTimer.current) }, [])
+  useEffect(() => () => {
+    endListening()
+    stopSay.current?.()
+  }, [endListening])
 
   // Space toggles, matching the SPACE affordance printed on the button. Ignored while typing.
   useEffect(() => {
@@ -130,9 +177,8 @@ export function HomeClient({ data }: { data: HomeData }) {
   // say. No request is made, and no answer is invented.
   const onSubmit = useCallback((text: string) => {
     setSaid(text)
-    setReply(data.line)
-    rudi.current?.speak(undefined, 4000)
-  }, [data.line])
+    answer(text)
+  }, [answer])
 
   // ONE canvas, in ONE tree. See use-breakpoint.ts: rendering the hero into both trees and hiding one
   // with CSS gave two canvases racing for the same imperative ref, and the hidden one won.
@@ -142,6 +188,7 @@ export function HomeClient({ data }: { data: HomeData }) {
         handleRef={rudi}
         onStateChange={setState}
         minimised={minimised}
+        micLive={micLive}
         className="v2-face"
         onClick={() => (minimised ? wake() : toggleTalk())}
       />

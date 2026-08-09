@@ -95,6 +95,17 @@ export default async function V2Home() {
     businessName: (tenant?.business_name as string) || 'Your business',
     phone: (tenant?.phone_number as string) || null,
     line: rudiLine({ jobsToday: todaysJobs.length, unansweredLeads, humanRequested }),
+    // The reply function's whole input. Same figures the panels render, so a spoken answer and the
+    // screen beside it can never disagree.
+    facts: {
+      jobsToday: todaysJobs.length,
+      unansweredLeads,
+      humanRequested,
+      monthLabel: impact.monthLabel,
+      conversationsManaged: impact.conversationsManaged.value,
+      customersHelped: impact.customersHelped.value,
+      answeredPct: impact.coveragePct.value,
+    },
     rail: {
       primary: railPrimary,
       groups: [

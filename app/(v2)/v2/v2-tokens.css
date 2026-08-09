@@ -79,8 +79,17 @@
 .v2 *::before,
 .v2 *::after { box-sizing: border-box; margin: 0; padding: 0; }
 .v2 ::selection { background: rgba(139, 92, 246, 0.2); }
-.v2 button { font: inherit; letter-spacing: inherit; color: inherit; background: none; border: none; cursor: pointer; }
-.v2 input { font: inherit; letter-spacing: inherit; color: inherit; background: none; border: none; outline: none; }
+/* The element reset is wrapped in :where() so it carries ZERO specificity.
+   
+   It did not, and that was the Talk button bug: `.v2 button { background: none }` is (0,1,1) and
+   `.v2-talk` is (0,1,0), so the reset beat the component and stripped the gradient fill. What was
+   left was a transparent button over a dark scrim with its coloured box-shadow still painting —
+   which reads exactly as "near-black with a purple glow".
+   
+   :where() means any class, however plain, wins. A reset should lose every argument it has with a
+   component; that is the whole job. */
+.v2 :where(button) { font: inherit; letter-spacing: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+.v2 :where(input) { font: inherit; letter-spacing: inherit; color: inherit; background: none; border: none; outline: none; }
 .v2 [data-scroll]::-webkit-scrollbar { display: none; }
 .v2 [data-scroll] { scrollbar-width: none; }
 
@@ -184,6 +193,8 @@
 }
 
 /* ── Stage ────────────────────────────────────────────────────────────────────────────────────── */
+/* The loading stage. Painted, so the first frame of the page is never a bare black region. */
+.v2-stage-loading { background: var(--v2-stage); }
 .v2-stage { position: relative; overflow: hidden; background: var(--v2-stage); min-width: 0; min-height: 0; }
 .v2-home { position: absolute; inset: 0; transition: opacity 0.3s, transform 0.3s; }
 /* Full-bleed: the canvas IS the centre column, top to bottom and edge to edge. The custom cursor
@@ -263,14 +274,22 @@
 .v2-ctl[data-hidden] { opacity: 0; transform: scale(0.985); pointer-events: none; }
 
 /* ── Voice face ────────────────────────────────────────────────────────────────────────────────── */
-/* The gradient's origin follows the pointer through --gx/--gy, set by the magnet. */
+/* A FILLED gradient with white text, an inset white top highlight and a coloured drop shadow — the
+   reference's .talk, exactly. The base fill is the linear gradient; the radial below is the same
+   three colours re-centred on the pointer by the magnet, so the fill never disappears when --gx/--gy
+   are unset.
+   
+   No overflow:hidden here — the pulsing ring is an ::after at inset:-5px and would be clipped by it.
+   Only .v2-shine clips, which is what it is for. */
 .v2-talk {
   padding: 0 24px 0 16px; color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
+  background: linear-gradient(100deg, #ff2e93, #8b5cf6 56%, #22d3ee);
   background: radial-gradient(135% 190% at var(--gx, 50%) var(--gy, 50%), #ff2e93 0%, #8b5cf6 46%, #22d3ee 100%);
   box-shadow: 0 6px 26px rgba(139, 92, 246, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  overflow: hidden; will-change: transform;
+  will-change: transform;
   transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s, filter 0.25s, opacity 0.22s;
 }
+.v2-talk:active { transform: scale(0.972); }
 .v2-composer[data-full] .v2-talk { justify-content: center; }
 .v2-talk:hover { filter: brightness(1.08); box-shadow: 0 10px 34px rgba(139, 92, 246, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
 /* While magnetised the transform must track the pointer, so the long settle curve is swapped for a
@@ -280,8 +299,9 @@
 .v2-talk[data-pop="true"] { animation: v2-pop 0.52s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes v2-pop { 0% { transform: scale(0.952) } 55% { transform: scale(1.03) } 100% { transform: scale(1) } }
 
-/* Listening / speaking: the fill drops to ink and a ring pulses out. */
-.v2-talk[data-on] { background: var(--v2-ink); color: #fff; }
+/* Listening / speaking ONLY: the fill drops to ink and a ring pulses out. The reference does this
+   too — it is the inversion, not the resting state. */
+.v2-talk[data-on] { background: var(--v2-ink); color: #fff; box-shadow: 0 6px 26px rgba(255, 46, 147, 0.34); }
 .v2-talk::after {
   content: ''; position: absolute; inset: -5px; border-radius: 30px;
   border: 1.5px solid rgba(139, 92, 246, 0.7); opacity: 0; pointer-events: none;
