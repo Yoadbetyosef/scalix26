@@ -6,10 +6,7 @@ import { Composer } from './composer'
 import { Rail } from './rail'
 import { Sheet, type NeedsItem, type NowItem, type Tile } from './sheet'
 import { rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
-import {
-  VAD_THRESHOLD, VAD_THRESHOLD_DUPLEX, createVad, hasSpeechRecognition, listenForText, openMic, say,
-  type MicHandle, type TranscriptHandle, type Vad,
-} from './voice'
+import { runDemo, type DemoSession } from './demo-harness'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
 
@@ -61,17 +58,12 @@ export function HomeClient({ data }: { data: HomeData }) {
   const [jump, setJump] = useState<number | null>(null)
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
-  const mic = useRef<MicHandle | null>(null)
-  const transcript = useRef<TranscriptHandle | null>(null)
-  const stopSay = useRef<(() => void) | null>(null)
-  // Only true when audio is actually flowing. The canvas prints LISTENING · DEMO otherwise, so the
-  // meter never implies it is hearing something it is not.
-  const [micLive, setMicLive] = useState(false)
   const palette = usePalette()
   useMagnet(talkEl, typing)
 
-  // The idle collapse. Restarts on any deliberate interaction, and is suspended entirely while Rudi
-  // is listening or speaking — collapsing mid-sentence would be the screen interrupting itself.
+  // The idle collapse. Restarts on any deliberate interaction, and is suspended while Rudi is
+  // listening, speaking or armed — collapsing mid-conversation would be the screen interrupting
+  // itself.
   const kick = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current)
     idleTimer.current = setTimeout(() => {
@@ -87,143 +79,31 @@ export function HomeClient({ data }: { data: HomeData }) {
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 
-  // ── THE SESSION ────────────────────────────────────────────────────────────────────────────────
-  //
-  //   idle -> listening -> speaking -> armed -> listening -> …
-  //
-  // with barge-in short-circuiting speaking -> listening at any moment.
-  //
-  // ONE press opens it and one press closes it. Inside, turns pass on their own: the microphone stays
-  // OPEN for the whole session — not reopened per turn — which is what makes both barge-in and the
-  // armed meter possible. Reopening the mic per turn would mean a permission-shaped gap between every
-  // sentence, and a device that cannot hear an interruption because it is not listening for one.
+  // The demo driver. The component knows nothing about it; this is the only thing that presses its
+  // buttons until the voice agent does.
+  const demo = useRef<DemoSession | null>(null)
 
-  const sessionRef = useRef(false)
-  const vadRef = useRef<Vad | null>(null)
-  const armedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [armedKey, setArmedKey] = useState(0)
-  const heardRef = useRef('')
-
-  /** Close everything and return to idle. */
   const endSession = useCallback(() => {
-    sessionRef.current = false
-    if (armedTimer.current) { clearTimeout(armedTimer.current); armedTimer.current = null }
-    transcript.current?.stop(); transcript.current = null
-    stopSay.current?.(); stopSay.current = null
-    mic.current?.stop(); mic.current = null
-    vadRef.current?.reset(); vadRef.current = null
-    setMicLive(false)
+    demo.current?.stop(); demo.current = null
     rudi.current?.endSession()
   }, [])
-
-  /** Start a listening turn. The mic is already open; this only opens the transcript. */
-  const openTurn = useCallback(() => {
-    if (!sessionRef.current) return
-    if (armedTimer.current) { clearTimeout(armedTimer.current); armedTimer.current = null }
-    heardRef.current = ''
-    setSaid(null)
-    rudi.current?.listen()
-    transcript.current?.stop()
-    transcript.current = hasSpeechRecognition()
-      ? listenForText(
-        (text) => { heardRef.current = text; setSaid(text || null) },
-        // The engine's own endpointing is a second opinion, not the authority — VAD decides the turn.
-        // Whichever fires first wins, and both funnel through the same reply.
-        () => { transcript.current = null },
-      )
-      : null
-  }, [])
-
-  /** She has finished. The mic stays open and it is my turn. */
-  const arm = useCallback(() => {
-    if (!sessionRef.current) return
-    transcript.current?.stop(); transcript.current = null
-    vadRef.current?.reset()
-    rudi.current?.arm()
-    setArmedKey((k) => k + 1)   // restarts the draining hairline
-    if (armedTimer.current) clearTimeout(armedTimer.current)
-    armedTimer.current = setTimeout(() => {
-      if (rudi.current?.state() === 'armed') endSession()
-    }, ARMED_TIMEOUT_MS)
-  }, [endSession])
-
-  /** Answer out loud, then arm. */
-  const answer = useCallback((heard: string) => {
-    if (!sessionRef.current) return
-    transcript.current?.stop(); transcript.current = null
-    const text = rudiReply(heard, data.facts)
-    setReply([{ text }])
-    stopSay.current?.()
-    // Driven by the utterance's OWN onstart/onend, so the video runs exactly as long as the voice.
-    // onend hands the floor back automatically — that is the turn passing without a press.
-    stopSay.current = say(
-      text,
-      () => rudi.current?.speak(text, 120_000),
-      () => {
-        rudi.current?.stopSpeaking()
-        stopSay.current = null
-        arm()
-      },
-    )
-  }, [data.facts, arm])
-
-  /** Cut her off mid-sentence and hand me the floor. The one thing that makes this feel alive. */
-  const bargeIn = useCallback(() => {
-    stopSay.current?.(); stopSay.current = null
-    rudi.current?.stopSpeaking()
-    openTurn()
-  }, [openTurn])
-
-  const beginSession = useCallback(async () => {
-    sessionRef.current = true
-    setSaid(null)
-    setReply(null)
-    rudi.current?.listen()
-
-    // ── The duplex guard ────────────────────────────────────────────────────────────────────────
-    // The threshold is raised while she speaks. Echo cancellation removes most of her playback and
-    // the raised floor covers the rest, so her own voice cannot open a turn — while a real
-    // interruption, which is louder and closer, still can.
-    const vad = createVad({
-      threshold: () => (rudi.current?.state() === 'speaking' ? VAD_THRESHOLD_DUPLEX : VAD_THRESHOLD),
-      onStart: () => {
-        const st = rudi.current?.state()
-        if (st === 'speaking') bargeIn()
-        else if (st === 'armed') openTurn()
-      },
-      onEnd: () => {
-        // Silence ended a listening turn. This is the moment a walkie-talkie would need a button.
-        if (rudi.current?.state() === 'listening') answer(heardRef.current)
-      },
-    })
-    vadRef.current = vad
-
-    const handle = await openMic((v) => {
-      rudi.current?.level(v)
-      vad.push(v, performance.now())
-    })
-    if (!sessionRef.current) { handle?.stop(); return }
-    mic.current = handle
-    setMicLive(!!handle)
-
-    openTurn()
-
-    // No microphone: VAD can never fire, so nothing would ever end the turn. Fall back to the
-    // pause-and-answer behaviour rather than leaving the session stuck open.
-    if (!handle) {
-      armedTimer.current = setTimeout(() => {
-        if (rudi.current?.state() === 'listening') answer(heardRef.current)
-      }, 3000)
-    }
-  }, [answer, bargeIn, openTurn])
 
   const toggleTalk = useCallback(() => {
     wake()
     const r = rudi.current
     if (!r) return
-    if (r.state() === 'idle') void beginSession()
-    else endSession()
-  }, [wake, beginSession, endSession])
+    if (r.state() === 'idle') {
+      setSaid(null)
+      setReply(null)
+      demo.current?.stop()
+      demo.current = runDemo(r, {
+        replyText: () => rudiReply('', data.facts),
+        onReply: (text) => setReply([{ text }]),
+      })
+    } else {
+      endSession()
+    }
+  }, [wake, endSession, data.facts])
 
   useEffect(() => () => { endSession() }, [endSession])
 
@@ -253,12 +133,15 @@ export function HomeClient({ data }: { data: HomeData }) {
 
   // Typing is read-only here: the line is echoed and Rudi answers with what the real numbers already
   // say. No request is made, and no answer is invented.
-  // Typed text takes the same path, including opening a session so her answer arms afterwards.
+  // Typed text: echo it, show the local answer, and hold the speaking state for a plausible length.
+  // The real agent will supply both the text and the duration.
   const onSubmit = useCallback((text: string) => {
     setSaid(text)
-    if (!sessionRef.current) { sessionRef.current = true }
-    answer(text)
-  }, [answer])
+    const reply = rudiReply(text, data.facts)
+    setReply([{ text: reply }])
+    rudi.current?.speak(reply, 4200)
+    setTimeout(() => rudi.current?.arm(), 4200)
+  }, [data.facts])
 
   // ONE canvas, in ONE tree. See use-breakpoint.ts: rendering the hero into both trees and hiding one
   // with CSS gave two canvases racing for the same imperative ref, and the hidden one won.
@@ -268,7 +151,6 @@ export function HomeClient({ data }: { data: HomeData }) {
         handleRef={rudi}
         onStateChange={setState}
         minimised={minimised}
-        micLive={micLive}
         className="v2-face"
         onClick={() => (minimised ? wake() : toggleTalk())}
       />
@@ -310,11 +192,11 @@ export function HomeClient({ data }: { data: HomeData }) {
               <p className="v2-cap">
                 {caption.map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
               </p>
-              {/* The silence timeout, draining. Keyed on armedKey so it restarts from full on every
-                  new armed turn, and it is the reason the session closing is never a surprise:
-                  speaking at any point resets it. */}
+              {/* The silence timeout, draining. No key needed: the element is only rendered while
+                  armed, so leaving and re-entering the state remounts it and the CSS animation
+                  restarts from full on its own. */}
               {state === 'armed' && (
-                <div className="v2-hair" key={armedKey} aria-hidden>
+                <div className="v2-hair" aria-hidden>
                   <i style={{ animationDuration: `${ARMED_TIMEOUT_MS}ms` }} />
                 </div>
               )}
@@ -424,7 +306,7 @@ export function HomeClient({ data }: { data: HomeData }) {
         />
       <div className="v2-sticky">
         {state === 'armed' && (
-          <div className="v2-hair" key={armedKey} aria-hidden>
+          <div className="v2-hair" aria-hidden>
             <i style={{ animationDuration: `${ARMED_TIMEOUT_MS}ms` }} />
           </div>
         )}

@@ -4,16 +4,29 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref
 
 // Rudi's face. A reproduction of the reference's canvas engine.
 //
-// ── WHAT DIFFERS FROM THE REFERENCE, AND WHY ────────────────────────────────────────────────────────
+// ── A PURE RENDERER OF STATE IT IS TOLD ABOUT ───────────────────────────────────────────────────────
 //
-// ONE thing: the level. The reference opens the real microphone with getUserMedia and reads an
-// analyser. In the app the level arrives through `Rudi.level(0..1)` from the voice layer instead —
-// so this component never asks for a microphone, never holds a MediaStream, and cannot prompt a
-// permission dialog on a preview screen. Everything downstream of the number is unchanged: the same
-// attack/decay smoothing, the same per-bar envelope, the same meter geometry.
+// This component owns NO opinion about whose turn it is. No voice activity detection, no thresholds,
+// no silence timing, no barge-in rule, no microphone, no SpeechRecognition, no speechSynthesis. All of
+// that belongs to the Deepgram Voice Agent, which already has it, and duplicating it here would mean
+// two implementations of turn-taking that drift apart.
 //
-// When no level has been supplied, the meter falls back to the reference's own synthetic envelope
-// rather than sitting flat — a dead meter reads as broken, and this screen is a design preview.
+// What it exposes is five calls and a state:
+//
+//   listen() / stopListening()   the caller is being heard
+//   speak(text, ms) / stopSpeaking()   she has the floor, for exactly ms
+//   arm()                        her turn is over; waiting for the user
+//   level(0..1)                  the number the meter renders — its provenance is not this file's
+//                                business, and the component cannot and must not tell a microphone
+//                                from a synthesiser
+//   state()
+//
+// The reference read a real microphone here. That is the one thing deliberately removed: the level is
+// handed in, so the component can never prompt for a permission or hold a MediaStream.
+//
+// With no level supplied the meter falls back to the reference's synthetic envelope rather than
+// sitting flat — a dead meter reads as broken — and labels itself DEMO so the movement is never
+// mistaken for something being heard.
 //
 // Everything else is the reference: the scan sweep and node network at idle, the sweep cutting to
 // zero on the same frame that listening begins, the white veil and monochrome meter while listening,
@@ -49,8 +62,6 @@ interface Props {
   onStateChange?: (s: RudiState) => void
   /** Collapsed (idle > 60s): still frame, slow band, no network, no video. */
   minimised?: boolean
-  /** True only when a real microphone is feeding level(). Drives LISTENING vs LISTENING · DEMO. */
-  micLive?: boolean
   className?: string
   onClick?: () => void
 }
@@ -86,7 +97,7 @@ function hue(t: number): [number, number, number] {
 }
 const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLive = false, className, onClick }: Props) {
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setStateRaw] = useState<RudiState>('idle')
@@ -99,10 +110,11 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
   const speakEndRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minRef = useRef(minimised)
-  const micLiveRef = useRef(micLive)
+  // Whether level() has ever been called. The only thing this component can honestly say about the
+  // number's provenance: that it was given one, or that it was not.
+  const levelledRef = useRef(false)
 
   useEffect(() => { minRef.current = minimised }, [minimised])
-  useEffect(() => { micLiveRef.current = micLive; if (!micLive) levelRef.current = null }, [micLive])
 
   const setState = useCallback((s: RudiState) => {
     stateRef.current = s
@@ -132,9 +144,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
       if (timerRef.current) clearTimeout(timerRef.current)
       speakEndRef.current = 0
       levelRef.current = null
+      levelledRef.current = false
       setState('idle')
     },
-    level(v: number) { levelRef.current = Math.min(1, Math.max(0, v)) },
+    level(v: number) { levelledRef.current = true; levelRef.current = Math.min(1, Math.max(0, v)) },
     state() { return stateRef.current },
   }), [setState])
 
@@ -188,6 +201,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
     // is most of them: scrollbars, devtools, an address bar retracting) must not pay for a rebuild.
     let netKey = ''
     function ensureNet() {
+      // Never before the still is drawn. The network is decoration over a portrait; building it first
+      // would spend the first frames on an overlay for a picture that is not there yet.
+      if (!img) return
       const key = `${CW}x${CH}x${raw.length}`
       if (key === netKey || !raw.length || !CW) return
       netKey = key
@@ -394,7 +410,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
         // the same class of lie as a record claiming a review that never happened.
         ctx!.fillText(
           st === 'armed' ? 'YOUR TURN'
-            : micLiveRef.current ? 'LISTENING' : 'LISTENING · DEMO',
+            : levelledRef.current ? 'LISTENING' : 'LISTENING · DEMO',
           CW / 2, wY + CH * 0.075,
         )
         ctx!.textAlign = 'left'
@@ -477,6 +493,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
     function start() {
       if (running || reduced || disposed) return
       running = true
+      // The loop only ever starts after the still has been drawn — see the ready.then below.
       raf = requestAnimationFrame(draw)
     }
     function stop() {
