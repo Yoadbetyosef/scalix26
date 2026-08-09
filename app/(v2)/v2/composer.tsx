@@ -77,12 +77,16 @@ export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange
 
   return (
     <div className="v2-composer" data-full={full || undefined}>
-      {/* Both faces share .v2-ctl, which owns the geometry. Only the skin differs. */}
+      {/* Both faces share .v2-ctl, which owns the geometry. Only the skin differs.
+          
+          Armed is deliberately NOT data-on: the ink inversion means "she has the floor", and armed
+          means the opposite. It keeps the gradient fill and takes its own breathing ring. */}
       <button
         ref={buttonRef}
         type="button"
         className="v2-ctl v2-talk"
-        data-on={state !== 'idle' || undefined}
+        data-on={state === 'listening' || state === 'speaking' || undefined}
+        data-armed={state === 'armed' || undefined}
         data-hidden={typing || undefined}
         onClick={onTalk}
         aria-hidden={typing}
@@ -90,7 +94,7 @@ export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange
       >
         <span className="v2-mic"><MicIcon /></span>
         <span className="v2-lab">{rudiState(state)}</span>
-        {!full && <span className="v2-kbd">SPACE</span>}
+        {!full && <span className="v2-kbd">{state === 'idle' ? 'SPACE' : 'END'}</span>}
         <span className="v2-shine" aria-hidden><i /></span>
       </button>
 

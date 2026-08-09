@@ -183,3 +183,62 @@ export function estimateMs(text: string): number {
   const words = text.split(/\s+/).filter(Boolean).length
   return Math.max(1600, Math.round((words / 165) * 60_000))
 }
+
+// ── Voice activity detection ────────────────────────────────────────────────────────────────────────
+//
+// Turn-taking is decided by the SOUND, not by a timer. A fixed timer is what makes a voice product
+// feel like a phone menu: it cuts you off mid-sentence and then waits through your silence.
+//
+// Speech STARTS when the level holds above the threshold for ~150ms — long enough that a door closing
+// or a keyboard does not open a turn. It ENDS after ~900ms below, which is longer than the pause
+// inside a sentence and shorter than the pause between two of them. Those two numbers are the whole
+// feel of the thing.
+//
+// The threshold is a FUNCTION rather than a constant so the caller can raise it while she is
+// speaking. That is the duplex guard: echo cancellation removes most of her playback, and a raised
+// floor covers the rest, so her own voice cannot open a turn while a genuine interruption still can.
+
+export const VAD_START_MS = 150
+export const VAD_END_MS = 900
+
+/** Ordinary speech sits well above this; room tone sits below it. */
+export const VAD_THRESHOLD = 0.055
+/** While she is speaking. Above what leaks past echo cancellation, below a real interruption. */
+export const VAD_THRESHOLD_DUPLEX = 0.20
+
+export interface Vad {
+  /** Feed every level frame. Safe to call when the caller is not interested in the result. */
+  push: (level: number, now: number) => void
+  /** Forget any partial run — used when a turn changes under it. */
+  reset: () => void
+  speaking: () => boolean
+}
+
+export function createVad(opts: {
+  onStart: () => void
+  onEnd: () => void
+  threshold: () => number
+}): Vad {
+  let above = 0        // when the current run above threshold began
+  let below = 0        // when the current run below threshold began
+  let active = false   // is a speech run currently open
+
+  return {
+    speaking: () => active,
+    reset() { above = 0; below = 0; active = false },
+    push(level, now) {
+      const t = opts.threshold()
+      if (level > t) {
+        below = 0
+        if (!above) above = now
+        if (!active && now - above >= VAD_START_MS) { active = true; opts.onStart() }
+      } else {
+        above = 0
+        if (active) {
+          if (!below) below = now
+          if (now - below >= VAD_END_MS) { active = false; below = 0; opts.onEnd() }
+        }
+      }
+    },
+  }
+}

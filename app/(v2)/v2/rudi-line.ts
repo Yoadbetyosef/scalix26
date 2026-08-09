@@ -64,10 +64,11 @@ export function rudiLine(input: RudiLineInput): RudiSegment[] {
   return segments
 }
 
-/** The line under the caption. Mono, uppercase — state, not content. */
-export function rudiState(state: 'idle' | 'listening' | 'speaking'): string {
+/** The button's label. Armed says whose turn it is, because that is the only thing worth saying. */
+export function rudiState(state: 'idle' | 'listening' | 'speaking' | 'armed'): string {
   if (state === 'listening') return 'Listening'
   if (state === 'speaking') return 'Rudi is speaking'
+  if (state === 'armed') return 'Your turn'
   return 'Talk to Rudi'
 }
 

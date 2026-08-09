@@ -19,7 +19,14 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref
 // zero on the same frame that listening begins, the white veil and monochrome meter while listening,
 // the video crossfading in while speaking with no scan and no overlay at all.
 
-export type RudiState = 'idle' | 'listening' | 'speaking'
+/**
+ * idle       nothing happening; scan sweep and node network
+ * listening  the mic is open and I am talking
+ * speaking   she is talking
+ * armed      she has finished, the mic is STILL open, it is my turn — the state that makes this a
+ *            conversation rather than a walkie-talkie
+ */
+export type RudiState = 'idle' | 'listening' | 'speaking' | 'armed'
 
 /** The control surface the voice layer drives. Same shape as the reference's `window.Rudi`. */
 export interface RudiHandle {
@@ -30,6 +37,10 @@ export interface RudiHandle {
   stopListening: () => void
   /** External audio level, 0..1. Drives the meter while listening. */
   level: (v: number) => void
+  /** She has finished; the mic is open and it is the caller's turn. */
+  arm: () => void
+  /** Close the conversation and return to idle. */
+  endSession: () => void
   state: () => RudiState
 }
 
@@ -116,6 +127,13 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
     },
     listen() { if (stateRef.current !== 'listening') setState('listening') },
     stopListening() { if (stateRef.current === 'listening') setState('idle') },
+    arm() { if (stateRef.current !== 'armed') setState('armed') },
+    endSession() {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      speakEndRef.current = 0
+      levelRef.current = null
+      setState('idle')
+    },
     level(v: number) { levelRef.current = Math.min(1, Math.max(0, v)) },
     state() { return stateRef.current },
   }), [setState])
@@ -210,6 +228,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
     /** The meter's envelope. Real level when the voice layer supplies one; the reference's synthetic
      *  wobble when it does not, because a flat meter reads as broken rather than as silent. */
     function envelope(now: number): number {
+      // Armed: present, and deliberately still. A meter that idles with movement would read as
+      // hearing something; a meter that is gone would read as closed. Flat says "open, waiting".
+      if (stateRef.current === 'armed') return 0
       const real = levelRef.current
       if (real === null) {
         return 0.26 + 0.74 * Math.pow(Math.abs(Math.sin(now / 300)), 0.8) * (0.55 + 0.45 * Math.abs(Math.sin(now / 97)))
@@ -247,7 +268,13 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
         return
       }
 
-      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150) : st === 'listening' ? 1.22 : 1
+      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150)
+        : st === 'listening' ? 1.22
+          // Armed breathes: a slow 2.6s swell, nothing like the speaking rings. The difference has to
+          // be legible across the room, which is why one is fast and shallow and the other is slow
+          // and deep.
+          : st === 'armed' ? 1 + 0.16 * Math.sin(now / 414)
+            : 1
       // Listening runs the band nearly three times faster — the design's way of saying "attending".
       const period = st === 'listening' ? 1300 : 3600
       const prog = (now % period) / period
@@ -270,8 +297,12 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
       // over ~20 frames when idle returns. That asymmetry is the design: attention is instant,
       // relaxation is gradual.
       scanA = st === 'idle' ? scanA + (1 - scanA) * 0.05 : 0
-      micA += ((st === 'listening' ? 1 : 0) - micA) * 0.22
-      const vTarget = st === 'idle' ? 0 : 1
+      // Armed keeps the veil and the meter: the mic is still open, so the surface must still look
+      // open. What changes is that the bars sit flat — see envelope().
+      micA += ((st === 'listening' || st === 'armed' ? 1 : 0) - micA) * 0.22
+      // Only SHE gets the video. Armed is my turn, and showing her mouth moving through it would say
+      // the opposite of what the state means.
+      const vTarget = st === 'speaking' ? 1 : 0
       vidA += (vTarget - vidA) * 0.075
 
       // ── THE VIDEO IS OPTIONAL, ALWAYS ────────────────────────────────────────────────────────
@@ -344,12 +375,28 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, micLiv
           ctx!.fillStyle = `rgba(14,14,17,${(0.78 * micA).toFixed(3)})`
           ctx!.fillRect(wX + wi * gap, wY - hgt, 2.2, hgt * 2)
         }
+        // The breathing ring. Armed only — one slow circle expanding and fading, so "your turn" is
+        // readable as motion before any word is read.
+        if (st === 'armed') {
+          const bp = (now % 2600) / 2600
+          const r = CH * (0.12 + 0.16 * bp)
+          ctx!.strokeStyle = `rgba(14,14,17,${(0.28 * (1 - bp) * micA).toFixed(3)})`
+          ctx!.lineWidth = 1.4
+          ctx!.beginPath()
+          ctx!.arc(CW / 2, wY, r, 0, Math.PI * 2)
+          ctx!.stroke()
+        }
+
         ctx!.font = '11px ui-monospace,Menlo,monospace'
         ctx!.textAlign = 'center'
         ctx!.fillStyle = `rgba(14,14,17,${(0.42 * micA).toFixed(3)})`
         // Says which it is. A meter that moves on a synthetic envelope while claiming to hear you is
         // the same class of lie as a record claiming a review that never happened.
-        ctx!.fillText(micLiveRef.current ? 'LISTENING' : 'LISTENING · DEMO', CW / 2, wY + CH * 0.075)
+        ctx!.fillText(
+          st === 'armed' ? 'YOUR TURN'
+            : micLiveRef.current ? 'LISTENING' : 'LISTENING · DEMO',
+          CW / 2, wY + CH * 0.075,
+        )
         ctx!.textAlign = 'left'
       }
 
