@@ -385,7 +385,34 @@ a[role="button"]:not([aria-disabled="true"]):active,
     print-color-adjust: exact;
   }
 
-  /* Anything the customer should not receive on paper. Buttons that do nothing on a page already
+  /* Anything the recipient should not receive on paper. Buttons that do nothing on a page already
      carry print:hidden; this catches the app chrome around them. */
   [data-print-hidden] { display: none !important; }
+
+  /* ── The approval page, printed as a work order ───────────────────────────────────────────────
+     
+     This is the surface the factory opens, and a workshop works from paper at the bench. On screen
+     it is a card floating on grey; on paper the card and its shadow are the browser pretending to be
+     a screen. Everything below flattens it to a document.
+     
+     !important throughout because that page is styled INLINE, and an inline style beats any selector.
+     Rewriting it to Tailwind purely to make this cascade nicely would be a large diff on a page whose
+     behaviour nobody asked to change. */
+  .approval-page { background: #fff !important; padding: 0 !important; min-height: 0 !important; }
+  .approval-wrap { max-width: none !important; }
+  .approval-card {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* A reference photo is the point of a factory approval and 120px of it is a thumbnail, not an
+     instruction. On paper they get real size, and never split across a page boundary. */
+  .approval-card a img { height: auto !important; max-height: 360px !important; object-fit: contain !important; }
+  .approval-card a { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Keep an item and its specification table together — a spec list orphaned from its heading is
+     worse than a page break in the middle of the list. */
+  .approval-card > div > div { break-inside: avoid; page-break-inside: avoid; }
 }

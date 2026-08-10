@@ -92,3 +92,34 @@ describe('the printed page carries no browser header or footer', () => {
     expect(print).toMatch(/@page\s*\{\s*margin:\s*0/)
   })
 })
+
+describe('the approval page prints as a work order', () => {
+  const src = () => readFileSync('app/approval/[token]/page.tsx', 'utf8')
+
+  it('offers a print button', () => {
+    // This is the surface the factory opens, and a workshop works from paper at the bench.
+    expect(src()).toMatch(/<PrintButton\s*\/>/)
+  })
+
+  it('hides the interactive halves from paper', () => {
+    // A decision form and an upload widget do nothing on a printed page; leaving them in wastes the
+    // space a spec table needs.
+    const code = src()
+    expect(code).toMatch(/data-print-hidden/)
+    // Both of them, not just whichever was remembered.
+    expect(code.match(/data-print-hidden/g)?.length ?? 0).toBeGreaterThanOrEqual(3)
+  })
+
+  it('the print stylesheet flattens the card', () => {
+    // On screen it is a card on grey; on paper that is the browser pretending to be a screen.
+    const print = readFileSync('app/globals.css', 'utf8')
+    const block = print.slice(print.lastIndexOf('@media print'))
+    expect(block).toMatch(/\.approval-card/)
+    expect(block).toMatch(/border:\s*none\s*!important/)
+  })
+
+  it('the title names nobody rather than being empty', () => {
+    // Empty leaves the browser showing the URL in the tab, which is the same leak in another place.
+    expect(src()).toMatch(/title:\s*'Order approval'/)
+  })
+})

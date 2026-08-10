@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { getApprovalByToken } from '@/lib/orders/approvals'
 import type { PublicOrderView } from '@/lib/orders/types'
+import { PrintButton } from '@/components/studio/print-button'
 import { PublicApprovalForm } from '@/components/orders/public-approval'
 import { FactoryDelivery } from '@/components/orders/factory-delivery'
 
@@ -30,7 +31,10 @@ export async function generateMetadata() {
   // The approval page resolves its view through a token guard inside the component; rather than run
   // that twice, the title is deliberately empty. Empty is correct here — it is never OUR name, and the
   // print header is suppressed by the document stylesheet regardless.
-  return { title: '', robots: { index: false, follow: false } }
+  // A STATIC title, not an empty one. Empty leaves the browser showing the URL in the tab — which on
+  // app.scalix26.com is the same leak this branch exists to close. "Order approval" names nobody, and
+  // costs no second resolution of the token.
+  return { title: 'Order approval', robots: { index: false, follow: false } }
 }
 
 export default async function ApprovalPage({ params }: { params: Promise<{ token: string }> }) {
@@ -58,12 +62,17 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
   const isImage = (m: string) => m.startsWith('image/') && m !== 'image/heic' && m !== 'image/heif'
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f6f7f9', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
-      <div style={{ maxWidth: 620, margin: '0 auto' }}>
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 28 }}>
+    <div className="approval-page" style={{ minHeight: '100vh', background: '#f6f7f9', fontFamily: 'system-ui, sans-serif', padding: 24 }}>
+      <div className="approval-wrap" style={{ maxWidth: 620, margin: '0 auto' }}>
+        <div className="approval-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 28 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{view.businessName}</div>
           <h1 style={{ fontSize: 22, margin: '8px 0 2px', color: '#111827' }}>Order {view.order.orderNumber}</h1>
           <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>You are reviewing this order as the {view.approvalType}.{view.deadline ? ` Please respond by ${new Date(view.deadline).toLocaleDateString()}.` : ''}</p>
+          {/* A workshop works from paper at the bench, not from a phone propped against a vice. This is
+              the surface the factory actually opens, so it is the one that needs to print. */}
+          <div style={{ marginTop: 14 }} data-print-hidden>
+            <PrintButton />
+          </div>
           {view.order.customerName && <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>Customer: {view.order.customerName}</p>}
 
           <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }}>Items</h2>
@@ -110,16 +119,18 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
 
           {view.canSubmitDelivery ? (
             <>
-              <h2 style={{ fontSize: 14, margin: '22px 0 8px', color: '#111827' }}>Mark ready & upload invoice</h2>
-              <FactoryDelivery token={token} />
+              <h2 style={{ fontSize: 14, margin: '22px 0 8px', color: '#111827' }} data-print-hidden>Mark ready &amp; upload invoice</h2>
+              <div data-print-hidden><FactoryDelivery token={token} /></div>
             </>
           ) : view.deliverySubmitted ? (
             <div style={{ marginTop: 20, padding: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 14, color: '#166534' }}>This order is marked <strong>ready</strong> and your invoice was received. Thank you — nothing further is needed.</div>
           ) : (
             <>
               {responded && <div style={{ marginTop: 18, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 13, color: '#166534' }}>Your response was recorded: <strong>{view.status.replace('_', ' ')}</strong>.{view.existingResponse?.comment ? ` "${view.existingResponse.comment}"` : ''} You can update it below if needed.</div>}
-              <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }}>Your decision</h2>
-              {view.canRespond ? <PublicApprovalForm token={token} approvalType={view.approvalType} /> : <p style={{ fontSize: 13, color: '#9ca3af' }}>This request is no longer open for responses.</p>}
+              <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }} data-print-hidden>Your decision</h2>
+              <div data-print-hidden>
+                {view.canRespond ? <PublicApprovalForm token={token} approvalType={view.approvalType} /> : <p style={{ fontSize: 13, color: '#9ca3af' }}>This request is no longer open for responses.</p>}
+              </div>
             </>
           )}
         </div>
