@@ -133,3 +133,38 @@ describe('the shared loader never depends on a session', () => {
     expect(fn.slice(0, 600)).toMatch(/\.eq\('tenant_id', tenantId\)/)
   })
 })
+
+describe('every function the loader calls resolves tenancy explicitly', () => {
+  // The transitive check. The loader itself was already session-free after the getOrder fix, and the
+  // images STILL came back empty — because publicDocumentImages, one layer down, resolved tenancy from
+  // requireActiveBusinessContext(). Checking only the loader missed it.
+  //
+  // These are the six reads a document depends on. Each must take a tenant rather than find one.
+  const CHAIN: Array<[string, string]> = [
+    ['lib/orders/store.ts', 'getOrderForTenant'],
+    ['lib/orders/attachments.ts', 'publicDocumentImagesForTenant'],
+    ['lib/orders/documents.ts', 'loadDocContext'],
+    ['lib/orders/templates.ts', 'listTemplates'],
+    ['lib/orders/templates.ts', 'getTemplate'],
+    ['lib/tax/rates-store.ts', 'loadTaxRates'],
+  ]
+
+  it.each(CHAIN)('%s → %s reads with the admin client, never the cookie one', (file, fn) => {
+    const src = code(file)
+    const start = src.indexOf(`export async function ${fn}`)
+    expect(start, `${fn} not found in ${file}`).toBeGreaterThan(-1)
+    // Up to the next top-level export, which is the end of this function for these files.
+    const next = src.indexOf('\nexport ', start + 1)
+    const body = src.slice(start, next === -1 ? undefined : next)
+
+    expect(body, `${fn} must not read ambient session state`).not.toMatch(/requireActiveBusinessContext|requireOrdersAccess|getActiveTenantId|getActiveWorkspace/)
+    expect(body, `${fn} must not use the cookie-scoped client`).not.toMatch(/await createClient\(\)/)
+  })
+
+  it('the loader calls the ForTenant variants, not the session ones', () => {
+    const src = code('lib/orders/document-data.ts')
+    expect(src).toMatch(/publicDocumentImagesForTenant\(tenantId, orderId\)/)
+    // The session-scoped names must not appear at all.
+    expect(src).not.toMatch(/[^A-Za-z]publicDocumentImages\(/)
+  })
+})

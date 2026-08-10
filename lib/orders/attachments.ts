@@ -34,26 +34,51 @@ export async function signedUrlFor(storagePath: string, expiresIn = 300): Promis
 export interface DocumentImage { id: string; url: string; fileName: string }
 
 /**
- * The images a CUSTOMER-facing document may show.
+ * The images a CUSTOMER-facing document may show, for a tenant given EXPLICITLY.
  *
- * Two filters, both load-bearing:
- *   visibility === 'public'  — 'internal' is the default, so an attachment is private until somebody
- *                              deliberately marks it otherwise. A supplier invoice or a cost sheet
- *                              uploaded to the order must never appear on the customer's estimate.
- *   an image mime type       — a PDF or a CAD file has no thumbnail and would render as a broken box.
+ * ── WHY THIS TAKES A TENANT INSTEAD OF READING A SESSION ────────────────────────────────────────────
  *
- * The signed URL lasts 30 minutes rather than the usual 5. A document is opened, read, and THEN
- * printed, and an expired URL prints as a blank rectangle — the failure would be silent and would
- * land on the customer's copy.
+ * It used to call listAttachments(), which resolves tenancy from requireActiveBusinessContext() and
+ * reads with the cookie-scoped client. On /e/[token] there is no session, so it returned an empty
+ * array — and an empty gallery is INVISIBLE: the document renders, looks complete, and simply has no
+ * photograph of the ring on it. The owner sees the image, the customer does not, and nothing errors.
+ *
+ * That is the same fault as getOrder() one layer deeper, and it is the more dangerous of the two
+ * because the first one 404'd loudly while this one silently ships a worse document.
+ *
+ * Tenancy is now an argument, proved by the share token, and the read is the admin client under an
+ * explicit tenant_id filter — which, with RLS bypassed, is the only thing scoping it.
+ *
+ * Two filters remain, both load-bearing:
+ *   visibility === 'public'  — 'internal' is the default, so a supplier invoice uploaded to the order
+ *                              can never appear on the customer's estimate.
+ *   an image mime type       — a PDF or CAD file has no thumbnail and would print as a broken box.
+ *
+ * The signed URL lasts 30 minutes rather than the usual 5: a document is opened, read, and THEN
+ * printed, and an expired URL prints as a blank rectangle on the customer's copy.
  */
-export async function publicDocumentImages(orderId: string): Promise<DocumentImage[]> {
-  const all = await listAttachments(orderId)
-  const images = all.filter((a) => a.visibility === 'public' && a.mimeType.startsWith('image/'))
+export async function publicDocumentImagesForTenant(tenantId: string, orderId: string): Promise<DocumentImage[]> {
+  const { data } = await createAdminClient()
+    .from('order_attachments').select('*')
+    .eq('tenant_id', tenantId).eq('order_id', orderId).eq('visibility', 'public')
+    .order('created_at')
+
+  const images = ((data as Array<Record<string, unknown>> | null) ?? [])
+    .map(row)
+    .filter((a) => a.mimeType.startsWith('image/'))
+
   const signed = await Promise.all(images.map(async (a) => {
     const url = await signedUrlFor(a.storagePath, 1800)
     return url ? { id: a.id, url, fileName: a.fileName } : null
   }))
   return signed.filter((x): x is DocumentImage => x !== null)
+}
+
+/** The owner-facing read: tenancy from the signed-in workspace. Never use on a public route. */
+export async function publicDocumentImages(orderId: string): Promise<DocumentImage[]> {
+  const c = await requireActiveBusinessContext()
+  if (!c) return []
+  return publicDocumentImagesForTenant(c.tenantId, orderId)
 }
 
 export async function uploadAttachment(orderId: string, file: File): Promise<{ ok: boolean; error?: string; attachment?: OrderAttachment }> {

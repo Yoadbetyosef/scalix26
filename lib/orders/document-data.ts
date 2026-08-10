@@ -1,5 +1,5 @@
 import { loadDocContext } from './documents'
-import { publicDocumentImages } from './attachments'
+import { publicDocumentImagesForTenant } from './attachments'
 import { templateForOrder, applyTemplate } from './templates'
 import { getOrderForTenant } from './store'
 import { loadTaxRates } from '@/lib/tax/rates-store'
@@ -42,7 +42,9 @@ export async function loadOrderDocument(
 
   const [ctx, images, template, rates] = await Promise.all([
     loadDocContext(tenantId),
-    publicDocumentImages(orderId),
+    // ForTenant, NOT the session-scoped variant: on /e/[token] that returned an empty array and the
+    // customer's copy silently rendered with no photograph of the piece.
+    publicDocumentImagesForTenant(tenantId, orderId),
     templateForOrder(tenantId, extra.documentTemplateId ?? null),
     loadTaxRates('CA'),
   ])
