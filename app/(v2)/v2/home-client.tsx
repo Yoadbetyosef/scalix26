@@ -53,7 +53,25 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   const facts = useRef<ReplyFacts | null>(null)
   useEffect(() => {
     let alive = true
-    dataPromise.then((d) => { if (alive) facts.current = d.facts }).catch(() => {})
+    // AWAIT, not .then().catch().
+    //
+    // A promise handed from a server component to a client component is NOT a Promise — React
+    // serialises it as a ReactPromise, whose prototype is Object.create(Promise.prototype) so it
+    // looks like one, but whose `then` registers callbacks and RETURNS NOTHING. Chaining `.catch`
+    // off it therefore reads a property of undefined and throws, which is what took the whole screen
+    // to the error boundary.
+    //
+    // `await` is specified to work on any thenable and ignores what `then` returns, so it is correct
+    // here where chaining is not. use() elsewhere in this file works for the same reason.
+    void (async () => {
+      try {
+        const d = await dataPromise
+        if (alive) facts.current = d.facts
+      } catch {
+        // Swallowed deliberately: this read is an optimisation for the reply text. The Suspense
+        // boundaries consume the same promise and are what surface a real failure to the owner.
+      }
+    })()
     return () => { alive = false }
   }, [dataPromise])
 
