@@ -446,6 +446,33 @@
    real screen has, and cannot fire. */
 .v2 button[disabled] { cursor: not-allowed; opacity: 0.55; }
 
+/* ── Skeletons ────────────────────────────────────────────────────────────────────────────────── */
+/* Shaped like the thing they stand in for, in the same card idiom, so the layout does not move when
+   the figures land. A spinner would say "something is happening"; a skeleton says "this is what is
+   coming, and it will be here". */
+.v2-skel { pointer-events: none; }
+.v2-skel-bar {
+  display: block; height: 11px; border-radius: 5px;
+  background: linear-gradient(90deg, rgba(14,14,17,0.07), rgba(14,14,17,0.13), rgba(14,14,17,0.07));
+  background-size: 200% 100%;
+  animation: v2-shimmer 1.35s ease-in-out infinite;
+}
+.v2-cap .v2-skel-bar {
+  background: linear-gradient(90deg, rgba(255,255,255,0.10), rgba(255,255,255,0.20), rgba(255,255,255,0.10));
+  background-size: 200% 100%;
+}
+.v2-skel-num {
+  display: block; width: 92px; height: 54px; border-radius: 10px;
+  background: linear-gradient(90deg, rgba(14,14,17,0.07), rgba(14,14,17,0.13), rgba(14,14,17,0.07));
+  background-size: 200% 100%;
+  animation: v2-shimmer 1.35s ease-in-out infinite;
+}
+@keyframes v2-shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-skel-bar, .v2-skel-num { animation: none; }
+}
+
 /* ── Interaction layer ───────────────────────────────────────────────────────────────────────── */
 
 /* The custom cursor. mix-blend-mode: difference keeps the small dot visible against both the lit and

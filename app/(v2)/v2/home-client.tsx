@@ -1,58 +1,45 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { RudiCanvas, type RudiHandle, type RudiState } from './rudi-canvas'
 import { Composer } from './composer'
 import { Rail } from './rail'
-import { Sheet, type NeedsItem, type NowItem, type Tile } from './sheet'
 import { rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
-import { runDemo, type DemoSession } from './demo-harness'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
+import { runDemo, type DemoSession } from './demo-harness'
+import type { HomeData, ShellData } from './data'
+import {
+  AiBadge, Caption, CardSkeleton, ColumnSkeleton, JobCount, RailCount, RightColumn, SheetBody, TodayList,
+} from './deferred'
 
-// The interactive shell. Everything below the data boundary — the page hands it real numbers and
-// this owns state, the idle timer, and the Rudi handle.
-
-export interface HomeData {
-  businessName: string
-  phone: string | null
-  line: RudiSegment[]
-  rail: {
-    primary: { label: string; count?: number | null; badge?: string }[]
-    groups: { id: string; label: string; items: { label: string; count?: number | null; badge?: string; out?: boolean }[] }[]
-  }
-  rightNow: NowItem[]
-  needsYou: NeedsItem[]
-  monthLabel: string
-  monthStats: { label: string; value: string }[]
-  tiles: Tile[]
-  /** Recent activity, newest first. Shown behind the collapsed hero. */
-  recent: { time: string; text: string }[]
-  /** Everything the local reply function answers from. Real numbers, already on the page. */
-  facts: ReplyFacts
-}
+// The interactive shell.
+//
+// It renders from `shell` alone — a business name and a phone number — so the hero, the composer and
+// the rail exist before the numbers do. Everything that needs a figure sits inside a <Suspense> and
+// reads the streamed promise through use(); nothing here awaits it.
 
 /** After this long with no interaction the hero collapses and the animation stops. */
 const IDLE_MS = 60_000
 
-/**
- * How long the session waits, armed, before closing itself.
- *
- * Long enough to think about what to ask next; short enough that a room left alone does not sit with
- * an open microphone. The hairline drains over exactly this, so it is visible rather than a surprise
- * — speaking at any point restarts it.
- */
+/** How long the armed state waits before the session closes. The hairline drains over exactly this. */
 const ARMED_TIMEOUT_MS = 12_000
 
-export function HomeClient({ data }: { data: HomeData }) {
+const GROUPS = [
+  { id: 'g1', label: 'Rudi', items: [{ label: 'AI Employees' }, { label: 'Knowledge' }, { label: 'Test AI' }] },
+  { id: 'g2', label: 'Business', items: [{ label: 'Orders' }, { label: 'Analytics' }, { label: 'Reports' }] },
+  { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Settings' }, { label: 'Sign Out', out: true }] },
+]
+
+export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromise: Promise<HomeData> }) {
   const rudi = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [minimised, setMinimised] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMobile = useIsMobile()
-  // Two lines, never three. `said` is what the owner typed, echoed once above the caption; the reply
-  // REPLACES the caption rather than appending to it. There is deliberately no transcript array —
-  // this screen is a presence, not a chat log.
+
+  // Two lines, never three: `said` is what the owner typed, echoed once; the reply REPLACES the
+  // caption rather than appending to it. No transcript array — this screen is a presence, not a log.
   const [said, setSaid] = useState<string | null>(null)
   const [reply, setReply] = useState<RudiSegment[] | null>(null)
   const [jump, setJump] = useState<number | null>(null)
@@ -61,9 +48,23 @@ export function HomeClient({ data }: { data: HomeData }) {
   const palette = usePalette()
   useMagnet(talkEl, typing)
 
-  // The idle collapse. Restarts on any deliberate interaction, and is suspended while Rudi is
-  // listening, speaking or armed — collapsing mid-conversation would be the screen interrupting
-  // itself.
+  // The facts, read off the same promise WITHOUT suspending — a conversation can start before the
+  // figures land, and the reply says so rather than inventing one.
+  const facts = useRef<ReplyFacts | null>(null)
+  useEffect(() => {
+    let alive = true
+    dataPromise.then((d) => { if (alive) facts.current = d.facts }).catch(() => {})
+    return () => { alive = false }
+  }, [dataPromise])
+
+  const replyTo = useCallback((heard: string) => (
+    facts.current
+      ? rudiReply(heard, facts.current)
+      : 'One moment — I am still pulling today’s numbers.'
+  ), [])
+
+  // The idle collapse, suspended while she is listening, speaking or armed: collapsing
+  // mid-conversation would be the screen interrupting itself.
   const kick = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current)
     idleTimer.current = setTimeout(() => {
@@ -79,14 +80,13 @@ export function HomeClient({ data }: { data: HomeData }) {
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 
-  // The demo driver. The component knows nothing about it; this is the only thing that presses its
-  // buttons until the voice agent does.
+  // The demo driver. The component knows nothing about it — see demo-harness.ts.
   const demo = useRef<DemoSession | null>(null)
-
   const endSession = useCallback(() => {
     demo.current?.stop(); demo.current = null
     rudi.current?.endSession()
   }, [])
+  useEffect(() => () => { endSession() }, [endSession])
 
   const toggleTalk = useCallback(() => {
     wake()
@@ -97,54 +97,41 @@ export function HomeClient({ data }: { data: HomeData }) {
       setReply(null)
       demo.current?.stop()
       demo.current = runDemo(r, {
-        replyText: () => rudiReply('', data.facts),
+        replyText: () => replyTo(''),
         onReply: (text) => setReply([{ text }]),
       })
     } else {
       endSession()
     }
-  }, [wake, endSession, data.facts])
+  }, [wake, endSession, replyTo])
 
-  useEffect(() => () => { endSession() }, [endSession])
-
-  // Space toggles, matching the SPACE affordance printed on the button. Ignored while typing.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       if (typing || palette.open) return
       if (e.code === 'Space') { e.preventDefault(); toggleTalk() }
-      // Esc goes home: stop whatever Rudi is doing and bring a collapsed hero back.
       if (e.key === 'Escape') { e.preventDefault(); endSession(); wake() }
-      // 1-4 jump to the primary destinations. /v2 navigates nowhere, so this highlights the row it
-      // WOULD open rather than pretending to route.
       if (/^[1-4]$/.test(e.key)) { e.preventDefault(); setJump(Number(e.key) - 1) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [toggleTalk, typing, palette.open, wake, endSession])
 
-  // Listening shows no caption at all — the meter is the message, and the reference clears the line.
-  // Armed KEEPS her last sentence. Clearing it would take away the thing I am answering, and leave
-  // the screen saying nothing at the exact moment it is my turn to reply to something.
-  const caption: RudiSegment[] =
-    state === 'listening' ? []
-      : reply ?? (state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : data.line)
-
-  // Typing is read-only here: the line is echoed and Rudi answers with what the real numbers already
-  // say. No request is made, and no answer is invented.
-  // Typed text: echo it, show the local answer, and hold the speaking state for a plausible length.
-  // The real agent will supply both the text and the duration.
   const onSubmit = useCallback((text: string) => {
     setSaid(text)
-    const reply = rudiReply(text, data.facts)
-    setReply([{ text: reply }])
-    rudi.current?.speak(reply, 4200)
+    const answer = replyTo(text)
+    setReply([{ text: answer }])
+    rudi.current?.speak(answer, 4200)
     setTimeout(() => rudi.current?.arm(), 4200)
-  }, [data.facts])
+  }, [replyTo])
 
-  // ONE canvas, in ONE tree. See use-breakpoint.ts: rendering the hero into both trees and hiding one
-  // with CSS gave two canvases racing for the same imperative ref, and the hidden one won.
+  // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
+  // answered. Only the resting line needs the numbers, so only that case can suspend.
+  const override: RudiSegment[] | null =
+    state === 'listening' ? []
+      : reply ?? (state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null)
+
   const hero = (
     <>
       <RudiCanvas
@@ -158,28 +145,53 @@ export function HomeClient({ data }: { data: HomeData }) {
     </>
   )
 
-  // Nothing until the breakpoint is measured — one frame of the wrong layout is worse than one frame
-  // of none, and the canvas would size itself against a viewport it is about to leave.
-  if (isMobile === null) return <div className="v2-app" aria-hidden />
+  const hairline = state === 'armed' && (
+    <div className="v2-hair" aria-hidden><i style={{ animationDuration: `${ARMED_TIMEOUT_MS}ms` }} /></div>
+  )
 
-  const cursorLabel = minimised ? 'EXPAND' : state === 'idle' ? 'TALK' : 'STOP'
+  // A one-line skeleton rather than an empty block, so the composer does not jump when the line lands.
+  const caption = (
+    <Suspense fallback={
+      <p className="v2-cap" aria-hidden><span className="v2-skel-bar" style={{ width: '68%', height: 22 }} /></p>
+    }>
+      <Caption p={dataPromise} override={override} />
+    </Suspense>
+  )
+
+  const count = (pick: (d: HomeData) => number | null) => (
+    <Suspense fallback={null}><RailCount p={dataPromise} pick={pick} /></Suspense>
+  )
+
+  if (isMobile === null) return <div className="v2-app" aria-hidden />
 
   if (!isMobile) {
     return (
       <div className="v2-app">
-        <Cursor label={cursorLabel} active={!typing} />
+        <Cursor label={minimised ? 'EXPAND' : state === 'idle' ? 'TALK' : 'STOP'} active={!typing} />
         <Palette
           commands={[
-            ...data.rail.primary.map((x, n) => ({ label: x.label, hint: String(n + 1) })),
-            ...data.rail.groups.flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
+            ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
+            ...GROUPS.flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
           ]}
           open={palette.open}
           onClose={palette.close}
         />
+
         <Rail
-          businessName={data.businessName}
-          primary={data.rail.primary}
-          groups={data.rail.groups}
+          businessName={shell.businessName}
+          primary={[
+            { label: 'Leads', count: count((d) => d.railCounts.leads) },
+            { label: 'Inbox', count: count((d) => d.railCounts.inbox) },
+            { label: 'Appointments', count: count((d) => d.railCounts.appointments) },
+            { label: 'Contacts' },
+          ]}
+          groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {
+            ...g,
+            items: g.items.map((it) => (it.label !== 'AI Employees' ? it : {
+              ...it,
+              count: <Suspense fallback={null}><AiBadge p={dataPromise} /></Suspense>,
+            })),
+          }))}
           activeIndex={jump}
         />
 
@@ -187,19 +199,10 @@ export function HomeClient({ data }: { data: HomeData }) {
           <div className="v2-home">
             {hero}
             <div className="v2-overlay">
-              {data.phone && <p className="v2-tag">Rudi · listening on {data.phone}</p>}
+              {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
               {said && <p className="v2-you">You · {said}</p>}
-              <p className="v2-cap">
-                {caption.map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
-              </p>
-              {/* The silence timeout, draining. No key needed: the element is only rendered while
-                  armed, so leaving and re-entering the state remounts it and the CSS animation
-                  restarts from full on its own. */}
-              {state === 'armed' && (
-                <div className="v2-hair" aria-hidden>
-                  <i style={{ animationDuration: `${ARMED_TIMEOUT_MS}ms` }} />
-                </div>
-              )}
+              {caption}
+              {hairline}
               <Composer
                 state={state}
                 onTalk={toggleTalk}
@@ -210,106 +213,39 @@ export function HomeClient({ data }: { data: HomeData }) {
             </div>
           </div>
 
-          {/* Revealed as the hero collapses: Today, then what has already happened. Rendered from the
-              same figures the right column uses — the collapse changes the arrangement, not the
-              data, so nothing here can disagree with the panel beside it. */}
           <div className="v2-dash" data-scroll>
-            <h3>Today</h3>
-            {data.rightNow.length === 0
-              ? <p className="v2-dempty">Nothing booked for today.</p>
-              : data.rightNow.map((n) => (
-                <button key={n.title} type="button" className="v2-dline" disabled title="v2 preview">
-                  <time>{n.detail.split(' · ')[0] || '—'}</time>
-                  <p>{n.title}</p>
-                </button>
-              ))}
-
-            <h3 data-mt="true">Recent</h3>
-            {data.recent.length === 0
-              ? <p className="v2-dempty">Nothing yet today.</p>
-              : data.recent.map((r, i) => (
-                <button key={i} type="button" className="v2-dline" disabled title="v2 preview">
-                  <time>{r.time}</time>
-                  <p>{r.text}</p>
-                </button>
-              ))}
+            <Suspense fallback={<><h3>Today</h3><CardSkeleton /></>}>
+              <TodayList p={dataPromise} />
+            </Suspense>
           </div>
         </main>
 
         <aside className="v2-side" data-scroll>
-          <p className="v2-kick" data-tone="live"><i />Right now</p>
-          {data.rightNow.length === 0
-            ? <div className="v2-card" data-empty><p>Nothing on today</p><span>No appointments booked.</span></div>
-            : data.rightNow.map((n) => (
-              <div key={n.title} className="v2-card">
-                <p>{n.title}</p>
-                <span>{n.detail}</span>
-              </div>
-            ))}
-
-          <div className="v2-blk">
-            <p className="v2-kick" data-tone="warn"><i />Needs you{data.needsYou.length > 0 ? ` · ${data.needsYou.length}` : ''}</p>
-            {data.needsYou.length === 0
-              ? <div className="v2-card" data-empty><p>Nothing needs you</p><span>Every lead has been answered.</span></div>
-              : data.needsYou.map((n) => (
-                <button key={n.title} type="button" className="v2-card v2-item" disabled title="v2 preview">
-                  <p>{n.title}</p>
-                  <em>{n.detail}</em>
-                </button>
-              ))}
-          </div>
-
-          <div className="v2-blk">
-            <p className="v2-kick"><i />This month · {data.monthLabel}</p>
-            {data.monthStats.length > 0 && (
-              <div className="v2-big">
-                <b>{data.monthStats[0].value}</b>
-                <span>{data.monthStats[0].label}</span>
-              </div>
-            )}
-            {data.monthStats.length > 1 && (
-              <div className="v2-mini">
-                {data.monthStats.slice(1).map((s) => (
-                  <div key={s.label}>
-                    <b>{s.value}</b>
-                    <span>{s.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-      </aside>
+          <Suspense fallback={<ColumnSkeleton />}>
+            <RightColumn p={dataPromise} />
+          </Suspense>
+        </aside>
       </div>
     )
   }
 
   return (
     <div className="v2-mobile">
-        <div className="v2-frame">{hero}</div>
-        <div className="v2-top">
-          <b>{data.businessName}</b>
-          <i><s />{data.rightNow.length.toString().padStart(2, '0')}</i>
-        </div>
-        <div className="v2-ov">
-          {data.phone && <p className="v2-tag">Rudi · listening on {data.phone}</p>}
-          {said && <p className="v2-you">You · {said}</p>}
-          <p className="v2-cap">
-            {caption.map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
-          </p>
-        </div>
-        <Sheet
-          now={data.rightNow}
-          needs={data.needsYou}
-          tiles={data.tiles}
-          monthLabel={data.monthLabel}
-          monthStats={data.monthStats}
-        />
+      <div className="v2-frame">{hero}</div>
+      <div className="v2-top">
+        <b>{shell.businessName}</b>
+        <i><s /><Suspense fallback={<>&mdash;</>}><JobCount p={dataPromise} /></Suspense></i>
+      </div>
+      <div className="v2-ov">
+        {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
+        {said && <p className="v2-you">You · {said}</p>}
+        {caption}
+      </div>
+      <Suspense fallback={null}>
+        <SheetBody p={dataPromise} />
+      </Suspense>
       <div className="v2-sticky">
-        {state === 'armed' && (
-          <div className="v2-hair" aria-hidden>
-            <i style={{ animationDuration: `${ARMED_TIMEOUT_MS}ms` }} />
-          </div>
-        )}
+        {hairline}
         <Composer state={state} onTalk={toggleTalk} full onSubmit={onSubmit} onTypingChange={setTyping} />
       </div>
     </div>

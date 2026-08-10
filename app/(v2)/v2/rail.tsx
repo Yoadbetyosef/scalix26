@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 // The left rail: business identity, the four primary destinations with their counts, three
 // collapsible groups, and the pulse strip pinned to the bottom.
@@ -9,7 +9,9 @@ import { useState } from 'react'
 // all rather than a zero — the reference only ever shows a figure when there is one, and a column of
 // zeroes reads as a dead product.
 
-interface NavItem { label: string; count?: number | null; badge?: string; out?: boolean }
+// `count` is a ReactNode, not a number: each one is its own <Suspense> boundary supplied by the
+// shell, so the labels render immediately and the figures pop in as the data streams.
+interface NavItem { label: string; count?: ReactNode; out?: boolean }
 interface Group { id: string; label: string; items: NavItem[] }
 
 interface Props {
@@ -32,7 +34,7 @@ function Nav({ item, on, shortcut }: { item: NavItem; on?: boolean; shortcut?: n
   return (
     <button type="button" className="v2-nav" data-on={on || undefined} data-out={item.out || undefined}>
       <span>{item.label}</span>
-      {item.badge ? <em>{item.badge}</em> : item.count ? <em>{item.count}</em> : null}
+      {item.count ?? null}
       {/* Revealed on hover — the shortcut is discoverable from the row it belongs to rather than from
           a help screen nobody opens. */}
       {shortcut && <span className="v2-kb">{shortcut}</span>}
