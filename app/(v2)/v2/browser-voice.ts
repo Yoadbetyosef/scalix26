@@ -58,6 +58,29 @@ const VAD_THRESHOLD = 0.055
 const VAD_THRESHOLD_DUPLEX = 0.2
 /** No recognition available: answer after this much silence instead. */
 const NO_ASR_PAUSE_MS = 3000
+/** No microphone at all: nothing can detect the end of a turn, so a timer has to. */
+const NO_MIC_TURN_MS = 6000
+
+// ── Keeping the speaking state escapable ────────────────────────────────────────────────────────────
+//
+// Chrome's speechSynthesis is unreliable in two documented ways: `onend` frequently never fires, and
+// the synth stops silently after roughly fifteen seconds unless it is kept alive. Either one, on its
+// own, strands a state machine that hands over on `onend` alone.
+//
+// So there are FOUR independent ways out of speaking, and the first to arrive wins:
+//
+//   1. onend / onerror            the normal path
+//   2. the synth reporting idle   polled; this is what actually catches a missing onend
+//   3. a hard cap                 derived from the text, in case the synth lies about being busy
+//   4. the canvas's own ceiling   last resort, inside the component
+//
+// Plus a start watchdog, because `onstart` can also go missing — and if it does, nothing would ever
+// enter speaking at all.
+const KEEPALIVE_MS = 10_000
+const SYNTH_POLL_MS = 400
+const START_WATCHDOG_MS = 2000
+
+const log = (msg: string) => console.info(`[v2 voice] ${Math.round(performance.now())}ms ${msg}`)
 
 type SR = {
   continuous: boolean
@@ -106,16 +129,31 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
   let armedTimer: ReturnType<typeof setTimeout> | null = null
   let noAsrTimer: ReturnType<typeof setTimeout> | null = null
   let sayTimer: ReturnType<typeof setTimeout> | null = null
+  let startWatchdog: ReturnType<typeof setTimeout> | null = null
+  let keepAlive: ReturnType<typeof setInterval> | null = null
+  let synthPoll: ReturnType<typeof setInterval> | null = null
+  let started = false
+  /** Set when there is no microphone, so recognition's own endpointing can end the turn. */
+  let onRecEnd: (() => void) | null = null
 
   // VAD state
   let above = 0
   let below = 0
   let voicing = false
 
+  /** Everything the speaking state owns. Called on every exit from it, including the forced ones. */
+  const stopSpeechWatchers = () => {
+    if (keepAlive) { clearInterval(keepAlive); keepAlive = null }
+    if (synthPoll) { clearInterval(synthPoll); synthPoll = null }
+    if (startWatchdog) { clearTimeout(startWatchdog); startWatchdog = null }
+    if (sayTimer) { clearTimeout(sayTimer); sayTimer = null }
+    started = false
+  }
+
   const clearTimers = () => {
     if (armedTimer) { clearTimeout(armedTimer); armedTimer = null }
     if (noAsrTimer) { clearTimeout(noAsrTimer); noAsrTimer = null }
-    if (sayTimer) { clearTimeout(sayTimer); sayTimer = null }
+    stopSpeechWatchers()
   }
 
   // ── Recognition ─────────────────────────────────────────────────────────────────────────────────
@@ -144,8 +182,14 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       if (final) heard = (heard ? `${heard} ` : '') + final.trim()
       opts.onHeard((heard + (interim ? ` ${interim}` : '')).trim() || null)
     }
-    r.onerror = () => { /* no-speech / denied: VAD still ends the turn */ }
-    r.onend = () => { /* VAD owns the turn; recognition ending early is not a turn boundary */ }
+    r.onerror = () => { log('recognition: error') }
+    r.onend = () => {
+      log('recognition: end')
+      // With a microphone, VAD owns the turn and recognition ending early is not a boundary.
+      // WITHOUT one there is no VAD at all, so this is the only thing that can close the turn —
+      // otherwise a denied getUserMedia leaves the session listening forever.
+      onRecEnd?.()
+    }
     rec = r
     try { r.start() } catch { /* already started, or refused */ }
   }
@@ -155,16 +199,30 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
     if (stopped) return
     clearTimers()
     heard = ''
+    onRecEnd = null
     opts.onHeard(null)
+    log('turn: listening')
     rudi.listen()
     startRecognition()
-    // No recognition at all: nothing would otherwise end the turn but VAD, which is fine — but if the
-    // mic is missing too, VAD can never fire, so a pause timer is the only remaining backstop.
-    if (!rec && !stream) noAsrTimer = setTimeout(() => answer(), NO_ASR_PAUSE_MS)
+
+    // ── EVERY DEGRADED PATH MUST STILL REACH THE END OF A TURN ──────────────────────────────────
+    //
+    // With a microphone, VAD closes the turn. Without one there is no VAD, and the turn would hang
+    // open forever — a denied permission would look exactly like the freeze this whole change is
+    // about. So when the mic is absent, recognition's own endpointing takes over, and a timer backs
+    // THAT up in case recognition is absent or errors out too.
+    if (!stream) {
+      onRecEnd = () => { if (rudi.state() === 'listening') answer() }
+      noAsrTimer = setTimeout(() => {
+        if (rudi.state() === 'listening') { log('turn: closed by timer (no microphone)'); answer() }
+      }, rec ? NO_MIC_TURN_MS : NO_ASR_PAUSE_MS)
+    }
   }
 
   const armTurn = () => {
     if (stopped) return
+    log('turn: armed')
+    onRecEnd = null
     stopRecognition()
     voicing = false; above = 0; below = 0
     rudi.arm()
@@ -176,36 +234,87 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
   const answer = () => {
     if (stopped) return
     // Recognition is paused for the whole utterance — the duplex guard's first half. The second is
-    // the raised VAD threshold below.
+    // the raised VAD threshold in pushLevel.
     stopRecognition()
     clearTimers()
 
     const f = opts.facts()
-    const text = f ? rudiReply(heard, f) : 'One moment — I am still pulling today’s numbers.'
+    const text = f ? rudiReply(heard, f) : 'One moment — I am still pulling today\u2019s numbers.'
     opts.onReply(text)
 
+    const est = estimateMs(text)
+    log(`reply "${text.slice(0, 40)}…" est=${est}ms`)
+
+    // ONE handover, whoever gets there first. Everything below races to call this, and the guard is
+    // what makes the race safe rather than a source of double-arming.
+    let handed = false
+    const handOver = (why: string) => {
+      if (handed || stopped) return
+      handed = true
+      log(`handover via ${why}`)
+      stopSpeechWatchers()
+      // If we got here on a timer rather than on onend, her voice may still be running. Silence it,
+      // or she talks over the armed state.
+      if (why !== 'onend' && hasSynthesis()) {
+        try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ }
+      }
+      rudi.stopSpeaking()
+      armTurn()
+    }
+
     if (!hasSynthesis()) {
-      const ms = estimateMs(text)
-      rudi.speak(text, ms)
-      sayTimer = setTimeout(() => { rudi.stopSpeaking(); armTurn() }, ms)
+      log('no speechSynthesis; holding the reply for the estimated duration')
+      rudi.speak(text, est + 10_000)
+      sayTimer = setTimeout(() => handOver('estimate (no synthesis)'), est)
       return
     }
 
     window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.rate = 1.02
-    // speak() is driven by the utterance's OWN onstart/onend, so the video runs for exactly as long
-    // as the voice does. That is the entire point of the duration argument, and the one thing a
-    // scripted timeout can never get right. The ms below is a ceiling in case onend never fires.
-    u.onstart = () => { if (!stopped) rudi.speak(text, 120_000) }
-    const finish = () => {
-      if (stopped) return
-      rudi.stopSpeaking()
-      armTurn()
+    log('utterance created')
+
+    const begin = (why: string) => {
+      if (started || stopped) return
+      started = true
+      log(`onstart via ${why}`)
+      // The ceiling handed to the canvas is generous, because the harness's own watchers should
+      // always win. It used to be 120_000 — two minutes — which turned a missed event into something
+      // indistinguishable from a permanent hang.
+      rudi.speak(text, est * 2 + 10_000)
+
+      // Chrome stops the synth silently after ~15s. resume() while speaking prevents it.
+      keepAlive = setInterval(() => {
+        try { window.speechSynthesis.resume() } catch { /* gone */ }
+      }, KEEPALIVE_MS)
+
+      // The real catch for a missing onend: ask the synth whether it is still busy. When it says no
+      // and no event arrived, that IS the bug, and this is what notices.
+      synthPoll = setInterval(() => {
+        if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+          handOver('synth reported idle (onend never fired)')
+        }
+      }, SYNTH_POLL_MS)
+
+      // And a hard cap, in case the synth claims to be busy forever.
+      sayTimer = setTimeout(() => handOver('hard cap'), est * 2 + 6000)
     }
-    u.onend = finish
-    u.onerror = finish
+
+    u.onstart = () => { log('event: onstart'); begin('event') }
+    u.onend = () => { log('event: onend'); handOver('onend') }
+    u.onerror = () => { log('event: onerror'); handOver('onerror') }
+    // Not used for control — logged because if boundaries arrive and onend does not, the utterance
+    // ran and only the final event was lost, which is a different fault from never starting.
+    u.onboundary = (e) => log(`event: onboundary @${Math.round(e.charIndex ?? 0)}`)
+
     window.speechSynthesis.speak(u)
+    log('speechSynthesis.speak() called')
+
+    // onstart can go missing too. Without this nothing would ever enter speaking, and the reply would
+    // sit on screen with the state stuck in listening.
+    startWatchdog = setTimeout(() => {
+      if (!started) { log('onstart never fired within watchdog'); begin('watchdog') }
+    }, START_WATCHDOG_MS)
   }
 
   /** Cut her off and hand the floor back. The one thing that makes this feel alive. */
@@ -244,9 +353,15 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
   }
 
   const session: VoiceSession = {
+    /**
+     * Force idle from ANY state. Never waits on an event, never checks what is pending, and is safe
+     * to call twice — the button, Esc and the armed timeout all land here, and none of them may be
+     * blocked by an utterance that is refusing to end.
+     */
     stop() {
       if (stopped) return
       stopped = true
+      log('session: stop')
       clearTimers()
       stopRecognition()
       if (raf) cancelAnimationFrame(raf)

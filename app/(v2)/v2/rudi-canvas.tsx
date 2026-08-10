@@ -118,6 +118,11 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
   useEffect(() => { minRef.current = minimised }, [minimised])
 
   const setState = useCallback((s: RudiState) => {
+    const from = stateRef.current
+    if (from === s) return
+    // Diagnostic only. A state machine that can strand itself is worth being able to read, and this
+    // is the line that shows whether the exit ever happened.
+    console.info(`[v2 state] ${Math.round(performance.now())}ms ${from} -> ${s}`)
     stateRef.current = s
     setStateRaw(s)
     onStateChange?.(s)
@@ -126,6 +131,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
   // ── The control surface ─────────────────────────────────────────────────────────────────────────
   useImperativeHandle(handleRef, (): RudiHandle => ({
     speak(text?: string, ms?: number) {
+      console.info(`[v2 state] speak(ms=${ms ?? 6000}) — ceiling only; the caller owns the handover`)
       speakEndRef.current = performance.now() + (ms ?? 6000)
       if (stateRef.current !== 'speaking') setState('speaking')
       if (timerRef.current) clearTimeout(timerRef.current)
@@ -134,6 +140,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       }, Math.max(300, speakEndRef.current - performance.now()))
     },
     stopSpeaking() {
+      console.info('[v2 state] stopSpeaking()')
       speakEndRef.current = 0
       if (timerRef.current) clearTimeout(timerRef.current)
       if (stateRef.current === 'speaking') setState('idle')

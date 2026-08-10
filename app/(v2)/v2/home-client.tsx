@@ -114,7 +114,14 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
     voice.current?.stop(); voice.current = null
     rudi.current?.endSession()
   }, [])
-  useEffect(() => () => { endSession() }, [endSession])
+  useEffect(() => () => {
+    endSession()
+    // Also unconditionally, in case no session was open: an utterance queued by a session that has
+    // already been dropped would otherwise keep speaking after this screen is gone.
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ }
+    }
+  }, [endSession])
 
   const toggleTalk = useCallback(() => {
     wake()
