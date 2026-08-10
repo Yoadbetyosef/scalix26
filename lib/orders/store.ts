@@ -24,6 +24,12 @@ const orderRow = (r: Record<string, unknown>): Order => ({
   subtotalCents: Number(r.subtotal_cents ?? 0), depositCents: Number(r.deposit_cents ?? 0), balanceCents: Number(r.balance_cents ?? 0), currency: (r.currency as string) ?? 'usd',
   clientRequirements: (r.client_requirements as string) ?? null, isCustomDesign: r.is_custom_design === true,
   internalNotes: (r.internal_notes as string) ?? null, publicNotes: (r.public_notes as string) ?? null, createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
+  // Added by add_orders_6. Read off the row rather than selected by name, so a database without the
+  // migration yields undefined here instead of failing the whole query.
+  deliveryProvince: (r.delivery_province as string) ?? null,
+  documentTemplateId: (r.document_template_id as string) ?? null,
+  invoicedAt: (r.invoiced_at as string) ?? null,
+  archivedAt: (r.archived_at as string) ?? null,
 })
 const num = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v))
 const lineRow = (r: Record<string, unknown>): OrderLineItem => ({
@@ -110,7 +116,10 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   const c = await ctx(); if (!c) return null
   const sb = await createClient()
   const m: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  const map: Record<string, string> = { orderNumber: 'order_number', contactId: 'contact_id', customerName: 'customer_name', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', clientRequirements: 'client_requirements', isCustomDesign: 'is_custom_design', internalNotes: 'internal_notes', publicNotes: 'public_notes' }
+  const map: Record<string, string> = { orderNumber: 'order_number', contactId: 'contact_id', customerName: 'customer_name', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', clientRequirements: 'client_requirements', isCustomDesign: 'is_custom_design', internalNotes: 'internal_notes', publicNotes: 'public_notes', deliveryProvince: 'delivery_province', documentTemplateId: 'document_template_id' }
+  // Only keys actually PRESENT in the patch are written. That is what lets add_orders_6's columns be
+  // optional: a form that does not send delivery_province never names it, so a database without the
+  // column is never asked about it.
   for (const [k, col] of Object.entries(map)) if (k in patch) m[col] = (patch as Record<string, unknown>)[k]
   // Never blank out the (NOT NULL, unique) order number — ignore an empty edit.
   if (typeof m.order_number === 'string') { const t = m.order_number.trim(); if (t) m.order_number = t; else delete m.order_number }

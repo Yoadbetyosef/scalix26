@@ -40,6 +40,9 @@ export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-passw
     // Public studio document page (quote / invoice / production order): the token in the URL is the sole
     // capability — the owner shares the link with a client/supplier who has no Scalix account.
     '/d/',
+    // The customer's copy of an order document (estimate / quote / invoice). The token in the URL is
+    // the sole credential — the recipient has no account — exactly like /d/ and /approval/ above.
+    '/e/',
     // Scheduled jobs: Vercel/external cron requests carry NO user session, so they must bypass the
     // login redirect to reach the route — where cronAuthorized (the fail-closed CRON_SECRET bearer)
     // is the real gate. These are NOT open: a request without the secret gets 401 at the route.

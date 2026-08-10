@@ -25,6 +25,14 @@ export interface OrderLineItem extends JewelrySpec {
 export interface OrderEvent { id: string; orderId: string; type: string; actor: string | null; payload: Record<string, unknown> | null; createdAt: string }
 
 export interface Order {
+  // ── Added by add_orders_6, and OPTIONAL on the type on purpose ──────────────────────────────────
+  // The application must render before the migration is run. Optional here means every consumer is
+  // forced by the compiler to handle their absence, rather than reading undefined as a value.
+  deliveryProvince?: string | null
+  documentTemplateId?: string | null
+  invoicedAt?: string | null
+  archivedAt?: string | null
+
   id: string; tenantId: string; orderNumber: string; contactId: string | null
   customerName: string | null; customerEmail: string | null; customerPhone: string | null
   stage: OrderStage; factoryName: string | null; factoryContactName: string | null; factoryEmail: string | null
@@ -58,6 +66,8 @@ export interface LineItemInput extends Partial<JewelrySpec> {
   internalCostCents?: number | null
 }
 export interface OrderInput {
+  deliveryProvince?: string | null
+  documentTemplateId?: string | null
   orderNumber?: string | null
   contactId?: string | null; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null
   factoryName?: string | null; factoryContactName?: string | null; factoryEmail?: string | null; assignedEmployee?: string | null

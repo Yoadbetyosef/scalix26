@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
+import { CA_REGIONS } from '@/lib/tax/canada'
 import { LineItemFields, emptyLine, fetchOptionLists, lineFromSaved, lineToPayload, type LineDraft } from './line-item-fields'
 
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
@@ -16,6 +17,9 @@ export interface OrderEditInitial {
   factoryName: string | null; factoryContactName: string | null; factoryEmail: string | null
   assignedEmployee: string | null; orderDate: string | null; requestedCompletionDate: string | null
   depositCents: number; currency: string
+  deliveryProvince?: string | null
+  documentTemplateId?: string | null
+  templates?: Array<{ id: string; name: string }>
   clientRequirements: string | null; isCustomDesign: boolean
   internalNotes: string | null; publicNotes: string | null
   lineItems: Array<Parameters<typeof lineFromSaved>[0]>
@@ -39,6 +43,8 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
     factoryName: initial.factoryName ?? '', factoryContactName: initial.factoryContactName ?? '', factoryEmail: initial.factoryEmail ?? '',
     assignedEmployee: initial.assignedEmployee ?? '', orderDate: initial.orderDate ?? '', requestedCompletionDate: initial.requestedCompletionDate ?? '',
     depositAmount: initial.depositCents ? (initial.depositCents / 100).toString() : '',
+    deliveryProvince: initial.deliveryProvince ?? '',
+    documentTemplateId: initial.documentTemplateId ?? '',
     clientRequirements: initial.clientRequirements ?? '', internalNotes: initial.internalNotes ?? '', publicNotes: initial.publicNotes ?? '',
   })
   const [isCustomDesign, setIsCustomDesign] = useState(initial.isCustomDesign)
@@ -62,6 +68,10 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
         depositCents: Math.round((parseFloat(f.depositAmount) || 0) * 100),
+        // Empty means "not recorded", not "no tax" — the document then shows no tax line at all
+        // rather than a 0%, which would be a claim that none is due.
+        deliveryProvince: f.deliveryProvince || null,
+        documentTemplateId: f.documentTemplateId || null,
         clientRequirements: f.clientRequirements || null, isCustomDesign,
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
@@ -136,6 +146,23 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
               <section>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="block text-xs text-gray-500">Deposit ({sym})<input value={f.depositAmount} onChange={set('depositAmount')} placeholder="0" className={inp} /></label>
+                  {/* PLACE OF SUPPLY — the destination, not the seller's province. A BC business
+                      delivering to Ontario charges 13% HST, and getting this backwards is invisible on
+                      the document: the arithmetic looks right, it is just the wrong rate. */}
+                  <label className="block text-xs text-gray-500">Delivering to (tax)
+                    <select value={f.deliveryProvince} onChange={(e) => setF((p) => ({ ...p, deliveryProvince: e.target.value }))} className={inp}>
+                      <option value="">Not set — no tax shown</option>
+                      {CA_REGIONS.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+                    </select>
+                  </label>
+                  {(initial.templates?.length ?? 0) > 0 && (
+                    <label className="block text-xs text-gray-500">Document template
+                      <select value={f.documentTemplateId} onChange={(e) => setF((p) => ({ ...p, documentTemplateId: e.target.value }))} className={inp}>
+                        <option value="">Default</option>
+                        {initial.templates!.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </label>
+                  )}
                   <label className="block text-xs text-gray-500">Public notes (visible on approval page)<textarea value={f.publicNotes} onChange={set('publicNotes')} rows={2} className={inp} /></label>
                   <label className="block text-xs text-gray-500">Internal notes (never shared)<textarea value={f.internalNotes} onChange={set('internalNotes')} rows={2} className={inp} /></label>
                 </div>

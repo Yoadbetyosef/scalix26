@@ -32,6 +32,10 @@ const orderFields = {
   depositCents: z.number().int().min(0).optional(), currency: z.string().max(8).optional(),
   clientRequirements: z.string().max(20000).nullable().optional(), isCustomDesign: z.boolean().optional(),
   internalNotes: z.string().max(5000).nullable().optional(), publicNotes: z.string().max(5000).nullable().optional(),
+  // Place of supply — the DESTINATION province, which decides the tax rate. Not the seller's.
+  deliveryProvince: z.string().max(2).nullable().optional(),
+  // Which company's letterhead this order's documents use. Null = the tenant's default.
+  documentTemplateId: z.string().uuid().nullable().optional(),
   lineItems: z.array(lineItemSchema).max(200).optional(),
 }
 

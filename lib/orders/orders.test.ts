@@ -23,11 +23,31 @@ describe('Order stage state machine', () => {
     expect(canManualTransition('cancelled', 'cancelled')).toBe(false)
   })
 
-  it('send-for-approval is only valid from the right stages and lands on waiting_*', () => {
+  it('send-for-approval works in EITHER order — neither approval is a prerequisite', () => {
     expect(canSendForApproval('new', 'factory')).toBe(true)
     expect(canSendForApproval('factory_changes_requested', 'factory')).toBe(true)
-    expect(canSendForApproval('new', 'customer')).toBe(false)              // must get factory approval first
+
+    // This assertion used to read `false`, with the comment "must get factory approval first". That
+    // encoded a sequence the business does not have: sometimes the customer approves the estimate
+    // before anything reaches a workshop. The old gate hid the Send to Customer button on exactly the
+    // orders where it was wanted.
+    expect(canSendForApproval('new', 'customer')).toBe(true)
     expect(canSendForApproval('factory_approved', 'customer')).toBe(true)
+
+    // Both may be outstanding at once — that is the point of the change.
+    expect(canSendForApproval('waiting_customer_approval', 'factory')).toBe(true)
+    expect(canSendForApproval('waiting_factory_approval', 'customer')).toBe(true)
+
+    // But not a DUPLICATE of one already in flight.
+    expect(canSendForApproval('waiting_factory_approval', 'factory')).toBe(false)
+    expect(canSendForApproval('waiting_customer_approval', 'customer')).toBe(false)
+
+    // And never once the piece is being made, delivered, finished or cancelled.
+    for (const s of ['production', 'ready', 'delivered', 'completed', 'cancelled'] as const) {
+      expect(canSendForApproval(s, 'factory')).toBe(false)
+      expect(canSendForApproval(s, 'customer')).toBe(false)
+    }
+
     expect(stageAfterSend('factory')).toBe('waiting_factory_approval')
     expect(stageAfterSend('customer')).toBe('waiting_customer_approval')
   })

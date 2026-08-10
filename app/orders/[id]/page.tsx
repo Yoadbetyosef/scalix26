@@ -8,6 +8,8 @@ import { OrderEdit } from '@/components/orders/order-edit'
 import { DeleteOrderButton } from '@/components/orders/delete-order'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
+import { FinishActions } from '@/components/orders/finish-actions'
+import { listTemplates } from '@/lib/orders/templates'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -24,6 +26,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const a = await requireOrdersAccess()
   if (!a) notFound()
   const o = await getOrder((await params).id)
+  // Empty when add_orders_6 has not been run — listTemplates() swallows a missing table on purpose,
+  // so the picker simply does not appear rather than the page failing.
+  const templates = o ? await listTemplates(o.tenantId) : []
   if (!o) notFound()
 
   return (
@@ -46,6 +51,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
               assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
               depositCents: o.depositCents, currency: o.currency, internalNotes: o.internalNotes, publicNotes: o.publicNotes,
+              deliveryProvince: o.deliveryProvince, documentTemplateId: o.documentTemplateId,
+              templates: templates.map((t) => ({ id: t.id, name: t.name })),
               clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
               lineItems: o.lineItems,
             }} />
@@ -60,6 +67,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Approval workflow</h3>
+        {/* A finished job had nowhere to go, so finished work was re-typed into another system. */}
+        {o.stage === 'completed' && (
+          <div className="mb-4">
+            <FinishActions orderId={o.id} invoicedAt={o.invoicedAt} archivedAt={o.archivedAt} />
+          </div>
+        )}
+
         <ApprovalActions orderId={o.id} stage={o.stage} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} />
       </div>
 
