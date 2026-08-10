@@ -6,6 +6,7 @@ import { INVOICE_EXTENSIONS, MAX_INVOICE_BYTES, extensionOf } from './attachment
 import { ORDER_BUCKET } from './attachments'
 import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
 import { approvalEmailHtml, deliveryRequestEmailHtml } from './approval-email'
+import { getSupplier, type Supplier } from './suppliers'
 import type { PublicOrderView } from './types'
 
 // External approval primitive. Tatiana-side ops go through the RLS client; the PUBLIC token route uses the
@@ -29,7 +30,13 @@ export async function listApprovalsForOrder(orderId: string): Promise<ApprovalRe
   return ((data as Array<Record<string, unknown>> | null) ?? []).map(reqRow)
 }
 
-export interface SendApprovalInput { approvalType: ApprovalType; recipientName?: string | null; recipientEmail: string; subject?: string | null; message?: string | null; deadline?: string | null; attachmentIds?: string[]; sendCopyToSelf?: boolean; internalNote?: string | null }
+export interface SendApprovalInput {
+  approvalType: ApprovalType; recipientName?: string | null; recipientEmail: string
+  subject?: string | null; message?: string | null; deadline?: string | null
+  attachmentIds?: string[]; sendCopyToSelf?: boolean; internalNote?: string | null
+  /** Factory sends only: the supplier record this goes to. Also becomes the order's supplier. */
+  supplierId?: string | null
+}
 
 export async function createAndSendApproval(orderId: string, input: SendApprovalInput, baseUrl: string): Promise<{ ok: boolean; error?: string; requestId?: string }> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
@@ -38,6 +45,18 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   const { data: order } = await sb.from('orders').select('*').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
   if (!order) return { ok: false, error: 'not found' }
   const stage = order.stage as OrderStage
+
+  // A factory send is addressed to a supplier RECORD, so the same workshop is one row across every order
+  // instead of a fresh spelling each time — and so "move to production" later has somewhere to send to.
+  let supplier: Supplier | null = null
+  if (input.approvalType === 'factory') {
+    if (!input.supplierId) return { ok: false, error: 'Choose the factory this is going to.' }
+    supplier = await getSupplier(input.supplierId)
+    if (!supplier) return { ok: false, error: 'That supplier no longer exists.' }
+    if (!supplier.email) return { ok: false, error: `${supplier.name} has no email address saved. Add one and try again.` }
+    input = { ...input, recipientEmail: supplier.email, recipientName: input.recipientName || supplier.contactName || supplier.name }
+  }
+
   // Required info + valid transition.
   if (!input.recipientEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input.recipientEmail)) return { ok: false, error: 'A valid recipient email is required.' }
   if (!canSendForApproval(stage, input.approvalType)) return { ok: false, error: `Cannot send a ${input.approvalType} approval while the order is "${stage}".` }
@@ -54,6 +73,7 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   const expiresAt = input.deadline ? new Date(input.deadline + 'T23:59:59Z').toISOString() : new Date(Date.now() + DEFAULT_EXPIRY_DAYS * 86_400_000).toISOString()
   const { data: created, error: insErr } = await sb.from('order_approval_requests').insert({
     tenant_id: c.tenantId, order_id: orderId, approval_type: input.approvalType, recipient_name: input.recipientName ?? null, recipient_email: input.recipientEmail,
+    supplier_id: supplier?.id ?? null,
     token_hash: hash, status: 'draft', version, subject: input.subject ?? null, message: input.message ?? null, internal_note: input.internalNote ?? null,
     expires_at: expiresAt, created_by: c.actorUserId,
   }).select('*').single()
@@ -84,7 +104,9 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
 
   const now = new Date().toISOString()
   await sb.from('order_approval_requests').update({ status: 'sent', sent_at: now, updated_at: now }).eq('id', requestId)
-  await sb.from('orders').update({ stage: stageAfterSend(input.approvalType), updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
+  // The supplier is recorded on the order only after the send worked, so an order never claims a factory
+  // that was never contacted.
+  await sb.from('orders').update({ stage: stageAfterSend(input.approvalType), ...(supplier ? { supplier_id: supplier.id } : {}), updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
   await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'approval_sent', actor: c.actorUserId, payload: { approvalType: input.approvalType, version, recipientEmail: input.recipientEmail } })
   return { ok: true, requestId }
 }
@@ -302,20 +324,35 @@ export interface ProductionResult {
   detail?: string
 }
 
-export async function sendToProduction(orderId: string, baseUrl?: string): Promise<ProductionResult> {
+export async function sendToProduction(orderId: string, baseUrl?: string, supplierId?: string | null): Promise<ProductionResult> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized', notified: null, reason: null }
   const sb = await createClient()
-  const { data } = await sb.from('orders').select('stage, order_number').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
+  const { data } = await sb.from('orders').select('stage, order_number, supplier_id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
   if (!data) return { ok: false, error: 'not found', notified: null, reason: null }
   if (!canSendToProduction(data.stage as OrderStage)) return { ok: false, error: 'Order must be Factory Approved or Customer Approved before production.', notified: null, reason: null }
 
-  // The factory recipient is resolved BEFORE the stage moves, so the outcome can be reported honestly in
-  // the same breath as the transition rather than discovered afterwards.
-  const { data: fr } = await sb.from('order_approval_requests').select('id, recipient_email').eq('tenant_id', c.tenantId).eq('order_id', orderId).eq('approval_type', 'factory').eq('status', 'approved').order('version', { ascending: false }).limit(1).maybeSingle()
-  const recipient = fr?.recipient_email && baseUrl ? (fr.recipient_email as string) : null
+  // Who makes this piece, resolved BEFORE the stage moves so the outcome is reported in the same breath as
+  // the transition rather than discovered afterwards. In order of authority: the factory chosen on this
+  // send, the factory already recorded on the order, then — for orders that predate suppliers — whatever
+  // address a factory approval was last sent to.
+  const supplier = supplierId ? await getSupplier(supplierId) : (data.supplier_id ? await getSupplier(data.supplier_id as string) : null)
+  if (supplierId && !supplier) return { ok: false, error: 'That supplier no longer exists.', notified: null, reason: null }
+
+  // Reuse this order's factory request when one exists — that row carries the link, so the factory keeps a
+  // single page for the job from approval through to invoice. With no such row the work order goes out
+  // cold and needs its own, at status 'sent': nobody has approved anything.
+  const { data: fr } = await sb.from('order_approval_requests').select('id, recipient_email')
+    .eq('tenant_id', c.tenantId).eq('order_id', orderId).eq('approval_type', 'factory')
+    .order('version', { ascending: false }).limit(1).maybeSingle()
+
+  const legacyEmail = !supplier && fr?.recipient_email ? (fr.recipient_email as string) : null
+  const recipient = baseUrl ? (supplier?.email ?? legacyEmail) : null
+  // No prior factory request means this workshop has never seen the piece. They need the specification,
+  // not an invoice prompt for a job they were never told about.
+  const firstContact = !fr
 
   const now = new Date().toISOString()
-  await sb.from('orders').update({ stage: 'production', updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
+  await sb.from('orders').update({ stage: 'production', ...(supplier ? { supplier_id: supplier.id } : {}), updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
 
   if (!recipient) {
     // The stage move is real and still worth making. The claim of a send is not.
@@ -328,11 +365,24 @@ export async function sendToProduction(orderId: string, baseUrl?: string): Promi
   let sent: { success: boolean; error?: string }
   try {
     const { token, hash } = generateApprovalToken()
-    await sb.from('order_approval_requests').update({ token_hash: hash, updated_at: now }).eq('tenant_id', c.tenantId).eq('id', fr!.id as string)
+    if (fr) {
+      await sb.from('order_approval_requests').update({ token_hash: hash, ...(supplier ? { supplier_id: supplier.id, recipient_email: supplier.email, recipient_name: supplier.contactName || supplier.name } : {}), updated_at: now }).eq('tenant_id', c.tenantId).eq('id', fr.id as string)
+    } else {
+      const { error: insErr } = await sb.from('order_approval_requests').insert({
+        tenant_id: c.tenantId, order_id: orderId, approval_type: 'factory', supplier_id: supplier!.id,
+        recipient_name: supplier!.contactName || supplier!.name, recipient_email: recipient,
+        token_hash: hash, status: 'sent', version: 1, sent_at: now, created_by: c.actorUserId,
+        // No deadline. The factory needs this page for as long as the piece takes to make, and a link that
+        // expires mid-job fails the person holding the work, not the person who sent it.
+        expires_at: null,
+      })
+      if (insErr) throw new Error(insErr.message)
+    }
     const { data: tenant } = await sb.from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
     const bizName = (tenant?.business_name as string) || 'Our team'
-    const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null })
-    sent = await sendEmail(recipient, `Order ${data.order_number} confirmed — upload invoice when ready`, html, { tenantId: c.tenantId, fromName: bizName, replyTo: (tenant?.email as string) ?? undefined })
+    const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null, firstContact })
+    const subject = firstContact ? `Work order ${data.order_number} from ${bizName}` : `Order ${data.order_number} confirmed — upload invoice when ready`
+    sent = await sendEmail(recipient, subject, html, { tenantId: c.tenantId, fromName: bizName, replyTo: (tenant?.email as string) ?? undefined })
   } catch (e) {
     sent = { success: false, error: (e as Error).message }
   }

@@ -35,7 +35,10 @@ export interface Order {
 
   id: string; tenantId: string; orderNumber: string; contactId: string | null
   customerName: string | null; customerEmail: string | null; customerPhone: string | null
-  stage: OrderStage; factoryName: string | null; factoryContactName: string | null; factoryEmail: string | null
+  stage: OrderStage
+  /** The factory record making this piece. factory* below is the free text typed on older orders. */
+  supplierId: string | null
+  factoryName: string | null; factoryContactName: string | null; factoryEmail: string | null
   assignedEmployee: string | null; orderDate: string | null; requestedCompletionDate: string | null; estimatedCompletionDate: string | null
   subtotalCents: number; depositCents: number; balanceCents: number; currency: string
   clientRequirements: string | null; isCustomDesign: boolean

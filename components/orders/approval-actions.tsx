@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { canSendForApproval, canSendToProduction, type OrderStage, type ApprovalType } from '@/lib/orders/stages'
+import { SupplierPicker, type Supplier } from './supplier-picker'
 
 interface Approval { id: string; approvalType: ApprovalType; recipientEmail: string; status: string; version: number; respondedAt: string | null; responseComment: string | null; estimatedCompletionDate: string | null; createdAt: string }
 interface Att { id: string; fileName: string; visibility: 'internal' | 'public' }
@@ -16,7 +17,12 @@ const STATUS_TINT: Record<string, string> = {
   revoked: 'bg-gray-100 text-gray-500', expired: 'bg-gray-100 text-gray-500',
 }
 
-export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; stage: OrderStage; prefill: { factoryName: string | null; factoryEmail: string | null; customerName: string | null; customerEmail: string | null } }) {
+export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
+  orderId: string; stage: OrderStage
+  prefill: { factoryName: string | null; factoryEmail: string | null; customerName: string | null; customerEmail: string | null }
+  /** The factory already recorded on this order, if any. Both dialogs open on it. */
+  orderSupplier: Supplier | null
+}) {
   const router = useRouter()
   const [approvals, setApprovals] = useState<Approval[]>([])
   const [atts, setAtts] = useState<Att[]>([])
@@ -25,6 +31,9 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
   // Persistent, not a toast: "nobody was notified" is a fact she may need to act on minutes later.
   const [outcome, setOutcome] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
   const [f, setF] = useState({ recipientName: '', recipientEmail: '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: [] as string[] })
+  // The factory a send is addressed to. A record, not a typed address — see supplier-picker.tsx.
+  const [supplier, setSupplier] = useState<Supplier | null>(null)
+  const [prodOpen, setProdOpen] = useState(false)
 
   const load = useCallback(async () => {
     const [ar, at] = await Promise.all([fetch(`/api/orders/${orderId}/approvals`), fetch(`/api/orders/${orderId}/attachments`)])
@@ -40,6 +49,7 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
     // Every shared file starts ticked. Sending the piece's reference photos is the normal case; leaving
     // one out should be the deliberate act, not remembering to include it.
     const shared = atts.filter((a) => a.visibility === 'public').map((a) => a.id)
+    setSupplier(orderSupplier ?? null)
     setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: shared })
     setOpen(type)
   }
@@ -47,7 +57,7 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
     if (!open) return
     setBusy(true); setErr(null)
     try {
-      const body = { approvalType: open, recipientName: f.recipientName || null, recipientEmail: f.recipientEmail, subject: f.subject || null, message: f.message || null, deadline: f.deadline || null, attachmentIds: f.include, sendCopyToSelf: f.sendCopyToSelf, internalNote: f.internalNote || null }
+      const body = { approvalType: open, supplierId: open === 'factory' ? supplier?.id ?? null : null, recipientName: f.recipientName || null, recipientEmail: open === 'factory' ? supplier?.email ?? '' : f.recipientEmail, subject: f.subject || null, message: f.message || null, deadline: f.deadline || null, attachmentIds: f.include, sendCopyToSelf: f.sendCopyToSelf, internalNote: f.internalNote || null }
       const r = await fetch(`/api/orders/${orderId}/approvals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!r.ok) throw new Error((await r.json()).error || 'Failed to send')
       setOpen(null); router.refresh(); void load()
@@ -57,11 +67,10 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
   // Moving to Production emails the factory ONLY if a factory approval was sent and approved — that is the
   // only place an address exists today. So the confirm promises the stage move (always true) and never a
   // send, and the outcome afterwards names the address or says plainly that nobody was told.
-  const toProduction = async () => {
-    if (!confirm(stage === 'factory_approved' ? 'Move this order to Production, skipping customer approval?' : 'Move this order to Production?')) return
+  const toProduction = async (withSupplier: Supplier | null) => {
     setBusy(true); setErr(null); setOutcome(null)
     try {
-      const r = await fetch(`/api/orders/${orderId}/production`, { method: 'POST' })
+      const r = await fetch(`/api/orders/${orderId}/production`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ supplierId: withSupplier?.id ?? null }) })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'Failed')
       setOutcome(j.notified
@@ -69,7 +78,7 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
         : j.reason === 'send_failed'
           ? { tone: 'warn', text: `Moved to Production, but the email to the factory did not go out${j.detail ? ` (${j.detail})` : ''}. Nobody has been told — contact them directly.` }
           : { tone: 'warn', text: 'Moved to Production. No email was sent — this order has no approved factory request, so there is no factory address on file. Nobody has been told.' })
-      router.refresh(); void load()
+      setProdOpen(false); router.refresh(); void load()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -83,7 +92,7 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
       <div className="flex flex-wrap gap-2">
         {canFactory && <button onClick={() => openModal('factory')} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">Send to Factory for Approval</button>}
         {canCustomer && <button onClick={() => openModal('customer')} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">Send to Customer for Approval</button>}
-        {canProd && <button onClick={toProduction} disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">Move to Production</button>}
+        {canProd && <button onClick={() => { setSupplier(orderSupplier ?? null); setErr(null); setProdOpen(true) }} disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">Move to Production</button>}
       </div>
 
       {outcome && (
@@ -97,7 +106,10 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
           {approvals.map((ap) => (
             <li key={ap.id}>
               <div className="flex flex-wrap items-center gap-2 text-gray-600">
-                <span className="capitalize text-gray-900">{ap.approvalType}</span>
+                {/* Once the piece is being made, a factory request is the work order — the factory is not
+                    being asked to approve anything, they are holding the job. Calling it "factory" there
+                    reads as an approval still outstanding. */}
+                <span className="capitalize text-gray-900">{ap.approvalType === 'factory' && ['production', 'ready', 'delivered', 'completed'].includes(stage) ? 'work order' : ap.approvalType}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[11px] ${STATUS_TINT[ap.status] ?? 'bg-gray-100 text-gray-700'}`}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
                 <span className="text-xs text-gray-400">{ap.recipientEmail}</span>
                 {ap.estimatedCompletionDate && <span className="text-xs text-gray-400">· est {ap.estimatedCompletionDate}</span>}
@@ -117,13 +129,45 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
         </ul>
       )}
 
+      {prodOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setProdOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900">Move to Production</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {stage === 'factory_approved' ? 'This skips customer approval. ' : ''}
+              Choose the factory making this piece and they get the work order — the full specification and photographs, with no prices.
+            </p>
+            <div className="mt-3">
+              <div className="text-xs text-gray-500">Factory</div>
+              <SupplierPicker value={supplier} onChange={setSupplier} autoFocus />
+            </div>
+            {err && <div className="mt-2 text-xs text-red-600">{err}</div>}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button onClick={() => toProduction(supplier)} disabled={busy || !supplier?.email} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? 'Sending…' : 'Send work order & move'}</button>
+              {/* Moving without telling anyone is legitimate — she may have phoned them. It is offered as
+                  its own labelled choice so it can never be mistaken for a send. */}
+              <button onClick={() => toProduction(null)} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:opacity-40">Move without notifying anyone</button>
+              <button onClick={() => setProdOpen(false)} className="ml-auto rounded-lg px-3 py-2 text-sm text-gray-500">Cancel</button>
+            </div>
+            {supplier && !supplier.email && <p className="mt-2 text-xs text-amber-700">{supplier.name} has no email address saved, so nothing can be sent to them.</p>}
+          </div>
+        </div>
+      )}
+
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(null)}>
           <div className="w-full max-w-lg rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900">Send to {open === 'factory' ? 'Factory' : 'Customer'} for Approval</h3>
+            {open === 'factory' ? (
+              <div className="mt-3">
+                <div className="text-xs text-gray-500">Factory</div>
+                <SupplierPicker value={supplier} onChange={setSupplier} autoFocus />
+                {supplier && !supplier.email && <p className="mt-1 text-xs text-amber-700">{supplier.name} has no email address saved. Remove and re-add them with one to send.</p>}
+              </div>
+            ) : null}
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs text-gray-500">Recipient name<input value={f.recipientName} onChange={(e) => setF((p) => ({ ...p, recipientName: e.target.value }))} className={inp} /></label>
-              <label className="block text-xs text-gray-500">Recipient email<input value={f.recipientEmail} onChange={(e) => setF((p) => ({ ...p, recipientEmail: e.target.value }))} className={inp} /></label>
+              {open === 'customer' && <label className="block text-xs text-gray-500">Recipient name<input value={f.recipientName} onChange={(e) => setF((p) => ({ ...p, recipientName: e.target.value }))} className={inp} /></label>}
+              {open === 'customer' && <label className="block text-xs text-gray-500">Recipient email<input value={f.recipientEmail} onChange={(e) => setF((p) => ({ ...p, recipientEmail: e.target.value }))} className={inp} /></label>}
               <label className="block text-xs text-gray-500">Subject<input value={f.subject} onChange={(e) => setF((p) => ({ ...p, subject: e.target.value }))} className={inp} /></label>
               <label className="block text-xs text-gray-500">Approval deadline<input type="date" value={f.deadline} onChange={(e) => setF((p) => ({ ...p, deadline: e.target.value }))} className={inp} /></label>
             </div>
@@ -163,7 +207,7 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
             <label className="mt-3 block text-xs text-gray-500">Internal note (never shared)<input value={f.internalNote} onChange={(e) => setF((p) => ({ ...p, internalNote: e.target.value }))} className={inp} /></label>
             <label className="mt-2 flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={f.sendCopyToSelf} onChange={(e) => setF((p) => ({ ...p, sendCopyToSelf: e.target.checked }))} />Send a copy to me</label>
             {err && <div className="mt-2 text-xs text-red-600">{err}</div>}
-            <div className="mt-4 flex gap-2"><button onClick={send} disabled={busy || !f.recipientEmail} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? 'Sending…' : 'Send approval request'}</button><button onClick={() => setOpen(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button></div>
+            <div className="mt-4 flex gap-2"><button onClick={send} disabled={busy || (open === 'factory' ? !supplier?.email : !f.recipientEmail)} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? 'Sending…' : 'Send approval request'}</button><button onClick={() => setOpen(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button></div>
           </div>
         </div>
       )}

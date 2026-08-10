@@ -7,7 +7,9 @@ import { createAndSendApproval, listApprovalsForOrder } from '@/lib/orders/appro
 const schema = z.object({
   approvalType: z.enum(['factory', 'customer']),
   recipientName: z.string().max(200).nullable().optional(),
-  recipientEmail: z.string().email().max(320),
+  // Optional for a factory send: the address comes from the chosen supplier record, not from typing.
+  recipientEmail: z.string().email().max(320).optional().default(''),
+  supplierId: z.string().uuid().nullable().optional(),
   subject: z.string().max(300).nullable().optional(),
   message: z.string().max(3000).nullable().optional(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),

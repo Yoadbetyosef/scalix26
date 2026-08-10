@@ -10,6 +10,7 @@ import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
 import { FinishActions } from '@/components/orders/finish-actions'
 import { listTemplates } from '@/lib/orders/templates'
+import { getSupplier } from '@/lib/orders/suppliers'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -77,7 +78,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           </div>
         )}
 
-        <ApprovalActions orderId={o.id} stage={o.stage} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} />
+        <ApprovalActions orderId={o.id} stage={o.stage} orderSupplier={o.supplierId ? await getSupplier(o.supplierId) : null} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

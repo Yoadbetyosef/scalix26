@@ -19,7 +19,7 @@ async function ctx(): Promise<OrderCtx | null> {
 const orderRow = (r: Record<string, unknown>): Order => ({
   id: r.id as string, tenantId: r.tenant_id as string, orderNumber: r.order_number as string, contactId: (r.contact_id as string) ?? null,
   customerName: (r.customer_name as string) ?? null, customerEmail: (r.customer_email as string) ?? null, customerPhone: (r.customer_phone as string) ?? null,
-  stage: r.stage as OrderStage, factoryName: (r.factory_name as string) ?? null, factoryContactName: (r.factory_contact_name as string) ?? null, factoryEmail: (r.factory_email as string) ?? null,
+  stage: r.stage as OrderStage, supplierId: (r.supplier_id as string) ?? null, factoryName: (r.factory_name as string) ?? null, factoryContactName: (r.factory_contact_name as string) ?? null, factoryEmail: (r.factory_email as string) ?? null,
   assignedEmployee: (r.assigned_employee as string) ?? null, orderDate: (r.order_date as string) ?? null, requestedCompletionDate: (r.requested_completion_date as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null,
   subtotalCents: Number(r.subtotal_cents ?? 0), depositCents: Number(r.deposit_cents ?? 0), balanceCents: Number(r.balance_cents ?? 0), currency: (r.currency as string) ?? 'usd',
   clientRequirements: (r.client_requirements as string) ?? null, isCustomDesign: r.is_custom_design === true,

@@ -27,7 +27,7 @@ const line = (over: Partial<OrderWithDetails['lineItems'][number]> = {}) => ({
 const order = (over: Partial<OrderWithDetails> = {}): OrderWithDetails => ({
   id: 'o1', tenantId: 't1', orderNumber: 'ORD-KCKZQEGV', contactId: null,
   customerName: 'Tatiana', customerEmail: 'c@example.com', customerPhone: null,
-  stage: 'new', factoryName: null, factoryContactName: null, factoryEmail: null,
+  stage: 'new', supplierId: null, factoryName: null, factoryContactName: null, factoryEmail: null,
   assignedEmployee: null, orderDate: null, requestedCompletionDate: null, estimatedCompletionDate: null,
   subtotalCents: 600_000, depositCents: 0, balanceCents: 600_000, currency: 'cad',
   clientRequirements: null, isCustomDesign: true, internalNotes: 'MARGIN 58% — never show this',

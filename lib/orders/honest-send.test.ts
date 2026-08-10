@@ -86,15 +86,60 @@ describe('the button does not promise what the action cannot do', () => {
     expect(ui).not.toMatch(/>Send to Production</)
   })
 
-  it('the confirm prompt claims no send', () => {
-    const prompts = ui.match(/confirm\(([\s\S]*?)\)\)? return/g) ?? []
-    const production = prompts.filter((p) => /Production/i.test(p))
-    expect(production.length).toBeGreaterThan(0)
-    for (const p of production) expect(p).not.toMatch(/\bSend\b/)
+  it('cannot send a work order without a factory to send it to', () => {
+    // The send button is disabled until a supplier with an address is chosen. Nothing about this action
+    // types an address: it is picked from the record, or the record is created first.
+    expect(ui).toMatch(/disabled=\{busy \|\| !supplier\?\.email\}/)
+    expect(ui).toMatch(/'Send work order & move'/)
+  })
+
+  it('offers moving without notifying as its own labelled choice', () => {
+    // Legitimate — she may have phoned them. It must never be reachable by pressing the send button and
+    // hoping, so it says exactly what it does.
+    expect(ui).toMatch(/>Move without notifying anyone</)
+    expect(ui).toMatch(/toProduction\(null\)/)
   })
 
   it('states the outcome afterwards, including having notified nobody', () => {
     expect(ui).toMatch(/Nobody has been told/)
     expect(ui).toMatch(/was emailed at \$\{j\.notified\}/)
+  })
+})
+
+describe('a factory send is addressed to a record, not to typing', () => {
+  const lib = code('lib/orders/approvals.ts')
+  const ui = code('components/orders/approval-actions.tsx')
+
+  it('refuses a factory approval with no supplier chosen', () => {
+    expect(lib).toMatch(/if \(!input\.supplierId\) return \{ ok: false, error: 'Choose the factory this is going to\.' \}/)
+  })
+
+  it('takes the address from the supplier rather than the form', () => {
+    // Retyping is what produced four spellings of one workshop, and an order whose factory was a
+    // single character.
+    expect(lib).toMatch(/recipientEmail: supplier\.email/)
+    expect(ui).not.toMatch(/open === 'factory'[^\n]*recipientEmail: f\.recipientEmail/)
+  })
+
+  it('records the supplier on the order only after the send succeeded', () => {
+    // An order must never name a factory that was never contacted.
+    const stamp = lib.indexOf('supplier_id: supplier.id }')
+    const guard = lib.indexOf('if (!sendResult.success)')
+    expect(stamp).toBeGreaterThan(guard)
+  })
+
+  it('moving to production can send a work order with no prior approval', () => {
+    // The cold path: no factory request exists, so one is created at status sent — not approved, because
+    // nobody approved anything.
+    expect(lib).toMatch(/approval_type: 'factory', supplier_id: supplier!\.id/)
+    expect(lib).toMatch(/status: 'sent', version: 1/)
+    expect(lib).toMatch(/const firstContact = !fr/)
+  })
+
+  it('keeps the work order on the spec-only approval page', () => {
+    // The factory page carries stones, shapes, metal, ring size and photographs and no money at all.
+    // Pointing a work order at the customer document body would show them the retail price.
+    expect(lib).toMatch(/\$\{baseUrl\}\/approval\/\$\{token\}/)
+    expect(lib).not.toMatch(/\/e\/\$\{token\}/)
   })
 })

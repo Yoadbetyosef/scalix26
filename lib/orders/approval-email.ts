@@ -25,7 +25,26 @@ export function approvalEmailHtml(p: { businessName: string; orderNumber: string
 
 // Sent to the factory when the order is confirmed for production: they can now upload an invoice and mark the
 // item ready on the same secure page. NO full order details in the email.
-export function deliveryRequestEmailHtml(p: { businessName: string; orderNumber: string; message: string | null; link: string; supportEmail: string | null }): string {
+//
+// `firstContact` is set when this factory has not seen the piece before — the work order goes straight out
+// without an approval round. They then need the specification, not just an invoice prompt, so the email
+// leads with the job rather than with the paperwork. Either way the details live behind the link, never in
+// the email body, and the page carries specs and photographs but no prices.
+export function deliveryRequestEmailHtml(p: { businessName: string; orderNumber: string; message: string | null; link: string; supportEmail: string | null; firstContact?: boolean }): string {
+  if (p.firstContact) {
+    return `<!doctype html><html><body style="margin:0;background:#f6f7f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827">
+  <div style="max-width:520px;margin:0 auto;padding:24px">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px">
+      <div style="font-size:14px;font-weight:600;color:#374151">${esc(p.businessName)}</div>
+      <h1 style="font-size:20px;margin:12px 0 6px">New work order ${esc(p.orderNumber)}</h1>
+      <p style="font-size:14px;color:#4b5563;margin:0 0 16px">Please make the piece described on the secure page below — full specification and reference photographs are there. When it's finished, upload your invoice and mark it ready on the same page.</p>
+      ${p.message ? `<div style="font-size:14px;color:#374151;background:#f9fafb;border-radius:10px;padding:12px;margin:0 0 16px">${esc(p.message)}</div>` : ''}
+      <a href="${p.link}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 20px;border-radius:10px">Open Work Order</a>
+      ${p.supportEmail ? `<p style="font-size:12px;color:#9ca3af;margin:18px 0 0">Questions? Contact ${esc(p.supportEmail)}.</p>` : ''}
+    </div>
+    <p style="font-size:11px;color:#9ca3af;text-align:center;margin:14px 0 0">If you didn't expect this, you can ignore this email.</p>
+  </div></body></html>`
+  }
   return `<!doctype html><html><body style="margin:0;background:#f6f7f9;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111827">
   <div style="max-width:520px;margin:0 auto;padding:24px">
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px">
