@@ -1,6 +1,6 @@
 'use client'
 
-import { FALLBACK_BRAND_NAME } from '@/lib/partner/brand'
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {

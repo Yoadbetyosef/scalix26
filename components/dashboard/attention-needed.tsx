@@ -1,6 +1,6 @@
 'use client'
 
-import { FALLBACK_BRAND_NAME } from '@/lib/partner/brand'
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import Link from 'next/link'
 import { AlertTriangle, ArrowUpRight, CheckCircle2, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'

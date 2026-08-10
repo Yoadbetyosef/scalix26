@@ -1,21 +1,10 @@
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import { createAdminClient } from '@/lib/supabase/server'
 import { resolveBrand } from '@/lib/brands'
 
 // Serializable brand data, resolved by request host. A White Label partner's brand (from a custom
 // domain) overrides the static host brand — otherwise we fall back to the existing Scalix/host brand.
 // Cached briefly so the layout doesn't hit the DB on every navigation.
-
-/**
- * The name shown when no brand resolves.
- *
- * ONE definition, because it was typed inline in five components — every `useBrand()?.name || 'Scalix'`
- * — plus this file's own fallback. Five literals meant a white-label tenant whose brand failed to
- * resolve saw our name in five different places, and changing it meant finding all five.
- *
- * This deliberately does NOT change what it says. It changes how many places say it, which is the
- * prerequisite for ever changing what it says.
- */
-export const FALLBACK_BRAND_NAME = 'Scalix'
 
 export interface BrandData {
   name: string
@@ -102,3 +91,6 @@ export async function resolveBrandForPartner(partnerId: string): Promise<BrandDa
 }
 
 export function clearBrandCache() { cache.clear() }
+
+// Re-exported for server-side callers that already import from this module.
+export { FALLBACK_BRAND_NAME }

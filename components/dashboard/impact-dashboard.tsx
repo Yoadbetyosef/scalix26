@@ -1,6 +1,6 @@
 'use client'
 
-import { FALLBACK_BRAND_NAME } from '@/lib/partner/brand'
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, CheckCircle2, ShieldAlert } from 'lucide-react'
