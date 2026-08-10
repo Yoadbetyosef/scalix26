@@ -7,7 +7,7 @@ import { Rail } from './rail'
 import { rudiCursor, rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
-import { runDemo, type DemoSession } from './demo-harness'
+import { startVoice, type VoiceSession } from './browser-voice'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
 import {
@@ -83,6 +83,7 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
     return () => { alive = false }
   }, [dataPromise])
 
+  /** The typed path's answer. Voice goes through browser-voice.ts, which calls rudiReply itself. */
   const replyTo = useCallback((heard: string) => (
     facts.current
       ? rudiReply(heard, facts.current)
@@ -106,10 +107,11 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 
-  // The demo driver. The component knows nothing about it — see demo-harness.ts.
-  const demo = useRef<DemoSession | null>(null)
+  // The voice harness. The component knows nothing about it — see browser-voice.ts, which is the one
+  // file the Deepgram agent replaces.
+  const voice = useRef<VoiceSession | null>(null)
   const endSession = useCallback(() => {
-    demo.current?.stop(); demo.current = null
+    voice.current?.stop(); voice.current = null
     rudi.current?.endSession()
   }, [])
   useEffect(() => () => { endSession() }, [endSession])
@@ -121,15 +123,18 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
     if (r.state() === 'idle') {
       setSaid(null)
       setReply(null)
-      demo.current?.stop()
-      demo.current = runDemo(r, {
-        replyText: () => replyTo(''),
+      voice.current?.stop()
+      voice.current = startVoice(r, {
+        facts: () => facts.current,
+        onHeard: setSaid,
         onReply: (text) => setReply([{ text }]),
+        onEnd: () => { voice.current = null },
+        armedMs: ARMED_TIMEOUT_MS,
       })
     } else {
       endSession()
     }
-  }, [wake, endSession, replyTo])
+  }, [wake, endSession])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

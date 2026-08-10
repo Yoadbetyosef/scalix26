@@ -368,24 +368,38 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         const wN = 52
         const wW = CW * 0.56
         const wX = (CW - wW) / 2
-        const wY = CH * 0.52
+        // BELOW the mouth, not across it. Her lips are the one part worth seeing while she talks, and
+        // a rule drawn through them is the first thing the eye goes to.
+        const wY = CH * 0.64
         const gap = wW / wN
         const env = envelope(now)
 
-        // The baseline carries the meter's own ink weight, because at rest it IS the meter: bars
-        // collapse into it and what remains must read as one flat line rather than as an absence.
-        ctx!.strokeStyle = `rgba(14,14,17,${(0.5 * micA).toFixed(3)})`
-        ctx!.lineWidth = 1.5
+        // ── PRESENCE RISES WITH LEVEL ────────────────────────────────────────────────────────────
+        //
+        // At rest this was a solid dark rule with end ticks — an object in its own right, drawn
+        // across her face, at a moment when nothing is happening. It should be almost nothing when
+        // silent and gather weight only as sound arrives, so the meter reads as a property of the
+        // sound rather than as furniture.
+        const energy = Math.min(1, Math.max(0, env))
+        ctx!.strokeStyle = `rgba(14,14,17,${(micA * (0.09 + 0.34 * energy)).toFixed(3)})`
+        ctx!.lineWidth = 1 + 0.6 * energy
         ctx!.beginPath()
-        ctx!.moveTo(wX - CW * 0.06, wY)
-        ctx!.lineTo(wX + wW + CW * 0.06, wY)
+        ctx!.moveTo(wX, wY)
+        ctx!.lineTo(wX + wW, wY)
         ctx!.stroke()
-        ctx!.strokeStyle = `rgba(14,14,17,${(0.3 * micA).toFixed(3)})`
-        for (const ex of [wX - CW * 0.06, wX + wW + CW * 0.06]) {
-          ctx!.beginPath()
-          ctx!.moveTo(ex, wY - CH * 0.012)
-          ctx!.lineTo(ex, wY + CH * 0.012)
-          ctx!.stroke()
+
+        // End ticks fade in with level and are absent at rest, where they were the thing that made
+        // the meter look like a measuring instrument rather than a level. They also extended its
+        // span by another 12% of the width; the rule now ends where the bars do.
+        if (energy > 0.02) {
+          ctx!.strokeStyle = `rgba(14,14,17,${(0.3 * micA * energy).toFixed(3)})`
+          ctx!.lineWidth = 1
+          for (const ex of [wX, wX + wW]) {
+            ctx!.beginPath()
+            ctx!.moveTo(ex, wY - CH * 0.012)
+            ctx!.lineTo(ex, wY + CH * 0.012)
+            ctx!.stroke()
+          }
         }
         for (let wi = 0; wi < wN; wi++) {
           const edge = Math.pow(Math.sin((wi / (wN - 1)) * Math.PI), 0.45)
