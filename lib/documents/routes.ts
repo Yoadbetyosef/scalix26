@@ -19,6 +19,7 @@ export function isCustomerDocumentPath(pathname: string): boolean {
   // audience and the same rule — it was inheriting our title too, so a prospect opening a jeweller's
   // enquiry form saw our name in the browser tab.
   if (pathname.startsWith('/d/') || pathname.startsWith('/approval/') || pathname.startsWith('/f/')) return true
+  if (pathname.startsWith('/e/')) return true
   return /^\/orders\/[^/]+\/document(\/|$)/.test(pathname)
 }
 

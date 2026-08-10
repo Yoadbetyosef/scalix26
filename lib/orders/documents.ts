@@ -9,7 +9,9 @@ import type { OrderLineItem, OrderWithDetails } from './types'
 // The document is rendered live from the order rather than snapshotted: the order is already the record
 // of truth, and a stale copy of it would be worse than none.
 
-export const ORDER_DOC_TYPES = ['estimate', 'quote'] as const
+// 'invoice' joins the set so a finished job can be invoiced from the data already entered, rather
+// than being re-keyed into another system. It shares the template, the tax line and the share link.
+export const ORDER_DOC_TYPES = ['estimate', 'quote', 'invoice'] as const
 export type OrderDocType = (typeof ORDER_DOC_TYPES)[number]
 export const isOrderDocType = (v: unknown): v is OrderDocType =>
   typeof v === 'string' && (ORDER_DOC_TYPES as readonly string[]).includes(v)
@@ -17,6 +19,7 @@ export const isOrderDocType = (v: unknown): v is OrderDocType =>
 export const ORDER_DOC_META: Record<OrderDocType, { title: string; blurb: string }> = {
   estimate: { title: 'Estimate', blurb: 'Estimated value of the piece(s) described below.' },
   quote: { title: 'Quote', blurb: 'Quoted price for the piece(s) described below.' },
+  invoice: { title: 'Invoice', blurb: 'Amount due for the piece(s) described below.' },
 }
 
 export interface DocBranding { logoUrl: string | null; accent: string | null; terms: string | null; validityDays: number }
@@ -49,9 +52,13 @@ export async function loadDocContext(tenantId: string): Promise<{ branding: DocB
   }
 }
 
-// Human document reference, stable for a given order + type: EST-1024 / QOT-1024.
+// Human document reference, stable for a given order + type: EST-1024 / QOT-1024 / INV-1024.
+//
+// A lookup rather than a ternary: adding 'invoice' to a ternary silently made every invoice an
+// EST- or a QOT-, and a customer holding two documents with the same reference cannot tell them apart.
+const DOC_PREFIX: Record<OrderDocType, string> = { estimate: 'EST', quote: 'QOT', invoice: 'INV' }
 export const orderDocNumber = (type: OrderDocType, orderNumber: string): string =>
-  `${type === 'estimate' ? 'EST' : 'QOT'}-${orderNumber.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(-8) || 'PIECE'}`
+  `${DOC_PREFIX[type]}-${orderNumber.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(-8) || 'PIECE'}`
 
 // Attribute rows for one line item — the itemised description an insurer expects, with the empty
 // attributes dropped rather than printed as blanks.

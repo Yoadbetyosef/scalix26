@@ -39,9 +39,31 @@ export function canManualTransition(from: OrderStage, to: OrderStage): boolean {
 }
 
 // Which stages permit sending a given approval type (a "Send to Factory/Customer" action).
+//
+// ── THE TWO APPROVALS ARE INDEPENDENT ───────────────────────────────────────────────────────────────
+//
+// This used to encode a sequence: factory first, then customer. That is one way a piece is made, not
+// the way. Sometimes the customer sees the estimate and agrees before anything reaches a workshop;
+// sometimes the factory is engaged first. Neither is a prerequisite for the other, and a gate that
+// assumed otherwise made the "Send to Customer" button invisible on a new order — exactly when it is
+// wanted.
+//
+// Both may now be outstanding at once. `stage` is a single field and can only describe one of them,
+// so the board column shows whichever was sent last: a KNOWN and accepted ambiguity. The truth about
+// each approval lives in order_approval_requests, which has a row per type with its own status; the
+// stage is a summary, and a summary of two things in one field is necessarily lossy.
+//
+// Terminal stages are excluded outright — an approval on a cancelled or completed order is never
+// wanted, and the old gate got that for free by listing stages rather than excluding them.
 export function canSendForApproval(stage: OrderStage, type: ApprovalType): boolean {
-  if (type === 'factory') return stage === 'new' || stage === 'factory_changes_requested'
-  return stage === 'factory_approved' || stage === 'customer_changes_requested' || stage === 'customer_approved'
+  if (isTerminalStage(stage)) return false
+  const inFlight: OrderStage[] = ['production', 'ready', 'delivered']
+  if (inFlight.includes(stage)) return false
+  if (type === 'factory') {
+    // Not while the factory's own request is already out — that would be a duplicate, not a parallel.
+    return stage !== 'waiting_factory_approval'
+  }
+  return stage !== 'waiting_customer_approval'
 }
 export const stageAfterSend = (type: ApprovalType): OrderStage => (type === 'factory' ? 'waiting_factory_approval' : 'waiting_customer_approval')
 
