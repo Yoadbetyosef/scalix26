@@ -52,7 +52,6 @@ export default async function BookingPage({ params }: { params: Promise<{ slug: 
           </div>
           <BookingForm token={tenant.lead_intake_token} />
         </div>
-        <p className="text-center text-xs text-muted mt-4">Powered by Scalix</p>
       </div>
     </div>
   )
