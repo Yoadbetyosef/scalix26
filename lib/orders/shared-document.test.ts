@@ -86,3 +86,50 @@ describe('the share token is never stored raw', () => {
     expect(fn).toMatch(/expires_at[\s\S]*return null/)
   })
 })
+
+describe('the shared loader never depends on a session', () => {
+  const LOADER = 'lib/orders/document-data.ts'
+
+  it('reads the order with the tenant it is GIVEN, not the one it is signed in as', () => {
+    // The bug this replaces: loadOrderDocument called getOrder(), which resolves tenancy from ctx()
+    // and reads with the cookie-scoped client. On /e/[token] there is no session, so it returned null
+    // and the page 404'd on a link the customer had just been emailed.
+    const src = code(LOADER)
+    expect(src).toMatch(/getOrderForTenant\(/)
+    expect(src).not.toMatch(/\bgetOrder\(/)
+  })
+
+  it('calls nothing else that resolves tenancy from the session', () => {
+    // Second time a session-bound helper reached a public surface, so this is a pattern rather than an
+    // accident, and the type system cannot catch it: both functions return the same shape and differ
+    // only in where they get the tenant from.
+    const src = code(LOADER)
+    for (const banned of [/requireActiveBusinessContext/, /requireOrdersAccess/, /getActiveTenantId/, /getActiveWorkspace/, /\bctx\(\)/]) {
+      expect(src).not.toMatch(banned)
+    }
+  })
+
+  it('every function the loader imports takes its tenant as an argument', () => {
+    // Each of these is called with tenantId, so none of them can quietly reach for a session.
+    const src = code(LOADER)
+    for (const call of [/loadDocContext\(tenantId\)/, /templateForOrder\(tenantId,/, /getOrderForTenant\(tenantId,/]) {
+      expect(src).toMatch(call)
+    }
+  })
+
+  it('the public page passes the tenant the TOKEN resolved, never a session', () => {
+    const src = code('app/e/[token]/page.tsx')
+    expect(src).toMatch(/loadOrderDocument\(share\.tenantId, share\.orderId\)/)
+    for (const banned of [/requireOrdersAccess/, /getActiveTenantId/, /auth\.getUser/]) {
+      expect(src).not.toMatch(banned)
+    }
+  })
+
+  it('getOrderForTenant filters by tenant_id — the admin client bypasses RLS', () => {
+    // With RLS bypassed, that filter is the only thing between a leaked order id and another tenant's
+    // data. Asserted rather than trusted.
+    const src = code('lib/orders/store.ts')
+    const fn = src.slice(src.indexOf('export async function getOrderForTenant'))
+    expect(fn.slice(0, 600)).toMatch(/\.eq\('tenant_id', tenantId\)/)
+  })
+})
