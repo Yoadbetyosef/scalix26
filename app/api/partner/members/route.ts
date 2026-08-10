@@ -40,12 +40,14 @@ export async function POST(req: NextRequest) {
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   await logPartnerAction(ctx.partnerId, ctx.userId, { action: 'member.invited', targetType: 'member', after: { email, role: r } })
-  // Invitation email (best-effort).
+  // The member row is created either way; the invitation email is what may not arrive. Report which,
+  // so nobody waits for a message that was never delivered.
+  let invited = false
   try {
     const tmpl = emailTemplates.partnerInvite(ctx.companyName || 'a Scalix26 partner', r, `${PARTNER_APP_URL}/partner/login`)
-    await sendEmail(String(email), tmpl.subject, tmpl.html)
-  } catch { /* best-effort */ }
-  return NextResponse.json({ success: true })
+    invited = (await sendEmail(String(email), tmpl.subject, tmpl.html)).success
+  } catch { /* the member is still invited in the table */ }
+  return NextResponse.json({ success: true, invitationEmailed: invited })
 }
 
 export async function PATCH(req: NextRequest) {

@@ -20,7 +20,10 @@ const specLine = (l: import('@/lib/orders/types').OrderLineItem): string => {
   const side = [l.sideStoneCaratTotal ? `${l.sideStoneCaratTotal}ct side` : null, l.sideStoneShape].filter(Boolean).join(' ')
   return [center, side, l.certificateLab ? `${l.certificateLab} cert` : null, l.metalKarat, l.ringSize ? `size ${l.ringSize}` : null, l.measurements, l.color, l.material, l.customSpec].filter(Boolean).join(' · ')
 }
-const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', sent_to_production: 'Sent to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
+const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', // 'sent_to_production' is the historic name and stays mapped for rows already written. It claimed a send
+// that only sometimes happened, so new rows are 'moved_to_production' — which is what the action does.
+// A real send is recorded separately as 'delivery_requested'.
+sent_to_production: 'Moved to production', moved_to_production: 'Moved to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const a = await requireOrdersAccess()

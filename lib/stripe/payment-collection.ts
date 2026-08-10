@@ -125,12 +125,13 @@ export async function createConnectCheckout(admin: SupabaseClient, input: Checko
   let emailed = false
   if (input.customerEmail && session.url) {
     try {
-      await sendEmail(
+      // `emailed` is what the agent repeats back to the customer ("I've emailed you the link"), so it
+      // has to mean the send succeeded — not merely that it didn't throw.
+      emailed = (await sendEmail(
         input.customerEmail,
         `Your payment link from ${input.businessName}`,
         `<p>Here's your secure payment link for <strong>${input.productName}</strong>:</p><p><a href="${session.url}">${session.url}</a></p><p>— ${input.businessName}</p>`,
-      )
-      emailed = true
+      )).success
     } catch { /* link is still returned for in-channel delivery */ }
   }
   return { url: session.url || '', sessionId: session.id, emailed, productName: input.productName }

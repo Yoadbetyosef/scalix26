@@ -44,7 +44,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // Branded as the tenant. Without this the customer's inbox shows "Scalix" as the sender of
       // their jeweller's invoice. The ADDRESS stays the platform's verified domain — per-tenant
       // sending domains need per-tenant DNS — but the display name is theirs.
-      await sendEmail(to, `${meta.title} ${docNumber(d)} from ${biz}`, html, customerFacing(biz, { tenantId: s.tenantId }))
+      // sendEmail RETURNS { success } instead of throwing, so the catch below never sees a rejected send.
+      // Without this check the document was stamped sent_at and the UI printed "Sent by email ✓" for a
+      // message the provider had refused.
+      const sent = await sendEmail(to, `${meta.title} ${docNumber(d)} from ${biz}`, html, customerFacing(biz, { tenantId: s.tenantId }))
+      if (!sent.success) return NextResponse.json({ error: `The email did not go out${sent.error ? ` (${sent.error})` : ''}. Nothing was sent.` }, { status: 502 })
     }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message || 'Send failed' }, { status: 502 })

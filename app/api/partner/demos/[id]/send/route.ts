@@ -27,7 +27,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const sent: string[] = []
   if (email) {
-    try { const t = emailTemplates.partnerDemo(demo.prospect_name, url); await sendEmail(email, t.subject, t.html); sent.push('email') } catch { /* best-effort */ }
+    // sendEmail returns { success } rather than throwing — pushing 'email' from inside a try only
+    // proved no exception was raised, not that anything was delivered.
+    try { const t = emailTemplates.partnerDemo(demo.prospect_name, url); if ((await sendEmail(email, t.subject, t.html)).success) sent.push('email') } catch { /* best-effort */ }
   }
   if (phone) {
     try { await sendSMS(phone, `See your AI employee for ${demo.prospect_name} in action: ${url}`); sent.push('sms') } catch { /* best-effort */ }

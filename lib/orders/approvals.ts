@@ -280,31 +280,68 @@ export async function submitFactoryDelivery(rawToken: string, file: File): Promi
   return { ok: true }
 }
 
-// Explicit, founder-only "Send to Production" (never automatic). If a factory approval exists, notify the
+// Explicit, founder-only move to Production (never automatic). If a factory approval exists, notify the
 // factory that the order is confirmed and they can upload an invoice + mark it ready — via a FRESH link
 // (we never stored the original raw token, so the delivery link is a rotated token on the same request row).
-export async function sendToProduction(orderId: string, baseUrl?: string): Promise<{ ok: boolean; error?: string }> {
-  const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
+//
+// It reports WHO it notified, and it is honest when that is nobody.
+//
+// It used to return a bare { ok: true } whether or not an email went anywhere, and the UI moved the order
+// to Production and wrote "Sent to production" on the timeline either way. On 2026-08-10 an order was moved
+// with no factory approval on file: the stage flipped, the timeline claimed a send, and no message existed.
+// A silent no-op is survivable; a silent no-op that reports success is how someone ends up telling a
+// customer their piece is being made when nobody has been asked to make it.
+export interface ProductionResult {
+  ok: boolean
+  error?: string
+  /** The address actually emailed, or null when no message was sent. */
+  notified: string | null
+  /** Why nobody was notified, or why the attempt failed. Null when `notified` is set. */
+  reason: 'no_factory_approval' | 'send_failed' | null
+  /** Provider detail for a failed send, for the owner to act on. */
+  detail?: string
+}
+
+export async function sendToProduction(orderId: string, baseUrl?: string): Promise<ProductionResult> {
+  const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized', notified: null, reason: null }
   const sb = await createClient()
   const { data } = await sb.from('orders').select('stage, order_number').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
-  if (!data) return { ok: false, error: 'not found' }
-  if (!canSendToProduction(data.stage as OrderStage)) return { ok: false, error: 'Order must be Factory Approved or Customer Approved before production.' }
+  if (!data) return { ok: false, error: 'not found', notified: null, reason: null }
+  if (!canSendToProduction(data.stage as OrderStage)) return { ok: false, error: 'Order must be Factory Approved or Customer Approved before production.', notified: null, reason: null }
+
+  // The factory recipient is resolved BEFORE the stage moves, so the outcome can be reported honestly in
+  // the same breath as the transition rather than discovered afterwards.
+  const { data: fr } = await sb.from('order_approval_requests').select('id, recipient_email').eq('tenant_id', c.tenantId).eq('order_id', orderId).eq('approval_type', 'factory').eq('status', 'approved').order('version', { ascending: false }).limit(1).maybeSingle()
+  const recipient = fr?.recipient_email && baseUrl ? (fr.recipient_email as string) : null
+
   const now = new Date().toISOString()
   await sb.from('orders').update({ stage: 'production', updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
-  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'sent_to_production', actor: c.actorUserId, payload: null })
 
-  // Notify the factory (best-effort) with a fresh delivery link. Never blocks the production transition.
+  if (!recipient) {
+    // The stage move is real and still worth making. The claim of a send is not.
+    await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'moved_to_production', actor: c.actorUserId, payload: { notified: null } })
+    return { ok: true, notified: null, reason: 'no_factory_approval' }
+  }
+
+  // sendEmail RETURNS { success } rather than throwing, so the result is read. A try/catch around it
+  // catches nothing that Resend reports.
+  let sent: { success: boolean; error?: string }
   try {
-    const { data: fr } = await sb.from('order_approval_requests').select('id, recipient_email').eq('tenant_id', c.tenantId).eq('order_id', orderId).eq('approval_type', 'factory').eq('status', 'approved').order('version', { ascending: false }).limit(1).maybeSingle()
-    if (fr?.recipient_email && baseUrl) {
-      const { token, hash } = generateApprovalToken()
-      await sb.from('order_approval_requests').update({ token_hash: hash, updated_at: now }).eq('tenant_id', c.tenantId).eq('id', fr.id as string)
-      const { data: tenant } = await sb.from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
-      const bizName = (tenant?.business_name as string) || 'Our team'
-      const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null })
-      await sendEmail(fr.recipient_email as string, `Order ${data.order_number} confirmed — upload invoice when ready`, html, { tenantId: c.tenantId, fromName: bizName, replyTo: (tenant?.email as string) ?? undefined })
-      await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'delivery_requested', actor: c.actorUserId, payload: null })
-    }
-  } catch { /* ignore notification failure */ }
-  return { ok: true }
+    const { token, hash } = generateApprovalToken()
+    await sb.from('order_approval_requests').update({ token_hash: hash, updated_at: now }).eq('tenant_id', c.tenantId).eq('id', fr!.id as string)
+    const { data: tenant } = await sb.from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
+    const bizName = (tenant?.business_name as string) || 'Our team'
+    const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null })
+    sent = await sendEmail(recipient, `Order ${data.order_number} confirmed — upload invoice when ready`, html, { tenantId: c.tenantId, fromName: bizName, replyTo: (tenant?.email as string) ?? undefined })
+  } catch (e) {
+    sent = { success: false, error: (e as Error).message }
+  }
+
+  if (!sent.success) {
+    await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'moved_to_production', actor: c.actorUserId, payload: { notified: null, failed: recipient } })
+    return { ok: true, notified: null, reason: 'send_failed', detail: sent.error }
+  }
+  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'moved_to_production', actor: c.actorUserId, payload: { notified: recipient } })
+  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'delivery_requested', actor: c.actorUserId, payload: { recipient } })
+  return { ok: true, notified: recipient, reason: null }
 }

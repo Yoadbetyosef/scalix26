@@ -22,6 +22,8 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
   const [atts, setAtts] = useState<Att[]>([])
   const [open, setOpen] = useState<ApprovalType | null>(null)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
+  // Persistent, not a toast: "nobody was notified" is a fact she may need to act on minutes later.
+  const [outcome, setOutcome] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
   const [f, setF] = useState({ recipientName: '', recipientEmail: '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: [] as string[] })
 
   const load = useCallback(async () => {
@@ -52,7 +54,24 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const revoke = async (id: string) => { if (!confirm('Revoke this approval link? It will stop working.')) return; await fetch(`/api/orders/${orderId}/approvals/${id}`, { method: 'DELETE' }); router.refresh(); void load() }
-  const toProduction = async () => { if (!confirm(stage === 'factory_approved' ? 'Send straight to production, skipping customer approval?' : 'Send this order to production?')) return; setBusy(true); try { const r = await fetch(`/api/orders/${orderId}/production`, { method: 'POST' }); if (!r.ok) throw new Error((await r.json()).error || 'Failed'); router.refresh() } catch (e) { setErr((e as Error).message) } finally { setBusy(false) } }
+  // Moving to Production emails the factory ONLY if a factory approval was sent and approved — that is the
+  // only place an address exists today. So the confirm promises the stage move (always true) and never a
+  // send, and the outcome afterwards names the address or says plainly that nobody was told.
+  const toProduction = async () => {
+    if (!confirm(stage === 'factory_approved' ? 'Move this order to Production, skipping customer approval?' : 'Move this order to Production?')) return
+    setBusy(true); setErr(null); setOutcome(null)
+    try {
+      const r = await fetch(`/api/orders/${orderId}/production`, { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'Failed')
+      setOutcome(j.notified
+        ? { tone: 'ok', text: `Moved to Production. The factory was emailed at ${j.notified}.` }
+        : j.reason === 'send_failed'
+          ? { tone: 'warn', text: `Moved to Production, but the email to the factory did not go out${j.detail ? ` (${j.detail})` : ''}. Nobody has been told — contact them directly.` }
+          : { tone: 'warn', text: 'Moved to Production. No email was sent — this order has no approved factory request, so there is no factory address on file. Nobody has been told.' })
+      router.refresh(); void load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
 
   const canFactory = canSendForApproval(stage, 'factory')
   const canCustomer = canSendForApproval(stage, 'customer')
@@ -64,8 +83,14 @@ export function ApprovalActions({ orderId, stage, prefill }: { orderId: string; 
       <div className="flex flex-wrap gap-2">
         {canFactory && <button onClick={() => openModal('factory')} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">Send to Factory for Approval</button>}
         {canCustomer && <button onClick={() => openModal('customer')} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">Send to Customer for Approval</button>}
-        {canProd && <button onClick={toProduction} disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">Send to Production</button>}
+        {canProd && <button onClick={toProduction} disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">Move to Production</button>}
       </div>
+
+      {outcome && (
+        <div className={`mt-2 rounded-lg border px-3 py-2 text-sm ${outcome.tone === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+          {outcome.text}
+        </div>
+      )}
 
       {approvals.length > 0 && (
         <ul className="mt-3 space-y-1.5 text-sm">
