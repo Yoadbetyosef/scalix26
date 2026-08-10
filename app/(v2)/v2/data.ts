@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
-import { getDashboardData } from '@/app/dashboard/page'
+import { getDashboardData } from '@/lib/dashboard/overview'
 import { getImpactData } from '@/lib/dashboard/impact'
 import { rudiLine, type ReplyFacts, type RudiSegment } from './rudi-line'
 import type { NeedsItem, NowItem, Tile } from './sheet'
