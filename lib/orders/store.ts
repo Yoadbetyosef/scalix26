@@ -66,16 +66,38 @@ export async function listOrders(): Promise<Order[]> {
   return ((data as Array<Record<string, unknown>> | null) ?? []).map(orderRow)
 }
 
-export async function getOrder(id: string): Promise<OrderWithDetails | null> {
-  const c = await ctx(); if (!c) return null
-  const sb = await createClient()
-  const { data } = await sb.from('orders').select('*').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+/**
+ * Read an order for a tenant given EXPLICITLY, with no session involved.
+ *
+ * ── WHY THIS EXISTS ─────────────────────────────────────────────────────────────────────────────────
+ *
+ * getOrder() below resolves tenancy from ctx() — the signed-in workspace — and reads with the
+ * cookie-scoped client. That is right for every owner-facing screen and WRONG for a public one: on
+ * /e/[token] there is no session, so ctx() returns null, getOrder() returns null, and the page 404s on
+ * a link the customer was just emailed. It did exactly that in production.
+ *
+ * Here tenancy is an ARGUMENT. The caller has already proved it — the share token resolved to a row
+ * carrying tenant_id — so the scope is explicit rather than ambient, and the admin client is correct
+ * because there is no user whose RLS could apply. The same shape getApprovalByToken already uses.
+ *
+ * The tenant_id filter is NOT optional decoration: it is the only thing standing between a leaked
+ * order id and another tenant's data, since the admin client bypasses RLS.
+ */
+export async function getOrderForTenant(tenantId: string, id: string): Promise<OrderWithDetails | null> {
+  const sb = createAdminClient()
+  const { data } = await sb.from('orders').select('*').eq('tenant_id', tenantId).eq('id', id).maybeSingle()
   if (!data) return null
   const [items, events] = await Promise.all([
     sb.from('order_line_items').select('*').eq('order_id', id).order('display_order'),
     sb.from('order_events').select('*').eq('order_id', id).order('created_at', { ascending: false }),
   ])
   return { ...orderRow(data as Record<string, unknown>), lineItems: ((items.data as Array<Record<string, unknown>>) ?? []).map(lineRow), events: ((events.data as Array<Record<string, unknown>>) ?? []).map(eventRow) }
+}
+
+/** The owner-facing read: tenancy from the signed-in workspace. Never use on a public route. */
+export async function getOrder(id: string): Promise<OrderWithDetails | null> {
+  const c = await ctx(); if (!c) return null
+  return getOrderForTenant(c.tenantId, id)
 }
 
 const lineTotals = (items: LineItemInput[]) => items.map((i) => Math.round((i.quantity ?? 1) * (i.unitPriceCents ?? 0)))

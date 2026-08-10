@@ -1,7 +1,7 @@
 import { loadDocContext } from './documents'
 import { publicDocumentImages } from './attachments'
 import { templateForOrder, applyTemplate } from './templates'
-import { getOrder } from './store'
+import { getOrderForTenant } from './store'
 import { loadTaxRates } from '@/lib/tax/rates-store'
 import { rateFor, taxOn, type TaxLine } from '@/lib/tax/canada'
 import type { OrderWithDetails } from './types'
@@ -28,8 +28,12 @@ export async function loadOrderDocument(
   tenantId: string,
   orderId: string,
 ): Promise<OrderDocumentData | null> {
-  const order = await getOrder(orderId)
-  if (!order || order.tenantId !== tenantId) return null
+  // getOrderForTenant, NOT getOrder: this loader serves the public /e/[token] page as well as the
+  // owner's, and getOrder resolves tenancy from the signed-in workspace. With no session it returned
+  // null, so a customer opening the link they had just been emailed got a 404. Tenancy is passed in —
+  // proved by the share token for the customer, by the guard for the owner.
+  const order = await getOrderForTenant(tenantId, orderId)
+  if (!order) return null
 
   // `order` may or may not carry document_template_id and delivery_province depending on whether
   // add_orders_6 has been run. Read them off the record defensively rather than selecting them by
