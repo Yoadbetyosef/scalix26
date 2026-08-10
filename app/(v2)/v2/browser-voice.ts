@@ -82,6 +82,21 @@ const START_WATCHDOG_MS = 2000
 
 const log = (msg: string) => console.info(`[v2 voice] ${Math.round(performance.now())}ms ${msg}`)
 
+/**
+ * The ONLY place speechSynthesis.cancel() is called, so every one is attributable.
+ *
+ * `interrupted` means something cancelled while an utterance was starting, and the answer to "which
+ * something" was invisible while four call sites each did it inline. The stack is printed because a
+ * reason string records what the caller believed, and the stack records what actually happened.
+ */
+function cancelSynth(reason: string) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+  const busy = window.speechSynthesis.speaking || window.speechSynthesis.pending
+  log(`cancel() reason="${reason}" busy=${busy}`)
+  if (busy) console.trace('[v2 voice] cancel() stack')
+  try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ }
+}
+
 type SR = {
   continuous: boolean
   interimResults: boolean
@@ -145,6 +160,8 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
   let keepAlive: ReturnType<typeof setInterval> | null = null
   let synthPoll: ReturnType<typeof setInterval> | null = null
   let started = false
+  /** True from the moment a reply is begun until the floor is handed back. */
+  let replying = false
 
   // VAD state
   let above = 0
@@ -238,6 +255,7 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
     clearTimers()
     heard = ''
     opts.onHeard(null)
+    replying = false
     log('turn: listening')
     rudi.listen()
     // Recognition is already up for the session. If Chrome dropped it and the restart has not landed
@@ -259,6 +277,7 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
 
   const armTurn = () => {
     if (stopped) return
+    replying = false
     log('turn: armed')
     voicing = false; above = 0; below = 0
     rudi.arm()
@@ -269,6 +288,15 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
 
   const answer = () => {
     if (stopped) return
+    // ── ONE REPLY PER TURN ────────────────────────────────────────────────────────────────────────
+    //
+    // Without this, VAD could call answer() twice: the state stays 'listening' from here until
+    // onstart, so a second silence-end lands in the same window, and the second answer() sees the
+    // first utterance PENDING and cancels it. That is the error=interrupted in the log — a cancel
+    // fired after speak() by answer() itself, re-entered.
+    if (replying) { log('answer() ignored — a reply is already in flight') ; return }
+    replying = true
+
     // Recognition is NOT stopped here. Its results are ignored while she has the floor (see
     // onresult), which is the same guard without the abort that used to kill the session.
     clearTimers()
@@ -292,7 +320,7 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       // If we got here on a timer rather than on onend, her voice may still be running. Silence it,
       // or she talks over the armed state.
       if (why !== 'onend' && hasSynthesis()) {
-        try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ }
+        cancelSynth(`handover:${why}`)
       }
       rudi.stopSpeaking()
       armTurn()
@@ -305,17 +333,19 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       return
     }
 
-    const u = new SpeechSynthesisUtterance(text)
-    u.rate = 1.02
-    log('utterance created')
-
+    // ── AUDIO AND NO-AUDIO ARE DIFFERENT STATES, AND WERE BEING CONFLATED ───────────────────────
+    //
+    // begin() is for an utterance that is REALLY SPEAKING. It starts the idle-poll, which asks the
+    // synth "are you still busy?" — the right question when audio is playing, and a guaranteed
+    // instant close when there is none. Calling it from the error path is what produced a 400ms
+    // silent "reply": no audio, so the synth was idle, so the poll closed the turn one tick later.
+    //
+    // holdText() is for no audio at all. The reply is on screen and the turn is held for as long as
+    // reading it would take. Deliberately NO poll, because there is nothing to poll.
     const begin = (why: string) => {
       if (started || stopped) return
       started = true
-      log(`onstart via ${why}`)
-      // The ceiling handed to the canvas is generous, because the harness's own watchers should
-      // always win. It used to be 120_000 — two minutes — which turned a missed event into something
-      // indistinguishable from a permanent hang.
+      log(`speaking (audio) via ${why}`)
       rudi.speak(text, est * 2 + 10_000)
 
       // Chrome stops the synth silently after ~15s. resume() while speaking prevents it.
@@ -323,62 +353,81 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
         try { window.speechSynthesis.resume() } catch { /* gone */ }
       }, KEEPALIVE_MS)
 
-      // The real catch for a missing onend: ask the synth whether it is still busy. When it says no
-      // and no event arrived, that IS the bug, and this is what notices.
+      // The catch for a missing onend — confirmed present in the log. When the synth says it is no
+      // longer busy and no event arrived, that IS the bug, and this is what notices.
       synthPoll = setInterval(() => {
         if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
           handOver('synth reported idle (onend never fired)')
         }
       }, SYNTH_POLL_MS)
 
-      // And a hard cap, in case the synth claims to be busy forever.
       sayTimer = setTimeout(() => handOver('hard cap'), est * 2 + 6000)
     }
 
-    u.onstart = () => { log('event: onstart'); begin('event') }
-    u.onend = () => { log('event: onend'); handOver('onend') }
-
-    // ── AN ERROR IS NOT A COMPLETION ─────────────────────────────────────────────────────────────
-    //
-    // This used to hand over immediately, so a failed utterance produced a speaking state that lasted
-    // 0ms and armed in the same millisecond — the bounce between armed and listening in the log
-    // starts here.
-    //
-    // A failure means her voice did not happen; it does not mean the turn is over. The reply is on
-    // screen, so the turn is held for as long as reading it would take, and only then handed on.
-    u.onerror = (e) => {
-      const reason = (e as unknown as { error?: string })?.error ?? 'unknown'
-      log(`event: onerror error=${reason}`)
-      if (handed || stopped) return
-      stopSpeechWatchers()
-      begin('onerror fallback')      // enter speaking, so the turn has visible length
-      sayTimer = setTimeout(() => handOver(`estimate (synthesis failed: ${reason})`), est)
+    const holdText = (why: string) => {
+      if (started || stopped || handed) return
+      started = true
+      log(`speaking (text only, no audio) — ${why}`)
+      rudi.speak(text, est + 8000)
+      sayTimer = setTimeout(() => handOver(`estimate (${why})`), est)
     }
 
-    // Not used for control — logged because boundaries arriving without onend means the utterance ran
-    // and only the final event was lost, which is a different fault from never starting.
-    u.onboundary = (e) => log(`event: onboundary @${Math.round(e.charIndex ?? 0)}`)
+    // ── The utterance, retryable ─────────────────────────────────────────────────────────────────
+    let attempt = 0
 
-    // ── DO NOT RACE cancel() INTO speak() ────────────────────────────────────────────────────────
-    //
-    // cancel() immediately followed by speak() makes Chrome error the NEW utterance, which is very
-    // likely the 0ms failure in the log: handOver() cancels on every non-onend exit, and the next
-    // reply was queued microseconds later. Cancel only when something is genuinely speaking, and let
-    // the queue settle before adding to it.
-    const fire = () => {
+    const speakOnce = () => {
       if (stopped || handed) return
+      attempt += 1
+      const u = new SpeechSynthesisUtterance(text)
+      u.rate = 1.02
+      log(`utterance created (attempt ${attempt})`)
+
+      u.onstart = () => { log('event: onstart'); begin('event') }
+      u.onend = () => { log('event: onend'); handOver('onend') }
+
+      u.onerror = (e) => {
+        const reason = (e as unknown as { error?: string })?.error ?? 'unknown'
+        log(`event: onerror error=${reason} (attempt ${attempt}, started=${started})`)
+        if (handed || stopped) return
+
+        // An utterance that errored BEFORE producing audio never spoke. Entering speaking for it
+        // claims something that did not happen — and the previous build did exactly that.
+        if (!started) {
+          if (attempt < 2) {
+            log('retrying the utterance once')
+            if (startWatchdog) { clearTimeout(startWatchdog); startWatchdog = null }
+            setTimeout(speakOnce, 260)
+            return
+          }
+          holdText(`synthesis failed twice: ${reason}`)
+          return
+        }
+
+        // Errored mid-speech: some audio played, so the turn had real length. End it normally.
+        handOver(`onerror mid-speech: ${reason}`)
+      }
+
+      // Not used for control — boundaries arriving without onend means the utterance ran and only the
+      // final event was lost, which is a different fault from never starting.
+      u.onboundary = (e) => log(`event: onboundary @${Math.round(e.charIndex ?? 0)}`)
+
       window.speechSynthesis.speak(u)
       log('speechSynthesis.speak() called')
-      // onstart can go missing too. Without this nothing would ever enter speaking, and the reply
-      // would sit on screen with the state stuck in listening.
+
+      // onstart can go missing too. If it does, audio may still be playing, so this enters the
+      // AUDIO state — it is a missing event, not a missing voice.
+      if (startWatchdog) clearTimeout(startWatchdog)
       startWatchdog = setTimeout(() => {
-        if (!started) { log('onstart never fired within watchdog'); begin('watchdog') }
+        if (started || stopped || handed) return
+        if (window.speechSynthesis.speaking) { log('onstart never fired but the synth is speaking'); begin('watchdog') }
+        else { log('onstart never fired and the synth is not speaking'); holdText('onstart never fired') }
       }, START_WATCHDOG_MS)
     }
 
+    const fire = speakOnce
+
     if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-      log('synth busy; cancelling and settling before speak()')
-      window.speechSynthesis.cancel()
+      cancelSynth('answer: synth was busy')
       setTimeout(fire, 140)
     } else {
       fire()
@@ -387,7 +436,7 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
 
   /** Cut her off and hand the floor back. The one thing that makes this feel alive. */
   const bargeIn = () => {
-    if (hasSynthesis()) { try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ } }
+    cancelSynth('barge-in')
     rudi.stopSpeaking()
     openTurn()
   }
@@ -433,7 +482,7 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       clearTimers()
       stopRecognition()
       if (raf) cancelAnimationFrame(raf)
-      if (hasSynthesis()) { try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ } }
+      cancelSynth('session stop')
       if (stream) for (const t of stream.getTracks()) t.stop()
       if (audio) void audio.close().catch(() => {})
       stream = null; audio = null
