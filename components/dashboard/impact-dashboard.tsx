@@ -1,5 +1,6 @@
 'use client'
 
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Users, ShieldCheck, MessagesSquare, Activity, ArrowUpRight, ArrowDownRight, CheckCircle2, ShieldAlert } from 'lucide-react'
@@ -58,7 +59,7 @@ function BigNumber({ children }: { children: React.ReactNode }) {
 export function ImpactDashboard({ data, businessName, brainAgentId, tenantId }: { data: ImpactData; businessName: string; brainAgentId?: string; tenantId: string }) {
   const opp = data.opportunities.value
   // Brand-aware: operator mode → the White Label partner's brand; otherwise Scalix/host brand.
-  const brandName = useBrand()?.name || 'Scalix'
+  const brandName = useBrand()?.name || FALLBACK_BRAND_NAME
 
   // Channel recap sentence, e.g. "3 by text, 2 by phone, 13 by email" (count>0 only).
   const channelLine = data.channelBreakdown.map((c) => `${c.count} ${c.label}`).join(', ')

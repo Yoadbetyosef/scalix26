@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireStudioTenant } from '@/lib/studio/session'
-import { sendEmail } from '@/lib/email/send'
+import { customerFacing, sendEmail } from '@/lib/email/send'
 import { sendSMS } from '@/lib/twilio/client'
 import { DOC_META, docNumber, type StudioDocument, type StudioDocType } from '@/lib/studio/types'
 
@@ -41,7 +41,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         <p><a href="${link}" style="display:inline-block;background:#111;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">View ${meta.title}</a></p>
         <p style="color:#666;font-size:13px">Or open: ${link}</p>
       </div>`
-      await sendEmail(to, `${meta.title} ${docNumber(d)} from ${biz}`, html)
+      // Branded as the tenant. Without this the customer's inbox shows "Scalix" as the sender of
+      // their jeweller's invoice. The ADDRESS stays the platform's verified domain — per-tenant
+      // sending domains need per-tenant DNS — but the display name is theirs.
+      await sendEmail(to, `${meta.title} ${docNumber(d)} from ${biz}`, html, customerFacing(biz, { tenantId: s.tenantId }))
     }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message || 'Send failed' }, { status: 502 })

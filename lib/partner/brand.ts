@@ -1,3 +1,4 @@
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import { createAdminClient } from '@/lib/supabase/server'
 import { resolveBrand } from '@/lib/brands'
 
@@ -78,7 +79,7 @@ export async function resolveBrandForPartner(partnerId: string): Promise<BrandDa
   const { data } = await createAdminClient().from('partner_brands').select('*').eq('partner_id', partnerId).maybeSingle()
   if (!data) return null
   const brand: BrandData = {
-    name: data.company_name || 'Scalix',
+    name: data.company_name || FALLBACK_BRAND_NAME,
     logoUrl: data.logo_url || null, faviconUrl: data.favicon_url || null,
     primaryColor: data.primary_color || null, secondaryColor: data.secondary_color || null,
     supportEmail: data.support_email || null, supportPhone: data.support_phone || null, website: data.website || null,
@@ -90,3 +91,6 @@ export async function resolveBrandForPartner(partnerId: string): Promise<BrandDa
 }
 
 export function clearBrandCache() { cache.clear() }
+
+// Re-exported for server-side callers that already import from this module.
+export { FALLBACK_BRAND_NAME }

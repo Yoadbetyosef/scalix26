@@ -359,3 +359,60 @@ a[role="button"]:not([aria-disabled="true"]):active,
   .sx-ring:not(:first-of-type) { display: none; }
   .sx-pop { animation: none; }
 }
+
+/* ── PRINTING A CUSTOMER DOCUMENT ────────────────────────────────────────────────────────────────
+   
+   Chrome draws its own header and footer in the page MARGIN — the document title top-left, the URL
+   bottom-left, the date and page number on the right. It only draws them if there is margin space to
+   draw them in, so `@page { margin: 0 }` removes all four. That is the only reliable way to suppress
+   them from CSS; there is no property that turns them off directly.
+   
+   This is what put "<platform> — AI Employee Platform" across the top of every estimate a customer
+   received, and "app.scalix26.com/orders/…" across the bottom.
+   
+   @page CANNOT be scoped to a selector — it is a page-context rule, not an element one — so this
+   applies to every printed page in the app. That is acceptable: nothing else here is designed to be
+   printed, and a browser-drawn URL is unwanted on all of them. The visual margin the paper still
+   needs is restored as padding on the printed content instead. */
+@media print {
+  @page { margin: 0; }
+
+  html, body {
+    background: #fff;
+    /* The paper edge is not a design surface. This is the margin @page gave up. */
+    padding: 14mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Anything the recipient should not receive on paper. Buttons that do nothing on a page already
+     carry print:hidden; this catches the app chrome around them. */
+  [data-print-hidden] { display: none !important; }
+
+  /* ── The approval page, printed as a work order ───────────────────────────────────────────────
+     
+     This is the surface the factory opens, and a workshop works from paper at the bench. On screen
+     it is a card floating on grey; on paper the card and its shadow are the browser pretending to be
+     a screen. Everything below flattens it to a document.
+     
+     !important throughout because that page is styled INLINE, and an inline style beats any selector.
+     Rewriting it to Tailwind purely to make this cascade nicely would be a large diff on a page whose
+     behaviour nobody asked to change. */
+  .approval-page { background: #fff !important; padding: 0 !important; min-height: 0 !important; }
+  .approval-wrap { max-width: none !important; }
+  .approval-card {
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* A reference photo is the point of a factory approval and 120px of it is a thumbnail, not an
+     instruction. On paper they get real size, and never split across a page boundary. */
+  .approval-card a img { height: auto !important; max-height: 360px !important; object-fit: contain !important; }
+  .approval-card a { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Keep an item and its specification table together — a spec list orphaned from its heading is
+     worse than a page break in the middle of the list. */
+  .approval-card > div > div { break-inside: avoid; page-break-inside: avoid; }
+}

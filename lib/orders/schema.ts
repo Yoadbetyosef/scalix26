@@ -12,6 +12,9 @@ const carat = z.number().min(0).max(10000).nullable().optional()
 export const lineItemSchema = z.object({
   productName: z.string().min(1).max(300), description: z.string().max(2000).nullable().optional(), sku: z.string().max(100).nullable().optional(),
   quantity: z.number().min(0).max(100000).optional(), unitPriceCents: z.number().int().min(0).optional(),
+  // INTERNAL ONLY. Nullable on purpose: null is "not recorded", 0 is "genuinely free", and the two
+  // are different facts about margin.
+  internalCostCents: z.number().int().min(0).nullable().optional(),
   measurements: z.string().max(500).nullable().optional(), color: z.string().max(200).nullable().optional(), material: z.string().max(200).nullable().optional(),
   customSpec: z.string().max(2000).nullable().optional(), productRef: z.string().uuid().nullable().optional(),
   stoneQuality: optionLabel, stoneColor: optionLabel, stoneOrigin: optionLabel, stoneType: optionLabel,

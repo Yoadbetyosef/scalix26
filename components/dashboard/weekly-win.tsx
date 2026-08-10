@@ -1,5 +1,6 @@
 'use client'
 
+import { FALLBACK_BRAND_NAME } from '@/lib/brand-name'
 import { useEffect, useState } from 'react'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { CountUp } from '@/components/ui/count-up'
@@ -20,7 +21,7 @@ function startOfWeek(): number {
 
 export function WeeklyWin({ count, name, voice }: { count: number; name: string; voice?: string | null }) {
   const [show, setShow] = useState(false)
-  const brandName = useBrand()?.name || 'Scalix'
+  const brandName = useBrand()?.name || FALLBACK_BRAND_NAME
 
   useEffect(() => {
     if (count <= 0) return

@@ -13,6 +13,14 @@ export interface OrderLineItem extends JewelrySpec {
   id: string; orderId: string; productName: string; description: string | null; sku: string | null
   quantity: number; unitPriceCents: number; measurements: string | null; color: string | null; material: string | null
   customSpec: string | null; productRef: string | null; lineTotalCents: number; displayOrder: number
+  /**
+   * INTERNAL ONLY — what this line cost to produce. Never rendered on a customer-facing surface.
+   *
+   * NULL means not recorded. 0 means genuinely free. Keeping them distinct is why the column is
+   * nullable with no default: a default of 0 would make every order that predates it look like pure
+   * margin, and an unknown margin is not a 100% one.
+   */
+  internalCostCents: number | null
 }
 export interface OrderEvent { id: string; orderId: string; type: string; actor: string | null; payload: Record<string, unknown> | null; createdAt: string }
 
@@ -27,9 +35,27 @@ export interface Order {
 }
 export interface OrderWithDetails extends Order { lineItems: OrderLineItem[]; events: OrderEvent[] }
 
+/**
+ * The order's total internal cost — DERIVED, never stored.
+ *
+ * A stored total would be a second copy of a number the lines already hold, and it goes wrong the
+ * first time a line is edited without the rollup being recomputed. Unlike balance_cents, which IS
+ * stored, this has no counterparty and no reason to be frozen: balance is a commercial snapshot the
+ * customer agreed to; cost is an internal figure that should always equal its parts.
+ *
+ * Returns null when NO line has a cost recorded — because the total is then unknown, not zero. A
+ * partial entry sums what exists, which is the honest reading of "some of it is known".
+ */
+export function orderInternalCostCents(lineItems: Pick<OrderLineItem, 'internalCostCents'>[]): number | null {
+  const known = lineItems.map((l) => l.internalCostCents).filter((c): c is number => c !== null && c !== undefined)
+  return known.length ? known.reduce((a, b) => a + b, 0) : null
+}
+
 export interface LineItemInput extends Partial<JewelrySpec> {
   productName: string; description?: string | null; sku?: string | null; quantity?: number; unitPriceCents?: number
   measurements?: string | null; color?: string | null; material?: string | null; customSpec?: string | null; productRef?: string | null
+  /** INTERNAL ONLY. Omitted or null = not recorded. */
+  internalCostCents?: number | null
 }
 export interface OrderInput {
   orderNumber?: string | null

@@ -6,6 +6,9 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 // Verified Resend sending domain. Defaults to scalix26.com, but can be overridden per-environment via
 // EMAIL_FROM_ADDRESS (e.g. point at a domain verified in the active Resend account) with no code change.
 export const FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS?.trim() || 'noreply@scalix26.com'
+// The PLATFORM's sender, for platform mail only — password resets, partner invites, billing. A
+// customer-facing send must never use it: the recipient is the tenant's customer and has no idea who
+// we are. Those callers pass `fromName` so the display name is the tenant's business.
 const FROM = `Scalix <${FROM_ADDRESS}>`
 
 // Optional billing context — when a tenant is in scope, the send is metered (Resend id = the
@@ -13,6 +16,19 @@ const FROM = `Scalix <${FROM_ADDRESS}>`
 // fromName/replyTo let a caller brand the send as the business (display name) and route replies to the
 // business's own inbox, WITHOUT changing the verified From address (which must stay on FROM_ADDRESS).
 export interface EmailMeta { tenantId?: string; customerId?: string | null; fromName?: string; replyTo?: string }
+
+/**
+ * Assert that a send is branded as the tenant, for mail going to the tenant's own customer.
+ *
+ * Throwing rather than silently falling back: an unbranded document email is a white-label breach,
+ * and the failure mode of "it went out looking like us" is worse than the failure mode of "it did not
+ * go out". Callers pass the business name they already have on hand.
+ */
+export function customerFacing(businessName: string | null | undefined, meta?: Omit<EmailMeta, 'fromName'>): EmailMeta {
+  const name = (businessName || '').trim()
+  if (!name) throw new Error('customerFacing(): a business name is required — a customer must never see the platform as the sender')
+  return { ...meta, fromName: name }
+}
 
 function meterEmail(id: string | undefined, meta?: EmailMeta) {
   if (!meta?.tenantId || !id) return

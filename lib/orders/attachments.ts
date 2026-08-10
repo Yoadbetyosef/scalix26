@@ -30,6 +30,32 @@ export async function signedUrlFor(storagePath: string, expiresIn = 300): Promis
   return data?.signedUrl ?? null
 }
 
+/** An attachment the customer may see, with a URL that will still resolve when they print. */
+export interface DocumentImage { id: string; url: string; fileName: string }
+
+/**
+ * The images a CUSTOMER-facing document may show.
+ *
+ * Two filters, both load-bearing:
+ *   visibility === 'public'  — 'internal' is the default, so an attachment is private until somebody
+ *                              deliberately marks it otherwise. A supplier invoice or a cost sheet
+ *                              uploaded to the order must never appear on the customer's estimate.
+ *   an image mime type       — a PDF or a CAD file has no thumbnail and would render as a broken box.
+ *
+ * The signed URL lasts 30 minutes rather than the usual 5. A document is opened, read, and THEN
+ * printed, and an expired URL prints as a blank rectangle — the failure would be silent and would
+ * land on the customer's copy.
+ */
+export async function publicDocumentImages(orderId: string): Promise<DocumentImage[]> {
+  const all = await listAttachments(orderId)
+  const images = all.filter((a) => a.visibility === 'public' && a.mimeType.startsWith('image/'))
+  const signed = await Promise.all(images.map(async (a) => {
+    const url = await signedUrlFor(a.storagePath, 1800)
+    return url ? { id: a.id, url, fileName: a.fileName } : null
+  }))
+  return signed.filter((x): x is DocumentImage => x !== null)
+}
+
 export async function uploadAttachment(orderId: string, file: File): Promise<{ ok: boolean; error?: string; attachment?: OrderAttachment }> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
   const ext = extensionOf(file.name)

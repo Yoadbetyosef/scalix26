@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { PATHNAME_HEADER } from '@/lib/documents/routes'
 import { enforce, clientIp } from '@/lib/ratelimit'
 
 // Public routes that don't need auth — no session required to reach them.
@@ -47,6 +48,11 @@ export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-passw
     '/api/brain/cron', '/api/partner/cron', '/api/learning/run', '/api/cron/']
 
 export async function updateSession(request: NextRequest) {
+  // Stamp the path onto the forwarded request so server components can know which route they are
+  // rendering. Next exposes no supported API for this, and the root layout needs it to avoid
+  // asserting a brand on a page whose audience is somebody else's customer — see lib/documents/routes.
+  request.headers.set(PATHNAME_HEADER, request.nextUrl.pathname)
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
