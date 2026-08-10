@@ -4,10 +4,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { RudiCanvas, type RudiHandle, type RudiState } from './rudi-canvas'
 import { Composer } from './composer'
 import { Rail } from './rail'
-import { rudiCursor, rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
+import { rudiCursor, type RudiSegment } from './rudi-line'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
-import { startVoice, type VoiceSession } from './browser-voice'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
 import {
@@ -42,53 +41,32 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   // Two lines, never three: `said` is what the owner typed, echoed once; the reply REPLACES the
   // caption rather than appending to it. No transcript array — this screen is a presence, not a log.
   const [said, setSaid] = useState<string | null>(null)
-  const [reply, setReply] = useState<RudiSegment[] | null>(null)
   const [jump, setJump] = useState<number | null>(null)
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
   const palette = usePalette()
   useMagnet(talkEl, typing)
 
-  // The facts, read off the same promise WITHOUT suspending — a conversation can start before the
-  // figures land, and the reply says so rather than inventing one.
   // FIRST effect in the shell, so it fires as soon as React has hydrated this component — which is
   // the moment its click handlers become real. Anything before this and the button is inert markup.
   useEffect(() => { mark('shell'); startTiming() }, [])
 
-  const facts = useRef<ReplyFacts | null>(null)
+  // Kept only to mark when the streamed numbers land, for the timing line.
   useEffect(() => {
     let alive = true
-    // AWAIT, not .then().catch().
-    //
-    // A promise handed from a server component to a client component is NOT a Promise — React
-    // serialises it as a ReactPromise, whose prototype is Object.create(Promise.prototype) so it
-    // looks like one, but whose `then` registers callbacks and RETURNS NOTHING. Chaining `.catch`
-    // off it therefore reads a property of undefined and throws, which is what took the whole screen
-    // to the error boundary.
-    //
-    // `await` is specified to work on any thenable and ignores what `then` returns, so it is correct
-    // here where chaining is not. use() elsewhere in this file works for the same reason.
     void (async () => {
       try {
-        const d = await dataPromise
-        // When the streamed numbers actually landed. Compared against the hydration mark, this
-        // answers whether the data is holding up interactivity or merely arriving after it.
+        await dataPromise
+        // When the streamed numbers actually landed, for the timing line.
         mark('data')
-        if (alive) facts.current = d.facts
+        if (!alive) return
       } catch {
-        // Swallowed deliberately: this read is an optimisation for the reply text. The Suspense
-        // boundaries consume the same promise and are what surface a real failure to the owner.
+        // Swallowed deliberately: the Suspense boundaries consume the same promise and are what
+        // surface a real failure to the owner.
       }
     })()
     return () => { alive = false }
   }, [dataPromise])
-
-  /** The typed path's answer. Voice goes through browser-voice.ts, which calls rudiReply itself. */
-  const replyTo = useCallback((heard: string) => (
-    facts.current
-      ? rudiReply(heard, facts.current)
-      : 'One moment — I am still pulling today’s numbers.'
-  ), [])
 
   // The idle collapse, suspended while she is listening, speaking or armed: collapsing
   // mid-conversation would be the screen interrupting itself.
@@ -107,41 +85,20 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 
-  // The voice harness. The component knows nothing about it — see browser-voice.ts, which is the one
-  // file the Deepgram agent replaces.
-  const voice = useRef<VoiceSession | null>(null)
-  const endSession = useCallback(() => {
-    voice.current?.stop(); voice.current = null
-    rudi.current?.endSession()
-  }, [])
-  useEffect(() => () => {
-    endSession()
-    // Also unconditionally, in case no session was open: an utterance queued by a session that has
-    // already been dropped would otherwise keep speaking after this screen is gone.
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel() } catch { /* nothing speaking */ }
-    }
-  }, [endSession])
+  // ── NOTHING HERE DRIVES THE CANVAS ────────────────────────────────────────────────────────────
+  //
+  // /v2 is a reskin. Its controls call the handlers /dashboard already has, or they do nothing — and
+  // the canvas's listening / speaking / armed states are never triggered from this file. They exist
+  // for the Deepgram agent to drive later, through the same API the component already exposes.
+  //
+  // The Talk button is INERT. Its equivalent on /dashboard is AskAmy's goLive(), which opens
+  // <AmyRealtime briefing={…} /> — and `briefing` is assembled inline inside app/dashboard/page.tsx
+  // from a dozen page-local variables. It is not an exported function, so it cannot be called from
+  // here without either changing that page or rebuilding it. Both are out of scope, so the control
+  // renders and does nothing rather than doing something invented.
+  const endSession = useCallback(() => { rudi.current?.endSession() }, [])
 
-  const toggleTalk = useCallback(() => {
-    wake()
-    const r = rudi.current
-    if (!r) return
-    if (r.state() === 'idle') {
-      setSaid(null)
-      setReply(null)
-      voice.current?.stop()
-      voice.current = startVoice(r, {
-        facts: () => facts.current,
-        onHeard: setSaid,
-        onReply: (text) => setReply([{ text }]),
-        onEnd: () => { voice.current = null },
-        armedMs: ARMED_TIMEOUT_MS,
-      })
-    } else {
-      endSession()
-    }
-  }, [wake, endSession])
+  const toggleTalk = useCallback(() => { wake() }, [wake])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -156,19 +113,16 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
     return () => window.removeEventListener('keydown', onKey)
   }, [toggleTalk, typing, palette.open, wake, endSession])
 
-  const onSubmit = useCallback((text: string) => {
-    setSaid(text)
-    const answer = replyTo(text)
-    setReply([{ text: answer }])
-    rudi.current?.speak(answer, 4200)
-    setTimeout(() => rudi.current?.arm(), 4200)
-  }, [replyTo])
+  // Echoes what was typed and nothing else. /dashboard's equivalent is AskAmyText, which needs the
+  // same `briefing` the Talk button cannot reach — so there is no answer to show, and inventing one
+  // is what this whole pass is removing.
+  const onSubmit = useCallback((text: string) => { setSaid(text) }, [])
 
   // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
   // answered. Only the resting line needs the numbers, so only that case can suspend.
   const override: RudiSegment[] | null =
     state === 'listening' ? []
-      : reply ?? (state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null)
+      : state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null
 
   const hero = (
     <>

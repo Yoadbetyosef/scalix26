@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getDashboardData } from '@/lib/dashboard/overview'
 import { getImpactData } from '@/lib/dashboard/impact'
-import { rudiLine, type ReplyFacts, type RudiSegment } from './rudi-line'
+import { rudiLine, type RudiSegment } from './rudi-line'
 import type { NeedsItem, NowItem, Tile } from './sheet'
 
 // The numbers, loaded but NOT awaited by the page.
@@ -31,7 +31,6 @@ export interface HomeData {
   monthStats: { label: string; value: string }[]
   tiles: Tile[]
   recent: { time: string; text: string }[]
-  facts: ReplyFacts
 }
 
 /** The one row the shell itself needs. A single indexed lookup — fast enough to await. */
@@ -118,17 +117,6 @@ export async function loadHomeData(tenantId: string): Promise<HomeData> {
         time: when ? when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '',
         text: `${conv.contact?.name || 'Someone'} · ${conv.channel || 'message'}`,
       }
-    }),
-    // The reply function's whole input. Same figures the panels render, so a spoken answer and the
-    // screen beside it can never disagree.
-    facts: {
-      jobsToday: todaysJobs.length,
-      unansweredLeads,
-      humanRequested,
-      monthLabel: impact.monthLabel,
-      conversationsManaged: impact.conversationsManaged.value,
-      customersHelped: impact.customersHelped.value,
-      answeredPct: impact.coveragePct.value,
-    },
+    })
   }
 }
