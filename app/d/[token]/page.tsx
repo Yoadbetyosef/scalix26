@@ -15,6 +15,27 @@ async function resolve(token: string): Promise<{ doc: StudioDocument; tenant: Te
   return { doc: doc as StudioDocument, tenant: (tenant as Tenant) || { business_name: null, email: null, phone: null, address: null, city: null, state: null, zip: null } }
 }
 
+
+// ── THE PAGE TITLE IS THE TENANT'S, AND ONLY THE TENANT'S ───────────────────────────────────────────
+//
+// Chrome prints document.title at the top of every printed page. This route used to inherit the root
+// layout's "<platform> — AI Employee Platform", so every estimate a customer received had our name
+// printed across the top of it. The title is the tenant's business name and the document's own
+// identity; nothing else belongs in it, because a customer reading it is not our customer.
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  try {
+    const r = await resolve((await params).token)
+    if (!r) return { title: '' }
+    const meta = DOC_META[r.doc.type]
+    return {
+      title: [r.tenant.business_name, meta?.title].filter(Boolean).join(' \u00b7 '),
+      robots: { index: false, follow: false },
+    }
+  } catch {
+    return { title: '' }
+  }
+}
+
 const money = (n: number, cur: string) => `${cur === 'usd' ? '$' : ''}${Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default async function PublicDocumentPage({ params }: { params: Promise<{ token: string }> }) {
@@ -35,11 +56,16 @@ export default async function PublicDocumentPage({ params }: { params: Promise<{
       {accent && <div className="mb-6 h-1.5 w-full rounded-full print:mb-4" style={{ background: accent, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
+          {/* The wordmark renders ONCE.
+              
+              This was a logo <img> followed by an <h1> of the same business name, so every tenant
+              whose logo contains their name — which is most brand logos — had it printed twice on
+              every document. A logo IS the name; if one exists it stands alone, and the name is
+              carried by the img's alt text for anyone who cannot see it. */}
           {doc.logo_url
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={doc.logo_url} alt={tenant.business_name || ''} className="mb-2 h-12 w-auto max-w-[180px] object-contain" />
-            : null}
-          <h1 className="text-2xl font-bold tracking-tight">{tenant.business_name || 'Studio'}</h1>
+            : <h1 className="text-2xl font-bold tracking-tight">{tenant.business_name || 'Studio'}</h1>}
           {addr.map((l, i) => <p key={i} className="text-sm text-neutral-500">{l}</p>)}
           <p className="text-sm text-neutral-500">{[tenant.email, tenant.phone].filter(Boolean).join(' · ')}</p>
         </div>

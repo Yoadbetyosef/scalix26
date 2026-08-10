@@ -19,6 +19,20 @@ function Unavailable() {
   )
 }
 
+
+// ── THE PAGE TITLE IS THE TENANT'S, AND ONLY THE TENANT'S ───────────────────────────────────────────
+//
+// Chrome prints document.title at the top of every printed page. This route used to inherit the root
+// layout's "<platform> — AI Employee Platform", so every estimate a customer received had our name
+// printed across the top of it. The title is the tenant's business name and the document's own
+// identity; nothing else belongs in it, because a customer reading it is not our customer.
+export async function generateMetadata() {
+  // The approval page resolves its view through a token guard inside the component; rather than run
+  // that twice, the title is deliberately empty. Empty is correct here — it is never OUR name, and the
+  // print header is suppressed by the document stylesheet regardless.
+  return { title: '', robots: { index: false, follow: false } }
+}
+
 export default async function ApprovalPage({ params }: { params: Promise<{ token: string }> }) {
   const token = (await params).token
   const view = await getApprovalByToken(token)

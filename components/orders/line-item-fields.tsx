@@ -6,7 +6,7 @@ import type { OrderOptionList } from '@/lib/orders/options'
 // Jewelry attributes come from the tenant's own dropdown lists; carats are free numeric entry.
 
 export interface LineDraft {
-  productName: string; description: string; sku: string; quantity: string; unitPrice: string
+  productName: string; description: string; sku: string; quantity: string; unitPrice: string; internalCost: string
   measurements: string; color: string; material: string; customSpec: string
   stoneType: string; stoneOrigin: string; stoneQuality: string; stoneColor: string
   centerStoneShape: string; sideStoneShape: string; metalKarat: string
@@ -15,7 +15,7 @@ export interface LineDraft {
 }
 
 export const emptyLine = (): LineDraft => ({
-  productName: '', description: '', sku: '', quantity: '1', unitPrice: '',
+  productName: '', description: '', sku: '', quantity: '1', unitPrice: '', internalCost: '',
   measurements: '', color: '', material: '', customSpec: '',
   stoneType: '', stoneOrigin: '', stoneQuality: '', stoneColor: '',
   centerStoneShape: '', sideStoneShape: '', metalKarat: '',
@@ -27,6 +27,8 @@ export const emptyLine = (): LineDraft => ({
 export const lineToPayload = (l: LineDraft) => ({
   productName: l.productName, description: l.description || null, sku: l.sku || null,
   quantity: parseFloat(l.quantity) || 1, unitPriceCents: Math.round((parseFloat(l.unitPrice) || 0) * 100),
+  // Empty stays NULL — "not recorded" — rather than becoming 0, which would claim the line was free.
+  internalCostCents: l.internalCost.trim() === '' ? null : Math.round((parseFloat(l.internalCost) || 0) * 100),
   measurements: l.measurements || null, color: l.color || null, material: l.material || null, customSpec: l.customSpec || null,
   stoneType: l.stoneType || null, stoneOrigin: l.stoneOrigin || null, stoneQuality: l.stoneQuality || null, stoneColor: l.stoneColor || null,
   centerStoneShape: l.centerStoneShape || null, sideStoneShape: l.sideStoneShape || null, metalKarat: l.metalKarat || null,
@@ -38,6 +40,7 @@ export const lineToPayload = (l: LineDraft) => ({
 // Rehydrate a saved line item back into the form.
 export const lineFromSaved = (l: {
   productName: string; description: string | null; sku: string | null; quantity: number; unitPriceCents: number
+  internalCostCents?: number | null
   measurements: string | null; color: string | null; material: string | null; customSpec: string | null
   stoneType?: string | null; stoneOrigin?: string | null; stoneQuality?: string | null; stoneColor?: string | null
   centerStoneShape?: string | null; sideStoneShape?: string | null; metalKarat?: string | null
@@ -46,6 +49,7 @@ export const lineFromSaved = (l: {
 }): LineDraft => ({
   productName: l.productName, description: l.description ?? '', sku: l.sku ?? '',
   quantity: String(l.quantity), unitPrice: l.unitPriceCents ? (l.unitPriceCents / 100).toString() : '',
+  internalCost: l.internalCostCents === null || l.internalCostCents === undefined ? '' : (l.internalCostCents / 100).toString(),
   measurements: l.measurements ?? '', color: l.color ?? '', material: l.material ?? '', customSpec: l.customSpec ?? '',
   stoneType: l.stoneType ?? '', stoneOrigin: l.stoneOrigin ?? '', stoneQuality: l.stoneQuality ?? '', stoneColor: l.stoneColor ?? '',
   centerStoneShape: l.centerStoneShape ?? '', sideStoneShape: l.sideStoneShape ?? '', metalKarat: l.metalKarat ?? '',
@@ -87,6 +91,14 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
         <label className="block text-xs text-gray-500">SKU<input value={line.sku} onChange={(e) => onChange('sku', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Qty<input value={line.quantity} onChange={(e) => onChange('quantity', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Unit price ({currencySymbol})<input value={line.unitPrice} onChange={(e) => onChange('unitPrice', e.target.value)} placeholder="0" className={inp} /></label>
+        {/* INTERNAL. Labelled on the input itself, because the one thing that must never happen is
+            somebody typing a cost into a field they believe the customer will see. It appears on no
+            document, share link, approval page, email or PDF — asserted in
+            lib/orders/internal-cost.test.ts. */}
+        <label className="block text-xs text-amber-700">
+          Internal cost ({currencySymbol}) <span className="font-normal text-amber-600">· your team only</span>
+          <input value={line.internalCost} onChange={(e) => onChange('internalCost', e.target.value)} placeholder="—" className={inp} />
+        </label>
       </div>
 
       <fieldset className="rounded-lg bg-gray-50 p-3">

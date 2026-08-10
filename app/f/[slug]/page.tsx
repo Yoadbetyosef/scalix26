@@ -5,6 +5,19 @@ import { BookingForm } from '@/components/booking/booking-form'
 
 // Public hosted lead-capture page. Shareable link: /f/<slug>. Submitting it
 // fires the existing Speed to Lead flow via /api/leads/inbound/<token>.
+// The tenant's name, not ours — see lib/documents/routes.ts. This page's reader is the tenant's
+// prospect, who has no idea who we are.
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/server')
+    const { data } = await createAdminClient()
+      .from('tenants').select('business_name').eq('slug', (await params).slug).maybeSingle()
+    return { title: (data?.business_name as string) || '', robots: { index: false, follow: false } }
+  } catch {
+    return { title: '' }
+  }
+}
+
 export default async function BookingPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 

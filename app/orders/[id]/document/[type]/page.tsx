@@ -17,6 +17,28 @@ const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '
 const money = (cents: number, cur: string) =>
   `${SYMBOL[cur] ?? `${cur.toUpperCase()} `}${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
+
+// ── THE PAGE TITLE IS THE TENANT'S, AND ONLY THE TENANT'S ───────────────────────────────────────────
+//
+// Chrome prints document.title at the top of every printed page. This route used to inherit the root
+// layout's "<platform> — AI Employee Platform", so every estimate a customer received had our name
+// printed across the top of it. The title is the tenant's business name and the document's own
+// identity; nothing else belongs in it, because a customer reading it is not our customer.
+export async function generateMetadata({ params }: { params: Promise<{ id: string; type: string }> }) {
+  try {
+    const a = await requireOrdersAccess()
+    if (!a) return { title: '' }
+    const { id, type } = await params
+    const [order, { business }] = await Promise.all([getOrder(id), loadDocContext(a.tenantId)])
+    const label = type.charAt(0).toUpperCase() + type.slice(1)
+    const num = order?.orderNumber ? ` ${order.orderNumber}` : ''
+    return { title: [business.businessName, `${label}${num}`].filter(Boolean).join(' · '), robots: { index: false, follow: false } }
+  } catch {
+    // A title is not worth failing a document render over.
+    return { title: '' }
+  }
+}
+
 export default async function OrderDocumentPage({ params }: { params: Promise<{ id: string; type: string }> }) {
   const a = await requireOrdersAccess()
   if (!a) notFound()
@@ -44,11 +66,16 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
 
       <header className="mb-6 flex items-start justify-between gap-4">
         <div>
+          {/* The wordmark renders ONCE.
+              
+              This was a logo <img> followed by an <h1> of the same business name, so every tenant
+              whose logo contains their name — which is most brand logos — had it printed twice on
+              every document. A logo IS the name; if one exists it stands alone, and the name is
+              carried by the img's alt text for anyone who cannot see it. */}
           {branding.logoUrl
             // eslint-disable-next-line @next/next/no-img-element -- tenant-uploaded logo, not a static asset
             ? <img src={branding.logoUrl} alt={business.businessName ?? ''} className="mb-2 h-14 w-auto max-w-[200px] object-contain" />
-            : null}
-          <h1 className="text-2xl font-bold tracking-tight">{business.businessName ?? 'Our business'}</h1>
+            : <h1 className="text-2xl font-bold tracking-tight">{business.businessName ?? 'Our business'}</h1>}
           {addr.map((l, i) => <p key={i} className="text-sm text-neutral-500">{l}</p>)}
           <p className="text-sm text-neutral-500">{[business.email, business.phone, business.website].filter(Boolean).join(' · ')}</p>
         </div>

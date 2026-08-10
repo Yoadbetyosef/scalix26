@@ -359,3 +359,33 @@ a[role="button"]:not([aria-disabled="true"]):active,
   .sx-ring:not(:first-of-type) { display: none; }
   .sx-pop { animation: none; }
 }
+
+/* ── PRINTING A CUSTOMER DOCUMENT ────────────────────────────────────────────────────────────────
+   
+   Chrome draws its own header and footer in the page MARGIN — the document title top-left, the URL
+   bottom-left, the date and page number on the right. It only draws them if there is margin space to
+   draw them in, so `@page { margin: 0 }` removes all four. That is the only reliable way to suppress
+   them from CSS; there is no property that turns them off directly.
+   
+   This is what put "<platform> — AI Employee Platform" across the top of every estimate a customer
+   received, and "app.scalix26.com/orders/…" across the bottom.
+   
+   @page CANNOT be scoped to a selector — it is a page-context rule, not an element one — so this
+   applies to every printed page in the app. That is acceptable: nothing else here is designed to be
+   printed, and a browser-drawn URL is unwanted on all of them. The visual margin the paper still
+   needs is restored as padding on the printed content instead. */
+@media print {
+  @page { margin: 0; }
+
+  html, body {
+    background: #fff;
+    /* The paper edge is not a design surface. This is the margin @page gave up. */
+    padding: 14mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Anything the customer should not receive on paper. Buttons that do nothing on a page already
+     carry print:hidden; this catches the app chrome around them. */
+  [data-print-hidden] { display: none !important; }
+}
