@@ -358,13 +358,13 @@
 .v2-send svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 1.8; stroke-linecap: round; }
 
 /* ── Armed ─────────────────────────────────────────────────────────────────────────────────────── */
-/* The button KEEPS its gradient while armed — the ink inversion means she has the floor, and armed
-   means the opposite. What marks it is a slow breath, matching the ring on the media. */
-.v2-talk[data-armed] { animation: v2-breathe 2.6s ease-in-out infinite; }
-@keyframes v2-breathe {
-  0%, 100% { box-shadow: 0 6px 26px rgba(139, 92, 246, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28) }
-  50%      { box-shadow: 0 10px 38px rgba(34, 211, 238, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.28) }
-}
+/* There is no armed treatment. Armed and listening are ONE visual state — the mic is open and it is
+   the caller's turn in both — so the button takes the same skin and only its label changes. The
+   breathing box-shadow that used to live here was removed for the same reason as the ring on the
+   media: a graphic belonging to one state and not the other makes the pair read as two screens.
+   
+   The hairline below is the exception, and it earns it: it shows the session closing, which is a
+   fact about armed that is true of nothing else. */
 
 /* The draining hairline. One pixel of honesty: the session is going to close, here is how long you
    have, and speaking restarts it. Without this the session ending is indistinguishable from a bug. */
@@ -381,7 +381,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .v2-hair i { animation: none; transform: scaleX(1); }
-  .v2-talk[data-armed] { animation: none; }
 }
 
 /* What the owner typed, echoed above the caption. ONE mono line — never a scrolling transcript. */

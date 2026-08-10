@@ -79,14 +79,14 @@ export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange
     <div className="v2-composer" data-full={full || undefined}>
       {/* Both faces share .v2-ctl, which owns the geometry. Only the skin differs.
           
-          Armed is deliberately NOT data-on: the ink inversion means "she has the floor", and armed
-          means the opposite. It keeps the gradient fill and takes its own breathing ring. */}
+          Armed takes the SAME treatment as listening, because they are the same state: the mic is
+          open and it is the caller's turn in both. Only the label differs. Giving armed its own skin
+          made it read as a separate screen rather than a moment inside a conversation. */}
       <button
         ref={buttonRef}
         type="button"
         className="v2-ctl v2-talk"
-        data-on={state === 'listening' || state === 'speaking' || undefined}
-        data-armed={state === 'armed' || undefined}
+        data-on={state !== 'idle' || undefined}
         data-hidden={typing || undefined}
         onClick={onTalk}
         aria-hidden={typing}

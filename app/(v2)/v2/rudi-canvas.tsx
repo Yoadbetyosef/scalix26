@@ -284,15 +284,16 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         return
       }
 
-      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150)
-        : st === 'listening' ? 1.22
-          // Armed breathes: a slow 2.6s swell, nothing like the speaking rings. The difference has to
-          // be legible across the room, which is why one is fast and shallow and the other is slow
-          // and deep.
-          : st === 'armed' ? 1 + 0.16 * Math.sin(now / 414)
-            : 1
-      // Listening runs the band nearly three times faster — the design's way of saying "attending".
-      const period = st === 'listening' ? 1300 : 3600
+      // ── ARMED IS LISTENING ──────────────────────────────────────────────────────────────────────
+      //
+      // The mic is open and it is the caller's turn in BOTH. The only thing that differs is whether
+      // sound is arriving, so the only thing that may differ on screen is the meter's amplitude and
+      // one word of label. Everything else — the veil, the bloom, the band's rate — is shared, and
+      // any graphic belonging to one and not the other makes it read as a separate screen rather than
+      // a moment inside a conversation.
+      const open = st === 'listening' || st === 'armed'
+      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150) : open ? 1.22 : 1
+      const period = open ? 1300 : 3600
       const prog = (now % period) / period
       const band = prog * CH
       const hc = hue(prog)
@@ -370,8 +371,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         const gap = wW / wN
         const env = envelope(now)
 
-        ctx!.strokeStyle = `rgba(14,14,17,${(0.13 * micA).toFixed(3)})`
-        ctx!.lineWidth = 1
+        // The baseline carries the meter's own ink weight, because at rest it IS the meter: bars
+        // collapse into it and what remains must read as one flat line rather than as an absence.
+        ctx!.strokeStyle = `rgba(14,14,17,${(0.5 * micA).toFixed(3)})`
+        ctx!.lineWidth = 1.5
         ctx!.beginPath()
         ctx!.moveTo(wX - CW * 0.06, wY)
         ctx!.lineTo(wX + wW + CW * 0.06, wY)
@@ -387,27 +390,22 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
           const edge = Math.pow(Math.sin((wi / (wN - 1)) * Math.PI), 0.45)
           const tgt = env * edge * (0.2 + 0.8 * Math.pow(Math.abs(Math.sin(wi * 3.1 + now / 62)), 1.5))
           LV[wi] += (tgt - LV[wi]) * (tgt > LV[wi] ? 0.6 : 0.22)
-          const hgt = Math.max(1.5, LV[wi] * CH * 0.105) * micA
+          // NO minimum height. It used to be Math.max(1.5, …), which at zero amplitude drew 52
+          // bars three pixels tall and thirteen apart — a dotted rule, and the single thing that made
+          // the waiting state look like a different screen. Bars now grow out of the baseline and
+          // return into it, so silence is a flat line and speech is the same line with amplitude.
+          const hgt = LV[wi] * CH * 0.105 * micA
+          if (hgt < 0.4) continue
           ctx!.fillStyle = `rgba(14,14,17,${(0.78 * micA).toFixed(3)})`
           ctx!.fillRect(wX + wi * gap, wY - hgt, 2.2, hgt * 2)
         }
-        // The breathing ring. Armed only — one slow circle expanding and fading, so "your turn" is
-        // readable as motion before any word is read.
-        if (st === 'armed') {
-          const bp = (now % 2600) / 2600
-          const r = CH * (0.12 + 0.16 * bp)
-          ctx!.strokeStyle = `rgba(14,14,17,${(0.28 * (1 - bp) * micA).toFixed(3)})`
-          ctx!.lineWidth = 1.4
-          ctx!.beginPath()
-          ctx!.arc(CW / 2, wY, r, 0, Math.PI * 2)
-          ctx!.stroke()
-        }
-
         ctx!.font = '11px ui-monospace,Menlo,monospace'
         ctx!.textAlign = 'center'
         ctx!.fillStyle = `rgba(14,14,17,${(0.42 * micA).toFixed(3)})`
-        // Says which it is. A meter that moves on a synthetic envelope while claiming to hear you is
-        // the same class of lie as a record claiming a review that never happened.
+        // Same position, same size, same colour as listening's. Only the word changes — and it still
+        // says DEMO when no level has been supplied, because a meter moving on a synthetic envelope
+        // while claiming to hear you is the same class of lie as a record claiming a review that
+        // never happened.
         ctx!.fillText(
           st === 'armed' ? 'YOUR TURN'
             : levelledRef.current ? 'LISTENING' : 'LISTENING · DEMO',
