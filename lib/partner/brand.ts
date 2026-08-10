@@ -5,6 +5,18 @@ import { resolveBrand } from '@/lib/brands'
 // domain) overrides the static host brand — otherwise we fall back to the existing Scalix/host brand.
 // Cached briefly so the layout doesn't hit the DB on every navigation.
 
+/**
+ * The name shown when no brand resolves.
+ *
+ * ONE definition, because it was typed inline in five components — every `useBrand()?.name || 'Scalix'`
+ * — plus this file's own fallback. Five literals meant a white-label tenant whose brand failed to
+ * resolve saw our name in five different places, and changing it meant finding all five.
+ *
+ * This deliberately does NOT change what it says. It changes how many places say it, which is the
+ * prerequisite for ever changing what it says.
+ */
+export const FALLBACK_BRAND_NAME = 'Scalix'
+
 export interface BrandData {
   name: string
   logoUrl: string | null
@@ -78,7 +90,7 @@ export async function resolveBrandForPartner(partnerId: string): Promise<BrandDa
   const { data } = await createAdminClient().from('partner_brands').select('*').eq('partner_id', partnerId).maybeSingle()
   if (!data) return null
   const brand: BrandData = {
-    name: data.company_name || 'Scalix',
+    name: data.company_name || FALLBACK_BRAND_NAME,
     logoUrl: data.logo_url || null, faviconUrl: data.favicon_url || null,
     primaryColor: data.primary_color || null, secondaryColor: data.secondary_color || null,
     supportEmail: data.support_email || null, supportPhone: data.support_phone || null, website: data.website || null,

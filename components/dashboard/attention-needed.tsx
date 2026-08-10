@@ -1,5 +1,6 @@
 'use client'
 
+import { FALLBACK_BRAND_NAME } from '@/lib/partner/brand'
 import Link from 'next/link'
 import { AlertTriangle, ArrowUpRight, CheckCircle2, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,7 +19,7 @@ export function AttentionNeeded({ onOpenMetric }: {
   onOpenMetric: (item: AttentionItem) => void
 }) {
   const { ready, visibleItems } = useAttention()
-  const brandName = useBrand()?.name || 'Scalix'
+  const brandName = useBrand()?.name || FALLBACK_BRAND_NAME
 
   if (ready && visibleItems.length === 0) {
     return (

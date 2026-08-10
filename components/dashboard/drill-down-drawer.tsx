@@ -1,5 +1,6 @@
 'use client'
 
+import { FALLBACK_BRAND_NAME } from '@/lib/partner/brand'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
@@ -56,7 +57,7 @@ const TL_ICON: Record<TimelineEvent['kind'], { icon: React.ElementType; cls: str
 function ConversationTimeline({ conversationId }: { conversationId: string }) {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null)
   const [error, setError] = useState(false)
-  const brandName = useBrand()?.name || 'Scalix'
+  const brandName = useBrand()?.name || FALLBACK_BRAND_NAME
   useEffect(() => {
     let active = true
     setError(false); setEvents(null)
@@ -98,7 +99,7 @@ function ConversationTimeline({ conversationId }: { conversationId: string }) {
 
 function ProofRowItem({ row }: { row: ProofRow }) {
   const [open, setOpen] = useState(false)
-  const brandName = useBrand()?.name || 'Scalix'
+  const brandName = useBrand()?.name || FALLBACK_BRAND_NAME
   const ch = CHANNEL[row.channel || ''] || { icon: MessageCircle, label: row.channel || 'Conversation', cls: 'bg-sunken text-subtle' }
   const Icon = ch.icon
   const expandable = row.kind === 'conversation'

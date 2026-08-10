@@ -5,6 +5,7 @@ import {
   ORDER_DOC_META, isOrderDocType, loadDocContext, orderDocNumber, specRows, totalCarats, validUntil,
 } from '@/lib/orders/documents'
 import { PrintButton } from '@/components/studio/print-button'
+import { publicDocumentImages } from '@/lib/orders/attachments'
 import { DocumentBranding } from '@/components/orders/document-branding'
 
 // Printable Estimate / Quote for an order. Rendered on the tenant's own screen and saved as PDF from the
@@ -47,7 +48,10 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
   const o = await getOrder(id)
   if (!o) notFound()
 
-  const { branding, business } = await loadDocContext(a.tenantId)
+  const [{ branding, business }, images] = await Promise.all([
+    loadDocContext(a.tenantId),
+    publicDocumentImages(id),
+  ])
   const meta = ORDER_DOC_META[type]
   const accent = branding.accent
   const issued = new Date().toISOString().slice(0, 10)
@@ -102,6 +106,34 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
           {o.isCustomDesign && <p className="mt-1 text-sm font-medium" style={accent ? { color: accent } : undefined}>Custom design</p>}
         </div>
       </section>
+
+      {/* ── THE PIECE ────────────────────────────────────────────────────────────────────────────
+          
+          A custom ring cannot be sold from a text description. This sits ABOVE the line items because
+          that is the order a customer reads in: they look at the piece, then read what it costs.
+          
+          Only attachments marked PUBLIC appear — 'internal' is the default, so nothing reaches the
+          customer until somebody deliberately shares it — and only image types, because a PDF or a
+          CAD file has no thumbnail and would print as a broken box.
+          
+          break-inside-avoid keeps a photo from being split across two printed pages. */}
+      {images.length > 0 && (
+        <section className="mb-6 break-inside-avoid">
+          <div className={images.length === 1 ? '' : 'grid grid-cols-2 gap-3 sm:grid-cols-3'}>
+            {images.map((img) => (
+              // eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset
+              <img
+                key={img.id}
+                src={img.url}
+                alt={img.fileName}
+                className={images.length === 1
+                  ? 'max-h-80 w-full rounded-lg border border-neutral-200 object-contain'
+                  : 'h-40 w-full rounded-lg border border-neutral-200 object-cover'}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="space-y-4">
         {o.lineItems.map((l, i) => {
