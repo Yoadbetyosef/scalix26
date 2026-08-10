@@ -90,9 +90,18 @@ type SR = {
   stop: () => void
   abort: () => void
   onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null
-  onerror: (() => void) | null
+  onerror: ((e: { error?: string; message?: string }) => void) | null
   onend: (() => void) | null
 }
+
+/**
+ * Errors that mean recognition is GONE, not merely interrupted.
+ *
+ * Everything else — 'aborted', 'no-speech', 'network' — is transient and the instance is restarted.
+ * Distinguishing them matters: treating a transient error as fatal is what silently removed the
+ * transcript for the rest of the session.
+ */
+const FATAL_ASR = new Set(['not-allowed', 'service-not-allowed', 'audio-capture'])
 
 function RecognitionCtor(): (new () => SR) | null {
   if (typeof window === 'undefined') return null
@@ -124,6 +133,9 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
   let audio: AudioContext | null = null
   let raf = 0
   let rec: SR | null = null
+  let recAvailable = true
+  /** True only while WE are tearing it down, so its own onend is not mistaken for Chrome's. */
+  let recDeliberate = false
   let heard = ''
   let smoothed = 0
   let armedTimer: ReturnType<typeof setTimeout> | null = null
@@ -133,8 +145,6 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
   let keepAlive: ReturnType<typeof setInterval> | null = null
   let synthPoll: ReturnType<typeof setInterval> | null = null
   let started = false
-  /** Set when there is no microphone, so recognition's own endpointing can end the turn. */
-  let onRecEnd: (() => void) | null = null
 
   // VAD state
   let above = 0
@@ -156,22 +166,35 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
     stopSpeechWatchers()
   }
 
-  // ── Recognition ─────────────────────────────────────────────────────────────────────────────────
+  // ── Recognition: ONE instance for the whole session ──────────────────────────────────────────
+  //
+  // It used to be started and abort()ed per turn. abort() raises an error event — the log showed it
+  // landing 4ms after speak(), every single time she spoke — and that error killed the transcript for
+  // the rest of the session. The pause meant to stop her voice being transcribed was destroying the
+  // thing it was protecting.
+  //
+  // Now it starts once and stays up. Her voice is kept out by IGNORING results while she has the
+  // floor, not by tearing the instance down. It is aborted in exactly one place: session stop.
   const stopRecognition = () => {
     if (!rec) return
+    recDeliberate = true
     try { rec.abort() } catch { /* already stopped */ }
     rec = null
   }
 
   const startRecognition = () => {
     const Ctor = RecognitionCtor()
-    if (!Ctor) return
-    stopRecognition()
+    if (!Ctor || !recAvailable || stopped) return
     const r = new Ctor()
     r.continuous = true
     r.interimResults = true
     r.lang = typeof navigator !== 'undefined' ? navigator.language || 'en-US' : 'en-US'
+
     r.onresult = (e) => {
+      // The duplex guard for the TRANSCRIPT. While she has the floor her own audio may reach the
+      // recogniser; those words are hers, not the caller's, and they are dropped rather than
+      // appended. This replaces tearing the instance down.
+      if (rudi.state() !== 'listening') return
       let interim = ''
       let final = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -182,16 +205,31 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       if (final) heard = (heard ? `${heard} ` : '') + final.trim()
       opts.onHeard((heard + (interim ? ` ${interim}` : '')).trim() || null)
     }
-    r.onerror = () => { log('recognition: error') }
+
+    r.onerror = (e) => {
+      const reason = e?.error ?? 'unknown'
+      log(`recognition: error=${reason}${e?.message ? ` message="${e.message}"` : ''}`)
+      // NEVER a turn boundary. A recogniser failing says nothing about whose turn it is, and treating
+      // it as an ending is what made the conversation bounce between armed and listening.
+      if (FATAL_ASR.has(reason)) {
+        recAvailable = false
+        log('recognition: unavailable for the rest of this session')
+      }
+    }
+
     r.onend = () => {
       log('recognition: end')
-      // With a microphone, VAD owns the turn and recognition ending early is not a boundary.
-      // WITHOUT one there is no VAD at all, so this is the only thing that can close the turn —
-      // otherwise a denied getUserMedia leaves the session listening forever.
-      onRecEnd?.()
+      if (recDeliberate) { recDeliberate = false; return }
+      // Chrome ends recognition on its own — after silence, and after about a minute. Restarting is
+      // what "survives a full session" actually requires.
+      if (!stopped && recAvailable) {
+        log('recognition: restarting')
+        setTimeout(() => { if (!stopped && recAvailable && !rec) startRecognition() }, 120)
+      }
     }
+
     rec = r
-    try { r.start() } catch { /* already started, or refused */ }
+    try { r.start(); log('recognition: started') } catch { /* already started */ }
   }
 
   // ── Turns ───────────────────────────────────────────────────────────────────────────────────────
@@ -199,31 +237,29 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
     if (stopped) return
     clearTimers()
     heard = ''
-    onRecEnd = null
     opts.onHeard(null)
     log('turn: listening')
     rudi.listen()
-    startRecognition()
+    // Recognition is already up for the session. If Chrome dropped it and the restart has not landed
+    // yet, this brings it back; it is never torn down and rebuilt per turn.
+    if (!rec) startRecognition()
 
     // ── EVERY DEGRADED PATH MUST STILL REACH THE END OF A TURN ──────────────────────────────────
     //
     // With a microphone, VAD closes the turn. Without one there is no VAD, and the turn would hang
-    // open forever — a denied permission would look exactly like the freeze this whole change is
-    // about. So when the mic is absent, recognition's own endpointing takes over, and a timer backs
-    // THAT up in case recognition is absent or errors out too.
+    // open forever — a denied permission would look exactly like the freeze this change is about.
+    // Recognition's endpointing cannot serve as the boundary any more, because the instance now
+    // restarts itself, so a timer is the honest fallback for a path that has no other signal.
     if (!stream) {
-      onRecEnd = () => { if (rudi.state() === 'listening') answer() }
       noAsrTimer = setTimeout(() => {
         if (rudi.state() === 'listening') { log('turn: closed by timer (no microphone)'); answer() }
-      }, rec ? NO_MIC_TURN_MS : NO_ASR_PAUSE_MS)
+      }, recAvailable ? NO_MIC_TURN_MS : NO_ASR_PAUSE_MS)
     }
   }
 
   const armTurn = () => {
     if (stopped) return
     log('turn: armed')
-    onRecEnd = null
-    stopRecognition()
     voicing = false; above = 0; below = 0
     rudi.arm()
     clearTimers()
@@ -233,9 +269,8 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
 
   const answer = () => {
     if (stopped) return
-    // Recognition is paused for the whole utterance — the duplex guard's first half. The second is
-    // the raised VAD threshold in pushLevel.
-    stopRecognition()
+    // Recognition is NOT stopped here. Its results are ignored while she has the floor (see
+    // onresult), which is the same guard without the abort that used to kill the session.
     clearTimers()
 
     const f = opts.facts()
@@ -248,6 +283,7 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
     // ONE handover, whoever gets there first. Everything below races to call this, and the guard is
     // what makes the race safe rather than a source of double-arming.
     let handed = false
+    started = false
     const handOver = (why: string) => {
       if (handed || stopped) return
       handed = true
@@ -269,7 +305,6 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       return
     }
 
-    window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(text)
     u.rate = 1.02
     log('utterance created')
@@ -302,19 +337,52 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
 
     u.onstart = () => { log('event: onstart'); begin('event') }
     u.onend = () => { log('event: onend'); handOver('onend') }
-    u.onerror = () => { log('event: onerror'); handOver('onerror') }
-    // Not used for control — logged because if boundaries arrive and onend does not, the utterance
-    // ran and only the final event was lost, which is a different fault from never starting.
+
+    // ── AN ERROR IS NOT A COMPLETION ─────────────────────────────────────────────────────────────
+    //
+    // This used to hand over immediately, so a failed utterance produced a speaking state that lasted
+    // 0ms and armed in the same millisecond — the bounce between armed and listening in the log
+    // starts here.
+    //
+    // A failure means her voice did not happen; it does not mean the turn is over. The reply is on
+    // screen, so the turn is held for as long as reading it would take, and only then handed on.
+    u.onerror = (e) => {
+      const reason = (e as unknown as { error?: string })?.error ?? 'unknown'
+      log(`event: onerror error=${reason}`)
+      if (handed || stopped) return
+      stopSpeechWatchers()
+      begin('onerror fallback')      // enter speaking, so the turn has visible length
+      sayTimer = setTimeout(() => handOver(`estimate (synthesis failed: ${reason})`), est)
+    }
+
+    // Not used for control — logged because boundaries arriving without onend means the utterance ran
+    // and only the final event was lost, which is a different fault from never starting.
     u.onboundary = (e) => log(`event: onboundary @${Math.round(e.charIndex ?? 0)}`)
 
-    window.speechSynthesis.speak(u)
-    log('speechSynthesis.speak() called')
+    // ── DO NOT RACE cancel() INTO speak() ────────────────────────────────────────────────────────
+    //
+    // cancel() immediately followed by speak() makes Chrome error the NEW utterance, which is very
+    // likely the 0ms failure in the log: handOver() cancels on every non-onend exit, and the next
+    // reply was queued microseconds later. Cancel only when something is genuinely speaking, and let
+    // the queue settle before adding to it.
+    const fire = () => {
+      if (stopped || handed) return
+      window.speechSynthesis.speak(u)
+      log('speechSynthesis.speak() called')
+      // onstart can go missing too. Without this nothing would ever enter speaking, and the reply
+      // would sit on screen with the state stuck in listening.
+      startWatchdog = setTimeout(() => {
+        if (!started) { log('onstart never fired within watchdog'); begin('watchdog') }
+      }, START_WATCHDOG_MS)
+    }
 
-    // onstart can go missing too. Without this nothing would ever enter speaking, and the reply would
-    // sit on screen with the state stuck in listening.
-    startWatchdog = setTimeout(() => {
-      if (!started) { log('onstart never fired within watchdog'); begin('watchdog') }
-    }, START_WATCHDOG_MS)
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      log('synth busy; cancelling and settling before speak()')
+      window.speechSynthesis.cancel()
+      setTimeout(fire, 140)
+    } else {
+      fire()
+    }
   }
 
   /** Cut her off and hand the floor back. The one thing that makes this feel alive. */
@@ -421,6 +489,8 @@ export function startVoice(rudi: RudiHandle, opts: VoiceOptions): VoiceSession {
       raf = requestAnimationFrame(tick)
     }
 
+    // One instance, started with the session and torn down only with it.
+    startRecognition()
     openTurn()
   })()
 
