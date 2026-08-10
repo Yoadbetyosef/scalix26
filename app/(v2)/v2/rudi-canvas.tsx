@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
+import { mark } from './timing'
 
 // Rudi's face. A reproduction of the reference's canvas engine.
 //
@@ -543,6 +544,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       fit()
       drawStill()                       // <- the picture is on screen HERE, before any effect starts
       firstDraw = performance.now()
+      mark('canvas')
       if (!reduced) sync()
     })
 

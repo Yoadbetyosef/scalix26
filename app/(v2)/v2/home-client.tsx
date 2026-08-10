@@ -4,11 +4,12 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { RudiCanvas, type RudiHandle, type RudiState } from './rudi-canvas'
 import { Composer } from './composer'
 import { Rail } from './rail'
-import { rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
+import { rudiCursor, rudiReply, type ReplyFacts, type RudiSegment } from './rudi-line'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
 import { runDemo, type DemoSession } from './demo-harness'
 import type { HomeData, ShellData } from './data'
+import { mark, startTiming } from './timing'
 import {
   AiBadge, Caption, CardSkeleton, ColumnSkeleton, JobCount, RailCount, RightColumn, SheetBody, TodayList,
 } from './deferred'
@@ -50,6 +51,10 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   // The facts, read off the same promise WITHOUT suspending — a conversation can start before the
   // figures land, and the reply says so rather than inventing one.
+  // FIRST effect in the shell, so it fires as soon as React has hydrated this component — which is
+  // the moment its click handlers become real. Anything before this and the button is inert markup.
+  useEffect(() => { mark('shell'); startTiming() }, [])
+
   const facts = useRef<ReplyFacts | null>(null)
   useEffect(() => {
     let alive = true
@@ -66,6 +71,9 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
     void (async () => {
       try {
         const d = await dataPromise
+        // When the streamed numbers actually landed. Compared against the hydration mark, this
+        // answers whether the data is holding up interactivity or merely arriving after it.
+        mark('data')
         if (alive) facts.current = d.facts
       } catch {
         // Swallowed deliberately: this read is an optimisation for the reply text. The Suspense
@@ -185,7 +193,7 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   if (!isMobile) {
     return (
       <div className="v2-app">
-        <Cursor label={minimised ? 'EXPAND' : state === 'idle' ? 'TALK' : 'STOP'} active={!typing} />
+        <Cursor label={rudiCursor(state, minimised)} active={!typing} />
         <Palette
           commands={[
             ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
