@@ -198,9 +198,16 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     function fit() {
       const r = canvas!.getBoundingClientRect()
       const d = Math.min(2, window.devicePixelRatio || 1)
-      CW = Math.round(r.width * d)
-      CH = Math.round(r.height * d)
-      if (CW === 0 || CH === 0) return
+      const w = Math.round(r.width * d)
+      const h = Math.round(r.height * d)
+      if (w === 0 || h === 0) return
+      // ASSIGNING canvas.width WIPES THE CANVAS. It clears every pixel and resets the 2D context
+      // state, even when the value is unchanged — so a fit() on an already-correct size is not a
+      // no-op, it is a blank frame. That is what made a mouse move black the screen: the
+      // first-interaction handler called fit() on a canvas that was already sized and already
+      // painted. Measure first, and only resize when the size has genuinely changed.
+      if (w === CW && h === CH) return
+      CW = w; CH = h
       canvas!.width = CW; canvas!.height = CH
       sweep.width = CW; sweep.height = CH
       S = Math.max(CW / IW, CH / IH)
@@ -272,7 +279,11 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     }
 
     function draw(now: number) {
-      if (disposed || !img) return
+      if (disposed) return
+      // A missing still must not KILL the loop. Returning without re-requesting a frame ended it
+      // permanently, so anything that cleared the canvas before the image was ready left it black
+      // with nothing scheduled to repaint it.
+      if (!img) { raf = requestAnimationFrame(draw); return }
       const st = stateRef.current
       ctx!.setTransform(1, 0, 0, 1, 0, 0)
       ctx!.clearRect(0, 0, CW, CH)
@@ -606,6 +617,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       fit()
       ensureNet()
       sync()
+      // If the loop is not running after this — reduced motion, or off-screen — the still is what
+      // stays on screen, so repaint it in case fit() resized and cleared.
+      if (!running) drawStill()
     }
     KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, once: false }))
 
