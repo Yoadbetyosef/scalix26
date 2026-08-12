@@ -619,6 +619,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       sync()
       // If the loop is not running after this — reduced motion, or off-screen — the still is what
       // stays on screen, so repaint it in case fit() resized and cleared.
+      K('kick done', { running, img: img ? 'set' : 'NULL' })
       if (!running) drawStill()
     }
     KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, once: false }))
