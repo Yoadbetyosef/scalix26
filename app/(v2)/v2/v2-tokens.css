@@ -110,6 +110,7 @@
 /* ── Shell ────────────────────────────────────────────────────────────────────────────────────── */
 .v2-app {
   width: 100%; height: 100%;
+  position: relative; z-index: 2;
   display: grid;
   grid-template-columns: var(--v2-rail-w) 1fr var(--v2-side-w);
   /* Explicit, not implicit. An `auto` row sizes to the tallest column's CONTENT, so a short rail and
@@ -195,7 +196,8 @@
 /* ── Stage ────────────────────────────────────────────────────────────────────────────────────── */
 /* The loading stage. Painted, so the first frame of the page is never a bare black region. */
 .v2-stage-loading { background: var(--v2-stage); }
-.v2-stage { position: relative; overflow: hidden; background: var(--v2-stage); min-width: 0; min-height: 0; }
+.v2-stage { position: relative; overflow: hidden; background: transparent; min-width: 0; min-height: 0; pointer-events: none; }
+.v2-dash { pointer-events: auto; }
 .v2-home { position: absolute; inset: 0; transition: opacity 0.3s, transform 0.3s; }
 /* Full-bleed: the canvas IS the centre column, top to bottom and edge to edge. The custom cursor
    replaces the native one over the media only — the rail and the right column keep theirs. */
@@ -233,19 +235,19 @@
 }
 
 /* Collapsed: the hero shrinks to the corner and the dashboard fades up behind it. */
-.v2-stage[data-min="true"] .v2-face {
+.v2-root[data-min] .v2-face {
   left: 32px; bottom: 32px; top: auto; right: auto;
   width: 172px; height: 230px; border-radius: 16px;
   box-shadow: 0 14px 40px rgba(14, 14, 17, 0.22), 0 0 0 1px rgba(14, 14, 17, 0.07);
   z-index: 6;
 }
-.v2-stage[data-min="true"] .v2-scrim { opacity: 0; }
-.v2-stage[data-min="true"] .v2-overlay { opacity: 0; pointer-events: none; }
+.v2-root[data-min] .v2-scrim { opacity: 0; }
+.v2-root[data-min] .v2-overlay { opacity: 0; pointer-events: none; }
 .v2-dash {
   position: absolute; inset: 0; background: var(--v2-paper); padding: 38px 44px 32px; z-index: 4;
   opacity: 0; pointer-events: none; transition: opacity 0.4s; overflow-y: auto;
 }
-.v2-stage[data-min="true"] .v2-dash { opacity: 1; pointer-events: auto; }
+.v2-root[data-min] .v2-dash { opacity: 1; pointer-events: auto; }
 .v2-dash h3 {
   font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.2em;
   text-transform: uppercase; color: var(--v2-ink-42); margin-bottom: 18px;
@@ -769,3 +771,27 @@
   100% { box-shadow: 0 0 0 0 rgba(255, 92, 108, 0); }
 }
 @media (prefers-reduced-motion: reduce) { .v2 .v2-tag[data-live] i { animation: none; } }
+
+
+/* ── ONE HERO, TWO SETS OF CHROME ────────────────────────────────────────────────────────────────
+   The canvas is child 0 of .v2-root in every mode, so React never reconciles it into a different
+   parent and can never destroy it on a branch change. The layouts differ around it: on desktop it
+   occupies the centre column's geometry (between the rail and the right column) without being a grid
+   child; on mobile it is the whole frame. .v2-app sits above it at z-index 2 for the rail and the
+   right column, and its centre cell is transparent so she shows through. */
+.v2 .v2-root { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.v2 .v2-hero {
+  position: absolute; inset: 0; z-index: 1;
+  background: var(--v2-stage); overflow: hidden;
+}
+.v2 .v2-root[data-mode="desktop"] .v2-hero {
+  left: var(--v2-rail-w); right: var(--v2-side-w);
+}
+/* Before the breakpoint resolves she is already on screen, full-bleed, rather than the tree rendering
+   nothing — the placeholder branch existed only to avoid a flash of the wrong CHROME. */
+.v2 .v2-root[data-mode="pending"] .v2-app,
+.v2 .v2-root[data-mode="pending"] .v2-mobile { display: none; }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-root[data-mode="desktop"] .v2-hero { left: 0; right: 0; }
+}

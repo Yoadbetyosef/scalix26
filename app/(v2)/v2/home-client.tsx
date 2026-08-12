@@ -40,12 +40,6 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const [minimised, setMinimised] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMobile = useIsMobile()
-  // Which TREE is rendering. The canvas effect has an empty dependency array, so it re-running means a
-  // genuine unmount and remount — and the three return branches below are three different trees, so a
-  // change here swaps one for another and takes the canvas with it.
-  /* eslint-disable no-console */
-  if (typeof window !== 'undefined') console.info('%c[v2 tree]', 'color:#22d3ee', 'render', { isMobile, width: window.innerWidth })
-  /* eslint-enable no-console */
 
   // Two lines, never three: `said` is what the owner typed, echoed once; the reply REPLACES the
   // caption rather than appending to it. No transcript array — this screen is a presence, not a log.
@@ -210,100 +204,105 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
     <Suspense fallback={null}><RailCount p={dataPromise} pick={pick} /></Suspense>
   )
 
-  if (isMobile === null) return <div className="v2-app" aria-hidden />
-
-  if (!isMobile) {
-    return (
-      <div className="v2-app">
-        <Cursor label={rudiCursor(state, minimised)} active={!typing && amy.mode === 'idle'} />
-        <Palette
-          commands={[
-            ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
-            ...GROUPS.flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
-          ]}
-          open={palette.open}
-          onClose={palette.close}
-        />
-
-        <Rail
-          businessName={shell.businessName}
-          primary={[
-            // Gated exactly as /dashboard gates its tabs: no `pipeline`, no Leads row; no
-            // `scheduling`, no Appointments row.
-            ...(modules.includes('pipeline') ? [{ label: 'Leads', href: '/v2/leads', count: count((d) => d.railCounts.leads) }] : []),
-            ...(modules.includes('inbox') ? [{ label: 'Inbox', href: '/v2/inbox', count: count((d) => d.railCounts.inbox) }] : []),
-            ...(modules.includes('scheduling') ? [{ label: 'Appointments', href: '/v2/appointments', count: count((d) => d.railCounts.appointments) }] : []),
-            // Contacts has no v2 page yet, so it stays an inert row rather than a link to nothing.
-            { label: 'Contacts' },
-          ]}
-          groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {
-            ...g,
-            items: g.items.map((it) => (it.label !== 'AI Employees' ? it : {
-              ...it,
-              count: <Suspense fallback={null}><AiBadge p={dataPromise} /></Suspense>,
-            })),
-          }))}
-          activeIndex={jump}
-        />
-
-        <main className="v2-stage" data-min={minimised || undefined}>
-          <div className="v2-home">
-            {hero}
-            {amyLayer}
-            <div className="v2-overlay">
-              {amy.mode === 'idle'
-                ? (shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>)
-                : <p className="v2-tag" data-live><i />Microphone live · press to end</p>}
-              {said && <p className="v2-you">You · {said}</p>}
-              {caption}
-              {hairline}
-              <Composer
-                state={state}
-                onTalk={toggleTalk}
-                onSubmit={onSubmit}
-                onTypingChange={setTyping}
-                buttonRef={setTalkEl}
-              />
-            </div>
-          </div>
-
-          <div className="v2-dash" data-scroll>
-            <Suspense fallback={<><h3>Today</h3><CardSkeleton /></>}>
-              <TodayList p={dataPromise} />
-            </Suspense>
-          </div>
-        </main>
-
-        <aside className="v2-side" data-scroll>
-          <Suspense fallback={<ColumnSkeleton />}>
-            <RightColumn p={dataPromise} />
-          </Suspense>
-        </aside>
-      </div>
-    )
-  }
+  // ── ONE CANVAS, ONE POSITION ────────────────────────────────────────────────────────────────────
+  //
+  // The hero used to sit inside whichever branch was rendering — under .v2-home on desktop, under
+  // .v2-frame on mobile — which are different positions in different parents. React reconciles by
+  // position, so ANY change of branch destroyed the canvas and built a new one: the WebGL context, the
+  // mesh, the still, the video, all discarded and refetched. That is what "effect running" a second
+  // time was.
+  //
+  // It is now child 0 of a root that never changes, in both modes and while the breakpoint is still
+  // unknown. The layouts differ AROUND it. That fixes the remount whatever triggers it, and it fixes
+  // the real case this was always going to break on: crossing 720px, where the branch legitimately
+  // does change and the canvas would have been thrown away every time.
+  //
+  // use-breakpoint.ts's constraint is intact — exactly ONE canvas exists and the ref is unambiguous.
+  // This is not "one tree plus CSS"; it is one hero and two sets of chrome.
+  const mode = isMobile === null ? 'pending' : isMobile ? 'mobile' : 'desktop'
 
   return (
-    <div className="v2-mobile">
-      <div className="v2-frame">{hero}{amyLayer}</div>
-      <div className="v2-top">
-        <b>{shell.businessName}</b>
-        <i><s /><Suspense fallback={<>&mdash;</>}><JobCount p={dataPromise} /></Suspense></i>
-      </div>
-      <div className="v2-ov">
+    <div className="v2-root" data-mode={mode} data-min={minimised || undefined}>
+      <div className="v2-hero">
+        {hero}
+        {amyLayer}
+      <div className="v2-overlay">
         {amy.mode === 'idle'
-                ? (shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>)
-                : <p className="v2-tag" data-live><i />Microphone live · press to end</p>}
+          ? (shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>)
+          : <p className="v2-tag" data-live><i />Microphone live · press to end</p>}
         {said && <p className="v2-you">You · {said}</p>}
         {caption}
-      </div>
-      <Suspense fallback={null}>
-        <SheetBody p={dataPromise} />
-      </Suspense>
-      <div className="v2-sticky">
         {hairline}
-        <Composer state={state} onTalk={toggleTalk} full onSubmit={onSubmit} onTypingChange={setTyping} />
+        <Composer
+          state={state}
+          onTalk={toggleTalk}
+          onSubmit={onSubmit}
+          onTypingChange={setTyping}
+          buttonRef={setTalkEl}
+        />
       </div>
+      </div>
+
+      {mode === 'desktop' && (
+        <div className="v2-app">
+          <Cursor label={rudiCursor(state, minimised)} active={!typing && amy.mode === 'idle'} />
+          <Palette
+            commands={[
+              ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
+              ...GROUPS.flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
+            ]}
+            open={palette.open}
+            onClose={palette.close}
+          />
+
+          <Rail
+            businessName={shell.businessName}
+            primary={[
+              // Gated exactly as /dashboard gates its tabs: no `pipeline`, no Leads row; no
+              // `scheduling`, no Appointments row.
+              ...(modules.includes('pipeline') ? [{ label: 'Leads', href: '/v2/leads', count: count((d) => d.railCounts.leads) }] : []),
+              ...(modules.includes('inbox') ? [{ label: 'Inbox', href: '/v2/inbox', count: count((d) => d.railCounts.inbox) }] : []),
+              ...(modules.includes('scheduling') ? [{ label: 'Appointments', href: '/v2/appointments', count: count((d) => d.railCounts.appointments) }] : []),
+              // Contacts has no v2 page yet, so it stays an inert row rather than a link to nothing.
+              { label: 'Contacts' },
+            ]}
+            groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {
+              ...g,
+              items: g.items.map((it) => (it.label !== 'AI Employees' ? it : {
+                ...it,
+                count: <Suspense fallback={null}><AiBadge p={dataPromise} /></Suspense>,
+              })),
+            }))}
+            activeIndex={jump}
+          />
+
+          <main className="v2-stage" data-min={minimised || undefined}>
+            <div className="v2-dash" data-scroll>
+              <Suspense fallback={<><h3>Today</h3><CardSkeleton /></>}>
+                <TodayList p={dataPromise} />
+              </Suspense>
+            </div>
+          </main>
+
+          <aside className="v2-side" data-scroll>
+            <Suspense fallback={<ColumnSkeleton />}>
+              <RightColumn p={dataPromise} />
+            </Suspense>
+          </aside>
+        </div>
+      )}
+
+      {mode === 'mobile' && (
+      <div className="v2-mobile">
+        <div className="v2-top">
+          <b>{shell.businessName}</b>
+          <i><s /><Suspense fallback={<>&mdash;</>}><JobCount p={dataPromise} /></Suspense></i>
+        </div>
+        <Suspense fallback={null}>
+          <SheetBody p={dataPromise} />
+        </Suspense>
+      </div>
+      )}
     </div>
   )
 }

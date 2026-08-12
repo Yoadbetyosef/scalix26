@@ -14,13 +14,28 @@ const src = readFileSync(join(process.cwd(), 'app/(v2)/v2/home-client.tsx'), 'ut
   .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
 
 describe('both /v2 trees mount the voice panel', () => {
-  it('renders amyLayer exactly twice — once per tree', () => {
-    expect(src.match(/\{amyLayer\}/g) ?? []).toHaveLength(2)
+  it('renders the hero and the voice panel exactly ONCE', () => {
+    // This assertion inverted with the hoist, and the old one was hiding the bug it was written for.
+    // Two mounts meant one per branch, which meant the canvas lived at a different position in each —
+    // so any branch change destroyed it and rebuilt the WebGL context, the mesh, the still and the
+    // video. One mount in one stable parent is what makes that impossible.
+    expect(src.match(/\{amyLayer\}/g) ?? []).toHaveLength(1)
+    expect(src.match(/\{hero\}/g) ?? []).toHaveLength(1)
   })
 
-  it('mounts one inside the desktop stage and one inside the mobile frame', () => {
-    expect(src).toMatch(/<main className="v2-stage"[\s\S]{0,220}\{amyLayer\}/)
-    expect(src).toMatch(/<div className="v2-frame">[\s\S]{0,80}\{amyLayer\}/)
+  it('mounts it as child 0 of a root that never changes', () => {
+    // The root renders in every mode, including before the breakpoint resolves, and the hero is its
+    // first child. Neither the mode nor the branch can move it.
+    expect(src).toMatch(/<div className="v2-root" data-mode=\{mode\}[\s\S]{0,120}<div className="v2-hero">\s*\n\s*\{hero\}\s*\n\s*\{amyLayer\}/)
+    // And the chrome is a sibling of the hero, never its parent.
+    expect(src).toMatch(/\{mode === 'desktop' && \(/)
+    expect(src).toMatch(/\{mode === 'mobile' && \(/)
+  })
+
+  it('still has exactly one canvas, so the ref stays unambiguous', () => {
+    // use-breakpoint.ts rejected "one tree plus CSS" because two canvases both called
+    // useImperativeHandle on one ref and the hidden one won. The hoist keeps one hero, not two.
+    expect(src.match(/<RudiCanvas/g) ?? []).toHaveLength(1)
   })
 
   it('both trees drive the same session — one goLive, from one handler', () => {
