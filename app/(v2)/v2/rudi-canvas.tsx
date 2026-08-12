@@ -675,6 +675,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       clearTimeout(report)
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
+      boot('EFFECT TORN DOWN — this instance is going away')
       ro.disconnect()
       window.removeEventListener('focus', onFocusLog)
       window.removeEventListener('blur', onBlurLog)

@@ -40,6 +40,12 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const [minimised, setMinimised] = useState(false)
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMobile = useIsMobile()
+  // Which TREE is rendering. The canvas effect has an empty dependency array, so it re-running means a
+  // genuine unmount and remount — and the three return branches below are three different trees, so a
+  // change here swaps one for another and takes the canvas with it.
+  /* eslint-disable no-console */
+  if (typeof window !== 'undefined') console.info('%c[v2 tree]', 'color:#22d3ee', 'render', { isMobile, width: window.innerWidth })
+  /* eslint-enable no-console */
 
   // Two lines, never three: `said` is what the owner typed, echoed once; the reply REPLACES the
   // caption rather than appending to it. No transcript array — this screen is a presence, not a log.
