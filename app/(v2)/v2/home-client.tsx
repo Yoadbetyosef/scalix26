@@ -141,7 +141,7 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
     else if (m.type === 'speak') { setReply(m.text || null); r.speak(m.text, m.ms) }
     else if (m.type === 'stopSpeaking') r.stopSpeaking()
     else if (m.type === 'arm') r.arm()
-    else if (m.type === 'said') { setSaid(m.text); setReply(null) }
+    else if (m.type === 'said') setSaid(m.text)
     else if (m.type === 'reply') setReply(m.text)
   }, [])
 

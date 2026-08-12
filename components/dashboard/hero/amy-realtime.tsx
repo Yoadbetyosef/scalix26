@@ -37,7 +37,40 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // Every moment, timestamped, with the two clocks that decide whether she is still audible — and the
   // line it came from. The question is whether listen() ever fires while playHead is still ahead of
   // currentTime; if it does, the caller in the stack is what is ending her turn, not endSpeaking.
+  // WHILE SHE IS AUDIBLE, THE SCREEN STAYS ON HER.
+  //
+  // One guard here rather than a check at each call site, so it also covers sites added later. Three
+  // moments take the portrait off her — arm, listen and stopSpeaking — and none of them may be emitted
+  // while scheduled audio is still ahead of the context clock.
+  //
+  // Two unguarded paths were doing exactly that, both triggered by USER SPEECH: UserStartedSpeaking
+  // ended her turn immediately (skipping the drain entirely, which is why fixing the drain changed
+  // nothing), and ConversationText role=user emitted arm() with no condition at all. This file already
+  // documents why that fires falsely — its LAYER 4 noise gate exists because Rudi's own TTS echo gets
+  // transcribed as user speech. The gate stops mic audio being FORWARDED; these two messages arrive
+  // FROM the agent, so anything that slips through reaches both.
+  //
+  // A genuine barge-in still cuts her off: stopPlayback() kills the scheduled sources and zeroes the
+  // play head, so this guard opens on the same tick and the turn ends. The cost is that a real
+  // interruption ends a beat after the sound rather than with it — the right way round, because the
+  // alternative is her own echo taking the screen off her mid-sentence.
+  const TAKES_SCREEN_OFF_HER: AmyMoment['type'][] = ['arm', 'listen', 'stopSpeaking']
+  const stillAudible = () => {
+    const c = ctxRef.current
+    return !!c && playHeadRef.current > c.currentTime + 0.05
+  }
+
   const emit = (m: AmyMoment) => {
+    if (TAKES_SCREEN_OFF_HER.includes(m.type) && stillAudible()) {
+      if (DEBUG) {
+        /* eslint-disable no-console */
+        console.info(`%c[amy emit] ${m.type} DROPPED — she is still audible`, 'color:#ffb020', {
+          aheadBy: +(playHeadRef.current - (ctxRef.current?.currentTime ?? 0)).toFixed(3),
+        })
+        /* eslint-enable no-console */
+      }
+      return
+    }
     if (DEBUG && m.type !== 'level') {
       const c = ctxRef.current
       const ahead = c ? +(playHeadRef.current - c.currentTime).toFixed(3) : null
@@ -75,7 +108,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // falls behind the context clock the sound has genuinely stopped.
   const drainRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const clearDrain = () => { if (drainRef.current) { clearInterval(drainRef.current); drainRef.current = null } }
-  const endSpeaking = (immediate = false) => {
+  const endSpeaking = () => {
     clearDrain()
     if (!speakEmittedRef.current) return
     const finish = () => {
@@ -84,8 +117,6 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
       emit({ type: 'stopSpeaking' })
       emit({ type: 'listen' })
     }
-    // A barge-in has already stopped the sources — nothing is draining, so do not wait for it.
-    if (immediate) { finish(); return }
     const ctx = ctxRef.current
     if (!ctx) { finish(); return }
     if (playHeadRef.current <= ctx.currentTime) { finish(); return }
@@ -321,9 +352,10 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
               // Her turn is over, whether or not it finished. Without this the guard stays latched and
               // every later turn is silent to the portrait.
-              // Barge-in: stopPlayback() kills the scheduled sources on the next line, so there is
-              // nothing left to drain and the portrait must stop with the sound, not after it.
-              stopPlayback(); endSpeaking(true); setPhase('thinking'); break
+              // Barge-in: cut the sound first. stopPlayback() zeroes the play head, so the guard in
+              // emit() opens and endSpeaking's drain completes on its own tick. No `immediate` path —
+              // that one skipped the drain and was itself the bug.
+              stopPlayback(); endSpeaking(); setPhase('thinking'); break
             case 'ConversationText':
               if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking'); emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' }) }
               // Stripped for display too. The prompt tells the agent not to format, but its words are
