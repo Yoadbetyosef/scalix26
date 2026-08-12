@@ -182,11 +182,11 @@ export function JobCount({ p }: { p: P }) {
 // They carry their own (v1) styling. That is deliberate: restyling them would mean forking the voice
 // UI, and a fork is the thing that drifts. The look is a separate, later decision.
 
-export function AmyLayer({ p, session }: { p: Promise<HomeData>; session: AmySession }) {
+export function AmyLayer({ p, session, ask }: { p: Promise<HomeData>; session: AmySession; ask?: string | null }) {
   const briefing = use(p).briefing
   if (session.mode === 'live') {
     return <AmyRealtime briefing={briefing} audioCtx={session.audioCtx} onClose={session.close} onType={session.goText} />
   }
-  if (session.mode === 'text') return <AskAmyText briefing={briefing} onTalk={session.goLive} />
+  if (session.mode === 'text') return <AskAmyText briefing={briefing} onTalk={session.goLive} ask={ask} />
   return null
 }

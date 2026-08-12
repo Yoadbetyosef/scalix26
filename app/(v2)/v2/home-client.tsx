@@ -41,7 +41,9 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   // Two lines, never three: `said` is what the owner typed, echoed once; the reply REPLACES the
   // caption rather than appending to it. No transcript array — this screen is a presence, not a log.
-  const [said, setSaid] = useState<string | null>(null)
+  const [said] = useState<string | null>(null)
+  // Handed to AskAmyText, which asks it and shows the answer. The caption no longer repeats it.
+  const [asked, setAsked] = useState<string | null>(null)
   const [jump, setJump] = useState<number | null>(null)
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
@@ -118,13 +120,21 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   // Typing hands off to AskAmyText — the same component "Type instead" opens on /dashboard, with the
   // same briefing. The echo stays: it is what the composer showed before the answer had anywhere to
   // come from, and it still reads as the owner's own line.
-  const onSubmit = useCallback((text: string) => { setSaid(text); amy.goText() }, [amy])
+  const onSubmit = useCallback((text: string) => { setAsked(text); amy.goText() }, [amy])
 
   // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
   // answered. Only the resting line needs the numbers, so only that case can suspend.
   const override: RudiSegment[] | null =
     state === 'listening' ? []
       : state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null
+
+  // Over the hero, never beside it: .v2-amy is absolutely positioned inside the stage, so it cannot
+  // participate in the shell grid.
+  const amyLayer = (
+    <div className="v2-amy">
+      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} ask={asked} /></Suspense>
+    </div>
+  )
 
   const hero = (
     <>
@@ -161,8 +171,6 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   if (!isMobile) {
     return (
       <div className="v2-app">
-      {/* /dashboard's live call and typed fallback, mounted over the v2 shell. */}
-      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} /></Suspense>
         <Cursor label={rudiCursor(state, minimised)} active={!typing} />
         <Palette
           commands={[
@@ -227,9 +235,7 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   return (
     <div className="v2-mobile">
-      {/* /dashboard's live call and typed fallback, mounted over the v2 shell. */}
-      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} /></Suspense>
-      <div className="v2-frame">{hero}</div>
+      <div className="v2-frame">{hero}{amyLayer}</div>
       <div className="v2-top">
         <b>{shell.businessName}</b>
         <i><s /><Suspense fallback={<>&mdash;</>}><JobCount p={dataPromise} /></Suspense></i>

@@ -631,3 +631,14 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── The voice panel's mount ──────────────────────────────────────────────────────────────────────
+   AmyRealtime and AskAmyText render in normal flow (mx-auto, max-w-md). Mounted as a direct child of
+   .v2-app they became GRID ITEMS and pushed the rail and the stage apart — the shell reflowed around
+   a panel that was only ever meant to sit on top of the hero. This takes them out of flow entirely. */
+.v2 .v2-amy {
+  position: absolute; inset: 0; z-index: 8;
+  display: grid; place-items: center; padding: 24px;
+  pointer-events: none;
+}
+.v2 .v2-amy > * { pointer-events: auto; }

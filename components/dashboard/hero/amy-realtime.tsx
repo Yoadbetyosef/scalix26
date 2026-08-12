@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { X } from 'lucide-react'
 import { type AmyBriefing, TTS_VOICE, buildRealtimePrompt } from './ask-amy-shared'
 import { stripMarkdown } from '@/lib/utils'
@@ -343,10 +342,9 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
 
           {/* Amy's living presence — the voice ring reflects her state */}
           <div className="flex flex-col items-center">
-            <div className="relative inline-flex">
+            <div className="relative inline-flex h-3 w-3">
               {phase === 'speaking' && <span aria-hidden="true" className="pointer-events-none absolute -inset-2 rounded-full sx-ring-live" />}
               {(phase === 'live' || phase === 'thinking') && <span aria-hidden="true" className="pointer-events-none absolute -inset-2 rounded-full ring-2 ring-accent/40 animate-ping" />}
-              <EmployeeAvatar name={name} voice={briefing.employeeVoice} status={phase === 'error' ? 'paused' : 'on_duty'} size="lg" showStatus={false} className={cn(alive && 'sx-breathe')} />
             </div>
 
             {phase === 'error' ? (

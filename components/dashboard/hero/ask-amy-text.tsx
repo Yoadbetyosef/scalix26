@@ -1,14 +1,17 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { ArrowUp, AudioLines } from 'lucide-react'
 import { type AmyBriefing, TTS_VOICE } from './ask-amy-shared'
 
 // Typed fallback for Ask Amy. Realtime voice is the primary experience; this is the
 // quiet "Type instead" path. Streams the reply and speaks it in her real voice.
-export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk: () => void }) {
+// `ask` is a question typed somewhere else. /v2 has its own composer, so the owner had already typed
+// and sent before this panel existed; without this it opened blank and they had to type it again,
+// while the v2 caption still showed the original. Handing it over makes ONE of them the owner of the
+// question — this one — and the caption stops repeating it. Undefined on /dashboard, which types here.
+export function AskAmyText({ briefing, onTalk, ask }: { briefing: AmyBriefing; onTalk: () => void; ask?: string | null }) {
   const name = briefing.employeeName || 'Amy'
   const [input, setInput] = useState('')
   const [question, setQuestion] = useState<string | null>(null)
@@ -72,6 +75,15 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
     try { await fetch(`/api/assistant/actions/${pending.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'cancel' }) }) } catch { /* noop */ }
     setPending(null)
   }
+  // Send a handed-over question once, on mount. Ref-guarded so a re-render never re-asks it.
+  const askedRef = useRef(false)
+  useEffect(() => {
+    if (!ask || askedRef.current) return
+    askedRef.current = true
+    void send(ask)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ask])
+
   const humanType = (t: string) => t.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
   return (
@@ -81,7 +93,6 @@ export function AskAmyText({ briefing, onTalk }: { briefing: AmyBriefing; onTalk
           <div aria-hidden="true" className="pointer-events-none absolute -inset-3 rounded-[32px] bg-accent/10 blur-2xl opacity-70" />
           <div key={question} className="relative rounded-3xl bg-white ring-1 ring-hairline shadow-e3 px-6 py-5 sx-animate-in">
             <div className="mb-2 flex items-center gap-2.5">
-              <EmployeeAvatar name={name} voice={briefing.employeeVoice} status="on_duty" size="sm" />
               <span className="text-sm font-medium text-ink">{name}</span>
             </div>
             <p className="text-[15px] font-light leading-relaxed text-ink">{answer || '…'}</p>
