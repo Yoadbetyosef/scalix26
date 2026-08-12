@@ -176,12 +176,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
 
     let raf = 0
     let disposed = false
-    /* eslint-disable no-console */
-    const K = (m: string, d?: unknown) => console.info('%c[v2 kick]', 'color:#ffb020', m, d ?? '')
-    /* eslint-enable no-console */
-    let assigned = 0            // how many times canvas.width has been written
-    let traceDraws = 0          // log the next few draw() branches after a kick
-    const instance = Math.round(performance.now())  // tells one effect's loop from another's
     // Reported to the console so the time to first canvas draw is a number rather than an impression.
     let firstDraw = 0
     let vidRequested = false
@@ -214,7 +208,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       // painted. Measure first, and only resize when the size has genuinely changed.
       if (w === CW && h === CH) return
       CW = w; CH = h
-      assigned++
       canvas!.width = CW; canvas!.height = CH
       sweep.width = CW; sweep.height = CH
       S = Math.max(CW / IW, CH / IH)
@@ -286,10 +279,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     }
 
     function draw(now: number) {
-      if (traceDraws > 0) {
-        traceDraws--
-        K(`draw() branch inst=${instance}`, { disposed, img: img ? 'set' : 'NULL', complete: img?.complete, CW, CH, running, scanA: Number(scanA.toFixed(3)) })
-      }
       if (disposed) return
       // A missing still must not KILL the loop. Returning without re-requesting a frame ended it
       // permanently, so anything that cleared the canvas before the image was ready left it black
@@ -522,7 +511,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     /** One static frame — reduced motion, hidden tab, hero off-screen. */
     function drawStill() {
       if (CW === 0) return
-      K(`drawStill inst=${instance}`, { img: img ? 'set' : 'NULL — GROUND ONLY, i.e. black', CW, CH, running })
       paintGround()
       if (!img) return
       ctx!.drawImage(img, DX, DY, DW, DH)
@@ -544,9 +532,8 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     let playedThisTurn = false
 
     function start() {
-      if (running || reduced || disposed) { K(`start() SKIPPED inst=${instance}`, { running, reduced, disposed }); return }
+      if (running || reduced || disposed) return
       running = true
-      K(`start() -> new rAF loop inst=${instance}`)
       // The loop only ever starts after the still has been drawn — see the ready.then below.
       raf = requestAnimationFrame(draw)
     }
@@ -558,7 +545,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       if (v && !v.paused) v.pause()
     }
     function sync() {
-      K(`sync inst=${instance}`, { visible, onScreen, running })
       if (visible && onScreen) start()
       else { stop(); drawStill() }
     }
@@ -625,19 +611,14 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // lib/invoices/OUTSTANDING.md. It is not the fix; it is the thing that makes the screen correct
     // while the cause is still unknown.
     const KICK_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'scroll'] as const
-    const kick = (ev?: Event) => {
+    const kick = () => {
       KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick))
-      if (disposed) { K('kick after dispose — ignored'); return }
-      const was = assigned
-      K(`KICK by ${ev?.type ?? 'unknown'} inst=${instance}`, { CW, CH, assigned, img: img ? 'set' : 'NULL', complete: img?.complete, running })
-      traceDraws = 3
+      if (disposed) return
       fit()
-      K('after fit()', { CW, CH, assignedNow: assigned, resized: assigned !== was, earlyReturnTaken: assigned === was })
       ensureNet()
       sync()
       // If the loop is not running after this — reduced motion, or off-screen — the still is what
       // stays on screen, so repaint it in case fit() resized and cleared.
-      K('kick done', { running, img: img ? 'set' : 'NULL' })
       if (!running) drawStill()
     }
     KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, once: false }))
@@ -651,7 +632,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // still paints the moment its bitmap is DECODED — decode() rather than onload, because onload
     // fires when the bytes have arrived and the first drawImage can then still block on decoding a
     // 680x907 image. Nothing in this path waits on the video, the mesh, or the network build.
-    K(`effect mounted inst=${instance}`, { reduced })
     fit()
     paintGround()
 
@@ -699,7 +679,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       clearTimeout(report)
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
-      K(`effect DISPOSED inst=${instance}`)
       ro.disconnect()
       KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick))
       window.removeEventListener('resize', onResize)

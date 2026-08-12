@@ -31,7 +31,7 @@ describe('resizing the canvas cannot blank it', () => {
   })
 
   it('the first-interaction handler repaints when the loop is not running', () => {
-    const kick = src.slice(src.indexOf('const kick = ('), src.indexOf('KICK_EVENTS.forEach((e) => window.addEventListener'))
+    const kick = src.slice(src.indexOf('const kick = ()'), src.indexOf('KICK_EVENTS.forEach((e) => window.addEventListener'))
     expect(kick).toMatch(/if \(!running\) drawStill\(\)/)
   })
 })

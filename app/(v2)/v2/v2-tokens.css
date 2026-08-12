@@ -108,9 +108,16 @@
 }
 
 /* ── Shell ────────────────────────────────────────────────────────────────────────────────────── */
+/* THE CHROME MUST NOT SWALLOW THE HERO'S CLICKS.
+   Since the hoist, .v2-app is a SIBLING painted above .v2-hero, so it covers her. Marking the centre
+   cell pointer-events:none did nothing on its own: a transparent child just makes the hit fall
+   through to its PARENT, and the parent is this element. Every click over the portrait — the Talk
+   button, and every mousemove the custom cursor reads e.target from — landed here instead. The
+   container is transparent to the pointer and the three regions that are actually interactive opt
+   back in below. */
 .v2-app {
   width: 100%; height: 100%;
-  position: relative; z-index: 2;
+  position: relative; z-index: 2; pointer-events: none;
   display: grid;
   grid-template-columns: var(--v2-rail-w) 1fr var(--v2-side-w);
   /* Explicit, not implicit. An `auto` row sizes to the tallest column's CONTENT, so a short rail and
@@ -197,7 +204,8 @@
 /* The loading stage. Painted, so the first frame of the page is never a bare black region. */
 .v2-stage-loading { background: var(--v2-stage); }
 .v2-stage { position: relative; overflow: hidden; background: transparent; min-width: 0; min-height: 0; pointer-events: none; }
-.v2-dash { pointer-events: auto; }
+/* The regions that opt back in. The stage stays transparent — she is behind it. */
+.v2 .v2-rail, .v2 .v2-side, .v2 .v2-dash { pointer-events: auto; }
 .v2-home { position: absolute; inset: 0; transition: opacity 0.3s, transform 0.3s; }
 /* Full-bleed: the canvas IS the centre column, top to bottom and edge to edge. The custom cursor
    replaces the native one over the media only — the rail and the right column keep theirs. */
@@ -795,3 +803,7 @@
 @media (max-width: 719.98px) {
   .v2 .v2-root[data-mode="desktop"] .v2-hero { left: 0; right: 0; }
 }
+
+/* Same rule on mobile: the chrome is a sibling above the hero, so it must not capture her clicks. */
+.v2 .v2-mobile { pointer-events: none; }
+.v2 .v2-mobile > * { pointer-events: auto; }
