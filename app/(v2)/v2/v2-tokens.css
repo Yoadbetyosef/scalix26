@@ -205,7 +205,11 @@
 .v2-stage-loading { background: var(--v2-stage); }
 .v2-stage { position: relative; overflow: hidden; background: transparent; min-width: 0; min-height: 0; pointer-events: none; }
 /* The regions that opt back in. The stage stays transparent — she is behind it. */
-.v2 .v2-rail, .v2 .v2-side, .v2 .v2-dash { pointer-events: auto; }
+/* NOT .v2-dash. It is a full-bleed panel at z-index 4 over the hero and it is only interactive when
+   the hero is COLLAPSED — its own data-min rule below owns that, and listing it here re-enabled it
+   while the hero was expanded, so it sat on top of the Talk button and every mousemove. One element,
+   both symptoms: the click died and e.target was never the canvas, so the cursor ring vanished too. */
+.v2 .v2-rail, .v2 .v2-side { pointer-events: auto; }
 .v2-home { position: absolute; inset: 0; transition: opacity 0.3s, transform 0.3s; }
 /* Full-bleed: the canvas IS the centre column, top to bottom and edge to edge. The custom cursor
    replaces the native one over the media only — the rail and the right column keep theirs. */
@@ -253,9 +257,17 @@
 .v2-root[data-min] .v2-overlay { opacity: 0; pointer-events: none; }
 .v2-dash {
   position: absolute; inset: 0; background: var(--v2-paper); padding: 38px 44px 32px; z-index: 4;
-  opacity: 0; pointer-events: none; transition: opacity 0.4s; overflow-y: auto;
+  opacity: 0; pointer-events: none; overflow-y: auto;
+  /* visibility, not just opacity: an opacity-0 panel is still hit-tested and still focusable, so it
+     could swallow a click or a tab stop while being invisible. Transitioned with a delay so it fades
+     out fully before it leaves the stack. */
+  visibility: hidden;
+  transition: opacity 0.4s, visibility 0s linear 0.4s;
 }
-.v2-root[data-min] .v2-dash { opacity: 1; pointer-events: auto; }
+.v2-root[data-min] .v2-dash {
+  opacity: 1; pointer-events: auto; visibility: visible;
+  transition: opacity 0.4s, visibility 0s;
+}
 .v2-dash h3 {
   font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.2em;
   text-transform: uppercase; color: var(--v2-ink-42); margin-bottom: 18px;
@@ -807,3 +819,17 @@
 /* Same rule on mobile: the chrome is a sibling above the hero, so it must not capture her clicks. */
 .v2 .v2-mobile { pointer-events: none; }
 .v2 .v2-mobile > * { pointer-events: auto; }
+
+/* ── THE OVERLAY ON A PHONE ──────────────────────────────────────────────────────────────────────
+   Since the hoist there is ONE overlay and one composer for both layouts. Desktop's 46px side padding
+   left ~258px of usable width at 350px, so the phone gets its own measurements here rather than a
+   second component being reintroduced — the two composers were what made the ref ambiguous in the
+   first place. Pinned above the safe area, as .v2-sticky used to be. */
+@media (max-width: 719.98px) {
+  .v2 .v2-overlay {
+    padding: 0 16px calc(18px + env(safe-area-inset-bottom));
+    z-index: 5;
+  }
+  .v2 .v2-overlay .v2-composer { max-width: none; margin-top: 18px; }
+  .v2 .v2-overlay .v2-ctl { right: 0; }
+}

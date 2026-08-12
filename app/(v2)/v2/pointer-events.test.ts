@@ -27,9 +27,28 @@ describe('the chrome cannot swallow the hero', () => {
   })
 
   it('the regions that ARE interactive opt back in', () => {
-    // Without this the rail, the right column and the collapsed dashboard would all be inert.
-    expect(css).toMatch(/\.v2 \.v2-rail, \.v2 \.v2-side, \.v2 \.v2-dash \{ pointer-events: auto; \}/)
+    // Without this the rail and the right column would be inert.
+    expect(css).toMatch(/\.v2 \.v2-rail, \.v2 \.v2-side \{ pointer-events: auto; \}/)
     expect(css).toMatch(/\.v2 \.v2-mobile > \* \{ pointer-events: auto; \}/)
+  })
+
+  it('the collapsed dashboard is NOT in that list', () => {
+    // It is a full-bleed panel at z-index 4 over the hero. Opting it in unconditionally put it on top
+    // of the Talk button and of every mousemove — the click died and the cursor ring vanished with it.
+    expect(css).not.toMatch(/\.v2-rail, \.v2 \.v2-side, \.v2 \.v2-dash/)
+  })
+
+  it('and it leaves the stack entirely when the hero is expanded', () => {
+    // opacity alone is not enough: an opacity-0 panel is still hit-tested and still focusable.
+    expect(rule('.v2-dash')).toMatch(/visibility:\s*hidden/)
+    expect(rule('.v2-dash')).toMatch(/pointer-events:\s*none/)
+    expect(css).toMatch(/\.v2-root\[data-min\] \.v2-dash \{[\s\S]*?visibility: visible/)
+  })
+
+  it('the phone gets the overlay measured for a phone', () => {
+    // One overlay and one composer for both layouts since the hoist — two composers were what made
+    // the button ref ambiguous, so this is a rule and not a second component.
+    expect(css).toMatch(/@media \(max-width: 719\.98px\) \{[\s\S]*?\.v2 \.v2-overlay \{/)
   })
 
   it('the stage stays transparent — she is behind it', () => {
