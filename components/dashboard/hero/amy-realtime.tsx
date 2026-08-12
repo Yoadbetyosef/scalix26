@@ -191,13 +191,15 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // the microphone live and nothing on screen to say so. Four conditions, all cheap and none of them
   // a model call.
 
-  // THE CLOCK MEASURES ONE THING: HER QUESTION GOING UNANSWERED.
+  // THE CLOCK RUNS WHENEVER NOBODY IS SPEAKING.
   //
-  // It was armed at connect and re-armed on any speech, which made it a session-age timer wearing the
-  // word idle — ten seconds in, mid-conversation, it hung up. It is now armed at exactly one moment,
-  // when her turn ends and it becomes the owner's turn, and CANCELLED by the owner speaking rather
-  // than restarted. A long pause while she is still talking, or while the agent is thinking, cannot
-  // reach it, because neither of those is her waiting for an answer.
+  // It does not need to know whose turn it is. Speech from either side stops it; the end of speech
+  // from either side starts it. One rule covers every case: her question going unanswered, a greeting
+  // that never came, and a connection where nobody said anything at all.
+  //
+  // The version before this restarted the clock ON speech rather than stopping it, which made it a
+  // session-age timer — it expired mid-conversation. The one before that armed only when her turn
+  // ended, which left a silent session open forever.
   const IDLE_END_MS = 10_000
   /** A backgrounded tab holding a mic. Shorter than idle, because nobody is watching. */
   const HIDDEN_END_MS = 30_000
@@ -206,9 +208,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     clearIdle()
     idleRef.current = setTimeout(() => endSession(`no speech for ${IDLE_END_MS / 1000}s`), IDLE_END_MS)
   }
-  /** The owner answered. Her question is no longer outstanding, so the clock stops — it does not
-   *  restart here; it restarts when she next finishes speaking. */
-  const answered = () => clearIdle()
+  /** Someone is talking. Nothing is idle, so the clock stops until they finish. */
+  const speechStarted = () => clearIdle()
 
   // Closing intent, matched on the owner's own words. Deliberately a string test and not a model call:
   // this decides whether to hang up, and a wrong end is far cheaper to recover from than a wrong
@@ -231,6 +232,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   const beginSpeaking = () => {
     if (speakEmittedRef.current) return
     speakEmittedRef.current = true
+    speechStarted()
     const t = replyRef.current
     // At the first packet almost nothing is scheduled yet and the transcript may not have arrived, so
     // the opening ceiling is deliberately generous. It is refined below within one tick.
@@ -473,12 +475,12 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
           try { msg = JSON.parse(ev.data) } catch { return }
           switch (msg.type) {
             case 'Welcome': case 'SettingsApplied':
-              setPhase('live'); emit({ type: 'listen' })
+              setPhase('live'); emit({ type: 'listen' }); armIdle()
               // LAYER 3 — honest transition: only now flip to "Listening" + buzz the user.
               if (!vibrated) { vibrated = true; try { navigator.vibrate?.(30) } catch { /* unsupported */ }; log('tap → agent-ready', Math.round(performance.now() - tapT0), 'ms') }
               break
             case 'UserStartedSpeaking':
-              answered()
+              speechStarted()
               tRef.current = { micFirstSent: tRef.current.micFirstSent ?? performance.now(), userStartedSpeaking: performance.now() }
               reportedRef.current = false
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
@@ -492,7 +494,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               if (msg.role === 'user') {
                 mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking')
                 emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' })
-                answered()
+                armIdle()
                 // She gets her last word out first: the flag is honoured once her audio has drained.
                 if (soundsFinal(msg.content || '')) closingRef.current = true
               }

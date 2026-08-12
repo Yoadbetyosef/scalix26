@@ -38,23 +38,24 @@ describe('the four ways a session ends itself', () => {
     expect(src).toMatch(/endSession\(`no speech for \$\{IDLE_END_MS \/ 1000\}s`\)/)
   })
 
-  it('the clock starts in exactly one place: her turn ending', () => {
-    // Armed at connect and re-armed on any speech, it was a session-age timer wearing the word idle
-    // and it hung up ten seconds into a live conversation.
-    expect(src.match(/armIdle\(\)/g) ?? []).toHaveLength(1) // exactly one call site, and this is it
+  it('the clock is stopped by speech from EITHER side', () => {
+    // Stopping on speech is the whole rule. The version before this RESTARTED on speech, which made
+    // it a session-age timer that expired mid-conversation.
+    expect(src).toMatch(/const speechStarted = \(\) => clearIdle\(\)/)
+    // Her audio starting, and the owner's.
+    expect(src.match(/speechStarted\(\)/g) ?? []).toHaveLength(2)
+    const begin = src.slice(src.indexOf('const beginSpeaking'), src.indexOf('clearTick()', src.indexOf('const beginSpeaking')))
+    expect(begin).toMatch(/speechStarted\(\)/)
+  })
+
+  it('the clock is started by the END of speech, and by connecting', () => {
+    // Three arm points: her turn ending, the owner's turn ending, and the connection itself — a
+    // session where nobody ever speaks must still close.
+    expect(src.match(/armIdle\(\)/g) ?? []).toHaveLength(3)
     const finish = src.slice(src.indexOf('const finish = ()'), src.indexOf('const ctx = ctxRef.current'))
     expect(finish).toMatch(/armIdle\(\)/)
-  })
-
-  it('the owner speaking cancels it rather than restarting it', () => {
-    expect(src).toMatch(/const answered = \(\) => clearIdle\(\)/)
-    // Both places the owner's speech is observed.
-    expect(src.match(/answered\(\)/g) ?? []).toHaveLength(2) // UserStartedSpeaking + ConversationText
-  })
-
-  it('connecting does not start it — nothing is waiting on an answer yet', () => {
     const welcome = src.slice(src.indexOf("case 'Welcome'"), src.indexOf("case 'UserStartedSpeaking'"))
-    expect(welcome).not.toMatch(/armIdle/)
+    expect(welcome).toMatch(/armIdle\(\)/)
   })
 
   it('2. intent — after her reply finishes, not before', () => {
