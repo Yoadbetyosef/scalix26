@@ -35,8 +35,27 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   const momentRef = useRef<((m: AmyMoment) => void) | undefined>(onMoment)
   momentRef.current = onMoment
   const emit = (m: AmyMoment) => momentRef.current?.(m)
-  // Her latest transcript, for the speak() ceiling — AgentStartedSpeaking arrives without the text.
+  // Her latest transcript, for the speak() ceiling — the audio start carries no text.
   const replyRef = useRef('')
+
+  // Whether speak() has been emitted for THIS turn. Both entry points guard on it, so whichever
+  // happens first wins and the other is a no-op.
+  //
+  // Deliberately not agentSpeakingRef: that ref also gates barge-in (it decides whether an incoming
+  // user frame is an interruption), and setting it from the audio path would change when a barge-in
+  // counts as real. This ref reports one thing — "the host has been told she started" — so it cannot
+  // move any behaviour but the portrait.
+  const speakEmittedRef = useRef(false)
+
+  // The one place the host is told she has begun. `ms` is a CEILING: ConversationText for the
+  // assistant reliably lands before her audio, so replyRef holds the sentence by now, and
+  // AgentAudioDone is what really ends it — a dropped end event cannot strand her mid-word.
+  const beginSpeaking = () => {
+    if (speakEmittedRef.current) return
+    speakEmittedRef.current = true
+    const t = replyRef.current
+    emit({ type: 'speak', text: t, ms: Math.min(30_000, Math.max(1_500, t.length * 55)) })
+  }
   const name = briefing.employeeName || 'Amy'
   const [phase, setPhase] = useState<Phase>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -253,6 +272,9 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               tRef.current = { micFirstSent: tRef.current.micFirstSent ?? performance.now(), userStartedSpeaking: performance.now() }
               reportedRef.current = false
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
+              // Her turn is over, whether or not it finished. Without this the guard stays latched and
+              // every later turn is silent to the portrait.
+              if (speakEmittedRef.current) { speakEmittedRef.current = false; emit({ type: 'stopSpeaking' }) }
               stopPlayback(); setPhase('thinking'); break
             case 'ConversationText':
               if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking'); emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' }) }
@@ -261,16 +283,13 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               // owner doesn't also read the asterisks on screen.
               else if (msg.role === 'assistant') { mk('agentFirstTranscript'); const t = stripMarkdown(msg.content || ''); setAmyText(t); replyRef.current = t; emit({ type: 'reply', text: t }) }
               break
-            case 'AgentStartedSpeaking': {
+            case 'AgentStartedSpeaking':
               agentSpeakingRef.current = true; resetGate(); setPhase('speaking')
-              // ms is a CEILING — the canvas's own contract says the caller owns the handover, and
-              // AgentAudioDone is what really ends it. Estimated from the text so a dropped Done event
-              // cannot strand the portrait mid-word.
-              const t = replyRef.current
-              emit({ type: 'speak', text: t, ms: Math.min(30_000, Math.max(1_500, t.length * 55)) })
+              beginSpeaking()
               break
-            }
-            case 'AgentAudioDone': agentSpeakingRef.current = false; setPhase('live'); emit({ type: 'stopSpeaking' }); emit({ type: 'listen' }); break
+            case 'AgentAudioDone':
+              agentSpeakingRef.current = false; speakEmittedRef.current = false
+              setPhase('live'); emit({ type: 'stopSpeaking' }); emit({ type: 'listen' }); break
             case 'FunctionCallRequest': {
               // The agent wants to perform a real action. We (authenticated browser) execute it
               // via the app API, show a status card, and return the TRUE result to the agent —
@@ -341,6 +360,10 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     // loud passage flatten at the top rather than distort the shape below it.
     const GAIN = 3.5
     emit({ type: 'level', value: Math.min(1, (peak / 32768) * GAIN) })
+    // Her voice IS these packets. AgentStartedSpeaking is not in this agent's stream — the log had
+    // stopSpeaking on every turn and never one speak — so binding to the event whose name matched the
+    // concept bound to nothing. This is the moment; it fires whatever the control events are called.
+    beginSpeaking()
     const buf = ctx.createBuffer(1, int16.length, 24000)
     const ch = buf.getChannelData(0)
     for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 32768
