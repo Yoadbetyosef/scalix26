@@ -167,10 +167,14 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
 
   // ── The render loop ─────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    /* eslint-disable no-console */
+    const boot = (m: string, d?: unknown) => console.info('%c[v2 scan]', 'color:#8b5cf6', m, d ?? '')
+    /* eslint-enable no-console */
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) { boot('EFFECT BAILED — no canvas ref'); return }
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) { boot('EFFECT BAILED — no 2d context'); return }
+    boot('effect running', { connected: canvas.isConnected, rect: canvas.getBoundingClientRect().toJSON() })
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -591,16 +595,29 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // Only a resize could recover it, which is why switching tabs and back appeared to fix the screen
     // — returning to a tab happens to fire one. That was a coincidence being relied on. The element
     // now reports its own size, so the mesh is built the moment there is something to build it across.
-    const ro = new ResizeObserver(() => {
+    let roCalls = 0
+    const ro = new ResizeObserver((entries) => {
+      roCalls++
+      const cr = entries[0]?.contentRect
       const had = CW
       fit()
       ensureNet()
-      if (CW && !had) flags('canvas got its size')
+      flags(`RESIZE OBSERVER fired #${roCalls} contentRect=${cr ? `${Math.round(cr.width)}x${Math.round(cr.height)}` : 'none'} cwBefore=${had}`)
       if (!running) drawStill()
     })
     ro.observe(canvas)
+    boot('resize observer attached')
+    // If the observer never fires, nothing above prints and this is the last line before the still.
+    setTimeout(() => { if (roCalls === 0) flags('RESIZE OBSERVER HAS NOT FIRED after 2s') }, 2000)
 
-    const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
+    const onFocusLog = () => flags('window focus')
+    const onBlurLog = () => flags('window blur')
+    const onVisLog = () => flags(`visibilitychange hidden=${document.hidden}`)
+    window.addEventListener('focus', onFocusLog)
+    window.addEventListener('blur', onBlurLog)
+    document.addEventListener('visibilitychange', onVisLog)
+
+    const onResize = () => { flags('window resize event'); fit(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
 
     // ── FIRST PAINT ──────────────────────────────────────────────────────────────────────────────
@@ -640,6 +657,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       .then((d: { points: [number, number][] }) => {
         if (disposed) return
         raw = d.points || []
+        flags(`mesh fetched: ${raw.length} points`)
         netKey = ''                     // force one build at the current size
         ensureNet()
       })
@@ -658,6 +676,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
       ro.disconnect()
+      window.removeEventListener('focus', onFocusLog)
+      window.removeEventListener('blur', onBlurLog)
+      document.removeEventListener('visibilitychange', onVisLog)
       window.removeEventListener('resize', onResize)
       window.removeEventListener('pointerdown', onGesture)
       io.disconnect()
