@@ -33,9 +33,28 @@ describe('every ending releases the socket, the mic and the audio graph', () => 
 })
 
 describe('the four ways a session ends itself', () => {
-  it('1. inactivity — armed with no speech', () => {
+  it('1. inactivity — but ONLY her question going unanswered', () => {
     expect(src).toMatch(/const IDLE_END_MS = 10_000/)
     expect(src).toMatch(/endSession\(`no speech for \$\{IDLE_END_MS \/ 1000\}s`\)/)
+  })
+
+  it('the clock starts in exactly one place: her turn ending', () => {
+    // Armed at connect and re-armed on any speech, it was a session-age timer wearing the word idle
+    // and it hung up ten seconds into a live conversation.
+    expect(src.match(/armIdle\(\)/g) ?? []).toHaveLength(1) // exactly one call site, and this is it
+    const finish = src.slice(src.indexOf('const finish = ()'), src.indexOf('const ctx = ctxRef.current'))
+    expect(finish).toMatch(/armIdle\(\)/)
+  })
+
+  it('the owner speaking cancels it rather than restarting it', () => {
+    expect(src).toMatch(/const answered = \(\) => clearIdle\(\)/)
+    // Both places the owner's speech is observed.
+    expect(src.match(/answered\(\)/g) ?? []).toHaveLength(2) // UserStartedSpeaking + ConversationText
+  })
+
+  it('connecting does not start it — nothing is waiting on an answer yet', () => {
+    const welcome = src.slice(src.indexOf("case 'Welcome'"), src.indexOf("case 'UserStartedSpeaking'"))
+    expect(welcome).not.toMatch(/armIdle/)
   })
 
   it('2. intent — after her reply finishes, not before', () => {

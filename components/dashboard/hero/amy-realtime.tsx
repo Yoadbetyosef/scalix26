@@ -126,6 +126,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
       emit({ type: 'stopSpeaking' })
       emit({ type: 'listen' })
       if (closingRef.current) { endSession('you said goodbye'); return }
+      // THE ONLY PLACE THE CLOCK STARTS. Her audio has drained, the mic is open, and it is the owner's
+      // turn — the one state where silence means a question is going unanswered.
       armIdle()
     }
     const ctx = ctxRef.current
@@ -189,7 +191,13 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // the microphone live and nothing on screen to say so. Four conditions, all cheap and none of them
   // a model call.
 
-  /** Armed with nothing said. The draining hairline already promises this; now it happens. */
+  // THE CLOCK MEASURES ONE THING: HER QUESTION GOING UNANSWERED.
+  //
+  // It was armed at connect and re-armed on any speech, which made it a session-age timer wearing the
+  // word idle — ten seconds in, mid-conversation, it hung up. It is now armed at exactly one moment,
+  // when her turn ends and it becomes the owner's turn, and CANCELLED by the owner speaking rather
+  // than restarted. A long pause while she is still talking, or while the agent is thinking, cannot
+  // reach it, because neither of those is her waiting for an answer.
   const IDLE_END_MS = 10_000
   /** A backgrounded tab holding a mic. Shorter than idle, because nobody is watching. */
   const HIDDEN_END_MS = 30_000
@@ -198,8 +206,9 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     clearIdle()
     idleRef.current = setTimeout(() => endSession(`no speech for ${IDLE_END_MS / 1000}s`), IDLE_END_MS)
   }
-  /** Any speech, from either of us, means the conversation is alive. */
-  const keepAlive = () => { if (!tornDownRef.current) armIdle() }
+  /** The owner answered. Her question is no longer outstanding, so the clock stops — it does not
+   *  restart here; it restarts when she next finishes speaking. */
+  const answered = () => clearIdle()
 
   // Closing intent, matched on the owner's own words. Deliberately a string test and not a model call:
   // this decides whether to hang up, and a wrong end is far cheaper to recover from than a wrong
@@ -464,12 +473,12 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
           try { msg = JSON.parse(ev.data) } catch { return }
           switch (msg.type) {
             case 'Welcome': case 'SettingsApplied':
-              setPhase('live'); emit({ type: 'listen' }); armIdle()
+              setPhase('live'); emit({ type: 'listen' })
               // LAYER 3 — honest transition: only now flip to "Listening" + buzz the user.
               if (!vibrated) { vibrated = true; try { navigator.vibrate?.(30) } catch { /* unsupported */ }; log('tap → agent-ready', Math.round(performance.now() - tapT0), 'ms') }
               break
             case 'UserStartedSpeaking':
-              keepAlive()
+              answered()
               tRef.current = { micFirstSent: tRef.current.micFirstSent ?? performance.now(), userStartedSpeaking: performance.now() }
               reportedRef.current = false
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
@@ -483,7 +492,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               if (msg.role === 'user') {
                 mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking')
                 emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' })
-                keepAlive()
+                answered()
                 // She gets her last word out first: the flag is honoured once her audio has drained.
                 if (soundsFinal(msg.content || '')) closingRef.current = true
               }
