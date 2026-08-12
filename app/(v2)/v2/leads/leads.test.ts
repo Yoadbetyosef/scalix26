@@ -86,7 +86,11 @@ describe('leads reproduces what the current view does', () => {
   it('is gated on pipeline, exactly as the dashboard tab is', () => {
     expect(page).toMatch(/modules\.includes\('pipeline'\)/)
     expect(code('app/dashboard/page.tsx')).toMatch(/modules\.includes\('pipeline'\)/)
-    expect(code('app/(v2)/v2/home-client.tsx')).toMatch(/modules\.includes\('pipeline'\)/)
+    // The rail's gate now lives in nav.ts and is applied to the sheet from the same call, so this
+    // asserts the single source rather than a copy inside the shell.
+    expect(code('app/(v2)/v2/nav.ts')).toMatch(/module: 'pipeline'/)
+    expect(code('app/(v2)/v2/home-client.tsx')).toMatch(/allowed\(PRIMARY, modules\)/)
+    expect(code('app/(v2)/v2/data.ts')).toMatch(/allowed\(PRIMARY, modules\)/)
   })
 })
 

@@ -42,7 +42,7 @@ export default async function V2Home() {
   const shell = await loadShell(tenantId)
 
   // Deliberately NOT awaited.
-  const dataPromise = loadHomeData(tenantId)
+  const dataPromise = loadHomeData(tenantId, modules)
 
   return <HomeClient shell={shell} dataPromise={dataPromise} modules={modules} />
 }

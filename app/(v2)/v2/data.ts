@@ -4,6 +4,7 @@ import { getImpactData } from '@/lib/dashboard/impact'
 import { buildHeroInputs } from '@/lib/dashboard/briefing'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 import { rudiLine, type RudiSegment } from './rudi-line'
+import { PRIMARY, allowed, visibleGroups } from './nav'
 import type { NeedsItem, NowItem, Tile } from './sheet'
 
 // The numbers, loaded but NOT awaited by the page.
@@ -34,6 +35,7 @@ export interface HomeData {
   monthLabel: string
   monthStats: { label: string; value: string }[]
   tiles: Tile[]
+  groups: { id: string; label: string; items: { label: string; href?: string; out?: boolean }[] }[]
   recent: { time: string; text: string }[]
 }
 
@@ -47,7 +49,7 @@ export async function loadShell(tenantId: string): Promise<ShellData> {
   }
 }
 
-export async function loadHomeData(tenantId: string): Promise<HomeData> {
+export async function loadHomeData(tenantId: string, modules: string[] = []): Promise<HomeData> {
   const [dash, impact] = await Promise.all([
     getDashboardData(tenantId),
     getImpactData(tenantId),
@@ -95,6 +97,8 @@ export async function loadHomeData(tenantId: string): Promise<HomeData> {
     monthStats.push({ label: 'Answered', value: `${Math.round(impact.coveragePct.value)}%` })
   }
   monthStats.push({ label: 'After hours or handover', value: String(impact.opportunities.value) })
+  // Calls moved here from the tile grid — a figure, among figures.
+  if (dash.stats.totalCalls > 0) monthStats.push({ label: 'Calls answered', value: String(dash.stats.totalCalls) })
 
   return {
     line: rudiLine({ jobsToday: todaysJobs.length, unansweredLeads, humanRequested }),
@@ -111,12 +115,19 @@ export async function loadHomeData(tenantId: string): Promise<HomeData> {
     needsYou,
     monthLabel: impact.monthLabel,
     monthStats,
-    tiles: [
-      { label: 'Leads', value: dash.stats.activeLeads || null, sub: `${dash.stats.leads} total` },
-      { label: 'Inbox', value: dash.stats.totalConversations || null, sub: 'last 7 days' },
-      { label: 'Appointments', value: todaysJobs.length || null, sub: 'today' },
-      { label: 'Calls', value: dash.stats.totalCalls || null, sub: 'last 7 days' },
-    ],
+    // The four primary destinations, hrefs and gating from nav.ts so the sheet and the rail cannot
+    // disagree. 'Calls' used to sit here: it is a figure with no screen behind it, so it moved to the
+    // Week pane where figures belong and stopped pretending to be somewhere you could go.
+    tiles: allowed(PRIMARY, modules).map((d) => {
+      const n = {
+        Leads: { value: dash.stats.activeLeads || null, sub: `${dash.stats.leads} total` },
+        Inbox: { value: dash.stats.totalConversations || null, sub: 'last 7 days' },
+        Appointments: { value: todaysJobs.length || null, sub: 'today' },
+        Contacts: { value: null, sub: 'address book' },
+      }[d.label] ?? { value: null, sub: '' }
+      return { label: d.label, href: d.href, ...n }
+    }),
+    groups: visibleGroups(modules),
     recent: dash.conversations.slice(0, 8).map((c) => {
       const conv = c as { updated_at?: string; channel?: string; contact?: { name?: string } | null }
       const when = conv.updated_at ? new Date(conv.updated_at) : null

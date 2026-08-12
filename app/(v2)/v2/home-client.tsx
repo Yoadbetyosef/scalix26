@@ -9,6 +9,7 @@ import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
 import type { AmyMoment } from '@/components/dashboard/hero/amy-realtime'
 import { replyLine } from './reply-line'
+import { PRIMARY, allowed, visibleGroups } from './nav'
 import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
@@ -28,11 +29,6 @@ const IDLE_MS = 60_000
 /** How long the armed state waits before the session closes. The hairline drains over exactly this. */
 const ARMED_TIMEOUT_MS = 12_000
 
-const GROUPS = [
-  { id: 'g1', label: 'Rudi', items: [{ label: 'AI Employees' }, { label: 'Knowledge' }, { label: 'Test AI' }] },
-  { id: 'g2', label: 'Business', items: [{ label: 'Orders', href: '/v2/orders' }, { label: 'Analytics' }, { label: 'Reports' }] },
-  { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Settings' }, { label: 'Sign Out', out: true }] },
-]
 
 export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; dataPromise: Promise<HomeData>; modules: string[] }) {
   const rudi = useRef<RudiHandle | null>(null)
@@ -255,7 +251,7 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
           <Palette
             commands={[
               ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
-              ...GROUPS.flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
+              ...visibleGroups(modules).flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
             ]}
             open={palette.open}
             onClose={palette.close}
@@ -263,16 +259,16 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
 
           <Rail
             businessName={shell.businessName}
-            primary={[
-              // Gated exactly as /dashboard gates its tabs: no `pipeline`, no Leads row; no
-              // `scheduling`, no Appointments row.
-              ...(modules.includes('pipeline') ? [{ label: 'Leads', href: '/v2/leads', count: count((d) => d.railCounts.leads) }] : []),
-              ...(modules.includes('inbox') ? [{ label: 'Inbox', href: '/v2/inbox', count: count((d) => d.railCounts.inbox) }] : []),
-              ...(modules.includes('scheduling') ? [{ label: 'Appointments', href: '/v2/appointments', count: count((d) => d.railCounts.appointments) }] : []),
-              // Contacts has no v2 page yet, so it stays an inert row rather than a link to nothing.
-              ...(modules.includes('contacts') ? [{ label: 'Contacts', href: '/v2/contacts' }] : []),
-            ]}
-            groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {
+            // From nav.ts, gated once. The mobile sheet reads the same list, so the only two
+            // navigation surfaces in the product cannot drift apart — which they had, the sheet
+            // being ten destinations short and carrying one that was not a destination.
+            primary={allowed(PRIMARY, modules).map((d) => ({
+              ...d,
+              count: d.label === 'Leads' ? count((x) => x.railCounts.leads)
+                : d.label === 'Inbox' ? count((x) => x.railCounts.inbox)
+                  : d.label === 'Appointments' ? count((x) => x.railCounts.appointments) : undefined,
+            }))}
+            groups={visibleGroups(modules).map((g) => (g.id !== 'g1' ? g : {
               ...g,
               items: g.items.map((it) => (it.label !== 'AI Employees' ? it : {
                 ...it,

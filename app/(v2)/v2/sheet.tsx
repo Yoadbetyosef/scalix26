@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { useState } from 'react'
 
 // The mobile pull-up sheet: Now / Work / Week over the full-bleed hero.
@@ -8,7 +10,7 @@ import { useState } from 'react'
 // current month and nothing here re-windows it. The segment keeps the reference's short label
 // because the control is three words wide; the panel heading inside says what the data actually is.
 
-export interface Tile { label: string; value: number | null; sub: string }
+export interface Tile { label: string; value: number | null; sub: string; href?: string }
 export interface NeedsItem { title: string; detail: string; action: string }
 export interface NowItem { title: string; detail: string; progress?: number | null }
 
@@ -18,11 +20,12 @@ interface Props {
   tiles: Tile[]
   monthLabel: string
   monthStats: { label: string; value: string }[]
+  groups: { id: string; label: string; items: { label: string; href?: string; out?: boolean }[] }[]
 }
 
 type Pane = 'now' | 'work' | 'week'
 
-export function Sheet({ now, needs, tiles, monthLabel, monthStats }: Props) {
+export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats }: Props) {
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('now')
 
@@ -86,15 +89,44 @@ export function Sheet({ now, needs, tiles, monthLabel, monthStats }: Props) {
           )}
 
           {pane === 'work' && (
-            <div className="v2-tiles">
-              {tiles.map((t) => (
-                <button key={t.label} type="button" className="v2-tile" disabled title="v2 preview">
-                  {t.value !== null && <s>{t.value}</s>}
-                  <b>{t.label}</b>
-                  <i>{t.sub}</i>
-                </button>
+            <>
+              {/* The sheet is the ONLY navigation a phone has, so it carries every destination the
+                  rail does — and in the rail's structure, because thirteen tiles in one grid is a
+                  database, not a screen. The four that carry a count keep the tile treatment; the
+                  rest are rows under their group heading.
+                  A destination with no href has no screen yet and stays inert. It is never a link to
+                  nothing. */}
+              <div className="v2-tiles">
+                {tiles.map((t) => (
+                  t.href
+                    ? (
+                      <Link key={t.label} href={t.href} className="v2-tile">
+                        {t.value !== null && <s>{t.value}</s>}
+                        <b>{t.label}</b>
+                        <i>{t.sub}</i>
+                      </Link>
+                    )
+                    : (
+                      <button key={t.label} type="button" className="v2-tile" disabled title="v2 preview">
+                        {t.value !== null && <s>{t.value}</s>}
+                        <b>{t.label}</b>
+                        <i>{t.sub}</i>
+                      </button>
+                    )
+                ))}
+              </div>
+
+              {groups.map((g) => (
+                <div key={g.id}>
+                  <p className="v2-kick" style={{ margin: '26px 0 10px' }}>{g.label}</p>
+                  {g.items.map((d) => (
+                    d.href
+                      ? <Link key={d.label} href={d.href} className="v2-srow">{d.label}</Link>
+                      : <button key={d.label} type="button" className="v2-srow" disabled title="v2 preview" data-out={d.out || undefined}>{d.label}</button>
+                  ))}
+                </div>
               ))}
-            </div>
+            </>
           )}
 
           {pane === 'week' && (

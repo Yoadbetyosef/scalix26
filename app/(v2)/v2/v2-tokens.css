@@ -886,3 +886,13 @@
   .v2 .v2-facts { grid-template-columns: 1fr; }
   .v2 .v2-dsec { max-width: none; }
 }
+
+/* A destination row in the sheet's Work pane. The four counted ones keep the tile; these are the rest,
+   under their group heading, in the rail's own structure. */
+.v2 .v2-srow {
+  display: block; width: 100%; text-align: left;
+  padding: 13px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 15.5px; font-weight: 450; color: rgba(255, 255, 255, 0.92);
+}
+.v2 .v2-srow:disabled { color: rgba(255, 255, 255, 0.34); }
+.v2 .v2-srow[data-out] { color: rgba(255, 92, 108, 0.8); }
