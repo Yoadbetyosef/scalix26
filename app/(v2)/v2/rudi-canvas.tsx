@@ -132,6 +132,12 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
   useImperativeHandle(handleRef, (): RudiHandle => ({
     speak(text?: string, ms?: number) {
       console.info(`[v2 state] speak(ms=${ms ?? 6000}) — ceiling only; the caller owns the handover`)
+      // THE BYTES. preload="none" means readyState stays 0 until something asks, and the draw loop
+      // only plays the video `if (vid.readyState >= 2)` — so without this call that branch was never
+      // once true and she never moved. The comment on the <video> said "the first speak calls load()";
+      // no speak() ever did. Idempotent: load() on an already-loaded element is a no-op.
+      const v = videoRef.current
+      if (v && v.readyState < 2) { try { v.load() } catch { /* the still is the fallback */ } }
       speakEndRef.current = performance.now() + (ms ?? 6000)
       if (stateRef.current !== 'speaking') setState('speaking')
       if (timerRef.current) clearTimeout(timerRef.current)
