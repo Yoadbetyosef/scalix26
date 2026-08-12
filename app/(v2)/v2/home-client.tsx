@@ -83,7 +83,9 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const kick = useCallback(() => {
     if (idleTimer.current) clearTimeout(idleTimer.current)
     idleTimer.current = setTimeout(() => {
-      if (rudi.current?.state() === 'idle') setMinimised(true)
+      // Desktop only. Collapsing exists to hand the centre column to the dashboard, and a phone has
+      // no centre column to hand over — see collapse() below.
+      if (rudi.current?.state() === 'idle') collapse()
     }, IDLE_MS)
   }, [])
 
@@ -92,6 +94,12 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
     else if (idleTimer.current) clearTimeout(idleTimer.current)
     return () => { if (idleTimer.current) clearTimeout(idleTimer.current) }
   }, [state, kick])
+
+  // COLLAPSING IS A DESKTOP BEHAVIOUR. It shrinks the hero so the dashboard can take the centre
+  // column; a phone has no centre column, so there is nothing for it to reveal and the collapsed
+  // state was only ever a smaller portrait on an empty screen. On mobile a session simply ends and
+  // she stays full-screen, back at the resting caption and the Talk button — the state it started in.
+  const collapse = useCallback(() => { if (!isMobile) setMinimised(true) }, [isMobile])
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 
@@ -113,8 +121,8 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const onEnded = useCallback(() => {
     rudi.current?.endSession()
     setReply(null)
-    setMinimised(true)
-  }, [])
+    collapse()
+  }, [collapse])
 
 
   const toggleTalk = useCallback(() => {

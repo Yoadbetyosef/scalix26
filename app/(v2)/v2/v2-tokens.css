@@ -851,24 +851,9 @@
   .v2 .v2-overlay .v2-talk .v2-kbd { display: none; }
 }
 
-/* ── COLLAPSING ON A PHONE ───────────────────────────────────────────────────────────────────────
-   Desktop collapse reveals .v2-dash filling the centre column. There is no centre column on a phone
-   and no .v2-dash in that tree, so the same rules revealed nothing: a transparent hero over the
-   stage colour, i.e. a black screen with a tile in the corner.
-   The mobile equivalent of "the dashboard fills the centre" is the sheet — so it rises to full height
-   and the tile sits above it. The hero keeps its ground here rather than dropping it, because on a
-   phone there is nothing behind it worth showing through to. */
-@media (max-width: 719.98px) {
-  .v2 .v2-root[data-min] .v2-hero { background: var(--v2-stage); z-index: 8; }
-  .v2 .v2-root[data-min] .v2-sheet { height: calc(100dvh - 150px); z-index: 7; }
-  .v2 .v2-root[data-min] .v2-grab { opacity: 0; pointer-events: none; }
-  /* Bottom-left would put the tile under the risen sheet. Top-left keeps it clear of it and clear of
-     the business name in .v2-top. */
-  .v2 .v2-root[data-min] .v2-face {
-    left: 16px; top: 64px; bottom: auto; right: auto;
-    width: 104px; height: 138px; border-radius: 14px;
-  }
-}
+/* There is no collapsed state below 720px. The desktop collapse hands the centre column to the
+   dashboard; a phone has no centre column, so it revealed nothing and the whole state was a smaller
+   portrait on an empty screen. home-client simply never sets data-min at this width. */
 
 /* ── DETAIL PAGES ────────────────────────────────────────────────────────────────────────────────
    Shares .v2-page / .v2-phd / .v2-pbody / .v2-lin / .v2-row with the list pages, so a detail screen
