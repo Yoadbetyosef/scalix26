@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Phone, Mail, MapPin, MessageCircle, Globe, Calendar, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
+import { readContactProfile } from '@/lib/contacts/profile-read'
 
 export default async function ContactProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
   const { from } = await searchParams
@@ -22,22 +23,11 @@ export default async function ContactProfilePage({ params, searchParams }: { par
 
   const { id } = await params
 
-  const { data: contact } = await service
-    .from('contacts')
-    .select('*')
-    .eq('id', id)
-    .eq('tenant_id', tenantId)
-    .maybeSingle()
-
-  if (!contact) notFound()
-
-  const { data: conversations } = await service
-    .from('conversations')
-    .select('id, channel, status, summary, created_at, updated_at')
-    .eq('contact_id', id)
-    .eq('tenant_id', tenantId)
-    .order('updated_at', { ascending: false })
-    .limit(50)
+  // Moved to lib/contacts/profile-read.ts so /v2's contact screen reads the same rows. Same queries,
+  // same columns, same ordering — see that file's header.
+  const profile = await readContactProfile(tenantId, id)
+  if (!profile) notFound()
+  const { contact, conversations } = profile
 
   const ident = contactIdentifier(contact.channel, contact.phone)
   const IdentIcon = ident?.isPhone ? Phone : MessageCircle

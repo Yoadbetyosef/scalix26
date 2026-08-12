@@ -39,7 +39,7 @@ export default async function V2Orders() {
       trailing: relativeTime(o.createdAt),
       marked: bucket === 'waiting',
       muted: isTerminalStage(o.stage),
-      href: `/orders/${o.id}`,
+      href: `/v2/orders/${o.id}`,
       bucket,
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }

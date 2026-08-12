@@ -150,3 +150,32 @@ describe('the contacts read is the page\'s own, extracted not rewritten', () => 
     }
   })
 })
+
+describe('the detail screens read what the real pages read', () => {
+  it('the contact profile query moved to lib and the page delegates', () => {
+    const page = code('app/contacts/[id]/page.tsx')
+    expect(page).toMatch(/readContactProfile\(tenantId, id\)/)
+    expect(page).not.toMatch(/\.from\('contacts'\)/)
+    expect(page).not.toMatch(/\.from\('conversations'\)/)
+  })
+
+  it('notFound stayed in the page — it is a routing decision, not a read', () => {
+    expect(code('lib/contacts/profile-read.ts')).not.toMatch(/notFound/)
+    expect(code('app/contacts/[id]/page.tsx')).toMatch(/if \(!profile\) notFound\(\)/)
+  })
+
+  it.each([
+    ['app/(v2)/v2/orders/[id]/page.tsx', 'getOrder'],
+    ['app/(v2)/v2/contacts/[id]/page.tsx', 'readContactProfile'],
+  ])('%s adds no query — it reuses %s', (file, loader) => {
+    const src = code(file)
+    expect(src).toContain(loader)
+    expect(src).not.toMatch(/\.from\('/)
+  })
+
+  it('v2 list rows stay inside v2', () => {
+    // A row that left for the old app made the preview a dead end in one tap.
+    expect(code('app/(v2)/v2/contacts/page.tsx')).toMatch(/\/v2\/contacts\/\$\{c\.id\}/)
+    expect(code('app/(v2)/v2/orders/page.tsx')).toMatch(/\/v2\/orders\/\$\{o\.id\}/)
+  })
+})

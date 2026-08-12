@@ -38,7 +38,7 @@ export default async function V2Contacts() {
       trailing: c.last_interaction ? relativeTime(c.last_interaction) : null,
       marked: false,
       muted: bucket === 'quiet',
-      href: `/contacts/${c.id}`,
+      href: `/v2/contacts/${c.id}`,
       bucket,
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }
