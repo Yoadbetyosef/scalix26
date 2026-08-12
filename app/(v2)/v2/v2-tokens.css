@@ -896,3 +896,42 @@
 }
 .v2 .v2-srow:disabled { color: rgba(255, 255, 255, 0.34); }
 .v2 .v2-srow[data-out] { color: rgba(255, 92, 108, 0.8); }
+
+/* ── THE THREAD ──────────────────────────────────────────────────────────────────────────────────
+   Authorship is the only thing that changes: which side it sits on, and which surface it wears. The
+   gradient marks YOUR side of the conversation and nothing else on this screen competes for it, so
+   the one-accent rule holds. Bodies are Inter Tight — they are prose. Mono is the day dividers and
+   the meta line only. */
+.v2 .v2-thread { display: flex; flex-direction: column; gap: 10px; max-width: 660px; }
+.v2 .v2-tday {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--v2-ink-42); text-align: center; margin: 22px 0 12px;
+}
+.v2 .v2-msg {
+  max-width: 78%; padding: 12px 15px; border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(14, 14, 17, 0.05);
+}
+.v2 .v2-msg p { font-size: 15px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+.v2 .v2-msg .v2-mmeta {
+  display: block; margin-top: 6px;
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase;
+}
+.v2 .v2-msg[data-side="them"] {
+  align-self: flex-start; background: var(--v2-paper); border: 1px solid var(--v2-line);
+  color: var(--v2-ink);
+}
+.v2 .v2-msg[data-side="them"] .v2-mmeta { color: var(--v2-ink-42); }
+.v2 .v2-msg[data-side="us"] {
+  align-self: flex-end; background: var(--v2-grad-2); color: #fff; border: 1px solid transparent;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.28);
+}
+.v2 .v2-msg[data-side="us"] .v2-mmeta { color: rgba(255, 255, 255, 0.62); }
+/* A failed delivery is a state of the message, so it is worn by the message rather than announced
+   above it. */
+.v2 .v2-msg[data-failed] { background: rgba(255, 92, 108, 0.12); border-color: rgba(255, 92, 108, 0.4); color: var(--v2-ink); box-shadow: none; }
+.v2 .v2-msg[data-failed] .v2-mmeta { color: var(--v2-red); }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-msg { max-width: 86%; }
+  .v2 .v2-thread { max-width: none; }
+}

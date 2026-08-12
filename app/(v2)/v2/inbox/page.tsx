@@ -35,7 +35,7 @@ export default async function V2Inbox() {
       detail: [c.channel || 'message', c.status || null].filter(Boolean).join(' · '),
       trailing: when ? relativeTime(when) : null,
       // The thread is the destination the rest of the app already uses for a conversation.
-      href: `/inbox/${c.id}?from=v2`,
+      href: `/v2/inbox/${c.id}`,
       bucket: spoken ? 'voice' : 'message',
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }

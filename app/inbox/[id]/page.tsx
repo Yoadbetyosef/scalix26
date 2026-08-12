@@ -6,7 +6,7 @@ import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-rea
 import { Badge } from '@/components/ui/badge'
 import { formatDateTime, formatDate, formatDuration, contactIdentifier, looksLikeName, isSocialChannel } from '@/lib/utils'
 import { formatPhone } from '@/lib/format'
-import { getBusinessTimezone } from '@/lib/timezone'
+import { readConversation } from '@/lib/inbox/conversation-read'
 
 const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS', voice: 'Voice', whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', email: 'Email',
@@ -31,29 +31,12 @@ export default async function ConversationPage({ params, searchParams }: { param
   const service = createAdminClient()
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/auth/signup')
-  const { data: tenant } = await service.from('tenants').select('id, timezone').eq('id', tenantId).maybeSingle()
-  if (!tenant) redirect('/auth/signup')
-
-  // Conversation/message times shown in the tenant's business timezone (same source
-  // the agent/booking use), consistent with the inbox list.
-  const tz = await getBusinessTimezone(tenant.id, tenant.timezone)
-
+  // Moved to lib/inbox/conversation-read.ts so /v2's conversation screen reads the same rows. Same
+  // queries, same join, same ordering — see that file's header.
   const { id } = await params
-
-  const { data: conv } = await service
-    .from('conversations')
-    .select('*, contact:contacts(*), ai_employee:ai_employees(name)')
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .single()
-
-  if (!conv) notFound()
-
-  const { data: messages } = await service
-    .from('messages')
-    .select('*')
-    .eq('conversation_id', id)
-    .order('timestamp', { ascending: true })
+  const read = await readConversation(tenantId, id)
+  if (!read) notFound()
+  const { tz, conv, messages } = read
 
   const contact = conv.contact as { id: string; name?: string; phone?: string; email?: string; address?: string } | null
 
@@ -69,7 +52,7 @@ export default async function ConversationPage({ params, searchParams }: { param
 
   // Customer Profile V1 (read-only, additive). Fail-safe: returns an empty profile
   // on any error or missing data, in which case the block hides itself.
-  const profile = contact?.id ? await getCustomerProfile(tenant.id, contact.id) : null
+  const profile = contact?.id ? await getCustomerProfile(tenantId, contact.id) : null
 
   const ident = contactIdentifier(conv.channel, contact?.phone)
   const IdentIcon = ident && !ident.isPhone ? MessageCircle : Phone

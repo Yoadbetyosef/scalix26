@@ -179,3 +179,34 @@ describe('the detail screens read what the real pages read', () => {
     expect(code('app/(v2)/v2/orders/page.tsx')).toMatch(/\/v2\/orders\/\$\{o\.id\}/)
   })
 })
+
+describe('the thread is its own shape, and the shared ones stayed shared', () => {
+  it('ThreadView exists rather than DetailRow growing three fields for one caller', () => {
+    const t = code('app/(v2)/v2/thread.tsx')
+    expect(t).toMatch(/side: 'them' \| 'us'/)
+    // The fields that would have had to land on DetailRow, and did not.
+    const d = code('app/(v2)/v2/detail.tsx')
+    expect(d).not.toMatch(/side|byAi|isGroupStart/)
+  })
+
+  it('the conversation read moved to lib and the page delegates', () => {
+    const page = code('app/inbox/[id]/page.tsx')
+    expect(page).toMatch(/readConversation\(tenantId, id\)/)
+    expect(page).not.toMatch(/\.from\('conversations'\)/)
+    expect(page).not.toMatch(/\.from\('messages'\)/)
+    // Routing decisions stayed in the page.
+    expect(code('lib/inbox/conversation-read.ts')).not.toMatch(/notFound|redirect/)
+  })
+
+  it('the v2 conversation screen adds no query and stays read-only', () => {
+    const src = code('app/(v2)/v2/inbox/[id]/page.tsx')
+    expect(src).toContain('readConversation')
+    expect(src).not.toMatch(/\.from\('/)
+    const actions = src.match(/\{ label: [^}]*\}/g) ?? []
+    for (const a of actions) expect(a).toMatch(/disabledReason: PREVIEW|PREVIEW/)
+  })
+
+  it('every v2 list row now leads to a v2 screen', () => {
+    expect(code('app/(v2)/v2/inbox/page.tsx')).toMatch(/\/v2\/inbox\/\$\{c\.id\}/)
+  })
+})
