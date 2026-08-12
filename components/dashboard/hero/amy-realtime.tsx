@@ -34,7 +34,24 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // Held in a ref so emitting never re-subscribes the socket effect below.
   const momentRef = useRef<((m: AmyMoment) => void) | undefined>(onMoment)
   momentRef.current = onMoment
-  const emit = (m: AmyMoment) => momentRef.current?.(m)
+  // Every moment, timestamped, with the two clocks that decide whether she is still audible — and the
+  // line it came from. The question is whether listen() ever fires while playHead is still ahead of
+  // currentTime; if it does, the caller in the stack is what is ending her turn, not endSpeaking.
+  const emit = (m: AmyMoment) => {
+    if (DEBUG && m.type !== 'level') {
+      const c = ctxRef.current
+      const ahead = c ? +(playHeadRef.current - c.currentTime).toFixed(3) : null
+      const from = (new Error().stack || '').split('\n')[2]?.trim().replace(/^at\s+/, '') ?? '?'
+      /* eslint-disable no-console */
+      console.info(
+        `%c[amy emit] ${m.type}`,
+        ahead !== null && ahead > 0.05 ? 'color:#ff2e93;font-weight:600' : 'color:#8b5cf6',
+        { t: Math.round(performance.now()), ctxTime: c ? +c.currentTime.toFixed(3) : null, playHead: +playHeadRef.current.toFixed(3), aheadBy: ahead, from },
+      )
+      /* eslint-enable no-console */
+    }
+    momentRef.current?.(m)
+  }
   // Her latest transcript, for the speak() ceiling — the audio start carries no text.
   const replyRef = useRef('')
 
