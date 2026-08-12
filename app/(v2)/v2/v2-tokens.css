@@ -223,6 +223,9 @@
 .v2-cap {
   max-width: 620px; font-size: 31px; line-height: 1.22; font-weight: 600;
   letter-spacing: -0.03em; color: #fff; min-height: 78px; transition: opacity 0.24s;
+  /* The scrim carries most of the contrast, but the portrait has bright shoulders the gradient can
+     still lose itself against. A shadow costs nothing on the white and rescues the accent clause. */
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.45);
 }
 .v2-cap b {
   font-weight: 600; background: var(--v2-grad);

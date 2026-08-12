@@ -50,6 +50,36 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // The one place the host is told she has begun. `ms` is a CEILING: ConversationText for the
   // assistant reliably lands before her audio, so replyRef holds the sentence by now, and
   // AgentAudioDone is what really ends it — a dropped end event cannot strand her mid-word.
+  // The END of her turn, driven by the audio, not by the event.
+  //
+  // AgentAudioDone means the SERVER finished sending. The browser is still draining a queue of
+  // scheduled buffers at that moment, so ending on the event returned the portrait to listening while
+  // she was audibly still talking. playHead is the time the last scheduled buffer runs out; when it
+  // falls behind the context clock the sound has genuinely stopped.
+  const drainRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const clearDrain = () => { if (drainRef.current) { clearInterval(drainRef.current); drainRef.current = null } }
+  const endSpeaking = (immediate = false) => {
+    clearDrain()
+    if (!speakEmittedRef.current) return
+    const finish = () => {
+      clearDrain()
+      speakEmittedRef.current = false
+      emit({ type: 'stopSpeaking' })
+      emit({ type: 'listen' })
+    }
+    // A barge-in has already stopped the sources — nothing is draining, so do not wait for it.
+    if (immediate) { finish(); return }
+    const ctx = ctxRef.current
+    if (!ctx) { finish(); return }
+    if (playHeadRef.current <= ctx.currentTime) { finish(); return }
+    drainRef.current = setInterval(() => {
+      const c = ctxRef.current
+      // No context, or the queue has run out: either way she has stopped.
+      if (!c || playHeadRef.current <= c.currentTime) finish()
+    }, 60)
+  }
+  useEffect(() => clearDrain, [])
+
   const beginSpeaking = () => {
     if (speakEmittedRef.current) return
     speakEmittedRef.current = true
@@ -274,8 +304,9 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
               // Her turn is over, whether or not it finished. Without this the guard stays latched and
               // every later turn is silent to the portrait.
-              if (speakEmittedRef.current) { speakEmittedRef.current = false; emit({ type: 'stopSpeaking' }) }
-              stopPlayback(); setPhase('thinking'); break
+              // Barge-in: stopPlayback() kills the scheduled sources on the next line, so there is
+              // nothing left to drain and the portrait must stop with the sound, not after it.
+              stopPlayback(); endSpeaking(true); setPhase('thinking'); break
             case 'ConversationText':
               if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking'); emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' }) }
               // Stripped for display too. The prompt tells the agent not to format, but its words are
@@ -288,8 +319,10 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               beginSpeaking()
               break
             case 'AgentAudioDone':
-              agentSpeakingRef.current = false; speakEmittedRef.current = false
-              setPhase('live'); emit({ type: 'stopSpeaking' }); emit({ type: 'listen' }); break
+              // The server has stopped sending. She has not stopped talking — endSpeaking waits for
+              // the scheduled audio to drain before telling the portrait.
+              agentSpeakingRef.current = false
+              setPhase('live'); endSpeaking(); break
             case 'FunctionCallRequest': {
               // The agent wants to perform a real action. We (authenticated browser) execute it
               // via the app API, show a status card, and return the TRUE result to the agent —
