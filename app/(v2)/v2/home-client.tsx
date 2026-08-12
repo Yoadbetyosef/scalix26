@@ -7,6 +7,7 @@ import { Rail } from './rail'
 import { rudiCursor, type RudiSegment } from './rudi-line'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
+import type { AmyMoment } from '@/components/dashboard/hero/amy-realtime'
 import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
@@ -41,8 +42,11 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   // Two lines, never three: `said` is what the owner typed, echoed once; the reply REPLACES the
   // caption rather than appending to it. No transcript array — this screen is a presence, not a log.
-  const [said] = useState<string | null>(null)
-  // Handed to AskAmyText, which asks it and shows the answer. The caption no longer repeats it.
+  // What the owner said, and what she answered. Both come from the live session, and the caption is
+  // where her answer goes — the big gradient line IS her voice, so a card repeating it over the
+  // portrait was showing the same sentence twice and hiding the face to do it.
+  const [said, setSaid] = useState<string | null>(null)
+  const [reply, setReply] = useState<string | null>(null)
   const [asked, setAsked] = useState<string | null>(null)
   const [jump, setJump] = useState<number | null>(null)
   const [typing, setTyping] = useState(false)
@@ -102,7 +106,12 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   // Nothing about the conversation is new — only which button starts it.
   const endSession = useCallback(() => { rudi.current?.endSession() }, [])
 
-  const toggleTalk = useCallback(() => { wake(); amy.goLive() }, [wake, amy])
+  const toggleTalk = useCallback(() => {
+    wake()
+    // Live already → this is the END the cursor promises, not a second session.
+    if (amy.mode !== 'idle') { endSession(); amy.close(); setReply(null); return }
+    amy.goLive()
+  }, [wake, amy, endSession])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -120,19 +129,34 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   // Typing hands off to AskAmyText — the same component "Type instead" opens on /dashboard, with the
   // same briefing. The echo stays: it is what the composer showed before the answer had anywhere to
   // come from, and it still reads as the owner's own line.
-  const onSubmit = useCallback((text: string) => { setAsked(text); amy.goText() }, [amy])
+  const onSubmit = useCallback((text: string) => { setAsked(text); setSaid(text); amy.goText() }, [amy])
+
+  // The portrait, driven by the session's own moments. Every branch calls a method the canvas already
+  // exposes; nothing here decides anything about the conversation.
+  const onMoment = useCallback((m: AmyMoment) => {
+    const r = rudi.current
+    if (!r) return
+    if (m.type === 'listen') r.listen()
+    else if (m.type === 'level') r.level(m.value)
+    else if (m.type === 'speak') { setReply(m.text || null); r.speak(m.text, m.ms) }
+    else if (m.type === 'stopSpeaking') r.stopSpeaking()
+    else if (m.type === 'arm') r.arm()
+    else if (m.type === 'said') { setSaid(m.text); setReply(null) }
+    else if (m.type === 'reply') setReply(m.text)
+  }, [])
 
   // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
   // answered. Only the resting line needs the numbers, so only that case can suspend.
   const override: RudiSegment[] | null =
-    state === 'listening' ? []
-      : state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null
+    reply ? [{ text: reply, accent: true }]
+      : state === 'listening' ? []
+        : state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null
 
   // Over the hero, never beside it: .v2-amy is absolutely positioned inside the stage, so it cannot
   // participate in the shell grid.
   const amyLayer = (
     <div className="v2-amy">
-      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} ask={asked} /></Suspense>
+      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} ask={asked} onMoment={onMoment} /></Suspense>
     </div>
   )
 
@@ -171,7 +195,7 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   if (!isMobile) {
     return (
       <div className="v2-app">
-        <Cursor label={rudiCursor(state, minimised)} active={!typing} />
+        <Cursor label={rudiCursor(state, minimised)} active={!typing && amy.mode === 'idle'} />
         <Palette
           commands={[
             ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),

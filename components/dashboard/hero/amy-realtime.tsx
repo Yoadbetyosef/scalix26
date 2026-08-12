@@ -15,7 +15,28 @@ const log = (...a: unknown[]) => { if (DEBUG) console.log('%c[amy-realtime]', 'c
 
 type Phase = 'connecting' | 'live' | 'thinking' | 'speaking' | 'error'
 
-export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing: AmyBriefing; audioCtx?: AudioContext | null; onClose: () => void; onType: () => void }) {
+// `onMoment` reports the moments this component ALREADY knows — the mic opening, each audio tick, her
+// starting and stopping — so a host can drive its own presence with them. It is a report, not a
+// behaviour: nothing here changes shape when nobody is listening, which is the case on /dashboard.
+//
+// `surface` only stamps data-surface for CSS. In the v2 skin the card, its chrome and the transcript
+// are hidden, because the host renders her reply as the caption and her state as the portrait.
+export type AmyMoment =
+  | { type: 'listen' }
+  | { type: 'level'; value: number }
+  | { type: 'speak'; text: string; ms: number }
+  | { type: 'stopSpeaking' }
+  | { type: 'arm' }
+  | { type: 'said'; text: string }
+  | { type: 'reply'; text: string }
+
+export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, surface = 'v1' }: { briefing: AmyBriefing; audioCtx?: AudioContext | null; onClose: () => void; onType: () => void; onMoment?: (m: AmyMoment) => void; surface?: 'v1' | 'v2' }) {
+  // Held in a ref so emitting never re-subscribes the socket effect below.
+  const momentRef = useRef<((m: AmyMoment) => void) | undefined>(onMoment)
+  momentRef.current = onMoment
+  const emit = (m: AmyMoment) => momentRef.current?.(m)
+  // Her latest transcript, for the speak() ceiling — AgentStartedSpeaking arrives without the text.
+  const replyRef = useRef('')
   const name = briefing.employeeName || 'Amy'
   const [phase, setPhase] = useState<Phase>('connecting')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
@@ -224,7 +245,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
           try { msg = JSON.parse(ev.data) } catch { return }
           switch (msg.type) {
             case 'Welcome': case 'SettingsApplied':
-              setPhase('live')
+              setPhase('live'); emit({ type: 'listen' })
               // LAYER 3 — honest transition: only now flip to "Listening" + buzz the user.
               if (!vibrated) { vibrated = true; try { navigator.vibrate?.(30) } catch { /* unsupported */ }; log('tap → agent-ready', Math.round(performance.now() - tapT0), 'ms') }
               break
@@ -234,14 +255,22 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
               stopPlayback(); setPhase('thinking'); break
             case 'ConversationText':
-              if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking') }
+              if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking'); emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' }) }
               // Stripped for display too. The prompt tells the agent not to format, but its words are
               // spoken by Deepgram before we ever see them — so if one slips through, at least the
               // owner doesn't also read the asterisks on screen.
-              else if (msg.role === 'assistant') { mk('agentFirstTranscript'); setAmyText(stripMarkdown(msg.content || '')) }
+              else if (msg.role === 'assistant') { mk('agentFirstTranscript'); const t = stripMarkdown(msg.content || ''); setAmyText(t); replyRef.current = t; emit({ type: 'reply', text: t }) }
               break
-            case 'AgentStartedSpeaking': agentSpeakingRef.current = true; resetGate(); setPhase('speaking'); break
-            case 'AgentAudioDone': agentSpeakingRef.current = false; setPhase('live'); break
+            case 'AgentStartedSpeaking': {
+              agentSpeakingRef.current = true; resetGate(); setPhase('speaking')
+              // ms is a CEILING — the canvas's own contract says the caller owns the handover, and
+              // AgentAudioDone is what really ends it. Estimated from the text so a dropped Done event
+              // cannot strand the portrait mid-word.
+              const t = replyRef.current
+              emit({ type: 'speak', text: t, ms: Math.min(30_000, Math.max(1_500, t.length * 55)) })
+              break
+            }
+            case 'AgentAudioDone': agentSpeakingRef.current = false; setPhase('live'); emit({ type: 'stopSpeaking' }); emit({ type: 'listen' }); break
             case 'FunctionCallRequest': {
               // The agent wants to perform a real action. We (authenticated browser) execute it
               // via the app API, show a status card, and return the TRUE result to the agent —
@@ -301,6 +330,11 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
   function enqueuePcm(int16: Int16Array) {
     const ctx = ctxRef.current
     if (!ctx || int16.length === 0) return
+    // The level the host's meter renders. Peak of this packet, normalised — the packet is already here
+    // and already decoded; this reads it, it does not resample or analyse anything.
+    let peak = 0
+    for (let i = 0; i < int16.length; i += 16) { const a = Math.abs(int16[i]); if (a > peak) peak = a }
+    emit({ type: 'level', value: Math.min(1, peak / 32768) })
     const buf = ctx.createBuffer(1, int16.length, 24000)
     const ch = buf.getChannelData(0)
     for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 32768
@@ -333,7 +367,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
   const alive = phase === 'live' || phase === 'thinking' || phase === 'speaking'
 
   return (
-    <div className="amy-panel mx-auto w-full max-w-md text-center">
+    <div className="amy-panel mx-auto w-full max-w-md text-center" data-surface={surface}>
       <div className="relative">
         <div aria-hidden="true" className="amy-bloom pointer-events-none absolute -inset-3 rounded-[32px]" />
         <div className="amy-card relative px-6 py-6 sx-animate-in">

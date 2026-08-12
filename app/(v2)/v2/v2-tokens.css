@@ -642,3 +642,15 @@
   pointer-events: none;
 }
 .v2 .v2-amy > * { pointer-events: auto; }
+
+
+/* What the owner just said — one quiet mono line above her answer. It is context for the caption, not
+   a transcript: only the latest, and it clears when she starts a new one. */
+.v2 .v2-you {
+  font-family: var(--v2-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--v2-ink-42);
+  margin-bottom: 10px;
+}

@@ -180,3 +180,15 @@
 
 /* The speaking bars, recoloured to the gradient's warm end. */
 .amy-bar { background: var(--amy-pink); }
+
+/* ── THE v2 SURFACE ──────────────────────────────────────────────────────────────────────────────
+   In v2 the host owns the words and the portrait owns the state, so the panel keeps the session and
+   gives up the drawing. Everything visual is hidden; the element stays mounted because it holds the
+   socket, the audio graph and the teardown. Hidden with clip, not display:none — a removed subtree
+   would be fine here today, but the moment anything inside needs measuring, display:none returns
+   zeroes and the failure looks like a logic bug rather than a style one. */
+.amy-panel[data-surface="v2"] {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+}

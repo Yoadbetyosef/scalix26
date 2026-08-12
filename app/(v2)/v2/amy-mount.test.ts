@@ -24,8 +24,19 @@ describe('both /v2 trees mount the voice panel', () => {
   })
 
   it('both trees drive the same session — one goLive, from one handler', () => {
-    expect(src).toMatch(/const toggleTalk = useCallback\(\(\) => \{ wake\(\); amy\.goLive\(\) \}/)
-    // Every Talk affordance routes through toggleTalk, so the unlock always happens inside the click.
     expect(src.match(/amy\.goLive\(\)/g) ?? []).toHaveLength(1)
+    const t = src.slice(src.indexOf('const toggleTalk'), src.indexOf('useEffect', src.indexOf('const toggleTalk')))
+    expect(t).toMatch(/amy\.goLive\(\)/)
+  })
+
+  it('a second press ends the session instead of opening another', () => {
+    const t = src.slice(src.indexOf('const toggleTalk'), src.indexOf('useEffect', src.indexOf('const toggleTalk')))
+    expect(t).toMatch(/amy\.mode !== 'idle'/)
+    expect(t).toMatch(/amy\.close\(\)/)
+  })
+
+  it('the custom cursor is off while a session is open', () => {
+    // The TALK ring drew on top of the panel and across her face mid-call.
+    expect(src).toMatch(/active=\{!typing && amy\.mode === 'idle'\}/)
   })
 })
