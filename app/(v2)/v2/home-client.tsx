@@ -107,12 +107,22 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   // Nothing about the conversation is new — only which button starts it.
   const endSession = useCallback(() => { rudi.current?.endSession() }, [])
 
+  // Ending must be VISIBLE, not only in the socket. All four endings — the end button, ten seconds of
+  // silence, a goodbye, a hidden tab — land here and collapse her to the corner tile, the same
+  // collapse idle already performs. Clicking her expands and starts a new session, unchanged.
+  const onEnded = useCallback(() => {
+    rudi.current?.endSession()
+    setReply(null)
+    setMinimised(true)
+  }, [])
+
+
   const toggleTalk = useCallback(() => {
     wake()
     // Live already → this is the END the cursor promises, not a second session.
-    if (amy.mode !== 'idle') { endSession(); amy.close(); setReply(null); return }
+    if (amy.mode !== 'idle') { amy.close(); onEnded(); return }
     amy.goLive()
-  }, [wake, amy, endSession])
+  }, [wake, amy, onEnded])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -160,7 +170,7 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   // participate in the shell grid.
   const amyLayer = (
     <div className="v2-amy">
-      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} ask={asked} onMoment={onMoment} /></Suspense>
+      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} ask={asked} onMoment={onMoment} onEnded={onEnded} /></Suspense>
     </div>
   )
 

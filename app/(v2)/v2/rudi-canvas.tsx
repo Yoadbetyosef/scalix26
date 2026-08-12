@@ -418,19 +418,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         ctx!.lineTo(wX + wW, wY)
         ctx!.stroke()
 
-        // End ticks fade in with level and are absent at rest, where they were the thing that made
-        // the meter look like a measuring instrument rather than a level. They also extended its
-        // span by another 12% of the width; the rule now ends where the bars do.
-        if (energy > 0.02) {
-          ctx!.strokeStyle = `rgba(14,14,17,${(0.3 * micA * energy).toFixed(3)})`
-          ctx!.lineWidth = 1
-          for (const ex of [wX, wX + wW]) {
-            ctx!.beginPath()
-            ctx!.moveTo(ex, wY - CH * 0.012)
-            ctx!.lineTo(ex, wY + CH * 0.012)
-            ctx!.stroke()
-          }
-        }
         for (let wi = 0; wi < wN; wi++) {
           const edge = Math.pow(Math.sin((wi / (wN - 1)) * Math.PI), 0.45)
           const tgt = env * edge * (0.2 + 0.8 * Math.pow(Math.abs(Math.sin(wi * 3.1 + now / 62)), 1.5))
@@ -444,18 +431,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
           ctx!.fillStyle = `rgba(14,14,17,${(0.78 * micA).toFixed(3)})`
           ctx!.fillRect(wX + wi * gap, wY - hgt, 2.2, hgt * 2)
         }
-        ctx!.font = '11px ui-monospace,Menlo,monospace'
-        ctx!.textAlign = 'center'
-        ctx!.fillStyle = `rgba(14,14,17,${(0.42 * micA).toFixed(3)})`
-        // Same position, same size, same colour as listening's. Only the word changes — and it still
-        // says DEMO when no level has been supplied, because a meter moving on a synthetic envelope
-        // while claiming to hear you is the same class of lie as a record claiming a review that
-        // never happened.
-        ctx!.fillText(
-          st === 'armed' ? 'YOUR TURN'
-            : levelledRef.current ? 'LISTENING' : 'LISTENING · DEMO',
-          CW / 2, wY + CH * 0.075,
-        )
+        // NO LABEL. The state is on her face and in the meter's own weight; a word stamped across
+        // her portrait to name what the portrait is already showing was the last thing making the
+        // listening state look like a different screen. Whether level() has ever been supplied is
+        // still tracked in levelledRef for the console — it just no longer writes DEMO over her.
         ctx!.textAlign = 'left'
       }
 

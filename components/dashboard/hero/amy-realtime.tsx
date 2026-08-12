@@ -190,7 +190,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // a model call.
 
   /** Armed with nothing said. The draining hairline already promises this; now it happens. */
-  const IDLE_END_MS = 20_000
+  const IDLE_END_MS = 10_000
   /** A backgrounded tab holding a mic. Shorter than idle, because nobody is watching. */
   const HIDDEN_END_MS = 30_000
 
@@ -364,7 +364,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               // RMS, not peak: this is a continuous stream rather than her discrete packets, and RMS is
               // what the gate already measures. Conversational speech sits near 0.02–0.1, so the gain is
               // larger than the peak-based one used for her side.
-              const MIC_GAIN = 9
+              const MIC_GAIN = 22
               moment({ type: 'level', value: Math.min(1, rms * MIC_GAIN) })
             }
 
@@ -569,7 +569,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     // and its 52 segments rendered as a dotted rule — what looked like the old drawing was the new one,
     // starved. GAIN maps a normal speaking voice across most of the meter's range; the clamp lets a
     // loud passage flatten at the top rather than distort the shape below it.
-    const GAIN = 3.5
+    const GAIN = 6
     emit({ type: 'level', value: Math.min(1, (peak / 32768) * GAIN) })
     // Her voice IS these packets. AgentStartedSpeaking is not in this agent's stream — the log had
     // stopSpeaking on every turn and never one speak — so binding to the event whose name matched the

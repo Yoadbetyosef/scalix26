@@ -34,7 +34,7 @@ describe('every ending releases the socket, the mic and the audio graph', () => 
 
 describe('the four ways a session ends itself', () => {
   it('1. inactivity — armed with no speech', () => {
-    expect(src).toMatch(/const IDLE_END_MS = 20_000/)
+    expect(src).toMatch(/const IDLE_END_MS = 10_000/)
     expect(src).toMatch(/endSession\(`no speech for \$\{IDLE_END_MS \/ 1000\}s`\)/)
   })
 
@@ -76,9 +76,16 @@ describe('closing intent is matched on whole lines only', () => {
 
 describe('the v2 END press does the full teardown', () => {
   it('closes the session rather than flipping a state', () => {
-    // amy.close() unmounts AmyRealtime, whose unmount effect tears down. The press also stops the
-    // canvas and clears her caption.
-    expect(v2).toMatch(/endSession\(\); amy\.close\(\); setReply\(null\)/)
+    // amy.close() unmounts AmyRealtime, whose unmount effect tears down.
+    expect(v2).toMatch(/amy\.close\(\); onEnded\(\)/)
+  })
+
+  it('every ending collapses her to the corner, including the button', () => {
+    // Ending has to be visible. The button cannot reach onClose (it unmounts the panel), so it calls
+    // onEnded directly; the other three arrive through AmyLayer's onClose.
+    expect(v2).toMatch(/setMinimised\(true\)/)
+    expect(readFileSync(join(process.cwd(), 'app/(v2)/v2/deferred.tsx'), 'utf8'))
+      .toMatch(/session\.close\(\); onEnded\?\.\(\)/)
   })
 
   it('says the microphone is live, since the cursor is hidden during a session', () => {
