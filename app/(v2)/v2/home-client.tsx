@@ -8,6 +8,7 @@ import { rudiCursor, type RudiSegment } from './rudi-line'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
 import type { AmyMoment } from '@/components/dashboard/hero/amy-realtime'
+import { replyLine } from './reply-line'
 import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
@@ -148,10 +149,10 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
   // answered. Only the resting line needs the numbers, so only that case can suspend.
   const override: RudiSegment[] | null =
-    // NOT accented. .v2-cap is already white with the gradient reserved for <b>, and passing her whole
-    // reply as one accented segment gradient-filled the entire sentence — which loses its middle over
-    // any mid-tone part of the portrait. The gradient marks a clause; it is not a text colour.
-    reply ? [{ text: reply }]
+    // The gradient is emphasis, not a text colour: white by default, with at most one clause accented
+    // — the part that needs an answer or an action. All-gradient lost the sentence's middle over the
+    // portrait; all-white said nothing about which part mattered. See reply-line.ts.
+    reply ? replyLine(reply)
       : state === 'listening' ? []
         : state === 'speaking' ? [{ text: 'Rudi is speaking.', accent: true }] : null
 

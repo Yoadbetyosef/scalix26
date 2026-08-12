@@ -143,6 +143,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const clearTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
 
+  const moment = (m: AmyMoment) => emit(m)
+
   /** Milliseconds of audio still scheduled, plus a margin so the net never lands on the last sample. */
   const remainingMs = () => {
     const c = ctxRef.current
@@ -280,6 +282,25 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
             let sum = 0
             for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff; sum += s * s }
             const rms = Math.sqrt(sum / f32.length)
+
+            // THE METER FOLLOWS WHOEVER IS TALKING.
+            //
+            // level() was fed only from enqueuePcm — HER audio, arriving from the agent — so while the
+            // owner spoke there was no real source and the meter moved on nothing. This is the same
+            // outbound stream already open and already forwarded below; the RMS on the line above is
+            // computed for the noise gate and read here as well. No second capture, and nothing about
+            // what the gate forwards is changed.
+            //
+            // Her audio keeps the meter while she speaks: this yields to it rather than fighting it,
+            // because both would otherwise write the same value on alternating frames.
+            if (!speakEmittedRef.current) {
+              // RMS, not peak: this is a continuous stream rather than her discrete packets, and RMS is
+              // what the gate already measures. Conversational speech sits near 0.02–0.1, so the gain is
+              // larger than the peak-based one used for her side.
+              const MIC_GAIN = 9
+              moment({ type: 'level', value: Math.min(1, rms * MIC_GAIN) })
+            }
+
             const frameMs = (1000 * f32.length) / ctx.sampleRate
             // Forward live once the agent is ready; until then buffer (LAYER 1).
             const emit = (buf: ArrayBufferLike) => {
