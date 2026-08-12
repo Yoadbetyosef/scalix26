@@ -202,8 +202,10 @@ describe('the thread is its own shape, and the shared ones stayed shared', () =>
     const src = code('app/(v2)/v2/inbox/[id]/page.tsx')
     expect(src).toContain('readConversation')
     expect(src).not.toMatch(/\.from\('/)
-    const actions = src.match(/\{ label: [^}]*\}/g) ?? []
-    for (const a of actions) expect(a).toMatch(/disabledReason: PREVIEW|PREVIEW/)
+    const actions = src.slice(src.indexOf('actions={['), src.indexOf(']}', src.indexOf('actions={[')))
+    const labels = actions.match(/\{ label: [^}]*\}/g) ?? []
+    expect(labels.length).toBeGreaterThan(0)
+    for (const a of labels) expect(a).toContain('disabledReason: PREVIEW')
   })
 
   it('every v2 list row now leads to a v2 screen', () => {
