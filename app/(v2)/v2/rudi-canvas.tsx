@@ -272,7 +272,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     }
 
     function draw(now: number) {
-      if (!firstFrameLogged) { firstFrameLogged = true; slog('FIRST DRAW FRAME', { hasImage: !!img, hasNet: raw.length > 0 }) }
       if (disposed || !img) return
       const st = stateRef.current
       ctx!.setTransform(1, 0, 0, 1, 0, 0)
@@ -530,21 +529,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // ── Run / pause ─────────────────────────────────────────────────────────────────────────────
     // Paused when the tab is hidden OR the hero has scrolled out of view. Both are checked because
     // they are different absences and either one alone leaves the loop burning frames nobody sees.
-    // ── INSTRUMENTATION ONLY (no behaviour) ─────────────────────────────────────────────────────
-    // Third report of a ~30s stillness, and the observer has been adjusted twice on a theory. This
-    // says what actually happens instead: when the effect ran, what the canvas measured, every sync
-    // with its inputs, and the timestamp of the first frame that draws. If the loop is running from
-    // t0 then the loop is not the fault and the suppression is downstream of it.
-    const scanT0 = performance.now()
-    const since = () => Math.round(performance.now() - scanT0)
-    /* eslint-disable no-console */
-    const slog = (...a: unknown[]) => console.info('%c[v2 scan]', 'color:#8b5cf6', `+${since()}ms`, ...a)
-    /* eslint-enable no-console */
-    {
-      const r0 = canvas.getBoundingClientRect()
-      slog('mount', { w: Math.round(r0.width), h: Math.round(r0.height), top: Math.round(r0.top), reduced })
-    }
-    let firstFrameLogged = false
+    // The ~30s stillness was measured and is not real: loop started +16ms, first canvas draw 22ms
+    // after mount. The seeded onScreen below stays — it is correct regardless — and the instrumentation
+    // that proved it is removed rather than left behind as permanent console noise.
 
     let visible = !document.hidden
     let onScreen = true
@@ -555,9 +542,8 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     let playedThisTurn = false
 
     function start() {
-      if (running || reduced || disposed) { slog('start skipped', { running, reduced, disposed }); return }
+      if (running || reduced || disposed) return
       running = true
-      slog('loop started')
       // The loop only ever starts after the still has been drawn — see the ready.then below.
       raf = requestAnimationFrame(draw)
     }
@@ -569,7 +555,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       if (v && !v.paused) v.pause()
     }
     function sync() {
-      slog('sync', { visible, onScreen, running })
       if (visible && onScreen) start()
       else { stop(); drawStill() }
     }
@@ -592,7 +577,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     )
     io.observe(canvas)
     onScreen = laidOut() ? canvas.getBoundingClientRect().bottom > 0 : true
-    slog('seeded onScreen', { onScreen, laidOut: laidOut() })
     sync()
 
     // A blocked play() is the browser's autoplay decision, and the next genuine gesture is when it can
@@ -628,7 +612,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
 
     ready.then(() => {
       if (disposed) return
-      slog('still decoded', { w: image.naturalWidth, h: image.naturalHeight })
       img = image
       fit()
       drawStill()                       // <- the picture is on screen HERE, before any effect starts

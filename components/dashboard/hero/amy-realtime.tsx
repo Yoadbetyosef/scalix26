@@ -113,6 +113,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     if (!speakEmittedRef.current) return
     const finish = () => {
       clearDrain()
+      clearTick()
       speakEmittedRef.current = false
       emit({ type: 'stopSpeaking' })
       emit({ type: 'listen' })
@@ -126,13 +127,46 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
       if (!c || playHeadRef.current <= c.currentTime) finish()
     }, 60)
   }
-  useEffect(() => clearDrain, [])
+  useEffect(() => () => { clearDrain(); clearTick() }, [])
+
+  // THE CEILING IS A SAFETY NET, NOT AN END.
+  //
+  // It was being enforced as one. speak(ms) arms a timer in the canvas that returns her to idle when it
+  // expires, and the ms came from replyRef — which at the first PCM packet is usually empty or a stale
+  // fragment, so Math.max floored it at 1500. A five-second sentence therefore animated for exactly
+  // 1.5s: "armed -> speaking" then "speaking -> idle" 1500ms later, in the log, every time.
+  //
+  // The fix is not a better guess from the text. The scheduled audio already knows precisely how much
+  // of her is left — playHead minus the context clock IS the remaining duration — so the ceiling is
+  // refreshed from it while she talks. It can then only expire if the audio has genuinely run out and
+  // the real stopSpeaking() was lost, which is the only thing a safety net is for.
+  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const clearTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
+
+  /** Milliseconds of audio still scheduled, plus a margin so the net never lands on the last sample. */
+  const remainingMs = () => {
+    const c = ctxRef.current
+    if (!c) return 0
+    return Math.max(0, Math.round((playHeadRef.current - c.currentTime) * 1000))
+  }
 
   const beginSpeaking = () => {
     if (speakEmittedRef.current) return
     speakEmittedRef.current = true
     const t = replyRef.current
-    emit({ type: 'speak', text: t, ms: Math.min(30_000, Math.max(1_500, t.length * 55)) })
+    // At the first packet almost nothing is scheduled yet and the transcript may not have arrived, so
+    // the opening ceiling is deliberately generous. It is refined below within one tick.
+    const fromText = t ? t.length * 75 : 0
+    emit({ type: 'speak', text: t, ms: Math.min(30_000, Math.max(8_000, fromText, remainingMs() + 1_500)) })
+
+    clearTick()
+    tickRef.current = setInterval(() => {
+      if (!speakEmittedRef.current) { clearTick(); return }
+      const left = remainingMs()
+      if (left <= 0) return // endSpeaking's drain owns the ending; the net stays out of it
+      // Re-arming speak() resets the canvas's timer, so the ceiling tracks the audio instead of a guess.
+      emit({ type: 'speak', text: replyRef.current, ms: Math.min(30_000, left + 1_500) })
+    }, 500)
   }
   const name = briefing.employeeName || 'Amy'
   const [phase, setPhase] = useState<Phase>('connecting')

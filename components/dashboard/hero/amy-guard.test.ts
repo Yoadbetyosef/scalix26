@@ -35,3 +35,26 @@ describe('the guard lives in emit and covers every call site', () => {
     expect(src).toMatch(/playHeadRef\.current = 0/)
   })
 })
+
+describe('the speak ceiling is a safety net, not an end', () => {
+  it('never floors at 1500 — that floor WAS the bug', () => {
+    // A five-second sentence animated for exactly 1.5s because replyRef was empty at the first packet
+    // and Math.max floored the estimate there.
+    expect(src).not.toMatch(/Math\.max\(1_?500/)
+  })
+
+  it('opens generously, because nothing reliable is known yet at the first packet', () => {
+    expect(src).toMatch(/Math\.max\(8_000, fromText, remainingMs\(\) \+ 1_500\)/)
+  })
+
+  it('refreshes from the scheduled audio, which knows the real remaining duration', () => {
+    expect(src).toMatch(/playHeadRef\.current - c\.currentTime\) \* 1000/)
+    expect(src).toMatch(/emit\(\{ type: 'speak', text: replyRef\.current, ms: Math\.min\(30_000, left \+ 1_500\) \}\)/)
+  })
+
+  it('stops refreshing when the audio has run out, leaving the ending to the drain', () => {
+    expect(src).toMatch(/if \(left <= 0\) return/)
+    // And the ticker is cleared wherever the turn ends.
+    expect(src).toMatch(/clearDrain\(\)\s*\n\s*clearTick\(\)/)
+  })
+})
