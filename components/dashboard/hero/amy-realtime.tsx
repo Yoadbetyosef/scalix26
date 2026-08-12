@@ -334,7 +334,13 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     // and already decoded; this reads it, it does not resample or analyse anything.
     let peak = 0
     for (let i = 0; i < int16.length; i += 16) { const a = Math.abs(int16[i]); if (a > peak) peak = a }
-    emit({ type: 'level', value: Math.min(1, peak / 32768) })
+    // peak/32768 is the mathematically honest fraction of full scale and the wrong number to send.
+    // Conversational speech peaks around a tenth to a third of full scale, so the meter sat near zero
+    // and its 52 segments rendered as a dotted rule — what looked like the old drawing was the new one,
+    // starved. GAIN maps a normal speaking voice across most of the meter's range; the clamp lets a
+    // loud passage flatten at the top rather than distort the shape below it.
+    const GAIN = 3.5
+    emit({ type: 'level', value: Math.min(1, (peak / 32768) * GAIN) })
     const buf = ctx.createBuffer(1, int16.length, 24000)
     const ch = buf.getChannelData(0)
     for (let i = 0; i < int16.length; i++) ch[i] = int16[i] / 32768

@@ -346,8 +346,25 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       if (vid) {
         if (vTarget && !vidRequested) { vidRequested = true; vid.load() }
         if (vid.readyState >= 2) {
-          if (vTarget && vid.paused) { try { vid.currentTime = 0; void vid.play() } catch { /* autoplay refused */ } }
-          if (!vTarget && vidA < 0.02 && !vid.paused) vid.pause()
+          // `void vid.play()` threw the promise away, and a try/catch cannot see an async rejection —
+          // so the catch labelled "autoplay refused" had never caught one. Worse, currentTime = 0 ran
+          // on EVERY frame the element stayed paused, so a rejected play() reset her to frame zero
+          // sixty times a second: the frozen first frame that was reported.
+          //
+          // Now: rewind only when a new utterance begins, ask once, and record why if it says no.
+          if (vTarget && vid.paused && !playPending) {
+            if (!playedThisTurn) { vid.currentTime = 0; playedThisTurn = true }
+            playPending = true
+            vid.play().then(
+              () => { playPending = false; playBlocked = false },
+              (err: unknown) => {
+                playPending = false; playBlocked = true
+                // Logged once per block, not per frame.
+                console.warn(`[v2 video] play() rejected: ${(err as Error)?.name ?? 'unknown'} — muted=${vid.muted} readyState=${vid.readyState}`)
+              },
+            )
+          }
+          if (!vTarget) { playedThisTurn = false; if (vidA < 0.02 && !vid.paused) vid.pause() }
           if (vidA > 0.006) {
             ctx!.globalAlpha = vidA
             ctx!.drawImage(vid, DX, DY, DW, DH)
@@ -515,6 +532,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     let visible = !document.hidden
     let onScreen = true
     let running = false
+    // Video play() bookkeeping, per the loop above.
+    let playPending = false
+    let playBlocked = false
+    let playedThisTurn = false
 
     function start() {
       if (running || reduced || disposed) return
@@ -537,11 +558,31 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     const onVisibility = () => { visible = !document.hidden; sync() }
     document.addEventListener('visibilitychange', onVisibility)
 
+    // IntersectionObserver fires once immediately with the CURRENT state. At that moment the canvas
+    // can still be zero-sized — the v2 shell renders a placeholder tree until useIsMobile() resolves,
+    // so this element is measured before it has been laid out. A zero-sized element never intersects,
+    // so that first callback set onScreen=false and stopped a loop that had started correctly, and
+    // nothing re-fired it until a scroll or a resize. That was the half-minute of stillness.
+    //
+    // The rect is the seed and the guard: a zero-sized canvas is not evidence of being off-screen, it
+    // is evidence of not having been laid out yet. The observer stays the ongoing source of truth.
+    const laidOut = () => { const r = canvas.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
     const io = new IntersectionObserver(
-      ([entry]) => { onScreen = entry.isIntersecting; sync() },
+      ([entry]) => { if (!entry.isIntersecting && !laidOut()) return; onScreen = entry.isIntersecting; sync() },
       { threshold: 0.01 },
     )
     io.observe(canvas)
+    onScreen = laidOut() ? canvas.getBoundingClientRect().bottom > 0 : true
+    sync()
+
+    // A blocked play() is the browser's autoplay decision, and the next genuine gesture is when it can
+    // be reversed. One attempt, then the listener removes itself — retrying on every click would spam
+    // the console with a refusal the user has already been told about.
+    const onGesture = () => {
+      const v = videoRef.current
+      if (v && playBlocked && v.readyState >= 2) { playBlocked = false; v.play().catch(() => { playBlocked = true }) }
+    }
+    window.addEventListener('pointerdown', onGesture)
 
     const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
@@ -600,6 +641,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('resize', onResize)
+      window.removeEventListener('pointerdown', onGesture)
       io.disconnect()
       if (timerRef.current) clearTimeout(timerRef.current)
     }
@@ -613,7 +655,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
           height are stated so the browser can size it without fetching, and it is off the layout
           entirely. Sampled into the canvas, never displayed. */}
       <video
-        ref={videoRef}
+        // React sets `muted` as a property and it is not always reflected before the first play(),
+        // which is one of the few ways a muted element still trips the autoplay policy. Set on the
+        // node itself, where the policy actually reads it.
+        ref={(el) => { videoRef.current = el; if (el) el.muted = true }}
         src={VIDEO}
         width={IW}
         height={IH}
