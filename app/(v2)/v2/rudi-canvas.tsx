@@ -221,6 +221,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       const key = `${CW}x${CH}x${raw.length}`
       if (key === netKey || !raw.length || !CW) return
       netKey = key
+      queueMicrotask(() => flags('mesh built'))
       buildNet()
     }
 
@@ -272,6 +273,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     }
 
     function draw(now: number) {
+      if (!framed) { framed = true; flags('FIRST DRAW FRAME') }
       if (disposed || !img) return
       const st = stateRef.current
       ctx!.setTransform(1, 0, 0, 1, 0, 0)
@@ -512,9 +514,20 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // after mount. The seeded onScreen below stays — it is correct regardless — and the instrumentation
     // that proved it is removed rather than left behind as permanent console noise.
 
+    // Kept until a cold load confirms the fix. Every flag the loop's running condition and the mesh
+    // build depend on, so the mount set and the post-return set can be compared directly.
+    const scanT0 = performance.now()
+    /* eslint-disable no-console */
+    const flags = (label: string) => console.info(
+      '%c[v2 scan]', 'color:#8b5cf6', `+${Math.round(performance.now() - scanT0)}ms ${label}`,
+      { CW, CH, visible, onScreen, running, mesh: raw.length, netKey: netKey || '(unbuilt)', reduced },
+    )
+    /* eslint-enable no-console */
+
     let visible = !document.hidden
     let onScreen = true
     let running = false
+    let framed = false
     // Video play() bookkeeping, per the loop above.
     let playPending = false
     let playBlocked = false
@@ -567,6 +580,26 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     }
     window.addEventListener('pointerdown', onGesture)
 
+    // ── THE CANVAS TELLS US WHEN IT HAS A SIZE ──────────────────────────────────────────────────
+    //
+    // ensureNet() returns early on !CW, which is correct — it cannot lay out a mesh across a zero
+    // width. Having no way back was not. The v2 shell renders a placeholder tree until useIsMobile()
+    // resolves, so this canvas is measured BEFORE it is laid out: CW was 0 at both fit() calls, the
+    // mesh fetch resolved into that zero, ensureNet() returned, netKey stayed '' and nothing ever
+    // called it again. The network was never built.
+    //
+    // Only a resize could recover it, which is why switching tabs and back appeared to fix the screen
+    // — returning to a tab happens to fire one. That was a coincidence being relied on. The element
+    // now reports its own size, so the mesh is built the moment there is something to build it across.
+    const ro = new ResizeObserver(() => {
+      const had = CW
+      fit()
+      ensureNet()
+      if (CW && !had) flags('canvas got its size')
+      if (!running) drawStill()
+    })
+    ro.observe(canvas)
+
     const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
 
@@ -578,6 +611,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // 680x907 image. Nothing in this path waits on the video, the mesh, or the network build.
     fit()
     paintGround()
+    flags('mount')
 
     const image = new Image()
     // Static, same-origin, and the only thing standing between the visitor and a picture.
@@ -623,6 +657,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       clearTimeout(report)
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
+      ro.disconnect()
       window.removeEventListener('resize', onResize)
       window.removeEventListener('pointerdown', onGesture)
       io.disconnect()
