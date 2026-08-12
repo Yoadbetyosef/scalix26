@@ -103,6 +103,7 @@ describe('the shared list survived four more screens', () => {
     ['app/(v2)/v2/inbox/page.tsx', 'getDashboardData'],
     ['app/(v2)/v2/appointments/page.tsx', 'getDashboardData'],
     ['app/(v2)/v2/orders/page.tsx', 'listOrders'],
+    ['app/(v2)/v2/contacts/page.tsx', 'listContactsPage'],
   ])('%s adds no query — it reuses %s', (file, loader) => {
     const src = code(file)
     expect(src).toContain(loader)
@@ -114,6 +115,7 @@ describe('the shared list survived four more screens', () => {
     ['app/(v2)/v2/appointments/page.tsx', 'scheduling'],
     ['app/(v2)/v2/orders/page.tsx', 'orders'],
     ['app/(v2)/v2/leads/page.tsx', 'pipeline'],
+    ['app/(v2)/v2/contacts/page.tsx', 'contacts'],
   ])('%s is gated on %s', (file, mod) => {
     expect(code(file)).toContain(`'${mod}'`)
   })
@@ -122,9 +124,25 @@ describe('the shared list survived four more screens', () => {
     'app/(v2)/v2/inbox/page.tsx',
     'app/(v2)/v2/appointments/page.tsx',
     'app/(v2)/v2/orders/page.tsx',
+    'app/(v2)/v2/contacts/page.tsx',
   ])('%s is read-only', (file) => {
     const actions = code(file).match(/\{ label: '[^']+'[^}]*\}/g) ?? []
     expect(actions.length).toBeGreaterThan(0)
     for (const a of actions) expect(a).toContain('disabledReason: PREVIEW')
+  })
+})
+
+describe('the contacts read is the page\'s own, extracted not rewritten', () => {
+  it('the page delegates to it rather than keeping its query', () => {
+    const page = code('app/contacts/page.tsx')
+    expect(page).toMatch(/listContactsPage\(tenantId/)
+    expect(page).not.toMatch(/\.from\('contacts'\)/)
+  })
+
+  it('the extraction kept every filter and both orderings', () => {
+    const lib = code('lib/contacts/page-read.ts')
+    for (const part of ["is('merged_into_id', null)", "order('last_interaction'", "order('name'", 'escapeSearchTerm(q)']) {
+      expect(lib).toContain(part)
+    }
   })
 })

@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
-import { escapeSearchTerm } from '@/lib/contacts/store'
+import { listContactsPage } from '@/lib/contacts/page-read'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Phone, Mail, MessageCircle, ChevronRight, ChevronLeft, Search } from 'lucide-react'
@@ -50,27 +50,9 @@ export default async function ContactsPage({
   const page = Math.max(1, Number(params.page) || 1)
   const offset = (page - 1) * PAGE_SIZE
 
-  // An imported address book is far larger than a book that filled up one conversation at a time, so
-  // the page is a window onto it: a count for the header, a slice for the table, and search over the
-  // whole book rather than over whatever the slice happened to contain.
-  let query = serviceSupabase
-    .from('contacts')
-    .select('id, name, email, phone, channel, total_conversations, last_interaction', { count: 'exact' })
-    .eq('tenant_id', tenantId)
-    .is('merged_into_id', null)
-    // People she's actually spoken to sit on top, most recent first. Everyone else — an imported book
-    // has no interactions at all — falls into a stable A–Z run instead of an arbitrary one, with the
-    // contacts we can only identify by email or phone last.
-    .order('last_interaction', { ascending: false, nullsFirst: false })
-    .order('name', { ascending: true, nullsFirst: false })
-    .range(offset, offset + PAGE_SIZE - 1)
-
-  const safe = escapeSearchTerm(q)
-  if (safe) query = query.or(`name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%,address.ilike.%${safe}%`)
-
-  const { data, count } = await query
-  const contacts = (data ?? []) as ContactRow[]
-  const total = count ?? 0
+  // Moved to lib/contacts/page-read.ts so /v2's contacts list reads the SAME window onto the address
+  // book. Same slice, same ordering, same search — see that file's header.
+  const { contacts, total } = await listContactsPage(tenantId, { q, page, pageSize: PAGE_SIZE })
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const firstShown = total === 0 ? 0 : offset + 1
   const lastShown = offset + contacts.length

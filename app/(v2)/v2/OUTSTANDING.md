@@ -42,12 +42,11 @@ an assumption, not a measurement. Log its identity in the render object before a
 **Next step if it is picked up again:** log `dataPromise` identity per render, and check whether
 `HomeClient` itself remounts (does `isMobile` return to `null`?) rather than only its children.
 
-## 2. Contacts has no v2 list page
+## 2. Contacts — DONE
 
-The other four (`leads`, `inbox`, `appointments`, `orders`) run on the shared `ListPage`. Contacts
-does not, because its rows come from a query written inline in `app/contacts/page.tsx` with paging and
-search — the same situation `getDashboardData` was in before it moved to `lib/`. It needs that same
-verbatim extraction, not a reimplementation that quietly differs from the page it mirrors.
+All five list screens now run on the shared `ListPage`. The contacts read was extracted verbatim from
+`app/contacts/page.tsx` into `lib/contacts/page-read.ts` (byte-identical, verified against the source
+block) so both screens see the same window onto the address book.
 
 ## 3. Mobile lost its pinned composer in the hoist
 

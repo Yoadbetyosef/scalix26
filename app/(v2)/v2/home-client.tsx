@@ -264,7 +264,7 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
               ...(modules.includes('inbox') ? [{ label: 'Inbox', href: '/v2/inbox', count: count((d) => d.railCounts.inbox) }] : []),
               ...(modules.includes('scheduling') ? [{ label: 'Appointments', href: '/v2/appointments', count: count((d) => d.railCounts.appointments) }] : []),
               // Contacts has no v2 page yet, so it stays an inert row rather than a link to nothing.
-              { label: 'Contacts' },
+              ...(modules.includes('contacts') ? [{ label: 'Contacts', href: '/v2/contacts' }] : []),
             ]}
             groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {
               ...g,

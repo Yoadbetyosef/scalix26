@@ -1,0 +1,63 @@
+import { listContactsPage, type ContactRow } from '@/lib/contacts/page-read'
+import { isSocialChannel } from '@/lib/utils'
+import { ListPage, type ListFilter, type ListRow } from '../list'
+import { listPageContext, relativeTime, PREVIEW } from '../list-page'
+import { contactsLine } from './line'
+
+// Contacts, reskinned. listContactsPage() is the contacts page's own read, extracted verbatim to
+// lib/ so both screens see the same window onto the address book — same slice, same ordering, same
+// search. This page adds no query.
+
+export const dynamic = 'force-dynamic'
+
+// The buckets are how a contact reached the business, which is the only grouping the row data
+// supports without inventing one.
+const FILTERS: ListFilter[] = [
+  { id: 'all', label: 'All', buckets: ['spoken', 'social', 'quiet'] },
+  { id: 'spoken', label: 'Talked to', buckets: ['spoken'] },
+  { id: 'social', label: 'Social', buckets: ['social'] },
+  { id: 'quiet', label: 'No contact yet', buckets: ['quiet'] },
+]
+
+// Verbatim from app/contacts/page.tsx: a contact the AI created from one inbound email or call has
+// nothing but that address, and calling them "Unknown" hides the one thing we DO know about them.
+const displayTitle = (c: ContactRow): string => c.name || c.email || c.phone || 'Unknown'
+
+export default async function V2Contacts() {
+  const { tenantId } = await listPageContext('contacts')
+  const { contacts, total } = await listContactsPage(tenantId)
+
+  const rows: ListRow[] = contacts.map((c) => {
+    const bucket = c.total_conversations > 0 ? 'spoken' : isSocialChannel(c.channel ?? '') ? 'social' : 'quiet'
+    return {
+      id: c.id,
+      primary: displayTitle(c),
+      detail: [c.email, c.phone, c.channel].filter(Boolean).join(' · ') || 'No details yet',
+      // When they were last spoken to. A contact with no interaction has no time to show, and a
+      // fabricated one would be worse than a blank.
+      trailing: c.last_interaction ? relativeTime(c.last_interaction) : null,
+      marked: false,
+      muted: bucket === 'quiet',
+      href: `/contacts/${c.id}`,
+      bucket,
+      actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
+    }
+  })
+
+  return (
+    <ListPage
+      title="Contacts"
+      line={contactsLine({
+        total,
+        shown: rows.length,
+        spoken: rows.filter((r) => r.bucket === 'spoken').length,
+        newest: rows.find((r) => r.trailing) ?? null,
+      })}
+      filters={FILTERS}
+      initialFilter="all"
+      rows={rows}
+      backHref="/v2"
+      empty={{ title: 'No contacts yet', body: 'Everyone Rudi speaks to is added here automatically.' }}
+    />
+  )
+}
