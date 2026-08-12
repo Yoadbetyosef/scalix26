@@ -30,7 +30,7 @@ const ARMED_TIMEOUT_MS = 12_000
 
 const GROUPS = [
   { id: 'g1', label: 'Rudi', items: [{ label: 'AI Employees' }, { label: 'Knowledge' }, { label: 'Test AI' }] },
-  { id: 'g2', label: 'Business', items: [{ label: 'Orders' }, { label: 'Analytics' }, { label: 'Reports' }] },
+  { id: 'g2', label: 'Business', items: [{ label: 'Orders', href: '/v2/orders' }, { label: 'Analytics' }, { label: 'Reports' }] },
   { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Settings' }, { label: 'Sign Out', out: true }] },
 ]
 
@@ -215,8 +215,9 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
             // Gated exactly as /dashboard gates its tabs: no `pipeline`, no Leads row; no
             // `scheduling`, no Appointments row.
             ...(modules.includes('pipeline') ? [{ label: 'Leads', href: '/v2/leads', count: count((d) => d.railCounts.leads) }] : []),
-            { label: 'Inbox', count: count((d) => d.railCounts.inbox) },
-            ...(modules.includes('scheduling') ? [{ label: 'Appointments', count: count((d) => d.railCounts.appointments) }] : []),
+            ...(modules.includes('inbox') ? [{ label: 'Inbox', href: '/v2/inbox', count: count((d) => d.railCounts.inbox) }] : []),
+            ...(modules.includes('scheduling') ? [{ label: 'Appointments', href: '/v2/appointments', count: count((d) => d.railCounts.appointments) }] : []),
+            // Contacts has no v2 page yet, so it stays an inert row rather than a link to nothing.
             { label: 'Contacts' },
           ]}
           groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {

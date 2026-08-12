@@ -89,3 +89,42 @@ describe('leads reproduces what the current view does', () => {
     expect(code('app/(v2)/v2/home-client.tsx')).toMatch(/modules\.includes\('pipeline'\)/)
   })
 })
+
+describe('the shared list survived four more screens', () => {
+  const list = code('app/(v2)/v2/list.tsx')
+
+  it('still knows nothing about any one screen', () => {
+    // The test that matters. Leads, Inbox, Appointments and Orders all render through this component;
+    // if any of them had needed a branch, this fails and the answer is a new ListRow field.
+    expect(list).not.toMatch(/lead|inbox|conversation|appointment|order|contact/i)
+  })
+
+  it.each([
+    ['app/(v2)/v2/inbox/page.tsx', 'getDashboardData'],
+    ['app/(v2)/v2/appointments/page.tsx', 'getDashboardData'],
+    ['app/(v2)/v2/orders/page.tsx', 'listOrders'],
+  ])('%s adds no query — it reuses %s', (file, loader) => {
+    const src = code(file)
+    expect(src).toContain(loader)
+    expect(src).not.toMatch(/\.from\('/)
+  })
+
+  it.each([
+    ['app/(v2)/v2/inbox/page.tsx', 'inbox'],
+    ['app/(v2)/v2/appointments/page.tsx', 'scheduling'],
+    ['app/(v2)/v2/orders/page.tsx', 'orders'],
+    ['app/(v2)/v2/leads/page.tsx', 'pipeline'],
+  ])('%s is gated on %s', (file, mod) => {
+    expect(code(file)).toContain(`'${mod}'`)
+  })
+
+  it.each([
+    'app/(v2)/v2/inbox/page.tsx',
+    'app/(v2)/v2/appointments/page.tsx',
+    'app/(v2)/v2/orders/page.tsx',
+  ])('%s is read-only', (file) => {
+    const actions = code(file).match(/\{ label: '[^']+'[^}]*\}/g) ?? []
+    expect(actions.length).toBeGreaterThan(0)
+    for (const a of actions) expect(a).toContain('disabledReason: PREVIEW')
+  })
+})
