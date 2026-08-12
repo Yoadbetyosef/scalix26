@@ -1,4 +1,7 @@
 'use client'
+import { AmyRealtime } from '@/components/dashboard/hero/amy-realtime'
+import { AskAmyText } from '@/components/dashboard/hero/ask-amy-text'
+import type { AmySession } from '@/components/dashboard/hero/use-amy-session'
 
 import { use } from 'react'
 import type { HomeData } from './data'
@@ -167,4 +170,23 @@ export function SheetBody({ p }: { p: P }) {
 /** The mobile header's job count. */
 export function JobCount({ p }: { p: P }) {
   return <>{use(p).rightNow.length.toString().padStart(2, '0')}</>
+}
+
+
+// ── THE VOICE LAYER, UNCHANGED ──────────────────────────────────────────────────────────────────────
+//
+// AmyRealtime and AskAmyText are the dashboard's own components, rendered here with the dashboard's
+// own briefing. Nothing about the conversation is reimplemented — this file only reads the streamed
+// promise so the session can start without the shell having awaited it.
+//
+// They carry their own (v1) styling. That is deliberate: restyling them would mean forking the voice
+// UI, and a fork is the thing that drifts. The look is a separate, later decision.
+
+export function AmyLayer({ p, session }: { p: Promise<HomeData>; session: AmySession }) {
+  const briefing = use(p).briefing
+  if (session.mode === 'live') {
+    return <AmyRealtime briefing={briefing} audioCtx={session.audioCtx} onClose={session.close} onType={session.goText} />
+  }
+  if (session.mode === 'text') return <AskAmyText briefing={briefing} onTalk={session.goLive} />
+  return null
 }

@@ -8,12 +8,12 @@ import { LeadsTable } from '@/components/dashboard/leads-table'
 import { AppointmentsTable } from '@/components/dashboard/appointments-table'
 import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
-import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import { getImpactData } from '@/lib/dashboard/impact'
 import { AttentionSync } from '@/components/dashboard/attention'
 import { enabledModulesOf, effectiveModules } from '@/lib/modules'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 import { getDashboardData } from '@/lib/dashboard/overview'
+import { buildHeroInputs } from '@/lib/dashboard/briefing'
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams
@@ -64,48 +64,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   )
 
   if (effectiveTab === 'overview' && impactData) {
-    const employeesTyped = aiEmployees as { id?: string; name?: string | null; status?: string | null; voice?: string | null }[]
-    const primaryEmployee = employeesTyped.find((e) => e.status === 'active') || employeesTyped[0]
-    const employeeName = primaryEmployee?.name || 'Your AI'
-    const employeeVoice = primaryEmployee?.voice ?? null
-    brainAgentId = primaryEmployee?.id
-
-    const handled = impactData.conversationsManaged.value
-    const booked = appointments_list.filter((a) => a.status === 'confirmed' || a.status === 'completed').length
-    const recovered = leads_list.filter((l) => Boolean((l as { responded_at?: string | null }).responded_at)).length
-    const answered = impactData.coveragePct.value
-    const attentionCount = impactData.attention.length
-
-    const presenceState: PresenceState = attentionCount > 0 ? 'attention' : handled > 0 ? 'working' : 'ready'
-
-    // The AI's spoken status. `idleSentence` is the "all caught up" variant; the reactive header
-    // (AttentionSentence) shows the live unresolved count and falls back to idleSentence at zero.
-    const idleSentence =
-      handled > 0
-        ? 'On duty — watching every channel. Nothing needs you.'
-        : 'On duty, watching your channels. Nothing needs you yet.'
-    const stateSentence =
-      attentionCount > 0
-        ? `${attentionCount} ${attentionCount === 1 ? 'thing needs' : 'things need'} your attention.`
-        : idleSentence
-
-    // Amy's knowledge — built entirely from the real data already on this page.
-    const todayStr = new Date().toLocaleDateString('en-CA')
-    const appointmentsToday = appointments_list.filter((a) => a.slot_date === todayStr && a.status !== 'cancelled').length
-    const briefing = {
-      employeeName,
-      employeeVoice,
-      handled,
-      booked,
-      recovered,
-      coverage: answered,
-      channelLine: impactData.channelBreakdown.map((c) => `${c.count} ${c.label}`).join(', ') || undefined,
-      attention: impactData.attention.map((a) => ({ label: a.label, href: a.href })),
-      leadsAwaiting: stats.activeLeads,
-      callsAnswered: stats.totalCalls,
-      textsHandled: stats.textMessages,
-      appointmentsToday,
-    }
+    // Moved to lib/dashboard/briefing.ts so /v2 can obtain the SAME briefing. Same inputs, same
+    // values — see that file's header.
+    const { employeeName, employeeVoice, brainAgentId: agentId, briefing, presenceState, stateSentence, idleSentence, figures } =
+      buildHeroInputs(aiEmployees, impactData, appointments_list, leads_list, stats)
+    brainAgentId = agentId
 
     topSection = (
       <>
@@ -118,12 +81,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         idleSentence={idleSentence}
         businessName={tenant.business_name || ''}
         tenantId={tenant.id}
-        figures={[
-          { value: handled, label: 'Handled' },
-          { value: booked, label: 'Booked' },
-          { value: recovered, label: 'Recovered' },
-          { value: answered, suffix: '%', label: 'Answered' },
-        ]}
+        figures={figures}
       />
       </>
     )

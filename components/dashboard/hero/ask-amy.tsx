@@ -7,7 +7,7 @@ import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { AmyRealtime } from './amy-realtime'
 import { AskAmyText } from './ask-amy-text'
 import { type AmyBriefing, dataGreeting } from './ask-amy-shared'
-import { useAttention } from '@/components/dashboard/attention'
+import { useAmySession, useLiveBriefing } from './use-amy-session'
 
 export type { AmyBriefing } from './ask-amy-shared'
 
@@ -19,52 +19,19 @@ type Mode = 'idle' | 'live' | 'text'
  * quiet fallback. The customer phone pipeline is entirely separate.
  */
 export function AskAmy({ briefing: serverBriefing }: { briefing: AmyBriefing }) {
-  // The voice assistant speaks the SAME live unresolved notifications as the rest of the dashboard.
-  const { ready, visibleItems } = useAttention()
-  const briefing: AmyBriefing = ready
-    ? { ...serverBriefing, attention: visibleItems.map((v) => ({ label: v.label, href: v.href })) }
-    : serverBriefing
+  // Session + live briefing come from the shared hook so /v2's Talk button drives the SAME machine.
+  // Every value below is what this component computed inline before.
+  const briefing = useLiveBriefing(serverBriefing)
+  const { mode, audioCtx, goLive, goText, close } = useAmySession()
   const name = briefing.employeeName || 'Amy'
-  const [mode, setMode] = useState<Mode>('idle')
   // The mobile action bar is fixed to the bottom of the viewport (above the tab nav). It
   // must render via a portal to <body>: the dashboard hero has a persistent transform
   // (sx-animate-in fill:both), which would otherwise make `position:fixed` resolve against
   // the hero instead of the viewport. Portal only after mount (SSR has no document.body).
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-  // The parent OWNS a single, reused AudioContext for the whole Ask-Amy lifetime. It's
-  // unlocked inside the user's tap (mobile autoplay policy) and shared across live
-  // sessions. The realtime client only borrows it — it must never close it. We do NOT
-  // proactively close it either: a remount (incl. React StrictMode's mount→unmount→mount)
-  // would otherwise close it out from under an active session. One idle, suspended
-  // context per page is negligible and the browser reclaims it on unload. Held in state
-  // (not a ref) so it's passed to the client without reading a ref during render.
-  const [audioCtx, setAudioCtx] = useState<AudioContext | null>(null)
 
-  // Unlock/resume audio output synchronously INSIDE the tap. iOS Safari + Android Chrome
-  // only let an AudioContext start (and play sound) from a user gesture; the realtime
-  // client mounts a tick later, by which point the gesture is gone.
-  const goLive = () => {
-    try {
-      let ctx = audioCtx
-      if (!ctx || ctx.state === 'closed') {
-        const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-        ctx = new Ctor()
-        setAudioCtx(ctx)
-      }
-      ctx.resume().catch(() => {})
-      // A 1-sample silent buffer played in-gesture fully unlocks output on iOS.
-      const unlock = ctx.createBufferSource()
-      unlock.buffer = ctx.createBuffer(1, 1, 22050)
-      unlock.connect(ctx.destination)
-      unlock.start(0)
-    } catch {
-      /* fall back to the client creating its own context */
-    }
-    setMode('live')
-  }
-
-  if (mode === 'live') return <AmyRealtime briefing={briefing} audioCtx={audioCtx} onClose={() => setMode('idle')} onType={() => setMode('text')} />
+  if (mode === 'live') return <AmyRealtime briefing={briefing} audioCtx={audioCtx} onClose={close} onType={goText} />
   if (mode === 'text') return <AskAmyText briefing={briefing} onTalk={goLive} />
 
   return (
@@ -117,7 +84,7 @@ export function AskAmy({ briefing: serverBriefing }: { briefing: AmyBriefing }) 
           <span aria-hidden="true" className="pointer-events-none absolute -inset-1.5 rounded-full bg-accent/25 sx-halo" />
           <Mic className="pointer-events-none relative h-7 w-7" />
         </button>
-        <button onClick={() => setMode('text')} className="text-xs font-medium text-muted transition-colors hover:text-ink">
+        <button onClick={goText} className="text-xs font-medium text-muted transition-colors hover:text-ink">
           Type instead
         </button>
       </div>

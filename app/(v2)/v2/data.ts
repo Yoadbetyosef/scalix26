@@ -1,6 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getDashboardData } from '@/lib/dashboard/overview'
 import { getImpactData } from '@/lib/dashboard/impact'
+import { buildHeroInputs } from '@/lib/dashboard/briefing'
+import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 import { rudiLine, type RudiSegment } from './rudi-line'
 import type { NeedsItem, NowItem, Tile } from './sheet'
 
@@ -23,6 +25,8 @@ export interface ShellData {
 
 export interface HomeData {
   line: RudiSegment[]
+  /** The exact briefing /dashboard hands AskAmy. Same helper, same inputs, no extra query. */
+  briefing: AmyBriefing
   railCounts: { leads: number | null; inbox: number | null; appointments: number | null }
   aiOn: boolean
   rightNow: NowItem[]
@@ -94,6 +98,9 @@ export async function loadHomeData(tenantId: string): Promise<HomeData> {
 
   return {
     line: rudiLine({ jobsToday: todaysJobs.length, unansweredLeads, humanRequested }),
+    // Built from the data already loaded above — buildHeroInputs adds no query. This is what makes
+    // the Talk button possible: the briefing was previously trapped inside the dashboard page.
+    briefing: buildHeroInputs(dash.aiEmployees, impact, dash.appointments_list, dash.leads_list, dash.stats).briefing,
     railCounts: {
       leads: dash.stats.activeLeads || null,
       inbox: dash.stats.totalConversations || null,

@@ -7,10 +7,11 @@ import { Rail } from './rail'
 import { rudiCursor, type RudiSegment } from './rudi-line'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
+import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
 import {
-  AiBadge, Caption, CardSkeleton, ColumnSkeleton, JobCount, RailCount, RightColumn, SheetBody, TodayList,
+  AiBadge, AmyLayer, Caption, CardSkeleton, ColumnSkeleton, JobCount, RailCount, RightColumn, SheetBody, TodayList,
 } from './deferred'
 
 // The interactive shell.
@@ -45,6 +46,8 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
   const palette = usePalette()
+  // AskAmy's session machine, verbatim — see components/dashboard/hero/use-amy-session.ts.
+  const amy = useAmySession()
   useMagnet(talkEl, typing)
 
   // FIRST effect in the shell, so it fires as soon as React has hydrated this component — which is
@@ -91,14 +94,13 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   // the canvas's listening / speaking / armed states are never triggered from this file. They exist
   // for the Deepgram agent to drive later, through the same API the component already exposes.
   //
-  // The Talk button is INERT. Its equivalent on /dashboard is AskAmy's goLive(), which opens
-  // <AmyRealtime briefing={…} /> — and `briefing` is assembled inline inside app/dashboard/page.tsx
-  // from a dozen page-local variables. It is not an exported function, so it cannot be called from
-  // here without either changing that page or rebuilding it. Both are out of scope, so the control
-  // renders and does nothing rather than doing something invented.
+  // The Talk button opens /dashboard's OWN live call. useAmySession is AskAmy's session machine,
+  // lifted out of that component unchanged; goLive still unlocks the AudioContext inside the tap and
+  // still renders <AmyRealtime>. The briefing is the one buildHeroInputs produces for /dashboard.
+  // Nothing about the conversation is new — only which button starts it.
   const endSession = useCallback(() => { rudi.current?.endSession() }, [])
 
-  const toggleTalk = useCallback(() => { wake() }, [wake])
+  const toggleTalk = useCallback(() => { wake(); amy.goLive() }, [wake, amy])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -113,10 +115,10 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
     return () => window.removeEventListener('keydown', onKey)
   }, [toggleTalk, typing, palette.open, wake, endSession])
 
-  // Echoes what was typed and nothing else. /dashboard's equivalent is AskAmyText, which needs the
-  // same `briefing` the Talk button cannot reach — so there is no answer to show, and inventing one
-  // is what this whole pass is removing.
-  const onSubmit = useCallback((text: string) => { setSaid(text) }, [])
+  // Typing hands off to AskAmyText — the same component "Type instead" opens on /dashboard, with the
+  // same briefing. The echo stays: it is what the composer showed before the answer had anywhere to
+  // come from, and it still reads as the owner's own line.
+  const onSubmit = useCallback((text: string) => { setSaid(text); amy.goText() }, [amy])
 
   // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
   // answered. Only the resting line needs the numbers, so only that case can suspend.
@@ -159,6 +161,8 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
   if (!isMobile) {
     return (
       <div className="v2-app">
+      {/* /dashboard's live call and typed fallback, mounted over the v2 shell. */}
+      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} /></Suspense>
         <Cursor label={rudiCursor(state, minimised)} active={!typing} />
         <Palette
           commands={[
@@ -223,6 +227,8 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
 
   return (
     <div className="v2-mobile">
+      {/* /dashboard's live call and typed fallback, mounted over the v2 shell. */}
+      <Suspense fallback={null}><AmyLayer p={dataPromise} session={amy} /></Suspense>
       <div className="v2-frame">{hero}</div>
       <div className="v2-top">
         <b>{shell.businessName}</b>
