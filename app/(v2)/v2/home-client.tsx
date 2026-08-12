@@ -202,6 +202,7 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
         <main className="v2-stage" data-min={minimised || undefined}>
           <div className="v2-home">
             {hero}
+            {amyLayer}
             <div className="v2-overlay">
               {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
               {said && <p className="v2-you">You · {said}</p>}
