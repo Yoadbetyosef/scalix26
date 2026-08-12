@@ -756,3 +756,16 @@
   /* The reference's mobile row is name, detail and one figure. Actions would crowd it off the edge. */
   .v2 .v2-racts { display: none; }
 }
+
+/* The microphone is open. The custom cursor carries END and is hidden during a session, so this is the
+   only thing on screen saying so — it is deliberately the one live-red element in the design. */
+.v2 .v2-tag[data-live] { display: inline-flex; align-items: center; gap: 7px; color: var(--v2-red); }
+.v2 .v2-tag[data-live] i {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--v2-red);
+  box-shadow: 0 0 0 0 rgba(255, 92, 108, 0.55); animation: v2-mic-live 1.6s ease-out infinite;
+}
+@keyframes v2-mic-live {
+  70% { box-shadow: 0 0 0 7px rgba(255, 92, 108, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 92, 108, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .v2 .v2-tag[data-live] i { animation: none; } }

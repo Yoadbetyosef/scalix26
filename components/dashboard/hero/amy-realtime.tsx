@@ -96,6 +96,14 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // counts as real. This ref reports one thing — "the host has been told she started" — so it cannot
   // move any behaviour but the portrait.
   const speakEmittedRef = useRef(false)
+  const tornDownRef = useRef(false)
+  // Held in refs so the timers below never re-subscribe the socket effect.
+  const onCloseRef = useRef(onClose); onCloseRef.current = onClose
+  const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hiddenRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closingRef = useRef(false)   // her last word is still coming; end when it lands
+  const clearIdle = () => { if (idleRef.current) { clearTimeout(idleRef.current); idleRef.current = null } }
+  const clearHidden = () => { if (hiddenRef.current) { clearTimeout(hiddenRef.current); hiddenRef.current = null } }
 
   // The one place the host is told she has begun. `ms` is a CEILING: ConversationText for the
   // assistant reliably lands before her audio, so replyRef holds the sentence by now, and
@@ -117,6 +125,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
       speakEmittedRef.current = false
       emit({ type: 'stopSpeaking' })
       emit({ type: 'listen' })
+      if (closingRef.current) { endSession('you said goodbye'); return }
+      armIdle()
     }
     const ctx = ctxRef.current
     if (!ctx) { finish(); return }
@@ -128,6 +138,34 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     }, 60)
   }
   useEffect(() => () => { clearDrain(); clearTick() }, [])
+
+  // A backgrounded tab holding an open microphone is the worst case on this list, so it is the
+  // shortest fuse. Returning to the tab cancels it.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) {
+        clearHidden()
+        hiddenRef.current = setTimeout(() => endSession(`tab hidden for ${HIDDEN_END_MS / 1000}s`), HIDDEN_END_MS)
+      } else clearHidden()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { document.removeEventListener('visibilitychange', onVis); clearHidden() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Unmount — which is what a route change is. This runs in ADDITION to the socket effect's own
+  // cleanup, and teardown is idempotent, so the belt and the braces cost nothing. Without it a
+  // reordering of the effects above could silently drop the only teardown on navigation.
+  useEffect(() => () => { teardown('unmounted') }, [])
+
+  // A tab being closed or reloaded never runs React cleanup. This is best-effort by nature — the
+  // browser may kill the page first — but the socket close is a single frame's work.
+  useEffect(() => {
+    const bye = () => teardown('page unloaded')
+    window.addEventListener('pagehide', bye)
+    return () => window.removeEventListener('pagehide', bye)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // THE CEILING IS A SAFETY NET, NOT AN END.
   //
@@ -144,6 +182,35 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   const clearTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null } }
 
   const moment = (m: AmyMoment) => emit(m)
+
+  // ── WHEN A SESSION ENDS ITSELF ──────────────────────────────────────────────────────────────────
+  //
+  // An open socket costs tokens and an open mic is worse: the tab can be behind another window with
+  // the microphone live and nothing on screen to say so. Four conditions, all cheap and none of them
+  // a model call.
+
+  /** Armed with nothing said. The draining hairline already promises this; now it happens. */
+  const IDLE_END_MS = 20_000
+  /** A backgrounded tab holding a mic. Shorter than idle, because nobody is watching. */
+  const HIDDEN_END_MS = 30_000
+
+  const armIdle = () => {
+    clearIdle()
+    idleRef.current = setTimeout(() => endSession(`no speech for ${IDLE_END_MS / 1000}s`), IDLE_END_MS)
+  }
+  /** Any speech, from either of us, means the conversation is alive. */
+  const keepAlive = () => { if (!tornDownRef.current) armIdle() }
+
+  // Closing intent, matched on the owner's own words. Deliberately a string test and not a model call:
+  // this decides whether to hang up, and a wrong end is far cheaper to recover from than a wrong
+  // charge. Anchored to the whole line so "thanks for booking that, can you also…" does not match.
+  const CLOSERS = [
+    /^(ok(ay)?|alright|right)?[\s,]*(thanks|thank you|thankyou|cheers|ta)[\s.!,]*$/i,
+    /^(that'?s (all|it|everything)|nothing else|no(thing)? more|i'?m (all )?(good|done|set)|all good|we'?re good)[\s.!,]*$/i,
+    /^(bye|goodbye|good ?night|see you|see ya|talk (to you )?(soon|later)|later|catch you later)[\s.!,]*$/i,
+    /^(ok(ay)?|alright)?[\s,]*(thanks|thank you)[\s,]*(bye|goodbye|see you|talk soon)[\s.!,]*$/i,
+  ]
+  const soundsFinal = (t: string) => CLOSERS.some((r) => r.test(t.trim()))
 
   /** Milliseconds of audio still scheduled, plus a margin so the net never lands on the last sample. */
   const remainingMs = () => {
@@ -397,11 +464,12 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
           try { msg = JSON.parse(ev.data) } catch { return }
           switch (msg.type) {
             case 'Welcome': case 'SettingsApplied':
-              setPhase('live'); emit({ type: 'listen' })
+              setPhase('live'); emit({ type: 'listen' }); armIdle()
               // LAYER 3 — honest transition: only now flip to "Listening" + buzz the user.
               if (!vibrated) { vibrated = true; try { navigator.vibrate?.(30) } catch { /* unsupported */ }; log('tap → agent-ready', Math.round(performance.now() - tapT0), 'ms') }
               break
             case 'UserStartedSpeaking':
+              keepAlive()
               tRef.current = { micFirstSent: tRef.current.micFirstSent ?? performance.now(), userStartedSpeaking: performance.now() }
               reportedRef.current = false
               agentSpeakingRef.current = false // real barge-in landed; back to normal streaming
@@ -412,7 +480,13 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               // that one skipped the drain and was itself the bug.
               stopPlayback(); endSpeaking(); setPhase('thinking'); break
             case 'ConversationText':
-              if (msg.role === 'user') { mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking'); emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' }) }
+              if (msg.role === 'user') {
+                mk('userEndpoint'); setUserText(msg.content || ''); setPhase('thinking')
+                emit({ type: 'said', text: msg.content || '' }); emit({ type: 'arm' })
+                keepAlive()
+                // She gets her last word out first: the flag is honoured once her audio has drained.
+                if (soundsFinal(msg.content || '')) closingRef.current = true
+              }
               // Stripped for display too. The prompt tells the agent not to format, but its words are
               // spoken by Deepgram before we ever see them — so if one slips through, at least the
               // owner doesn't also read the asterisks on screen.
@@ -479,7 +553,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
         setPhase('error')
       }
     })()
-    return () => { cancelled = true; teardown() }
+    return () => { cancelled = true; teardown('effect cleanup') }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -515,17 +589,50 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
     src.onended = () => { sourcesRef.current = sourcesRef.current.filter((s) => s !== src) }
   }
   function stopPlayback() { for (const s of sourcesRef.current) { try { s.stop() } catch { /* noop */ } } sourcesRef.current = []; playHeadRef.current = 0 }
-  function teardown() {
+  // Teardown REPORTS what it released. A session that ended in the UI while the socket stayed open is
+  // indistinguishable from one that ended properly unless the release is observable, and that gap is
+  // exactly what leaves a microphone live without anyone knowing.
+  function teardown(reason = 'closed') {
+    if (tornDownRef.current) return
+    tornDownRef.current = true
+    clearDrain(); clearTick(); clearIdle(); clearHidden()
     stopPlayback()
     try { procRef.current?.disconnect() } catch { /* noop */ }
-    try { wsRef.current?.close() } catch { /* noop */ }
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    // Only close a context we own; the parent's borrowed context must stay alive so a
-    // remount can keep using it (and audio playback isn't killed mid-session). close() is
-    // async — swallow its rejection (e.g. "already closed") so it never bubbles up.
-    if (ownsCtxRef.current && ctxRef.current && ctxRef.current.state !== 'closed') {
-      try { ctxRef.current.close().catch(() => {}) } catch { /* noop */ }
+
+    const ws = wsRef.current
+    const wsState = ws ? ws.readyState : -1
+    try { ws?.close() } catch { /* noop */ }
+
+    const tracks = streamRef.current?.getTracks() ?? []
+    tracks.forEach((t) => t.stop())
+    const live = tracks.filter((t) => t.readyState === 'live').length
+
+    // A context we created is closed. A BORROWED one is suspended, not closed: the parent reuses it
+    // across sessions and closing it would kill the next one — but leaving it running holds an audio
+    // graph open, so suspend is the honest middle. Both are logged with what actually happened.
+    const ctx = ctxRef.current
+    let ctxAction = 'none'
+    if (ctx && ctx.state !== 'closed') {
+      if (ownsCtxRef.current) { ctxAction = 'closed'; try { ctx.close().catch(() => {}) } catch { /* noop */ } }
+      else { ctxAction = 'suspended (borrowed)'; try { ctx.suspend().catch(() => {}) } catch { /* noop */ } }
     }
+
+    /* eslint-disable no-console */
+    console.info(
+      `%c[amy session] ENDED — ${reason}`,
+      live > 0 ? 'color:#ff5c6c;font-weight:600' : 'color:#0f9d58;font-weight:600',
+      { socketWas: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][wsState] ?? 'none', socketNow: ws ? ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState] : 'none',
+        micTracks: tracks.length, stillLive: live, audioContext: ctxAction },
+    )
+    /* eslint-enable no-console */
+  }
+
+  // Ending is teardown AND returning the UI to idle. Either alone is the failure: teardown without
+  // onClose leaves a dead panel on screen, onClose without teardown is the open microphone.
+  const endSession = (reason: string) => {
+    if (tornDownRef.current) return
+    teardown(reason)
+    onCloseRef.current()
   }
 
   // Open straight into "Listening…" — no "Connecting…" flash (tap → listening → speak).
@@ -537,7 +644,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
       <div className="relative">
         <div aria-hidden="true" className="amy-bloom pointer-events-none absolute -inset-3 rounded-[32px]" />
         <div className="amy-card relative px-6 py-6 sx-animate-in">
-          <button onClick={() => { teardown(); onClose() }} className="amy-close absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center" aria-label="End">
+          <button onClick={() => endSession('you pressed end')} className="amy-close absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center" aria-label="End">
             <X className="h-4 w-4" />
           </button>
 

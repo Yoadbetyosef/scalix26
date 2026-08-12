@@ -235,7 +235,9 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
             {hero}
             {amyLayer}
             <div className="v2-overlay">
-              {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
+              {amy.mode === 'idle'
+                ? (shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>)
+                : <p className="v2-tag" data-live><i />Microphone live · press to end</p>}
               {said && <p className="v2-you">You · {said}</p>}
               {caption}
               {hairline}
@@ -273,7 +275,9 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
         <i><s /><Suspense fallback={<>&mdash;</>}><JobCount p={dataPromise} /></Suspense></i>
       </div>
       <div className="v2-ov">
-        {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
+        {amy.mode === 'idle'
+                ? (shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>)
+                : <p className="v2-tag" data-live><i />Microphone live · press to end</p>}
         {said && <p className="v2-you">You · {said}</p>}
         {caption}
       </div>
