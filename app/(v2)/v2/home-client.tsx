@@ -53,42 +53,6 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
   const palette = usePalette()
-
-  // WHAT IS ACTUALLY ON TOP OF THE TALK BUTTON.
-  //
-  // Temporary. Three fixes have now been reasoned from the stacking rules and the button is still
-  // inert, so this stops reasoning: it asks the browser what element is at the button's own centre,
-  // and walks up from there printing the computed z-index and pointer-events of every ancestor. The
-  // first line names the hit target; if it is not the button, the second block says which ancestor
-  // made it so.
-  useEffect(() => {
-    if (!talkEl) return
-    const t = setTimeout(() => {
-      const r = talkEl.getBoundingClientRect()
-      const cx = Math.round(r.left + r.width / 2)
-      const cy = Math.round(r.top + r.height / 2)
-      const hit = document.elementFromPoint(cx, cy)
-      const desc = (el: Element | null) => {
-        if (!el) return 'none'
-        const c = getComputedStyle(el)
-        const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/).join('.') : ''
-        return `${el.tagName.toLowerCase()}${cls ? '.' + cls : ''} [z=${c.zIndex} pe=${c.pointerEvents} pos=${c.position}]`
-      }
-      /* eslint-disable no-console */
-      console.info('%c[v2 hit]', 'color:#ff2e93;font-weight:600', `button centre ${cx},${cy}`)
-      console.info('%c[v2 hit]', 'color:#ff2e93;font-weight:600', 'elementFromPoint →', desc(hit), hit === talkEl ? '✅ IS THE BUTTON' : '❌ NOT THE BUTTON')
-      // Everything the browser says is stacked there, topmost first.
-      const stack = (document.elementsFromPoint?.(cx, cy) ?? []).slice(0, 8).map(desc)
-      console.info('%c[v2 hit]', 'color:#ff2e93;font-weight:600', 'stack (topmost first):', stack)
-      // And the button's own ancestor chain, in case an ancestor is hiding or clipping it.
-      const chain: string[] = []
-      for (let el: Element | null = talkEl; el && chain.length < 10; el = el.parentElement) chain.push(desc(el))
-      console.info('%c[v2 hit]', 'color:#ff2e93;font-weight:600', 'button ancestors:', chain)
-      console.info('%c[v2 hit]', 'color:#ff2e93;font-weight:600', 'button rect:', { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), visible: r.width > 0 && r.height > 0 })
-      /* eslint-enable no-console */
-    }, 600)
-    return () => clearTimeout(t)
-  }, [talkEl])
   // AskAmy's session machine, verbatim — see components/dashboard/hero/use-amy-session.ts.
   const amy = useAmySession()
   useMagnet(talkEl, typing)
@@ -263,9 +227,7 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
         {hero}
         {amyLayer}
       <div className="v2-overlay">
-        {amy.mode === 'idle'
-          ? (shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>)
-          : <p className="v2-tag" data-live><i />Microphone live · press to end</p>}
+        {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
         {said && <p className="v2-you">You · {said}</p>}
         {caption}
         {hairline}

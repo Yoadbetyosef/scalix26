@@ -253,6 +253,20 @@
   box-shadow: 0 14px 40px rgba(14, 14, 17, 0.22), 0 0 0 1px rgba(14, 14, 17, 0.07);
   z-index: 6;
 }
+/* THE COLLAPSED TILE MUST OUTRANK THE DASHBOARD.
+   .v2-face carries z-index 6 and .v2-dash carries 4, which worked while they were SIBLINGS inside
+   .v2-stage. Since the hoist they are in different stacking contexts — the face inside .v2-hero (z 1),
+   the dash inside .v2-app (z 2) — so the entire hero subtree paints below the entire chrome subtree
+   and 6 can never beat 4. The tile was rendering correctly and was simply underneath the dashboard,
+   which is why the media looked blank with nothing to click.
+   Collapsed, the hero rises above the chrome and stops painting its own dark ground so the dashboard
+   shows through; only the tile itself takes the pointer. */
+.v2-root[data-min] .v2-hero {
+  z-index: 5;
+  background: transparent;
+  pointer-events: none;
+}
+.v2-root[data-min] .v2-face { pointer-events: auto; cursor: pointer; }
 .v2-root[data-min] .v2-scrim { opacity: 0; }
 .v2-root[data-min] .v2-overlay { opacity: 0; pointer-events: none; }
 .v2-dash {
@@ -676,7 +690,9 @@
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--v2-ink-42);
+  /* White, not ink. It sits over the portrait, and a dark mono line on a mid-tone image is the one
+     thing on this screen you cannot read. Same size, same face, same position. */
+  color: rgba(255, 255, 255, 0.55);
   margin-bottom: 10px;
 }
 
@@ -779,18 +795,7 @@
   .v2 .v2-racts { display: none; }
 }
 
-/* The microphone is open. The custom cursor carries END and is hidden during a session, so this is the
-   only thing on screen saying so — it is deliberately the one live-red element in the design. */
-.v2 .v2-tag[data-live] { display: inline-flex; align-items: center; gap: 7px; color: var(--v2-red); }
-.v2 .v2-tag[data-live] i {
-  width: 6px; height: 6px; border-radius: 50%; background: var(--v2-red);
-  box-shadow: 0 0 0 0 rgba(255, 92, 108, 0.55); animation: v2-mic-live 1.6s ease-out infinite;
-}
-@keyframes v2-mic-live {
-  70% { box-shadow: 0 0 0 7px rgba(255, 92, 108, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 92, 108, 0); }
-}
-@media (prefers-reduced-motion: reduce) { .v2 .v2-tag[data-live] i { animation: none; } }
+
 
 
 /* ── ONE HERO, TWO SETS OF CHROME ────────────────────────────────────────────────────────────────

@@ -63,3 +63,24 @@ describe('the custom cursor depends on reaching the canvas', () => {
     expect(ui).toMatch(/setOver\(!!t && t\.tagName === 'CANVAS'\)/)
   })
 })
+
+describe('the collapsed tile is reachable', () => {
+  it('the hero outranks the chrome when the hero is collapsed', () => {
+    // .v2-face's z-index 6 beat .v2-dash's 4 while they were siblings. Since the hoist they sit in
+    // different stacking contexts, so the whole hero subtree paints below the whole chrome subtree
+    // and the tile was buried — rendering correctly, and underneath the dashboard.
+    expect(rule('.v2-root[data-min] .v2-hero')).toMatch(/z-index:\s*5/)
+    expect(rule('.v2-root[data-min] .v2-hero')).toMatch(/background:\s*transparent/)
+  })
+
+  it('and only the tile itself takes the pointer', () => {
+    // The rest of the hero must stay transparent, or it would cover the dashboard it just revealed.
+    expect(rule('.v2-root[data-min] .v2-hero')).toMatch(/pointer-events:\s*none/)
+    expect(css).toMatch(/\.v2-root\[data-min\] \.v2-face \{ pointer-events: auto; cursor: pointer; \}/)
+  })
+
+  it('the You line is legible over the portrait', () => {
+    // It is mono, small, and sits on a mid-tone photograph; ink-42 was unreadable there.
+    expect(rule('.v2 .v2-you')).toMatch(/color:\s*rgba\(255, 255, 255, 0\.55\)/)
+  })
+})

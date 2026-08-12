@@ -108,8 +108,12 @@ describe('the v2 END press does the full teardown', () => {
       .toMatch(/session\.close\(\); onEnded\?\.\(\)/)
   })
 
-  it('says the microphone is live, since the cursor is hidden during a session', () => {
-    expect(v2).toMatch(/Microphone live · press to end/)
+  it('the button carries the live state — there is no second line saying it', () => {
+    // The red "Microphone live" line duplicated the button, which already reads END and already
+    // shows the state. Two things saying one thing is how they drift apart.
+    expect(v2).not.toMatch(/Microphone live/)
     expect(v2).toMatch(/active=\{!typing && amy\.mode === 'idle'\}/)
+    // rudiState/rudiCursor still drive the label, so the state is still on screen.
+    expect(v2).toMatch(/rudiCursor\(state, minimised\)/)
   })
 })
