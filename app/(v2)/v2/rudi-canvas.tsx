@@ -585,6 +585,30 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     })
     ro.observe(canvas)
 
+    // ── THE FIRST TOUCH STARTS HER ──────────────────────────────────────────────────────────────
+    //
+    // Something re-measures or re-mounts this canvas on the first real interaction with the page and
+    // I never found what. Two observers were added chasing it and neither helped, so this stops
+    // chasing: the first pointermove, click, keydown or scroll re-fits, builds the mesh if it is not
+    // built, and starts the loop. One listener, four events, removed the moment any of them fires.
+    //
+    // Until then she is a still frame — the portrait is already painted, so there is nothing missing,
+    // only nothing moving. At a second at most that reads as deliberate rather than broken, which is
+    // more than the previous behaviour managed.
+    //
+    // This is a workaround over an unidentified cause and is logged as such in
+    // lib/invoices/OUTSTANDING.md. It is not the fix; it is the thing that makes the screen correct
+    // while the cause is still unknown.
+    const KICK_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'scroll'] as const
+    const kick = () => {
+      KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick))
+      if (disposed) return
+      fit()
+      ensureNet()
+      sync()
+    }
+    KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, once: false }))
+
     const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
 
@@ -642,6 +666,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
       ro.disconnect()
+      KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick))
       window.removeEventListener('resize', onResize)
       window.removeEventListener('pointerdown', onGesture)
       io.disconnect()
