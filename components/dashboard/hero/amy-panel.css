@@ -1,0 +1,182 @@
+/* The voice panel's skin — AmyRealtime + AskAmyText.
+ *
+ * ── WHY A STYLESHEET AND NOT UTILITIES ──────────────────────────────────────────────────────────────
+ *
+ * These two components had no CSS at all: every colour, radius, shadow and type size was an inline
+ * Tailwind utility. That is why they could not be reskinned from outside — there was nothing to target
+ * and nothing to override that did not turn into a specificity fight. So the PRESENTATIONAL utilities
+ * were removed from the elements below and replaced with one class each; the LAYOUT utilities (flex,
+ * gap, absolute, sizes) stayed, because those are structure and moving them is how a reskin turns into
+ * a rewrite.
+ *
+ * ── THE TOKENS ARE ON :root, NOT UNDER .v2 ──────────────────────────────────────────────────────────
+ *
+ * Deliberate, and approved: one design, one component, both surfaces. /dashboard renders the same panel
+ * and gets the same look. They are prefixed --amy- so they cannot collide with either the app's tokens
+ * or v2's (which are declared on .v2 and stay there).
+ *
+ * Values transcribed from docs/rudi-desktop.html.
+ */
+
+:root {
+  --amy-ink: #0e0e11;
+  --amy-surface: rgba(20, 20, 26, 0.82);
+  --amy-surface-solid: #16161c;
+  --amy-line: rgba(255, 255, 255, 0.1);
+  --amy-line-strong: rgba(255, 255, 255, 0.16);
+  --amy-text: rgba(255, 255, 255, 0.94);
+  --amy-text-soft: rgba(255, 255, 255, 0.62);
+  --amy-text-faint: rgba(255, 255, 255, 0.42);
+
+  --amy-pink: #ff2e93;
+  --amy-violet: #8b5cf6;
+  --amy-cyan: #22d3ee;
+  --amy-grad: linear-gradient(100deg, #ff2e93, #8b5cf6 60%, #22d3ee);
+  --amy-grad-2: linear-gradient(100deg, #ff2e93, #8b5cf6);
+
+  --amy-sans: "Inter Tight", -apple-system, BlinkMacSystemFont, Inter, sans-serif;
+  --amy-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --amy-radius: 22px;
+  --amy-shadow: 0 24px 70px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.amy-panel {
+  font-family: var(--amy-sans);
+  letter-spacing: -0.014em;
+  color: var(--amy-text);
+}
+
+/* The bloom behind the card. It was a flat accent wash; it is now the signature gradient, which is the
+   one place the three colours appear together at full strength. */
+.amy-bloom {
+  background: var(--amy-grad);
+  opacity: 0.28;
+  filter: blur(38px);
+}
+
+/* Glass: a dark translucent surface over whatever is behind it — on /v2 that is her portrait, which is
+   the entire point of making it translucent rather than solid. */
+.amy-card {
+  background: var(--amy-surface);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  backdrop-filter: blur(22px) saturate(1.3);
+  border: 1px solid var(--amy-line);
+  border-radius: var(--amy-radius);
+  box-shadow: var(--amy-shadow);
+}
+
+/* Browsers without backdrop-filter get the solid surface rather than a wash of unreadable transparency. */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .amy-card { background: var(--amy-surface-solid); }
+}
+
+.amy-close {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--amy-text-soft);
+  transition: background 0.16s, color 0.16s;
+}
+.amy-close:hover { background: rgba(255, 255, 255, 0.14); color: var(--amy-text); }
+
+/* Small uppercase labels — the mono voice from the reference. */
+.amy-label {
+  font-family: var(--amy-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--amy-text-faint);
+}
+
+/* The status line. The gradient carries it, as the reference does for its one emphasised clause. */
+.amy-status {
+  font-family: var(--amy-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+  background: var(--amy-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.amy-said { font-size: 13px; color: var(--amy-text-faint); }
+.amy-body { font-size: 16px; font-weight: 400; line-height: 1.5; color: var(--amy-text); }
+.amy-name { font-size: 13.5px; font-weight: 600; color: var(--amy-text); }
+.amy-note { font-size: 13px; color: var(--amy-text-soft); }
+.amy-ok { color: #34d399; }
+.amy-bad { color: #ff5c6c; }
+
+/* A drafted action, waiting on a yes. */
+.amy-act {
+  border-radius: 14px;
+  border: 1px solid var(--amy-line-strong);
+  background: rgba(255, 255, 255, 0.05);
+}
+.amy-act-title {
+  font-family: var(--amy-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--amy-grad-2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.amy-input {
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--amy-line);
+  color: var(--amy-text);
+  font-family: var(--amy-sans);
+  font-size: 14.5px;
+  outline: none;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.amy-input::placeholder { color: var(--amy-text-faint); }
+.amy-input:focus { border-color: rgba(139, 92, 246, 0.6); box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18); }
+
+.amy-send {
+  border-radius: 999px;
+  background: var(--amy-grad-2);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.34);
+  transition: transform 0.12s, box-shadow 0.16s, opacity 0.16s;
+}
+.amy-send:disabled { opacity: 0.35; box-shadow: none; }
+.amy-send:not(:disabled):active { transform: scale(0.95); }
+
+.amy-btn {
+  border-radius: 999px;
+  background: var(--amy-grad-2);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.34);
+}
+.amy-btn:active { transform: scale(0.95); }
+
+.amy-btn-quiet {
+  border-radius: 999px;
+  border: 1px solid var(--amy-line-strong);
+  color: var(--amy-text-soft);
+  font-size: 13.5px;
+}
+.amy-btn-quiet:hover { color: var(--amy-text); }
+
+/* The "type instead" / "talk instead" switch. */
+.amy-swap {
+  font-family: var(--amy-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amy-text-faint);
+  transition: color 0.16s;
+}
+.amy-swap:hover { color: var(--amy-text); }
+
+/* The speaking bars, recoloured to the gradient's warm end. */
+.amy-bar { background: var(--amy-pink); }

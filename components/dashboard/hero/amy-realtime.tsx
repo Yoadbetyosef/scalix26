@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { X } from 'lucide-react'
+import './amy-panel.css'
 import { type AmyBriefing, TTS_VOICE, buildRealtimePrompt } from './ask-amy-shared'
 import { stripMarkdown } from '@/lib/utils'
 
@@ -332,11 +333,11 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
   const alive = phase === 'live' || phase === 'thinking' || phase === 'speaking'
 
   return (
-    <div className="mx-auto w-full max-w-md text-center">
+    <div className="amy-panel mx-auto w-full max-w-md text-center">
       <div className="relative">
-        <div aria-hidden="true" className="pointer-events-none absolute -inset-3 rounded-[32px] bg-accent/10 blur-2xl opacity-70" />
-        <div className="relative rounded-3xl bg-white ring-1 ring-hairline shadow-e3 px-6 py-6 sx-animate-in">
-          <button onClick={() => { teardown(); onClose() }} className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-sunken text-muted hover:text-ink transition-colors" aria-label="End">
+        <div aria-hidden="true" className="amy-bloom pointer-events-none absolute -inset-3 rounded-[32px]" />
+        <div className="amy-card relative px-6 py-6 sx-animate-in">
+          <button onClick={() => { teardown(); onClose() }} className="amy-close absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center" aria-label="End">
             <X className="h-4 w-4" />
           </button>
 
@@ -349,36 +350,36 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType }: { briefing:
 
             {phase === 'error' ? (
               <>
-                <p className="mt-5 text-sm text-muted">{errorMsg}</p>
-                <button onClick={onType} className="mt-3 text-xs font-medium text-accent-strong hover:underline">Type instead</button>
+                <p className="amy-note mt-5">{errorMsg}</p>
+                <button onClick={onType} className="amy-swap mt-3">Type instead</button>
               </>
             ) : (
               <>
-                <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-ink">
+                <p className="amy-status mt-4 inline-flex items-center gap-2">
                   {phase === 'speaking' && (
                     <span className="flex items-end gap-[2px] h-3" aria-hidden="true">
-                      {[0, 1, 2, 3].map((i) => <span key={i} className="sx-wavebar w-[2px] h-full rounded-full bg-accent" style={{ animationDelay: `${i * 0.12}s` }} />)}
+                      {[0, 1, 2, 3].map((i) => <span key={i} className="amy-bar sx-wavebar w-[2px] h-full rounded-full" style={{ animationDelay: `${i * 0.12}s` }} />)}
                     </span>
                   )}
                   {statusLabel}
                 </p>
                 {(userText || amyText) && (
                   <div className="mt-3">
-                    {userText && <p className="text-xs text-muted">“{userText}”</p>}
-                    {amyText && <p className="mt-1 text-[15px] font-light leading-relaxed text-ink">{amyText}</p>}
+                    {userText && <p className="amy-said">“{userText}”</p>}
+                    {amyText && <p className="amy-body mt-1">{amyText}</p>}
                   </div>
                 )}
                 {voiceAction && (
-                  <div className="mt-3 w-full rounded-xl border border-accent/30 bg-sunken px-4 py-3 text-left">
+                  <div className="amy-act mt-3 w-full px-4 py-3 text-left">
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-strong">{voiceAction.label}</span>
-                      <span className="text-[11px] font-medium text-subtle">
+                      <span className="amy-act-title">{voiceAction.label}</span>
+                      <span className="amy-label">
                         {voiceAction.status === 'draft' ? 'Say “yes” to send' : voiceAction.status === 'sending' ? 'Sending…' : voiceAction.status === 'sent' ? 'Sent ✓' : 'Failed'}
                       </span>
                     </div>
-                    <p className="text-[13px] leading-snug text-ink">{voiceAction.body || '(no content)'}</p>
-                    {voiceAction.status === 'failed' && <p className="mt-1 text-[12px] text-red-600">{voiceAction.error}</p>}
-                    {voiceAction.status === 'sent' && <p className="mt-1 text-[12px] text-emerald-600">Sent successfully.</p>}
+                    <p className="amy-note leading-snug">{voiceAction.body || '(no content)'}</p>
+                    {voiceAction.status === 'failed' && <p className="amy-bad amy-note mt-1">{voiceAction.error}</p>}
+                    {voiceAction.status === 'sent' && <p className="amy-ok amy-note mt-1">Sent successfully.</p>}
                   </div>
                 )}
               </>

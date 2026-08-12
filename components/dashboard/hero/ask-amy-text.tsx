@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ArrowUp, AudioLines } from 'lucide-react'
+import './amy-panel.css'
 import { type AmyBriefing, TTS_VOICE } from './ask-amy-shared'
 
 // Typed fallback for Ask Amy. Realtime voice is the primary experience; this is the
@@ -87,35 +88,35 @@ export function AskAmyText({ briefing, onTalk, ask }: { briefing: AmyBriefing; o
   const humanType = (t: string) => t.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
   return (
-    <div className="mx-auto w-full max-w-md text-left">
+    <div className="amy-panel mx-auto w-full max-w-md text-left">
       {question !== null && (
         <div className="relative mb-3">
-          <div aria-hidden="true" className="pointer-events-none absolute -inset-3 rounded-[32px] bg-accent/10 blur-2xl opacity-70" />
-          <div key={question} className="relative rounded-3xl bg-white ring-1 ring-hairline shadow-e3 px-6 py-5 sx-animate-in">
+          <div aria-hidden="true" className="amy-bloom pointer-events-none absolute -inset-3 rounded-[32px]" />
+          <div key={question} className="amy-card relative px-6 py-5 sx-animate-in">
             <div className="mb-2 flex items-center gap-2.5">
-              <span className="text-sm font-medium text-ink">{name}</span>
+              <span className="amy-name">{name}</span>
             </div>
-            <p className="text-[15px] font-light leading-relaxed text-ink">{answer || '…'}</p>
+            <p className="amy-body">{answer || '…'}</p>
           </div>
         </div>
       )}
 
       {pending && (
-        <div className="mb-3 rounded-2xl border border-accent/30 bg-white px-5 py-4 text-left shadow-e1">
+        <div className="amy-act mb-3 px-5 py-4 text-left">
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wide text-accent-strong">{humanType(pending.type)}{pending.target ? ` → ${pending.target}` : ''}</span>
-            <span className="text-xs font-medium text-subtle">{actState === 'draft' ? 'Waiting for confirmation' : actState === 'sending' ? 'Sending…' : actState === 'sent' ? 'Sent' : 'Failed'}</span>
+            <span className="amy-act-title">{humanType(pending.type)}{pending.target ? ` → ${pending.target}` : ''}</span>
+            <span className="amy-label">{actState === 'draft' ? 'Waiting for confirmation' : actState === 'sending' ? 'Sending…' : actState === 'sent' ? 'Sent' : 'Failed'}</span>
           </div>
-          <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-ink">{pending.body || '(no content drafted)'}</p>
+          <p className="amy-body whitespace-pre-wrap">{pending.body || '(no content drafted)'}</p>
           {actState === 'draft' && (
             <div className="mt-3 flex gap-2">
-              <button onClick={confirmAction} className="rounded-full bg-ink px-5 py-2 text-sm font-semibold text-white active:scale-95">Send</button>
-              <button onClick={cancelAction} className="rounded-full border border-hairline-strong px-4 py-2 text-sm text-subtle">Cancel</button>
+              <button onClick={confirmAction} className="amy-btn px-5 py-2">Send</button>
+              <button onClick={cancelAction} className="amy-btn-quiet px-4 py-2">Cancel</button>
             </div>
           )}
-          {actState === 'sending' && <p className="mt-2 text-sm text-subtle">Sending…</p>}
-          {actState === 'sent' && <p className="mt-2 text-sm font-medium text-emerald-600">Sent successfully ✓</p>}
-          {actState === 'failed' && <p className="mt-2 text-sm font-medium text-red-600">Couldn’t send — {actErr}</p>}
+          {actState === 'sending' && <p className="amy-note mt-2">Sending…</p>}
+          {actState === 'sent' && <p className="amy-note amy-ok mt-2">Sent successfully ✓</p>}
+          {actState === 'failed' && <p className="amy-note amy-bad mt-2">Couldn’t send — {actErr}</p>}
         </div>
       )}
 
@@ -124,14 +125,14 @@ export function AskAmyText({ briefing, onTalk, ask }: { briefing: AmyBriefing; o
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={`Type to ${name}…`}
-          className="h-11 flex-1 rounded-full bg-sunken px-4 text-sm text-ink placeholder:text-muted outline-none transition-shadow focus:shadow-[0_0_0_4px_rgba(91,108,240,0.10)]"
+          className="amy-input flex-1 px-4"
         />
-        <button type="submit" aria-label="Send" disabled={!input.trim() || busy} className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-ink text-white transition-all hover:bg-ink/90 active:scale-95 disabled:opacity-40">
+        <button type="submit" aria-label="Send" disabled={!input.trim() || busy} className="amy-send flex h-11 w-11 flex-shrink-0 items-center justify-center">
           <ArrowUp className="h-[18px] w-[18px]" />
         </button>
       </form>
 
-      <button onClick={onTalk} className={cn('mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-accent-strong hover:underline')}>
+      <button onClick={onTalk} className={cn('amy-swap mt-3 inline-flex items-center gap-1.5')}>
         <AudioLines className="h-3.5 w-3.5" /> Talk to {name} instead
       </button>
     </div>
