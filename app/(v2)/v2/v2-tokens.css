@@ -831,10 +831,73 @@
    second component being reintroduced — the two composers were what made the ref ambiguous in the
    first place. Pinned above the safe area, as .v2-sticky used to be. */
 @media (max-width: 719.98px) {
+  /* The overlay clears the swipe affordance. .v2-grab sits at bottom: 92px with its handle and its
+     SWIPE UP label, and the composer was landing on the same rows — two things in one place, which is
+     the one arrangement that reads as broken rather than dense. The padding puts the button above the
+     handle with real clearance; nothing moves on desktop, where .v2-grab does not exist. */
   .v2 .v2-overlay {
-    padding: 0 16px calc(18px + env(safe-area-inset-bottom));
+    padding: 0 16px calc(132px + env(safe-area-inset-bottom));
     z-index: 5;
   }
   .v2 .v2-overlay .v2-composer { max-width: none; margin-top: 18px; }
   .v2 .v2-overlay .v2-ctl { right: 0; }
+
+  /* THE BUTTON'S CONTENTS SIT CENTRED. The hoist dropped the mobile composer's `full` prop along with
+     the second component, and `full` was what centred the group and hid the SPACE badge — so a
+     full-width pill kept a left-aligned layout meant for an auto-width one, with a keyboard hint on a
+     device that has no keyboard. Restored here as a rule rather than by reintroducing the prop. */
+  .v2 .v2-overlay .v2-ctl { justify-content: center; }
+  .v2 .v2-overlay .v2-talk { padding: 0 24px; }
+  .v2 .v2-overlay .v2-talk .v2-kbd { display: none; }
+}
+
+/* ── COLLAPSING ON A PHONE ───────────────────────────────────────────────────────────────────────
+   Desktop collapse reveals .v2-dash filling the centre column. There is no centre column on a phone
+   and no .v2-dash in that tree, so the same rules revealed nothing: a transparent hero over the
+   stage colour, i.e. a black screen with a tile in the corner.
+   The mobile equivalent of "the dashboard fills the centre" is the sheet — so it rises to full height
+   and the tile sits above it. The hero keeps its ground here rather than dropping it, because on a
+   phone there is nothing behind it worth showing through to. */
+@media (max-width: 719.98px) {
+  .v2 .v2-root[data-min] .v2-hero { background: var(--v2-stage); z-index: 8; }
+  .v2 .v2-root[data-min] .v2-sheet { height: calc(100dvh - 150px); z-index: 7; }
+  .v2 .v2-root[data-min] .v2-grab { opacity: 0; pointer-events: none; }
+  /* Bottom-left would put the tile under the risen sheet. Top-left keeps it clear of it and clear of
+     the business name in .v2-top. */
+  .v2 .v2-root[data-min] .v2-face {
+    left: 16px; top: 64px; bottom: auto; right: auto;
+    width: 104px; height: 138px; border-radius: 14px;
+  }
+}
+
+/* ── DETAIL PAGES ────────────────────────────────────────────────────────────────────────────────
+   Shares .v2-page / .v2-phd / .v2-pbody / .v2-lin / .v2-row with the list pages, so a detail screen
+   is visibly the same surface as the list it came from. Only these four are new. */
+.v2 .v2-eyebrow {
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--v2-ink-42); margin-bottom: 8px;
+}
+/* Static chips state something; they are not controls and must not look like one. */
+.v2 .v2-chips[data-static] .v2-chip { cursor: default; }
+.v2 .v2-chips[data-static] .v2-chip:hover { border-color: var(--v2-line-strong); color: var(--v2-ink-72); }
+.v2 .v2-chip[data-tone="accent"] {
+  background: var(--v2-violet-wash); border-color: var(--v2-violet-edge); color: var(--v2-ink);
+}
+.v2 .v2-dacts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; }
+.v2 .v2-dsec { margin-top: 30px; max-width: 660px; }
+.v2 .v2-dsec h3 {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--v2-ink-42); margin-bottom: 12px;
+}
+.v2 .v2-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 24px; }
+.v2 .v2-facts > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--v2-line);
+}
+.v2 .v2-facts dt { font-size: 13px; color: var(--v2-ink-46); }
+.v2 .v2-facts dd { font-size: 14px; color: var(--v2-ink); text-align: right; min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-facts { grid-template-columns: 1fr; }
+  .v2 .v2-dsec { max-width: none; }
 }
