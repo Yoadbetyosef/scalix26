@@ -33,7 +33,7 @@ const GROUPS = [
   { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Settings' }, { label: 'Sign Out', out: true }] },
 ]
 
-export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromise: Promise<HomeData> }) {
+export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; dataPromise: Promise<HomeData>; modules: string[] }) {
   const rudi = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [minimised, setMinimised] = useState(false)
@@ -208,9 +208,11 @@ export function HomeClient({ shell, dataPromise }: { shell: ShellData; dataPromi
         <Rail
           businessName={shell.businessName}
           primary={[
-            { label: 'Leads', count: count((d) => d.railCounts.leads) },
+            // Gated exactly as /dashboard gates its tabs: no `pipeline`, no Leads row; no
+            // `scheduling`, no Appointments row.
+            ...(modules.includes('pipeline') ? [{ label: 'Leads', href: '/v2/leads', count: count((d) => d.railCounts.leads) }] : []),
             { label: 'Inbox', count: count((d) => d.railCounts.inbox) },
-            { label: 'Appointments', count: count((d) => d.railCounts.appointments) },
+            ...(modules.includes('scheduling') ? [{ label: 'Appointments', count: count((d) => d.railCounts.appointments) }] : []),
             { label: 'Contacts' },
           ]}
           groups={GROUPS.map((g) => (g.id !== 'g1' ? g : {

@@ -654,3 +654,102 @@
   color: var(--v2-ink-42);
   margin-bottom: 10px;
 }
+
+/* ── LIST PAGES ──────────────────────────────────────────────────────────────────────────────────
+   Leads, and Inbox / Contacts / Orders / Appointments after it. Both references draw these screens
+   with the same markup, so these rules are transcribed once and the desktop block below only changes
+   the measurements. */
+.v2 .v2-page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--v2-paper); z-index: 4; }
+.v2 .v2-phd {
+  display: flex; align-items: center; gap: 12px;
+  padding: 30px 44px 16px; border-bottom: 1px solid var(--v2-line);
+}
+.v2 .v2-phd h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.028em; color: var(--v2-ink); }
+.v2 .v2-bk {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 10px; color: var(--v2-ink-55);
+}
+.v2 .v2-bk:hover { background: var(--v2-hover); color: var(--v2-ink); }
+.v2 .v2-bk svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.v2 .v2-pbody { flex: 1; overflow-y: auto; padding: 26px 44px 60px; }
+
+/* The opening line. White by default; ONLY the accented clause carries the gradient — a sentence
+   gradient-filled end to end loses its middle against a mid-tone. */
+.v2 .v2-lin {
+  font-size: 20px; font-weight: 500; line-height: 1.4; letter-spacing: -0.02em;
+  margin: 0 0 26px; max-width: 600px; color: var(--v2-ink-80);
+}
+.v2 .v2-lin b {
+  font-weight: 600;
+  background: var(--v2-grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.v2 .v2-chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 16px; }
+.v2 .v2-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; color: var(--v2-ink-72);
+  padding: 6px 14px; border-radius: 15px;
+  background: var(--v2-paper); border: 1px solid var(--v2-line-strong);
+  transition: 0.16s;
+}
+.v2 .v2-chip:hover { border-color: rgba(0, 0, 0, 0.28); color: var(--v2-ink); }
+.v2 .v2-chip[data-on] {
+  background: var(--v2-grad-2); border-color: transparent; color: #fff;
+  box-shadow: 0 2px 12px rgba(139, 92, 246, 0.4);
+}
+.v2 .v2-chip i { font-style: normal; font-family: var(--v2-mono); font-size: 10.5px; opacity: 0.72; }
+
+.v2 .v2-row {
+  position: relative; display: flex; align-items: center; gap: 14px;
+  padding: 15px 14px; max-width: 660px;
+  border-bottom: 1px solid var(--v2-line); border-radius: 10px;
+  transition: background 0.16s;
+}
+.v2 .v2-row[data-click] { cursor: pointer; }
+.v2 .v2-row[data-click]:hover { background: var(--v2-hover); }
+.v2 .v2-row[data-muted] { opacity: 0.55; }
+.v2 .v2-row .v2-m { flex: 1; min-width: 0; }
+.v2 .v2-row .v2-m p { font-size: 15.5px; font-weight: 450; line-height: 1.3; color: var(--v2-ink); }
+.v2 .v2-row .v2-m span { display: block; margin-top: 4px; font-size: 13px; color: var(--v2-ink-46); line-height: 1.35; }
+.v2 .v2-row em {
+  font-family: var(--v2-mono); font-size: 11px; font-style: normal;
+  color: var(--v2-ink-55); flex: none;
+}
+.v2 .v2-row em[data-tone="positive"] { color: #0f9d58; }
+.v2 .v2-dot {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--v2-pink); box-shadow: 0 0 8px var(--v2-pink);
+}
+
+/* Actions render so the layout tells the truth about what the real screen offers, and every one of
+   them is disabled in the preview. */
+.v2 .v2-racts { display: flex; flex-shrink: 0; gap: 6px; }
+.v2 .v2-ract {
+  font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 13px;
+  border: 1px solid var(--v2-line-strong); color: var(--v2-ink-72); background: var(--v2-paper);
+}
+.v2 .v2-ract[data-tone="primary"] { background: var(--v2-ink); border-color: var(--v2-ink); color: #fff; }
+.v2 .v2-ract:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.v2 .v2-pnone { font-size: 13.5px; color: var(--v2-ink-42); padding: 22px 2px; }
+.v2 .v2-pempty { padding: 60px 2px; max-width: 460px; }
+.v2 .v2-pempty-t { font-size: 20px; font-weight: 500; letter-spacing: -0.02em; color: var(--v2-ink-80); }
+.v2 .v2-pempty-b { margin-top: 8px; font-size: 14.5px; line-height: 1.5; color: var(--v2-ink-46); }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-phd { padding: 22px 16px 14px; }
+  .v2 .v2-pbody { padding: 20px 16px 104px; }
+  .v2 .v2-lin { font-size: 18.5px; margin: 2px 0 22px; }
+  .v2 .v2-row {
+    min-height: 66px; max-width: none; margin-bottom: 8px; padding: 14px 16px;
+    background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(14, 14, 17, 0.04);
+  }
+  .v2 .v2-row .v2-m p { font-size: 16.5px; letter-spacing: -0.015em; }
+  .v2 .v2-row .v2-m span { font-size: 13.5px; }
+  .v2 .v2-dot { left: 6px; }
+  /* The reference's mobile row is name, detail and one figure. Actions would crowd it off the edge. */
+  .v2 .v2-racts { display: none; }
+}

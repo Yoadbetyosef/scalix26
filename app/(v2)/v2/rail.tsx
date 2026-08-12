@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
 
 // The left rail: business identity, the four primary destinations with their counts, three
@@ -11,7 +12,7 @@ import { useState, type ReactNode } from 'react'
 
 // `count` is a ReactNode, not a number: each one is its own <Suspense> boundary supplied by the
 // shell, so the labels render immediately and the figures pop in as the data streams.
-interface NavItem { label: string; count?: ReactNode; out?: boolean }
+interface NavItem { label: string; count?: ReactNode; out?: boolean; href?: string }
 interface Group { id: string; label: string; items: NavItem[] }
 
 interface Props {
@@ -31,15 +32,25 @@ const Chevron = () => (
 )
 
 function Nav({ item, on, shortcut }: { item: NavItem; on?: boolean; shortcut?: number }) {
-  return (
-    <button type="button" className="v2-nav" data-on={on || undefined} data-out={item.out || undefined}>
+  // Only a row with a built destination navigates. The rest stay buttons that do nothing, which is
+  // what they were — a link to a page that does not exist is a worse lie than an inert row.
+  // Only a row with a built destination navigates. The rest stay buttons that do nothing, which is
+  // what they were — a link to a page that does not exist is a worse lie than an inert row. Written as
+  // two branches rather than a dynamic tag because Link's props are not a superset of button's, and
+  // the union that satisfies both is less readable than saying it twice.
+  const inner = (
+    <>
       <span>{item.label}</span>
       {item.count ?? null}
       {/* Revealed on hover — the shortcut is discoverable from the row it belongs to rather than from
           a help screen nobody opens. */}
       {shortcut && <span className="v2-kb">{shortcut}</span>}
-    </button>
+    </>
   )
+  const attrs = { className: 'v2-nav', 'data-on': on || undefined, 'data-out': item.out || undefined }
+  return item.href
+    ? <Link href={item.href} {...attrs}>{inner}</Link>
+    : <button type="button" {...attrs}>{inner}</button>
 }
 
 export function Rail({ businessName, primary, groups, activeIndex = null }: Props) {

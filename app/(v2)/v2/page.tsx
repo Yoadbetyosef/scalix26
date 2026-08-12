@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { enabledModulesOf, effectiveModules } from '@/lib/modules'
+import { getModuleFlags } from '@/lib/admin/module-flags'
 import { getActiveTenantId } from '@/lib/workspace'
 import { loadHomeData, loadShell } from './data'
 import { HomeClient } from './home-client'
@@ -32,10 +34,15 @@ export default async function V2Home() {
 
   // One indexed row, and the shell cannot be drawn without it — the business name and the number she
   // answers on are both in the first paint.
+  // Same module gate as /dashboard, so the rail cannot offer a destination the tenant does not have.
+  const { data: tenant } = await createAdminClient().from('tenants').select('*').eq('id', tenantId).maybeSingle()
+  const isEnterprise = Array.isArray((tenant as { tags?: string[] } | null)?.tags) && (tenant as { tags?: string[] }).tags!.includes('Enterprise')
+  const modules: string[] = effectiveModules(enabledModulesOf(tenant), await getModuleFlags(), isEnterprise)
+
   const shell = await loadShell(tenantId)
 
   // Deliberately NOT awaited.
   const dataPromise = loadHomeData(tenantId)
 
-  return <HomeClient shell={shell} dataPromise={dataPromise} />
+  return <HomeClient shell={shell} dataPromise={dataPromise} modules={modules} />
 }
