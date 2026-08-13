@@ -1446,3 +1446,98 @@
   .v2 .v2-connrev { max-width: 120px; font-size: 9.5px; }
   .v2 .v2-grow[data-conn] .v2-glab em { font-size: 12px; }
 }
+
+/* ── THE SHARED CONTROLS ─────────────────────────────────────────────────────────────────────────
+   Matched to the language rather than invented: the accent marks a thing that is ON or needs a
+   person, the pale green stays for transient state, and every target clears 44px. */
+
+/* A state pill. Live takes the pale ground and the mono voice — the rail's AI badge, not a new green. */
+.v2 .v2-pill {
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.1em; font-weight: 500;
+  padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+}
+.v2 .v2-pill[data-state="live"] { color: var(--v2-live-ink); background: var(--v2-live-wash); }
+.v2 .v2-pill[data-state="pending"] { color: var(--v2-ink-46); background: var(--v2-hover); }
+.v2 .v2-pill[data-state="off"] { color: var(--v2-ink-42); background: var(--v2-hover); }
+
+/* A labelled row that holds a control. Same 46px rhythm and hairline as .v2-grow, so a toggle sits in
+   a card beside navigation rows without either looking borrowed. */
+.v2 .v2-ctlrow {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  min-height: 52px; padding: 10px 12px; position: relative;
+}
+.v2 .v2-ctlrow + .v2-ctlrow::before {
+  content: ''; position: absolute; top: 0; left: 12px; right: 0; height: 1px; background: rgba(0, 0, 0, 0.06);
+}
+.v2 .v2-ctltext { flex: 1; min-width: 0; }
+.v2 .v2-ctllab { display: block; font-size: 15px; color: #111; }
+.v2 .v2-ctltext em { display: block; margin-top: 3px; font-style: normal; font-size: 12.5px; line-height: 1.35; color: var(--v2-ink-46); }
+
+/* The toggle. ON takes the accent, because on IS the state that matters. */
+.v2 .v2-toggle {
+  flex: none; width: 46px; height: 28px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.12); position: relative;
+  transition: background 0.2s var(--v2-ease), transform 0.12s ease-out;
+}
+.v2 .v2-toggle i {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s var(--v2-ease);
+}
+.v2 .v2-toggle[data-on] { background: var(--v2-grad-2); }
+.v2 .v2-toggle[data-on] i { transform: translateX(18px); }
+.v2 .v2-toggle:not(:disabled):active, .v2 .v2-toggle[data-pressed] { transform: scale(0.94); }
+
+/* A field. The label is mono and small; the input is Inter Tight, because what a person types is
+   prose. */
+.v2 .v2-field { display: block; padding: 12px; position: relative; }
+.v2 .v2-field + .v2-field::before,
+.v2 .v2-ctlrow + .v2-field::before, .v2 .v2-field + .v2-ctlrow::before {
+  content: ''; position: absolute; top: 0; left: 12px; right: 0; height: 1px; background: rgba(0, 0, 0, 0.06);
+}
+.v2 .v2-flab {
+  display: block; margin-bottom: 7px;
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--v2-ink-42);
+}
+.v2 .v2-finput {
+  width: 100%; min-height: 44px; padding: 10px 13px;
+  border: 1px solid var(--v2-line-strong); border-radius: 12px; background: #fff;
+  font-family: var(--v2-sans); font-size: 15px; color: #111; outline: none;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.v2 textarea.v2-finput { line-height: 1.45; resize: vertical; }
+.v2 .v2-finput::placeholder { color: var(--v2-ink-42); }
+.v2 .v2-finput:focus { border-color: var(--v2-violet-edge); box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.14); }
+.v2 .v2-fhint { display: block; margin-top: 6px; font-style: normal; font-size: 12.5px; color: var(--v2-ink-46); }
+
+/* Mutually exclusive choices — the email reply mode and anything like it. */
+.v2 .v2-choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2 .v2-choiceopt {
+  flex: 1 1 150px; min-height: 52px; padding: 9px 12px; text-align: left;
+  border: 1px solid var(--v2-line-strong); border-radius: 12px; background: #fff;
+  transition: border-color 0.16s, background 0.18s, transform 0.12s ease-out;
+}
+.v2 .v2-choiceopt span { display: block; font-size: 14px; color: #111; }
+.v2 .v2-choiceopt em { display: block; margin-top: 2px; font-style: normal; font-size: 12px; color: var(--v2-ink-46); }
+.v2 .v2-choiceopt[data-on] {
+  border-color: transparent; color: #fff;
+  background: linear-gradient(90deg, rgba(255, 46, 147, 0.1), rgba(139, 92, 246, 0.07));
+  box-shadow: inset 0 0 0 1.5px var(--v2-violet-edge);
+}
+.v2 .v2-choiceopt:not(:disabled):active, .v2 .v2-choiceopt[data-pressed] { transform: scale(0.985); }
+
+/* THE DEPENDENCY STATE. Visible, inert, and it says where to go — never hidden, or the owner never
+   learns the capability exists. */
+.v2 [data-disabled] { opacity: 0.55; pointer-events: none; }
+.v2 .v2-needsconn {
+  margin: 0 12px 12px; padding: 10px 12px; border-radius: 10px;
+  background: var(--v2-hover); font-size: 12.5px; line-height: 1.4; color: var(--v2-ink-46);
+}
+/* The link is the one live thing in an inert card, so it must still take a click. */
+.v2 .v2-needsconn { pointer-events: auto; }
+.v2 .v2-needsconn a {
+  font-weight: 500;
+  background: var(--v2-grad-2); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

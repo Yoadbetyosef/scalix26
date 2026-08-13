@@ -1,5 +1,7 @@
+import type React from 'react'
 import Link from 'next/link'
-import { Calendar, CalendarClock, Phone, Mail, MessageCircle, AtSign, CreditCard, ChevronRight } from 'lucide-react'
+import { Calendar, CalendarClock, Phone, Mail, CreditCard, ChevronRight } from 'lucide-react'
+import { FacebookGlyph, InstagramGlyph } from '../../brand-glyphs'
 import { getIntegrationStates, type IntegrationState } from '@/lib/assistant/integrations'
 import { listPageContext } from '../../list-page'
 import { connectionsLine } from './line'
@@ -24,7 +26,7 @@ export const dynamic = 'force-dynamic'
 
 type Key = keyof Awaited<ReturnType<typeof getIntegrationStates>>
 
-interface Row { provider: string; key: Key; icon: typeof Calendar; without: string }
+interface Row { provider: string; key: Key; icon: React.ComponentType; without: string }
 
 // Capability is the heading; the provider is the row. Nothing is grouped by who sells it.
 const CAPABILITIES: Array<{ id: string; heading: string; verb: string; hue: string; rows: Row[] }> = [
@@ -40,8 +42,8 @@ const CAPABILITIES: Array<{ id: string; heading: string; verb: string; hue: stri
     rows: [
       { provider: 'Phone & SMS', key: 'twilio', icon: Phone, without: 'No number to answer on, so calls and texts go nowhere.' },
       { provider: 'Email', key: 'email', icon: Mail, without: 'Email arrives and nobody replies to it.' },
-      { provider: 'Facebook', key: 'facebook', icon: MessageCircle, without: 'Messages to your page go unanswered.' },
-      { provider: 'Instagram', key: 'instagram', icon: AtSign, without: 'Instagram DMs go unanswered.' },
+      { provider: 'Facebook', key: 'facebook', icon: FacebookGlyph, without: 'Messages to your page go unanswered.' },
+      { provider: 'Instagram', key: 'instagram', icon: InstagramGlyph, without: 'Instagram DMs go unanswered.' },
     ],
   },
   {
