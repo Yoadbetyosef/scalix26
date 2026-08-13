@@ -7,6 +7,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|gltf|bin|mp3|wav|woff|woff2|ttf|ico)$).*)',
+    // Skip static assets and Azure's publisher-domain file (must stay public, no auth redirect).
+    '/((?!_next/static|_next/image|favicon.ico|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|gltf|bin|mp3|wav|woff|woff2|ttf|ico)$).*)',
   ],
 }
