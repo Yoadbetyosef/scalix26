@@ -1103,3 +1103,66 @@
 }
 
 @media (max-width: 719.98px) { .v2 .v2-call { max-width: none; } }
+
+/* ── THE FIGURES BOARD ───────────────────────────────────────────────────────────────────────────
+   A results screen, not a record. One number carries it and the rest are subordinate BY SIZE, which
+   is what makes it read in a glance rather than line by line. The label/value hairline pattern is
+   deliberately absent — that shape belongs to DetailPage, where every field weighs the same. */
+
+/* The hero. The only gradient on the screen. */
+.v2 .v2-hero-fig { margin: 4px 0 44px; }
+.v2 .v2-figbig {
+  font-size: clamp(64px, 11vw, 132px); line-height: 0.92; font-weight: 600;
+  letter-spacing: -0.045em; font-variant-numeric: tabular-nums;
+  background: var(--v2-grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.v2 .v2-fignote { margin-top: 10px; font-size: 14px; color: var(--v2-ink-46); }
+
+/* Micro-label above every figure — mono, uppercase, small. The number is what you read. */
+.v2 .v2-figlab {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--v2-ink-42); margin-bottom: 10px;
+}
+
+/* The supporting figures. A grid across the width, not a two-column list down one side. */
+.v2 .v2-figgrid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 30px 40px; padding: 34px 0; margin-bottom: 10px;
+  border-top: 1px solid var(--v2-line); border-bottom: 1px solid var(--v2-line);
+}
+.v2 .v2-fignum {
+  font-size: 40px; line-height: 1; font-weight: 500; letter-spacing: -0.03em;
+  color: var(--v2-ink); font-variant-numeric: tabular-nums;
+}
+.v2 .v2-figgrid .v2-fignote { margin-top: 8px; font-size: 13px; }
+
+/* Proportional bars. The width IS the share — voice against SMS legible without reading a number. */
+.v2 .v2-shares { margin-top: 44px; max-width: 720px; }
+.v2 .v2-shares h3 {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--v2-ink-42); margin-bottom: 20px;
+}
+.v2 .v2-share { margin-bottom: 20px; }
+.v2 .v2-sharehead {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px;
+}
+.v2 .v2-sharehead span { font-size: 14.5px; font-weight: 450; color: var(--v2-ink); }
+.v2 .v2-sharehead em {
+  font-family: var(--v2-mono); font-style: normal; font-size: 12px;
+  color: var(--v2-ink-46); font-variant-numeric: tabular-nums;
+}
+.v2 .v2-sharebar { height: 8px; border-radius: 4px; background: var(--v2-hover); overflow: hidden; }
+.v2 .v2-sharebar i {
+  display: block; height: 100%; border-radius: 4px; background: var(--v2-grad);
+  /* The gradient is anchored to the full track, so a short bar is the START of the same sweep rather
+     than its own little rainbow — the screen keeps one gradient, not one per row. */
+  background-size: 720px 100%; background-repeat: no-repeat;
+}
+
+@media (max-width: 719.98px) {
+  .v2 .v2-hero-fig { margin-bottom: 32px; }
+  .v2 .v2-figgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 26px 0; }
+  .v2 .v2-fignum { font-size: 32px; }
+  .v2 .v2-shares { max-width: none; margin-top: 34px; }
+}

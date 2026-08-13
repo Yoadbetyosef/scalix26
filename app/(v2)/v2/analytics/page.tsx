@@ -1,5 +1,5 @@
 import { readAnalytics } from '@/lib/analytics/read'
-import { DetailPage, type DetailFact, type DetailRow } from '../detail'
+import { FiguresBoard, type Figure, type Share } from '../figures'
 import { channelKey, CHANNEL_LABEL } from '../channels'
 import { listPageContext } from '../list-page'
 import { analyticsLine } from './line'
@@ -24,24 +24,24 @@ export default async function V2Analytics() {
   }
   const ranked = [...byChannel.entries()].sort((a, b) => b[1] - a[1])
 
-  const channels: DetailRow[] = ranked.map(([k, n]) => ({
+  const shares: Share[] = ranked.map(([k, n]) => ({
     id: k,
-    primary: CHANNEL_LABEL[k as keyof typeof CHANNEL_LABEL],
-    detail: `${Math.round((n / total) * 100)}% of the month`,
-    trailing: String(n),
+    label: CHANNEL_LABEL[k as keyof typeof CHANNEL_LABEL],
+    value: n,
+    // The share of the month, from the same total the figures came from.
+    fraction: total > 0 ? n / total : 0,
   }))
 
   // A figure that does not exist is omitted, never zeroed: with no conversations there is no average
   // handle time to report, and printing "0m 0s" would claim a measurement nobody made.
-  const figures: DetailFact[] = [
+  const figures: Figure[] = [
     { label: 'Conversations', value: total.toLocaleString() },
-    { label: 'Settled without a person', value: total > 0 ? `${fcr}%` : null },
     { label: 'Average handle time', value: avgDuration > 0 ? duration(avgDuration) : null },
-    { label: 'Handed to a person', value: total > 0 ? `${total - resolved}` : null },
+    { label: 'Handed to a person', value: total > 0 ? String(total - resolved) : null },
   ]
 
   return (
-    <DetailPage
+    <FiguresBoard
       backHref="/v2"
       backLabel="Home"
       title="Analytics"
@@ -52,10 +52,14 @@ export default async function V2Analytics() {
         fcr,
         busiest: ranked[0] ? CHANNEL_LABEL[ranked[0][0] as keyof typeof CHANNEL_LABEL].toLowerCase() : null,
       })}
-      sections={[
-        { title: 'The month', facts: figures },
-        { title: 'Where it came from', rows: channels, empty: 'No conversations to break down yet.' },
-      ]}
+      // The number the screen exists to report, and the only place the gradient appears.
+      hero={{
+        label: 'Settled without a person',
+        value: total > 0 ? `${fcr}%` : null,
+        note: total > 0 ? `${resolved.toLocaleString()} of ${total.toLocaleString()} conversations` : null,
+      }}
+      figures={figures}
+      shares={{ title: 'Where it came from', rows: shares, empty: 'No conversations to break down yet.' }}
     />
   )
 }
