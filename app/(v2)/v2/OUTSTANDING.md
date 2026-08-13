@@ -83,3 +83,25 @@ until they can:
   different kind of state and probably a different section.
 
 A row that cannot say something true about its state does not belong on the page.
+
+## 7. Sandbox vs phone voice divergence (pre-existing, NOT a migration regression)
+
+Found while wiring the voice UI onto /v2/test-ai. Both faults predate the /v2 work; the migration only
+made them visible by putting the two surfaces side by side.
+
+- `/api/ai/speak` maps `ai_employees.voice` through `VOICE_MAP` to an **ElevenLabs** id. Aura ids
+  (`aura-2-asteria-en`) are not keys in that map, so it silently falls back to the hardcoded default
+  (Daniel, `speak/route.ts:26`). The sandbox never matches the configured voice.
+- `voice === 'coo'` special-case at `speak/route.ts:29-31` overrides to Eric — a third voice.
+- `/api/ai/speak` has no language concept; the phone path has `voiceLangConfig`, which branches to
+  `SPANISH_AURA_VOICE` and injects a language prompt line.
+- Two prompt builders: the sandbox uses `runAIPipeline`, the phone assembles its own Deepgram Voice
+  Agent config in the Twilio webhook (the `catalogPromptLine` block, `voice/route.ts:301-318`).
+  **Unconfirmed** whether they load the same playbook rows.
+
+**Fix shape:** one `voiceFor(agent, surface)` resolver owning both directions and able to tell an Aura
+id from an ElevenLabs one, rather than each route inferring; and one prompt builder with two surfaces.
+Same pattern as the `getIntegrations` unification, and the same reason — two copies of one thing drift,
+and this pair already has.
+
+**Scope this as its own task, not part of the /v2 migration.** It touches the live voice path.
