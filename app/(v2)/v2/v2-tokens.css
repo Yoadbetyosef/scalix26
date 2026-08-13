@@ -1036,3 +1036,10 @@
   background: var(--chan); margin-right: 5px; vertical-align: middle;
 }
 .v2 .v2-mmeta i { font-style: normal; }
+
+/* The state a connection reports, in the row's trailing slot. Live is quiet — it is the resting good
+   state and needs no emphasis. "In review" is the only one that earns colour, because it is the one a
+   person would otherwise read as their own unfinished work. Connect is an instruction, so it carries
+   the accent: it is the single thing on this page that needs the person. */
+.v2 .v2-dsec .v2-row em { text-transform: none; letter-spacing: 0.04em; }
+.v2 .v2-dsec .v2-row em:not([data-tone]) { font-size: 10.5px; }
