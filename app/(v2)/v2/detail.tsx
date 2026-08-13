@@ -109,7 +109,10 @@ export function DetailPage({ eyebrow, title, chips, line, actions, sections, bac
           </div>
         )}
 
-        {sections.map((s) => (
+        {/* A section with no facts, no rows, no extra and no empty line of its own renders NOTHING.
+            A heading over a void is worse than an absent heading: it says a thing exists and then
+            fails to show it, which reads as a broken screen rather than an empty one. */}
+        {sections.filter((s) => s.facts?.length || s.rows?.length || s.extra || s.empty).map((s) => (
           <section key={s.title} className="v2-dsec">
             <h3>{s.title}</h3>
 

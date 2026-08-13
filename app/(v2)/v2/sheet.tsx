@@ -116,7 +116,10 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats }: Pro
                 ))}
               </div>
 
-              {groups.map((g) => (
+              {/* A group whose rows were all gated away renders nothing — not a heading with a gap
+                  under it. visibleGroups already drops empty groups; this makes the pane safe
+                  regardless of what a caller hands it. */}
+              {groups.filter((g) => g.items.length > 0).map((g) => (
                 <div key={g.id}>
                   <p className="v2-kick" style={{ margin: '26px 0 10px' }}>{g.label}</p>
                   {g.items.map((d) => (

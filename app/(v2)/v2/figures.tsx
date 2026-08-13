@@ -84,7 +84,9 @@ export function FiguresBoard({ title, eyebrow, line, hero, figures, shares, back
           </section>
         )}
 
-        {shares && (
+        {/* Same rule as DetailPage: no heading over a void. A breakdown with nothing to break down
+            and nothing to say about it draws nothing. */}
+        {shares && (shares.rows.length > 0 || shares.empty) && (
           <section className="v2-shares">
             <h3>{shares.title}</h3>
             {shares.rows.length === 0 ? (
