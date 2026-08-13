@@ -219,12 +219,14 @@ describe('the list reads as a designed screen, not a table', () => {
   it('channel is a FIELD, so every list gets the mark', () => {
     // Not a branch inside the inbox screen — the whole point of the shared component.
     expect(list).toMatch(/channel\?: ChannelKey \| null/)
-    expect(list).toMatch(/export const channelKey/)
+    // The mapping moved to channels.ts, which has no 'use client' — the server routes call it.
+    expect(code('app/(v2)/v2/channels.ts')).toMatch(/export const channelKey/)
+    expect(code('app/(v2)/v2/channels.ts')).not.toMatch(/use client/)
   })
 
   it('an unknown channel gets no mark rather than a grey one', () => {
     // A grey dot would read as a channel of its own.
-    expect(list).toMatch(/\?\? null/)
+    expect(code('app/(v2)/v2/channels.ts')).toMatch(/\?\? null/)
     expect(list).toMatch(/\{r\.channel && <span className="v2-chan"/)
   })
 

@@ -5,7 +5,10 @@ import { getDashboardData } from '@/lib/dashboard/overview'
 import { enabledModulesOf, effectiveModules } from '@/lib/modules'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 import type { Lead, LeadSource } from '@/types'
-import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
+import { ListPage, type ListFilter, type ListRow } from '../list'
+// From channels.ts, not list.tsx: this is called on the SERVER, and a client module's exports are
+// proxies there. See channels.ts.
+import { channelKey } from '../channels'
 import { leadsLine } from './line'
 
 // Leads, reskinned. Same rows, same fields, same order, same source as the ?tab=leads view on

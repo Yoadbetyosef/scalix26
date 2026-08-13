@@ -1,7 +1,10 @@
 import { listContactsPage, type ContactRow } from '@/lib/contacts/page-read'
 import { isSocialChannel } from '@/lib/utils'
 import { ContactBody } from './[id]/body'
-import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
+import { ListPage, type ListFilter, type ListRow } from '../list'
+// From channels.ts, not list.tsx: this is called on the SERVER, and a client module's exports are
+// proxies there. See channels.ts.
+import { channelKey } from '../channels'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { contactsLine } from './line'
 
