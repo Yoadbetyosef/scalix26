@@ -10,12 +10,20 @@ import { testAiLine } from './line'
 // existing page calls, against this tenant's own agent, touching no customer record. There is nothing
 // here for read-only to protect.
 //
-// It drives the SAME hook as /test-ai. What differs is only what is rendered: this surface shows the
-// conversation and does not surface callActive, listening, speaking or transcript. Voice on /v2 is a
-// later task, not a half-wired one.
+// It drives the SAME hook as /test-ai, and now renders both of its surfaces. Voice is rendering only:
+// callActive, listening, speaking, transcript, startCall, endCall and startListening all come from the
+// hook exactly as they are. No handler, no state and no effect was added here — if this file ever
+// needs one, the machine has leaked out of the hook and that is the bug.
 
 export function TestAiClient() {
-  const { messages, input, setInput, loading, error, handleChatSubmit, reset, bottomRef } = useTestAi()
+  const {
+    messages, input, setInput, loading, error, handleChatSubmit, reset, bottomRef,
+    mode, setMode, callActive, listening, speaking, transcript, startCall, endCall, startListening,
+  } = useTestAi()
+
+  // What the call is doing, in the caller's own words. Only one of these is ever true, and the order
+  // matters: speaking wins over listening because her audio ends the turn.
+  const callState = speaking ? 'Rudi is speaking' : listening ? 'Listening' : loading ? 'Thinking' : 'Your turn'
 
   const thread: ThreadMessage[] = messages.map((m, i) => ({
     id: `${i}`,
@@ -37,6 +45,23 @@ export function TestAiClient() {
       </header>
 
       <div className="v2-pbody" data-scroll>
+        {/* Chat or call. One control, and it swaps which surface is live — never both at once, so the
+            single accent below always belongs to whichever mode is showing. endCall() on the way out
+            of voice is the hook's own teardown, not a local one. */}
+        <div className="v2-chips" style={{ marginBottom: 18 }}>
+          {(['chat', 'voice'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className="v2-chip"
+              data-on={mode === m || undefined}
+              onClick={() => { setMode(m); if (m === 'chat') endCall() }}
+            >
+              {m === 'chat' ? 'Chat' : 'Call'}
+            </button>
+          ))}
+        </div>
+
         <p className="v2-lin">
           {testAiLine({ exchanges: messages.length, busy: loading, error })
             .map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
@@ -50,8 +75,34 @@ export function TestAiClient() {
 
         <ThreadView
           messages={thread}
-          emptyLabel="Nothing said yet."
-          composer={
+          emptyLabel={mode === 'voice' ? 'Start the call and say something.' : 'Nothing said yet.'}
+          composer={mode === 'voice' ? (
+            <div className="v2-call">
+              {/* What she is hearing, as it arrives. It clears itself when the phrase is final, so an
+                  empty transcript is not an error state and draws nothing. */}
+              {transcript && <p className="v2-tscript">“{transcript}”</p>}
+
+              <div className="v2-callbar">
+                <span className="v2-callstate" data-on={callActive || undefined}>
+                  <i data-live={(listening || speaking) || undefined} />
+                  {callActive ? callState : 'Not on a call'}
+                </span>
+
+                {!callActive ? (
+                  <button type="button" className="v2-ract" data-tone="primary" onClick={startCall}>Start call</button>
+                ) : (
+                  <>
+                    {/* The hook exposes this for exactly the moment a turn ends without her hearing
+                        anything — v1 renders the same button under the same condition. */}
+                    {!listening && !speaking && !loading && (
+                      <button type="button" className="v2-ract" onClick={startListening}>Speak</button>
+                    )}
+                    <button type="button" className="v2-ract" onClick={endCall}>End call</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
             <form onSubmit={handleChatSubmit} className="v2-tform">
               <input
                 className="v2-tinput"
@@ -64,7 +115,7 @@ export function TestAiClient() {
                 {loading ? 'Sending…' : 'Send'}
               </button>
             </form>
-          }
+          )}
         />
         <div ref={bottomRef} />
       </div>

@@ -1063,3 +1063,43 @@
   box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
 }
 @media (max-width: 719.98px) { .v2 .v2-tform { max-width: none; } }
+
+/* ── THE CALL SURFACE ────────────────────────────────────────────────────────────────────────────
+   The same slot the chat composer occupies, so switching mode swaps one control for another rather
+   than reflowing the screen. */
+.v2 .v2-call { margin-top: 18px; max-width: 660px; }
+.v2 .v2-callbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 16px;
+  background: var(--v2-paper); border: 1px solid var(--v2-line);
+  box-shadow: 0 1px 2px rgba(14, 14, 17, 0.05);
+}
+.v2 .v2-callstate {
+  display: inline-flex; align-items: center; gap: 8px; margin-right: auto;
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--v2-ink-42);
+}
+.v2 .v2-callstate[data-on] { color: var(--v2-ink-72); }
+.v2 .v2-callstate i {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--v2-ink-42); flex: none;
+}
+/* Live only while sound is actually moving — listening or speaking. A dot that pulses through
+   "your turn" would claim the mic is open when the turn is the caller's. */
+.v2 .v2-callstate i[data-live] {
+  background: var(--v2-pink);
+  animation: v2-mic-live 1.6s ease-out infinite;
+  box-shadow: 0 0 0 0 rgba(255, 46, 147, 0.5);
+}
+@keyframes v2-mic-live {
+  70% { box-shadow: 0 0 0 7px rgba(255, 46, 147, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 46, 147, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .v2 .v2-callstate i[data-live] { animation: none; } }
+
+/* What she is hearing, as it arrives. Prose, so Inter Tight — it is a person's words, not a label. */
+.v2 .v2-tscript {
+  margin-bottom: 10px; padding: 0 4px;
+  font-size: 15px; line-height: 1.45; color: var(--v2-ink-46);
+}
+
+@media (max-width: 719.98px) { .v2 .v2-call { max-width: none; } }
