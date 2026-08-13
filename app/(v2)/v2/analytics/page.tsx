@@ -57,6 +57,9 @@ export default async function V2Analytics() {
         label: 'Settled without a person',
         value: total > 0 ? `${fcr}%` : null,
         note: total > 0 ? `${resolved.toLocaleString()} of ${total.toLocaleString()} conversations` : null,
+        // The result is worth marking on its own — no comparison, no extra read. Absent at zero, and
+        // absent when there is nothing to report, exactly as a tile's marker is.
+        marked: total > 0 && fcr > 0,
       }}
       figures={figures}
       shares={{ title: 'Where it came from', rows: shares, empty: 'No conversations to break down yet.' }}

@@ -36,7 +36,14 @@ export interface FiguresBoardProps {
   eyebrow?: string | null
   line: RudiSegment[]
   /** The one number the screen exists to report. Absent when there is nothing to report. */
-  hero?: { label: string; value: string | null; note?: string | null }
+  hero?: {
+    label: string
+    value: string | null
+    note?: string | null
+    /** Draws the highlighter behind the figure. Same rule as the sheet's tiles: never when the figure
+     *  is zero or unavailable, because the green marks something real or it marks nothing. */
+    marked?: boolean
+  }
   figures: Figure[]
   shares?: { title: string; rows: Share[]; empty: string }
   backHref: string
@@ -66,7 +73,10 @@ export function FiguresBoard({ title, eyebrow, line, hero, figures, shares, back
           <section className="v2-hero-fig">
             <p className="v2-figlab">{hero.label}</p>
             {/* THE one gradient on this screen. Everything else is ink. */}
-            <p className="v2-figbig">{hero.value ?? '—'}</p>
+            <span className="v2-fignum-wrap">
+              {hero.marked && hero.value && <em className="v2-marker" data-hero aria-hidden />}
+              <p className="v2-figbig">{hero.value ?? '—'}</p>
+            </span>
             {hero.note && <p className="v2-fignote">{hero.note}</p>}
           </section>
         )}

@@ -1345,3 +1345,11 @@
 .v2 .v2-sin > .v2-stagger, .v2 .v2-sin > .v2-pane-fade { animation: v2-panefade 0.22s var(--v2-ease) both; }
 @keyframes v2-panefade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .v2 .v2-sin > .v2-stagger { animation: none; } }
+
+/* The marker under the hero figure. Same highlighter as the sheet's tiles, scaled to the figure it
+   sits behind — it is one pen, not two. */
+.v2 .v2-fignum-wrap { position: relative; display: inline-block; }
+.v2 .v2-marker[data-hero] { left: -8px; right: -8px; bottom: 6px; height: 26px; border-radius: 3px; }
+@media (max-width: 719.98px) {
+  .v2 .v2-marker[data-hero] { left: -5px; right: -5px; bottom: 4px; height: 18px; }
+}
