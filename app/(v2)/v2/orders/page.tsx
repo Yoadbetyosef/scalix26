@@ -41,6 +41,8 @@ export default async function V2Orders() {
       muted: isTerminalStage(o.stage),
       href: `/v2/orders/${o.id}`,
       bucket,
+      // Waiting on a decision is the state that needs someone; in production does not.
+      needsYou: bucket === 'waiting',
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }
   })

@@ -5,7 +5,7 @@ import { getDashboardData } from '@/lib/dashboard/overview'
 import { enabledModulesOf, effectiveModules } from '@/lib/modules'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 import type { Lead, LeadSource } from '@/types'
-import { ListPage, type ListFilter, type ListRow } from '../list'
+import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
 import { leadsLine } from './line'
 
 // Leads, reskinned. Same rows, same fields, same order, same source as the ?tab=leads view on
@@ -82,6 +82,9 @@ export default async function V2Leads() {
       muted: dismissed,
       href: leadLinks[l.id] ?? null,
       bucket: l.status,
+      channel: channelKey(l.source),
+      // New and contacted are the two that have not been answered — the same pair stats.activeLeads counts.
+      needsYou: l.status === 'new' || l.status === 'contacted',
       // The same actions the card offers today, under the same conditions — Call for a lead with a
       // phone, Mark as Booked until it is booked, Dismiss until it is, Restore once it has been.
       actions: [

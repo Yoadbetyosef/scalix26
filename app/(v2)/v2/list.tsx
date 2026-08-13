@@ -18,6 +18,23 @@ import type { RudiSegment } from './rudi-line'
 // — and a chip states which buckets it shows. Counts are derived here from the rows, never passed in,
 // so a chip can never claim a number the list does not contain.
 
+// The channels the product actually has. A row's mark is the same shape and weight for every one of
+// them; only the hue differs, so a column of rows sorts by channel at a glance.
+export type ChannelKey = 'voice' | 'sms' | 'email' | 'facebook' | 'instagram' | 'web'
+
+const CHANNEL_ALIASES: Record<string, ChannelKey> = {
+  voice: 'voice', phone: 'voice', call: 'voice',
+  sms: 'sms', text: 'sms', whatsapp: 'sms',
+  email: 'email', mail: 'email',
+  facebook: 'facebook', messenger: 'facebook',
+  instagram: 'instagram',
+  web: 'web', chat: 'web', web_form: 'web', webchat: 'web',
+}
+
+/** Maps whatever a row's source column says onto a mark. Unknown stays unmarked rather than guessing. */
+export const channelKey = (v: string | null | undefined): ChannelKey | null =>
+  (v ? CHANNEL_ALIASES[v.toLowerCase().trim()] ?? null : null)
+
 export interface ListAction {
   label: string
   tone?: 'primary' | 'quiet'
@@ -42,6 +59,10 @@ export interface ListRow {
   href?: string | null
   /** Which bucket this row is in. Chips select by bucket. */
   bucket: string
+  /** How this row reached the business. Drives a coloured mark so the eye sorts without reading. */
+  channel?: ChannelKey | null
+  /** This row needs a person. THE accent on a list — nothing else competes for it. */
+  needsYou?: boolean
   actions?: ListAction[]
 }
 
@@ -130,10 +151,13 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
                   key={r.id}
                   className="v2-row"
                   data-muted={r.muted || undefined}
+                  data-needs={r.needsYou || undefined}
                   data-click={r.href ? true : undefined}
                   onClick={r.href ? () => router.push(r.href!) : undefined}
                 >
                   {r.marked && <span className="v2-dot" aria-hidden />}
+                  {/* Same shape and weight for every channel; only the hue differs. */}
+                  {r.channel && <span className="v2-chan" data-channel={r.channel} title={r.channel} aria-hidden />}
                   <div className="v2-m">
                     <p>{r.primary}</p>
                     <span>{r.detail}</span>

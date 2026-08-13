@@ -212,3 +212,44 @@ describe('the thread is its own shape, and the shared ones stayed shared', () =>
     expect(code('app/(v2)/v2/inbox/page.tsx')).toMatch(/\/v2\/inbox\/\$\{c\.id\}/)
   })
 })
+
+describe('the list reads as a designed screen, not a table', () => {
+  const list = code('app/(v2)/v2/list.tsx')
+
+  it('channel is a FIELD, so every list gets the mark', () => {
+    // Not a branch inside the inbox screen — the whole point of the shared component.
+    expect(list).toMatch(/channel\?: ChannelKey \| null/)
+    expect(list).toMatch(/export const channelKey/)
+  })
+
+  it('an unknown channel gets no mark rather than a grey one', () => {
+    // A grey dot would read as a channel of its own.
+    expect(list).toMatch(/\?\? null/)
+    expect(list).toMatch(/\{r\.channel && <span className="v2-chan"/)
+  })
+
+  it('needsYou is the single accent on a row', () => {
+    expect(list).toMatch(/needsYou\?: boolean/)
+    expect(list).toMatch(/data-needs=\{r\.needsYou \|\| undefined\}/)
+  })
+
+  it.each([
+    ['app/(v2)/v2/inbox/page.tsx', 'needsYou'],
+    ['app/(v2)/v2/leads/page.tsx', 'needsYou'],
+    ['app/(v2)/v2/appointments/page.tsx', 'needsYou'],
+    ['app/(v2)/v2/orders/page.tsx', 'needsYou'],
+  ])('%s marks what needs a person', (file, field) => {
+    expect(code(file)).toContain(field)
+  })
+
+  it('the opening line accents an action, never an identifier', () => {
+    const line = code('app/(v2)/v2/inbox/line.ts')
+    // It used to bold a phone number, which is not something a person can act on.
+    expect(line).toMatch(/openCount > 0/)
+    expect(line).not.toMatch(/newest|name/)
+  })
+
+  it('prose spells time out; the abbreviation stays in the mono column', () => {
+    expect(code('app/(v2)/v2/inbox/line.ts')).not.toMatch(/d ago|hr ago|min ago/)
+  })
+})

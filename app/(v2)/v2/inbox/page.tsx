@@ -1,5 +1,5 @@
 import { getDashboardData } from '@/lib/dashboard/overview'
-import { ListPage, type ListFilter, type ListRow } from '../list'
+import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { inboxLine } from './line'
 
@@ -37,6 +37,9 @@ export default async function V2Inbox() {
       // The thread is the destination the rest of the app already uses for a conversation.
       href: `/v2/inbox/${c.id}`,
       bucket: spoken ? 'voice' : 'message',
+      channel: channelKey(c.channel),
+      // Open is the state that needs a person; resolved and closed are settled and stay quiet.
+      needsYou: !['resolved', 'closed', 'archived'].includes((c.status || '').toLowerCase()),
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }
   })
@@ -47,7 +50,7 @@ export default async function V2Inbox() {
       line={inboxLine({
         total: rows.length,
         calls: rows.filter((r) => r.bucket === 'voice').length,
-        newest: rows[0] ? { name: rows[0].primary, when: rows[0].trailing ?? '' } : null,
+        openCount: rows.filter((r) => r.needsYou).length,
       })}
       filters={FILTERS}
       initialFilter="all"

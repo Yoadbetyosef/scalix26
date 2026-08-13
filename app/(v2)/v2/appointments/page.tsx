@@ -1,5 +1,5 @@
 import { getDashboardData } from '@/lib/dashboard/overview'
-import { ListPage, type ListFilter, type ListRow } from '../list'
+import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
 import { listPageContext, PREVIEW } from '../list-page'
 import { appointmentsLine } from './line'
 
@@ -36,6 +36,9 @@ export default async function V2Appointments() {
       marked: bucket === 'today',
       muted: cancelled || bucket === 'past',
       bucket,
+      channel: channelKey(a.channel),
+      // Today's jobs are the ones a person has to be somewhere for.
+      needsYou: bucket === 'today',
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }
   })

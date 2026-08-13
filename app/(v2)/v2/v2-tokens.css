@@ -935,3 +935,43 @@
   .v2 .v2-msg { max-width: 86%; }
   .v2 .v2-thread { max-width: none; }
 }
+
+/* ── THE LIST, REWORKED ──────────────────────────────────────────────────────────────────────────
+   It read as a table with a nice font: one narrow column with dead space beside it, three greys, and
+   every row the same height. These rules give it the width, the rhythm and the one accent. */
+
+/* USE THE SCREEN. 660px was the reference's measure for a mobile card; on a desktop centre column it
+   left half the width empty. The list now fills the column and the rows get room instead. */
+.v2 .v2-pbody .v2-row { max-width: none; padding: 17px 18px; gap: 16px; }
+
+/* RHYTHM. The name carries weight, the meta line drops back, the figure is mono and quiet. Three
+   distinct jobs instead of three shades of the same one. */
+.v2 .v2-pbody .v2-row .v2-m p { font-size: 16px; font-weight: 500; letter-spacing: -0.012em; color: var(--v2-ink); }
+.v2 .v2-pbody .v2-row .v2-m span { margin-top: 5px; font-size: 12.5px; color: var(--v2-ink-40); }
+.v2 .v2-pbody .v2-row em { font-size: 10.5px; letter-spacing: 0.06em; color: var(--v2-ink-40); }
+
+/* THE CHANNEL MARK. Same 8px dot for every channel, only the hue differs — the eye sorts a column by
+   colour without reading a word of it. An unknown channel gets no mark rather than a grey one, which
+   would read as a channel of its own. */
+.v2 .v2-chan { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.v2 .v2-chan[data-channel="voice"]     { background: #8b5cf6; }
+.v2 .v2-chan[data-channel="sms"]       { background: #22d3ee; }
+.v2 .v2-chan[data-channel="email"]     { background: #ffb020; }
+.v2 .v2-chan[data-channel="facebook"]  { background: #4267ff; }
+.v2 .v2-chan[data-channel="instagram"] { background: #ff2e93; }
+.v2 .v2-chan[data-channel="web"]       { background: #0f9d58; }
+
+/* STATE, SHOWN RATHER THAN SPELLED. A row that needs a person carries the gradient on its leading
+   edge; everything settled stays quiet. This is the single accent applied to a list, so nothing else
+   in a row may compete for it. */
+.v2 .v2-pbody .v2-row[data-needs] { background: rgba(139, 92, 246, 0.045); }
+.v2 .v2-pbody .v2-row[data-needs]::before {
+  content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px;
+  border-radius: 3px; background: var(--v2-grad-v);
+}
+.v2 .v2-pbody .v2-row[data-needs] .v2-m p { font-weight: 600; }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-pbody .v2-row { padding: 14px 16px; gap: 12px; }
+  .v2 .v2-pbody .v2-row[data-needs]::before { left: 0; top: 10px; bottom: 10px; }
+}

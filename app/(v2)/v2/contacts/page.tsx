@@ -1,6 +1,6 @@
 import { listContactsPage, type ContactRow } from '@/lib/contacts/page-read'
 import { isSocialChannel } from '@/lib/utils'
-import { ListPage, type ListFilter, type ListRow } from '../list'
+import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { contactsLine } from './line'
 
@@ -40,6 +40,7 @@ export default async function V2Contacts() {
       muted: bucket === 'quiet',
       href: `/v2/contacts/${c.id}`,
       bucket,
+      channel: channelKey(c.channel),
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }
   })
