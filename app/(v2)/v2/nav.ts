@@ -40,7 +40,7 @@ export const GROUPS: Group[] = [
       // (components/ai-employees/knowledge-base-editor.tsx inside app/ai-employees/[id]). Inert until
       // that screen exists in v2 — a link to nothing is worse than a row that does nothing.
       { label: 'Knowledge' },
-      { label: 'Test AI' },
+      { label: 'Test AI', href: '/v2/test-ai', module: 'ai_voice' },
     ] },
   {
     id: 'g2',

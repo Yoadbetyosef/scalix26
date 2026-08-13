@@ -1043,3 +1043,23 @@
    the accent: it is the single thing on this page that needs the person. */
 .v2 .v2-dsec .v2-row em { text-transform: none; letter-spacing: 0.04em; }
 .v2 .v2-dsec .v2-row em:not([data-tone]) { font-size: 10.5px; }
+
+/* The sandbox composer. It sits under the thread rather than pinned, because this screen is a
+   transcript you read top to bottom, not an inbox you live in. */
+.v2 .v2-tform { display: flex; gap: 8px; margin-top: 18px; max-width: 660px; }
+.v2 .v2-tinput {
+  flex: 1; min-width: 0; height: 42px; padding: 0 16px;
+  border-radius: 21px; border: 1px solid var(--v2-line-strong);
+  background: var(--v2-paper); color: var(--v2-ink);
+  font-family: var(--v2-sans); font-size: 14.5px; outline: none;
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.v2 .v2-tinput::placeholder { color: var(--v2-ink-42); }
+.v2 .v2-tinput:focus { border-color: var(--v2-violet-edge); box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.14); }
+/* The one live control in /v2 carries the accent, because here it genuinely is the thing that needs
+   the person — this screen exists to be used. */
+.v2 .v2-ract[data-tone="primary"]:not(:disabled) {
+  background: var(--v2-grad-2); border-color: transparent; color: #fff;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+}
+@media (max-width: 719.98px) { .v2 .v2-tform { max-width: none; } }
