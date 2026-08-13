@@ -18,6 +18,7 @@ function integrationMissing(k: IntegrationKey): string {
     twilio: 'Texting isn’t set up yet — there’s no connected phone number.',
     stripe: 'Stripe is not connected, so I can’t send payment links.',
     calendar: 'The calendar is not connected.',
+    outlook: 'The Outlook calendar is not connected.',
   }
   return map[k]
 }

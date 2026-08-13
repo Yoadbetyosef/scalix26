@@ -69,3 +69,17 @@ Rudi (AI Employees, Knowledge, Test AI), Business (Analytics, Reports), Account 
 Partner Program, Admin). Each is a route, a loader — extracted verbatim into lib/ if it is inline —
 and an href filled in on a destination nav.ts already lists. Knowledge's location is still
 unconfirmed: there is no app/knowledge, so it is nested under ai-employees or settings.
+
+## 6. Connection rows with no truthful state yet
+
+The connections page carries only providers that can say something true about themselves. Left off
+until they can:
+
+- **Web chat** — no connection record found. It may be always-on rather than connected; if so the row
+  is not a connection at all and belongs elsewhere.
+- **Google Business** — a connect flow exists in onboarding, but no status is surfaced anywhere.
+- **Pricing & services / Documents** ("so Rudi sounds like you") — these are catalog and knowledge
+  CONTENT, not connections. The row would be "has content" rather than "is connected", which is a
+  different kind of state and probably a different section.
+
+A row that cannot say something true about its state does not belong on the page.
