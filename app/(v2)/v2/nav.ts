@@ -34,7 +34,14 @@ export const PRIMARY: Dest[] = [
 ]
 
 export const GROUPS: Group[] = [
-  { id: 'g1', label: 'Rudi', items: [{ label: 'AI Employees' }, { label: 'Knowledge' }, { label: 'Test AI' }] },
+  { id: 'g1', label: 'Rudi', items: [
+      { label: 'AI Employees', href: '/v2/agents' },
+      // Knowledge has no route of its own: it is a section of an AI employee's detail screen
+      // (components/ai-employees/knowledge-base-editor.tsx inside app/ai-employees/[id]). Inert until
+      // that screen exists in v2 — a link to nothing is worse than a row that does nothing.
+      { label: 'Knowledge' },
+      { label: 'Test AI' },
+    ] },
   {
     id: 'g2',
     label: 'Business',

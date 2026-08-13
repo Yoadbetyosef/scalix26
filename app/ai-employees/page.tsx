@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
+import { readAgents } from '@/lib/agents/list-read'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Bot, Zap, Phone, MessageSquare, Mail, MessageCircle, Camera } from 'lucide-react'
@@ -46,21 +47,9 @@ export default async function AIEmployeesPage() {
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/auth/signup')
 
-  const { data: employees } = await serviceSupabase
-    .from('ai_employees')
-    .select('*, channels(*), skills(*)')
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false })
-
-  // Email connection lives in connected_email_accounts (per-agent), NOT in the
-  // channels table — so the card's count/badges miss it. Read which agents have a
-  // connected email account (admin read, scoped to this verified tenant).
-  const { data: emailAccounts } = await createAdminClient()
-    .from('connected_email_accounts')
-    .select('ai_employee_id')
-    .eq('tenant_id', tenantId)
-    .eq('status', 'connected')
-  const emailAgentIds = new Set((emailAccounts || []).map((a) => a.ai_employee_id).filter(Boolean))
+  // Moved to lib/agents/list-read.ts so /v2's AI Employees screen reads the same rows. Same queries,
+  // same join, same ordering — see that file's header.
+  const { employees, emailAgentIds } = await readAgents(tenantId)
 
   return (
     <div className="p-4 sm:p-8 max-w-6xl mx-auto">
