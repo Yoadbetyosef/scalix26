@@ -26,6 +26,8 @@ export interface DetailAction {
 export interface DetailChip {
   label: string
   tone?: 'accent' | 'quiet'
+  /** A channel key, so the record wears the same hue as the row it came from. One mapping, everywhere. */
+  channel?: string | null
 }
 
 export interface DetailFact {
@@ -81,7 +83,7 @@ export function DetailPage({ eyebrow, title, chips, line, actions, sections, bac
         {chips && chips.length > 0 && (
           <div className="v2-chips" data-static>
             {chips.map((c) => (
-              <span key={c.label} className="v2-chip" data-tone={c.tone ?? 'quiet'}>{c.label}</span>
+              <span key={c.label} className="v2-chip" data-tone={c.tone ?? 'quiet'} data-channel={c.channel ?? undefined}>{c.label}</span>
             ))}
           </div>
         )}

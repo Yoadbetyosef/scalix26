@@ -953,13 +953,25 @@
 /* THE CHANNEL MARK. Same 8px dot for every channel, only the hue differs — the eye sorts a column by
    colour without reading a word of it. An unknown channel gets no mark rather than a grey one, which
    would read as a channel of its own. */
-.v2 .v2-chan { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.v2 .v2-chan[data-channel="voice"]     { background: #8b5cf6; }
-.v2 .v2-chan[data-channel="sms"]       { background: #22d3ee; }
-.v2 .v2-chan[data-channel="email"]     { background: #ffb020; }
-.v2 .v2-chan[data-channel="facebook"]  { background: #4267ff; }
-.v2 .v2-chan[data-channel="instagram"] { background: #ff2e93; }
-.v2 .v2-chan[data-channel="web"]       { background: #0f9d58; }
+/* ONE MAPPING, EVERYWHERE A CHANNEL APPEARS. The hue is declared once as a custom property on the
+   element carrying data-channel, and the list mark, the detail chip and the thread's meta line all
+   read it. A second table would drift; there is one. */
+.v2 [data-channel="voice"]     { --chan: #8b5cf6; }
+.v2 [data-channel="sms"]       { --chan: #22d3ee; }
+.v2 [data-channel="email"]     { --chan: #ffb020; }
+.v2 [data-channel="facebook"]  { --chan: #4267ff; }
+.v2 [data-channel="instagram"] { --chan: #ff2e93; }
+.v2 [data-channel="web"]       { --chan: #0f9d58; }
+
+/* THE MARK HAS TO READ AT A GLANCE. An 8px flat dot was something to look FOR. It is now 10px with a
+   soft halo of its own hue and a hairline of white between it and the row, so a column of rows sorts
+   by colour at arm's length. Same shape, same weight, same halo for every channel — only the hue
+   differs, which is the whole point: the eye sorts without a word being read. */
+.v2 .v2-chan {
+  width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--chan, var(--v2-ink-42));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--chan, transparent) 18%, transparent);
+}
 
 /* STATE, SHOWN RATHER THAN SPELLED. A row that needs a person carries the gradient on its leading
    edge; everything settled stays quiet. This is the single accent applied to a list, so nothing else
@@ -1005,3 +1017,22 @@
   content: ''; position: absolute; right: 0; top: 8px; bottom: 8px; width: 2px;
   border-radius: 2px; background: var(--v2-ink-42);
 }
+
+/* The channel as a word, on a detail screen: the same hue, worn as a pill instead of a dot, so the
+   record and the row it came from are recognisably the same thing. */
+.v2 .v2-chip[data-channel] {
+  border-color: color-mix(in srgb, var(--chan) 45%, transparent);
+  background: color-mix(in srgb, var(--chan) 10%, transparent);
+  color: var(--v2-ink);
+}
+.v2 .v2-chip[data-channel]::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--chan); margin-right: 7px; display: inline-block; vertical-align: middle;
+}
+
+/* And in the thread, where a conversation spans channels: the meta line's own dot, same hue. */
+.v2 .v2-mmeta [data-channel] {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--chan); margin-right: 5px; vertical-align: middle;
+}
+.v2 .v2-mmeta i { font-style: normal; }

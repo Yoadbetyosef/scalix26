@@ -29,3 +29,9 @@ const CHANNEL_ALIASES: Record<string, ChannelKey> = {
 /** Maps whatever a row's source column says onto a mark. Unknown stays unmarked rather than guessing. */
 export const channelKey = (v: string | null | undefined): ChannelKey | null =>
   (v ? CHANNEL_ALIASES[v.toLowerCase().trim()] ?? null : null)
+
+/** How a channel is written when it is shown as a word. The mark carries the hue; this carries the name. */
+export const CHANNEL_LABEL: Record<ChannelKey, string> = {
+  voice: 'Voice', sms: 'SMS', email: 'Email',
+  facebook: 'Facebook', instagram: 'Instagram', web: 'Web chat',
+}

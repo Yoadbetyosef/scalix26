@@ -77,6 +77,8 @@ export function ThreadView({ messages, emptyLabel, composer }: ThreadViewProps) 
               <div className="v2-msg" data-side={m.side} data-failed={m.failed || undefined}>
                 <p>{m.body}</p>
                 <span className="v2-mmeta">
+                  {/* The same hue the row carried, when a thread actually spans channels. */}
+                  {showChannel && m.channel && <i data-channel={m.channel} aria-hidden />}
                   {[
                     m.side === 'us' ? (m.byAi ? 'Rudi' : 'You') : null,
                     showChannel ? m.channel : null,

@@ -2,6 +2,7 @@ import { readConversation } from '@/lib/inbox/conversation-read'
 import { DetailPage, type DetailFact } from '../../detail'
 import { ThreadView, type ThreadMessage } from '../../thread'
 import { relativeTime, PREVIEW } from '../../list-page'
+import { channelKey, CHANNEL_LABEL } from '../../channels'
 import { conversationLine } from './line'
 
 // One conversation, reskinned. readConversation is the /inbox/[id] page's own read, extracted verbatim
@@ -55,7 +56,7 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
       eyebrow={str(contact?.phone) ?? str(contact?.email)}
       title={who}
       chips={[
-        ...(str(conv.channel) ? [{ label: conv.channel }] : []),
+        ...(str(conv.channel) ? [{ label: CHANNEL_LABEL[channelKey(conv.channel)!] ?? conv.channel, channel: channelKey(conv.channel) }] : []),
         ...(conv.human_takeover ? [{ label: 'You took over', tone: 'accent' as const }] : []),
       ]}
       line={conversationLine({

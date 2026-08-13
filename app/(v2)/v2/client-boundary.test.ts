@@ -57,3 +57,31 @@ describe('the client boundary', () => {
     }
   })
 })
+
+describe('one channel mapping, used everywhere', () => {
+  const css = readFileSync(join(V2, 'v2-tokens.css'), 'utf8')
+  const channels = readFileSync(join(V2, 'channels.ts'), 'utf8')
+
+  it('the hue is declared once, on data-channel, not per component', () => {
+    // A second table would drift. The list mark, the detail chip and the thread meta all read --chan.
+    for (const c of ['voice', 'sms', 'email', 'facebook', 'instagram', 'web']) {
+      const at = css.indexOf(`[data-channel="${c}"]`)
+      expect(at, `no hue declared for ${c}`).toBeGreaterThan(-1)
+      expect(css.slice(at, css.indexOf('}', at))).toMatch(/--chan: #[0-9a-f]{6}/i)
+    }
+  })
+
+  it('every channel gets the same shape and weight, only the hue differs', () => {
+    const mark = css.slice(css.indexOf('.v2 .v2-chan {'), css.indexOf('}', css.indexOf('.v2 .v2-chan {')))
+    expect(mark).toMatch(/width: 10px; height: 10px/)
+    expect(mark).toMatch(/background: var\(--chan/)
+    // The halo is what makes it read at arm's length rather than being something to look for.
+    expect(mark).toMatch(/box-shadow: 0 0 0 3px/)
+  })
+
+  it('channels.ts stays callable from the server', () => {
+    // The DIRECTIVE, not the words — the file's own header explains why it has none.
+    expect(channels.trimStart().startsWith("'use client'")).toBe(false)
+    expect(channels).toMatch(/export const CHANNEL_LABEL/)
+  })
+})

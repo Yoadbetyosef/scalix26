@@ -1,6 +1,7 @@
 import { readContactProfile } from '@/lib/contacts/profile-read'
 import { DetailPage, type DetailFact, type DetailRow } from '../../detail'
 import { relativeTime, PREVIEW } from '../../list-page'
+import { channelKey, CHANNEL_LABEL } from '../../channels'
 import { contactProfileLine } from './line'
 
 // One contact, reskinned. readContactProfile is the /contacts/[id] page's own read, extracted
@@ -50,7 +51,7 @@ export async function ContactBody({ tenantId, id }: { tenantId: string; id: stri
       backLabel="Contacts"
       eyebrow={str(contact.phone) ?? str(contact.email)}
       title={title}
-      chips={str(contact.channel) ? [{ label: str(contact.channel)! }] : []}
+      chips={str(contact.channel) ? [{ label: CHANNEL_LABEL[channelKey(contact.channel)!] ?? str(contact.channel)!, channel: channelKey(contact.channel) }] : []}
       line={contactProfileLine({
         name: str(contact.name),
         conversations: conversations.length,
