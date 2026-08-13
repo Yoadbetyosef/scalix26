@@ -38,9 +38,7 @@ export default async function V2Agents() {
       needsYou: !reachable,
       muted: bucket === 'off',
       bucket,
-      // No v2 agent detail exists yet, so the row stays inert rather than throwing the reader out
-      // of the preview into the old app.
-      href: null,
+      href: `/v2/agents/${e.id}`,
       actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
     }
   })
