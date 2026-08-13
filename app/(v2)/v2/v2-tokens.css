@@ -1408,3 +1408,41 @@
 /* A stagger of more than about eight rows stops reading as an entrance and starts reading as a load,
    so the rest arrive together. */
 .v2 .v2-pbody .v2-stagger > *:nth-child(n+6) { animation-delay: 150ms; }
+
+/* ── CONNECTIONS ─────────────────────────────────────────────────────────────────────────────────
+   Reusing .v2-group, .v2-gcard, .v2-grow and .v2-gchip. Only the trailing state is new, and only
+   because a connection reports something a nav row does not. */
+.v2 .v2-grow[data-conn] { align-items: flex-start; padding: 12px; min-height: 56px; }
+.v2 .v2-grow[data-conn] .v2-gchip { margin-top: 1px; }
+.v2 .v2-grow[data-conn] .v2-glab em {
+  display: block; margin-top: 3px; font-style: normal;
+  font-size: 12.5px; line-height: 1.35; color: var(--v2-ink-46);
+}
+.v2 .v2-grow[data-conn] .v2-gtrail { align-self: center; }
+
+/* LIVE is transient state, so it wears the pale ground and the mono voice — the same treatment the
+   rail gives its AI badge, not a second green. */
+.v2 .v2-connlive {
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.1em; font-weight: 500;
+  color: var(--v2-live-ink); background: var(--v2-live-wash); padding: 3px 8px; border-radius: 4px;
+}
+/* The wait is the provider's, and saying so is the point of the third state. Neutral, because there
+   is nothing here for the person to do. */
+.v2 .v2-connrev {
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.08em; font-weight: 500;
+  color: var(--v2-ink-46); background: var(--v2-hover); padding: 3px 8px; border-radius: 4px;
+  max-width: 190px; text-align: right; line-height: 1.3;
+}
+/* The only thing on this page that needs the person, so it is the only thing carrying the accent. */
+.v2 .v2-conngo {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 13px; font-weight: 600;
+  background: var(--v2-grad-2); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.v2 .v2-conngo svg { width: 15px; height: 15px; stroke: var(--v2-t3); stroke-width: 2.5; fill: none; }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-connrev { max-width: 120px; font-size: 9.5px; }
+  .v2 .v2-grow[data-conn] .v2-glab em { font-size: 12px; }
+}

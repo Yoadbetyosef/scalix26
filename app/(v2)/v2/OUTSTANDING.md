@@ -105,3 +105,22 @@ Same pattern as the `getIntegrations` unification, and the same reason — two c
 and this pair already has.
 
 **Scope this as its own task, not part of the /v2 migration.** It touches the live voice path.
+
+## 8. Connections rows blocked on a loader
+
+Specified for /v2/connections, deferred because nothing can report their state and a design-only
+migration does not authorise new reads:
+
+- **QuickBooks state**, including the Sandbox badge
+- **Google Business status** — the connect flow exists in onboarding; no status is surfaced
+- **Twilio number pool** — `channels.twilio_number` exists per channel, but there is no pool view
+- **A2P / brand status** — no field is read anywhere
+- **Release Number** — an action rather than a state, and it lives on the agent endpoint
+
+They ship when there is something true to say. Until then /v2/connections carries exactly the six
+`getIntegrationStates` covers: calendar, outlook, twilio, email, facebook, instagram, stripe.
+
+Related, from the same mapping: buying or releasing a number, choosing a Page and choosing a mailbox
+all run through `/api/agents/:id/channels`. Connections shows their STATE; the binding stays on the
+agent, because moving the connect action would mean changing agent endpoints inside a design-only
+pass.
