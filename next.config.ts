@@ -41,7 +41,16 @@ const nextConfig: NextConfig = {
   // worker/bundling issues in the serverless function that runs the website crawler).
   serverExternalPackages: ["pdf-parse"],
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      {
+        source: "/.well-known/microsoft-identity-association.json",
+        headers: [
+          { key: "Content-Type", value: "application/json" },
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
+      { source: "/:path*", headers: securityHeaders },
+    ];
   },
 };
 
