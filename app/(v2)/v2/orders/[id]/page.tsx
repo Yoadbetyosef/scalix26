@@ -1,9 +1,11 @@
+import { notFound } from 'next/navigation'
 import { OrderBody } from './body'
 
-// A thin route over the shared body. The same component renders in the two-pane list's right side,
-// so a detail is one implementation reachable two ways rather than two that drift.
+// See the inbox route: notFound() is the route's decision, never the body's.
 export const dynamic = 'force-dynamic'
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  return <OrderBody id={(await params).id} />
+  const body = await OrderBody({ id: (await params).id })
+  if (!body) notFound()
+  return body
 }

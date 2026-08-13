@@ -1,8 +1,7 @@
-import { notFound } from 'next/navigation'
 import { readConversation } from '@/lib/inbox/conversation-read'
 import { DetailPage, type DetailFact } from '../../detail'
 import { ThreadView, type ThreadMessage } from '../../thread'
-import { listPageContext, relativeTime, PREVIEW } from '../../list-page'
+import { relativeTime, PREVIEW } from '../../list-page'
 import { conversationLine } from './line'
 
 // One conversation, reskinned. readConversation is the /inbox/[id] page's own read, extracted verbatim
@@ -11,10 +10,16 @@ import { conversationLine } from './line'
 
 const str = (v: string | null | undefined) => (v && v.trim() ? v : null)
 
-export async function ConversationBody({ id }: { id: string }) {
-  const { tenantId } = await listPageContext('inbox')
+// Returns NULL when the record is missing rather than calling notFound(). This body renders in two
+// places: as the route, where notFound() is the right answer, and as a PROP of ListPage — a client
+// component — where the same throw is no longer a routing signal and lands in error.tsx as a blank
+// screen instead. The route decides; the body reports. Same rule as the lib/ extractions.
+//
+// tenantId is an argument for the same reason: listPageContext() calls redirect() on a missing module,
+// and a redirect thrown from inside a client component's prop fails the same way.
+export async function ConversationBody({ tenantId, id }: { tenantId: string; id: string }) {
   const read = await readConversation(tenantId, id)
-  if (!read) notFound()
+  if (!read) return null
   const { conv, messages } = read
 
   const contact = conv.contact

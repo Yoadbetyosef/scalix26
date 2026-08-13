@@ -279,3 +279,49 @@ describe('two panes are one implementation reached two ways', () => {
     }
   })
 })
+
+describe('a body rendered inside a client prop must not throw a routing signal', () => {
+  it.each(['inbox', 'contacts', 'orders'])('%s body returns null instead of calling notFound', (screen) => {
+    // notFound()/redirect() are caught by the router only when the throw comes from a route. From a
+    // prop of a client component the same throw reaches error.tsx and blanks the screen.
+    const body = code(`app/(v2)/v2/${screen}/[id]/body.tsx`)
+    expect(body).not.toMatch(/notFound|redirect\(/)
+    expect(body).toMatch(/return null/)
+  })
+
+  it.each(['inbox', 'contacts', 'orders'])('%s route owns the 404 decision', (screen) => {
+    expect(code(`app/(v2)/v2/${screen}/[id]/page.tsx`)).toMatch(/if \(!body\) notFound\(\)/)
+  })
+
+  it.each(['inbox', 'contacts'])('%s body takes tenantId rather than resolving it', (screen) => {
+    // listPageContext() redirects on a missing module, which fails the same way from inside a prop.
+    const body = code(`app/(v2)/v2/${screen}/[id]/body.tsx`)
+    expect(body).toMatch(/\{ tenantId, id \}: \{ tenantId: string; id: string \}/)
+    expect(body).not.toMatch(/listPageContext/)
+  })
+
+  it('a missing record is a note in the pane, not a thrown screen', () => {
+    expect(code('app/(v2)/v2/inbox/page.tsx')).toMatch(/is no longer here/)
+  })
+})
+
+describe('the error boundary says what failed', () => {
+  const e = code('app/(v2)/v2/error.tsx')
+
+  it('shows the message, or the digest when there is none', () => {
+    // Framework errors carry an empty message and only a digest, which is why a real failure rendered
+    // a blank panel with a button.
+    expect(e).toMatch(/error\.message\?\.trim\(\) \|\|/)
+    expect(e).toMatch(/error\.digest/)
+  })
+
+  it('names which screen', () => {
+    expect(e).toMatch(/usePathname/)
+    expect(e).toMatch(/\{pathname\}/)
+  })
+
+  it('still refuses to guess a cause', () => {
+    // The old copy blamed the numbers and was wrong on its first real firing.
+    expect(e).not.toMatch(/could not load/)
+  })
+})

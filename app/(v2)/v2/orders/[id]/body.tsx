@@ -1,4 +1,3 @@
-import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
 import { listTemplates } from '@/lib/orders/templates'
@@ -31,14 +30,16 @@ const WAITING_ON: Record<string, string> = {
   production: 'the factory to finish',
 }
 
+// Returns NULL when the order is missing or out of reach — see ConversationBody for why a body that
+// renders inside a client component's prop must not throw a routing signal.
 export async function OrderBody({ id }: { id: string }) {
   const a = await requireOrdersAccess()
-  if (!a) notFound()
+  if (!a) return null
   const o = await getOrder(id)
   // Same comment as the real page: listTemplates swallows a missing table on purpose, so the picker
   // simply does not appear rather than the page failing.
   const templates = o ? await listTemplates(o.tenantId) : []
-  if (!o) notFound()
+  if (!o) return null
   const supplier = o.supplierId ? await getSupplier(o.supplierId) : null
 
   const dueInDays = o.requestedCompletionDate

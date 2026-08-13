@@ -47,11 +47,16 @@ export default async function V2Contacts({ searchParams }: { searchParams: Promi
     }
   })
 
+  // AWAITED HERE, on the server, whenever ?open is set — including on a narrow viewport, where
+  // ListPage will not display it. A prop is serialised whether or not the client renders it, so the
+  // work happens either way; the earlier comment claimed otherwise and was wrong. Awaiting it also
+  // lets a missing record become a note in the pane instead of a throw that blanks the screen.
+  const detail = open ? await ContactBody({ tenantId, id: open }) ?? <p className="v2-pnone">That contact is no longer here.</p> : null
+
   return (
     <ListPage
       selectedId={open ?? null}
-      // Rendered only above 1100px; ListPage decides, so a narrow viewport never builds a record.
-      detail={open ? <ContactBody id={open} /> : null}
+      detail={detail}
       title="Contacts"
       line={contactsLine({
         total,

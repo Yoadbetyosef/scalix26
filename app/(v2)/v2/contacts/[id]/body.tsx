@@ -1,7 +1,6 @@
-import { notFound } from 'next/navigation'
 import { readContactProfile } from '@/lib/contacts/profile-read'
 import { DetailPage, type DetailFact, type DetailRow } from '../../detail'
-import { listPageContext, relativeTime, PREVIEW } from '../../list-page'
+import { relativeTime, PREVIEW } from '../../list-page'
 import { contactProfileLine } from './line'
 
 // One contact, reskinned. readContactProfile is the /contacts/[id] page's own read, extracted
@@ -11,10 +10,16 @@ import { contactProfileLine } from './line'
 // "we do not have this". Both collapse to null so DetailPage draws its em dash.
 const str = (v: string | null | undefined) => (v && v.trim() ? v : null)
 
-export async function ContactBody({ id }: { id: string }) {
-  const { tenantId } = await listPageContext('contacts')
+// Returns NULL when the record is missing rather than calling notFound(). This body renders in two
+// places: as the route, where notFound() is the right answer, and as a PROP of ListPage — a client
+// component — where the same throw is no longer a routing signal and lands in error.tsx as a blank
+// screen instead. The route decides; the body reports. Same rule as the lib/ extractions.
+//
+// tenantId is an argument for the same reason: listPageContext() calls redirect() on a missing module,
+// and a redirect thrown from inside a client component's prop fails the same way.
+export async function ContactBody({ tenantId, id }: { tenantId: string; id: string }) {
   const profile = await readContactProfile(tenantId, id)
-  if (!profile) notFound()
+  if (!profile) return null
   const { contact, conversations } = profile
 
   // Same rule as the list (CT2): identify them by whatever we actually have rather than by "Unknown".
