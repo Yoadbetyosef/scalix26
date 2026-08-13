@@ -54,3 +54,18 @@ block) so both screens see the same window onto the address book.
 `.v2-sticky` variant with `full`. `.v2-frame` and `.v2-ov` are unused. If the mobile composer should
 be pinned to the bottom again, that is a rule on `.v2-overlay` inside the 720px media query — not a
 second component.
+
+## 4. The list is full-width, not two-pane
+
+Offered as either/or; full width was taken. Two panes — list left, selected detail right, collapsing
+to one column below 1100px — is the better answer for inbox, contacts and orders, and the detail
+screens already exist so it is a layout change rather than new work. It is a ROUTING change though:
+the list route has to render a detail for the selected row, which means either parallel routes or the
+list reading a search param and calling the detail's loader. Not started.
+
+## 5. Groups 2-4 are unbuilt
+
+Rudi (AI Employees, Knowledge, Test AI), Business (Analytics, Reports), Account (Billing, Settings,
+Partner Program, Admin). Each is a route, a loader — extracted verbatim into lib/ if it is inline —
+and an href filled in on a destination nav.ts already lists. Knowledge's location is still
+unconfirmed: there is no app/knowledge, so it is nested under ai-employees or settings.
