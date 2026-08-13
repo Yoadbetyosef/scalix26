@@ -10,6 +10,7 @@ import { Cursor, Palette, useMagnet, usePalette } from './interactions'
 import type { AmyMoment } from '@/components/dashboard/hero/amy-realtime'
 import { replyLine } from './reply-line'
 import { PRIMARY, allowed, visibleGroups } from './nav'
+import { usePressState } from './use-press'
 import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
 import type { HomeData, ShellData } from './data'
 import { mark, startTiming } from './timing'
@@ -49,6 +50,8 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const [typing, setTyping] = useState(false)
   const [talkEl, setTalkEl] = useState<HTMLButtonElement | null>(null)
   const palette = usePalette()
+  // One listener for both surfaces — see use-press.ts.
+  usePressState()
   // AskAmy's session machine, verbatim — see components/dashboard/hero/use-amy-session.ts.
   const amy = useAmySession()
   useMagnet(talkEl, typing)

@@ -1353,3 +1353,45 @@
 @media (max-width: 719.98px) {
   .v2 .v2-marker[data-hero] { left: -5px; right: -5px; bottom: 4px; height: 18px; }
 }
+
+/* ── THE RAIL, IN THE SHEET'S LANGUAGE ───────────────────────────────────────────────────────────
+   Reusing .v2-grow and .v2-gchip rather than growing a desktop twin: the press state, the chip and
+   the disabled treatment are already defined once, and a second set would drift the first time one
+   of them changed. Only the rail's own geometry is new. */
+.v2 .v2-nav.v2-grow {
+  min-height: 40px; padding: 6px 10px; border-radius: 10px; gap: 10px;
+  background: transparent;
+}
+.v2 .v2-nav.v2-grow + .v2-nav.v2-grow::before { display: none; }
+.v2 .v2-nav .v2-gchip { width: 28px; height: 28px; border-radius: 9px; }
+.v2 .v2-nav .v2-gchip svg { width: 15px; height: 15px; }
+.v2 .v2-nav .v2-glab { font-size: 14px; color: var(--v2-ink-80); }
+.v2 .v2-nav[data-on] .v2-glab { color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-nav:hover:not(:disabled) { background: var(--v2-hover); }
+
+/* The group header, matched to the sheet: dot, label, a rule that fades in the group's hue. The
+   chevron stays because these groups collapse and the sheet's do not. */
+.v2 .v2-gh .v2-gdot { width: 5px; height: 5px; border-radius: 50%; background: var(--ghue); flex: none; }
+.v2 .v2-gh .v2-grule {
+  flex: 1; height: 1px; text-decoration: none; margin: 0 4px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ghue) 35%, transparent), transparent);
+}
+
+/* GREEN FOR NEW AND LIVE ONLY. A rail count is a queue waiting on someone, so it wears the marker's
+   ground; a row with nothing waiting shows no count at all, so the green leaves the rail entirely
+   when there is nothing new — exactly as it leaves the sheet. */
+.v2 .v2-nav em {
+  background: var(--v2-marker); color: var(--v2-live-ink);
+  border-radius: 999px; padding: 1px 7px; font-size: 11.5px; font-weight: 500;
+  font-style: normal; font-family: var(--v2-sans); letter-spacing: 0;
+}
+/* A status pill is not a count: "ON" is live state, so it takes the pale ground and the mono voice
+   the sheet gives its live pill, and a radius that reads as a badge rather than a number. */
+.v2 .v2-nav em[data-live] {
+  background: var(--v2-live-wash); border-radius: 4px;
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.1em;
+}
+/* The company block's own live dot picks up the signal colour instead of inventing a third green. */
+.v2 .v2-co span i { background: var(--v2-live); box-shadow: 0 0 0 3px rgba(184, 255, 41, 0.28); }
+
+@media (prefers-reduced-motion: reduce) { .v2 .v2-rail .v2-stagger > * { animation: none; } }

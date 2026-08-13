@@ -62,7 +62,7 @@ export function RailCount({ p, pick }: { p: P; pick: (d: HomeData) => number | n
 }
 
 export function AiBadge({ p }: { p: P }) {
-  return use(p).aiOn ? <em>ON</em> : null
+  return use(p).aiOn ? <em data-live>ON</em> : null
 }
 
 /**

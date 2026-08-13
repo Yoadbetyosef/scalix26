@@ -6,7 +6,7 @@ import {
   Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut, ChevronRight,
 } from 'lucide-react'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 // The mobile pull-up sheet: Now / Work / Week over the full-bleed hero.
 //
@@ -46,25 +46,6 @@ type Pane = 'now' | 'work' | 'week'
 export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live }: Props) {
   const [open, setOpen] = useState(false)
 
-  // iOS Safari drops :active on a scrollable surface unless the document carries a touchstart
-  // listener, so the press state is mirrored onto [data-pressed]. Presentation only — it sets an
-  // attribute and nothing else, and every rule that reads it also reads :active for every other
-  // browser.
-  useEffect(() => {
-    const mark = (e: Event) => {
-      const el = (e.target as HTMLElement | null)?.closest?.('[data-touch]') as HTMLElement | null
-      if (el && !(el as HTMLButtonElement).disabled) el.setAttribute('data-pressed', '')
-    }
-    const clear = () => document.querySelectorAll('[data-pressed]').forEach((el) => el.removeAttribute('data-pressed'))
-    document.addEventListener('touchstart', mark, { passive: true })
-    document.addEventListener('touchend', clear, { passive: true })
-    document.addEventListener('touchcancel', clear, { passive: true })
-    return () => {
-      document.removeEventListener('touchstart', mark)
-      document.removeEventListener('touchend', clear)
-      document.removeEventListener('touchcancel', clear)
-    }
-  }, [])
   const [pane, setPane] = useState<Pane>('now')
 
   return (

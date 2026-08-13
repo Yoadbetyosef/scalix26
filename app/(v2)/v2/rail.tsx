@@ -2,6 +2,20 @@
 
 import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
+import {
+  TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
+  Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut,
+} from 'lucide-react'
+
+// The same map the sheet draws from — one label, one mark, both widths.
+const ICONS: Record<string, typeof TrendingUp> = {
+  Leads: TrendingUp, Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
+  'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
+  Orders: Package, Analytics: BarChart3, Reports: FileText,
+  Billing: CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
+}
+// RUDI magenta, BUSINESS violet, ACCOUNT cyan — the sheet's own assignment.
+const GROUP_HUE: Record<string, string> = { g1: 'var(--v2-t1)', g2: 'var(--v2-t3)', g3: 'var(--v2-t4)' }
 
 // The left rail: business identity, the four primary destinations with their counts, three
 // collapsible groups, and the pulse strip pinned to the bottom.
@@ -38,16 +52,20 @@ function Nav({ item, on, shortcut }: { item: NavItem; on?: boolean; shortcut?: n
   // what they were — a link to a page that does not exist is a worse lie than an inert row. Written as
   // two branches rather than a dynamic tag because Link's props are not a superset of button's, and
   // the union that satisfies both is less readable than saying it twice.
+  const Icon = ICONS[item.label]
   const inner = (
     <>
-      <span>{item.label}</span>
+      {/* The same 32px chip the sheet uses, at 10% of the group's hue. Primary rows carry the accent's
+          first sample, since they belong to no group. */}
+      {Icon && <span className="v2-gchip"><Icon /></span>}
+      <span className="v2-glab">{item.label}</span>
       {item.count ?? null}
       {/* Revealed on hover — the shortcut is discoverable from the row it belongs to rather than from
           a help screen nobody opens. */}
       {shortcut && <span className="v2-kb">{shortcut}</span>}
     </>
   )
-  const attrs = { className: 'v2-nav', 'data-on': on || undefined, 'data-out': item.out || undefined }
+  const attrs = { className: 'v2-nav v2-grow', 'data-touch': true, 'data-on': on || undefined, 'data-out': item.out || undefined }
   return item.href
     ? <Link href={item.href} {...attrs}>{inner}</Link>
     : <button type="button" {...attrs}>{inner}</button>
@@ -63,12 +81,14 @@ export function Rail({ businessName, primary, groups, activeIndex = null }: Prop
         <span><i />Rudi · on duty</span>
       </div>
 
-      {primary.map((item, i) => (
-        <Nav key={item.label} item={item} on={i === (activeIndex ?? 0)} shortcut={i + 1} />
-      ))}
+      <div className="v2-stagger" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+        {primary.map((item, i) => (
+          <Nav key={item.label} item={item} on={i === (activeIndex ?? 0)} shortcut={i + 1} />
+        ))}
+      </div>
 
       {groups.map((g) => (
-        <div key={g.id}>
+        <div key={g.id} style={{ ['--ghue' as string]: GROUP_HUE[g.id] ?? 'var(--v2-t3)' }}>
           <button
             type="button"
             className="v2-gh"
@@ -76,7 +96,11 @@ export function Rail({ businessName, primary, groups, activeIndex = null }: Prop
             onClick={() => setOpen((p) => ({ ...p, [g.id]: !p[g.id] }))}
             aria-expanded={!!open[g.id]}
           >
+            {/* Dot, label, then a rule that fades out in the group's own colour — the sheet's header,
+                with the rail's chevron kept because these groups collapse. */}
+            <i className="v2-gdot" />
             <span>{g.label}</span>
+            <s className="v2-grule" />
             <Chevron />
           </button>
           <div className="v2-sub" data-open={open[g.id] || undefined}>
