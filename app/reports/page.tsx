@@ -5,13 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Download, Activity, Bot, TrendingUp, Calendar } from 'lucide-react'
 import { ReportBuilder } from '@/components/reports/report-builder'
+import { REPORT_TEMPLATES } from '@/lib/reports/templates'
 
-const REPORT_TEMPLATES = [
-  { id: 'platform_usage', name: 'Platform Usage', description: 'Total conversations, messages, and active channels over time.', icon: Activity, tone: 'bg-blue-500' },
-  { id: 'ai_productivity', name: 'AI Employee Productivity', description: 'Resolution rates, handle times, and skill usage per AI employee.', icon: Bot, tone: 'bg-violet-500' },
-  { id: 'lead_generation', name: 'Lead Generation', description: 'Leads captured, qualified, and converted per channel.', icon: TrendingUp, tone: 'bg-emerald-500' },
-  { id: 'appointment_report', name: 'Appointment Report', description: 'Booked, completed, and no-show appointments.', icon: Calendar, tone: 'bg-orange-500' },
-]
+// Names and descriptions come from lib/reports/templates.ts so /v2 lists the same four; the icon and
+// the tone stay here, because they are this screen's presentation and v2 draws its own.
+const TEMPLATE_STYLE: Record<string, { icon: typeof Activity; tone: string }> = {
+  platform_usage: { icon: Activity, tone: 'bg-blue-500' },
+  ai_productivity: { icon: Bot, tone: 'bg-violet-500' },
+  lead_generation: { icon: TrendingUp, tone: 'bg-emerald-500' },
+  appointment_report: { icon: Calendar, tone: 'bg-orange-500' },
+}
 
 export default async function ReportsPage() {
   const supabase = await createClient()
@@ -34,12 +37,12 @@ export default async function ReportsPage() {
       {/* Templates */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sx-stagger">
         {REPORT_TEMPLATES.map(template => {
-          const Icon = template.icon
+          const Icon = TEMPLATE_STYLE[template.id].icon
           return (
           <Card key={template.id} className="hover:shadow-e2 hover:-translate-y-0.5 transition-all">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-xl ${template.tone} flex items-center justify-center text-white shadow-e1 flex-shrink-0`}>
+                <div className={`w-9 h-9 rounded-xl ${TEMPLATE_STYLE[template.id].tone} flex items-center justify-center text-white shadow-e1 flex-shrink-0`}>
                   <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
                 </div>
                 <div className="flex-1">

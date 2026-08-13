@@ -45,7 +45,7 @@ export const GROUPS: Group[] = [
   {
     id: 'g2',
     label: 'Business',
-    items: [{ label: 'Orders', href: '/v2/orders', module: 'orders' }, { label: 'Analytics', href: '/v2/analytics', module: 'analytics' }, { label: 'Reports' }],
+    items: [{ label: 'Orders', href: '/v2/orders', module: 'orders' }, { label: 'Analytics', href: '/v2/analytics', module: 'analytics' }, { label: 'Reports', href: '/v2/reports', module: 'analytics' }],
   },
   { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Connections', href: '/v2/settings/connections' }, { label: 'Settings' }, { label: 'Sign Out', out: true }] },
 ]
