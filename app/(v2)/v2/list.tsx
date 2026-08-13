@@ -156,7 +156,8 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
             {visible.length === 0 ? (
               <p className="v2-pnone">Nothing here.</p>
             ) : (
-              visible.map((r) => (
+              <div className="v2-stagger">
+              {visible.map((r) => (
                 <div
                   key={r.id}
                   className="v2-row"
@@ -164,6 +165,7 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
                   data-needs={r.needsYou || undefined}
                   data-click={r.href ? true : undefined}
                   data-selected={r.id === selectedId || undefined}
+                  data-touch={r.href ? true : undefined}
                   onClick={r.href ? () => {
                     // Wide: select, and the pane beside the list re-renders. Narrow: go to the page.
                     // replace() rather than push() so the back button leaves the list rather than
@@ -201,7 +203,8 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
 
                   {r.trailing && <em data-tone={r.trailingTone ?? undefined}>{r.trailing}</em>}
                 </div>
-              ))
+              ))}
+              </div>
             )}
           </>
         )}

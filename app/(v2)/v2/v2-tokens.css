@@ -1310,6 +1310,8 @@
    document carries a touchstart listener, so [data-pressed] is bound alongside it — see the shell. */
 .v2 .v2-grow:not(:disabled):active,
 .v2 .v2-grow[data-pressed],
+.v2 .v2-pbody .v2-row[data-click]:active,
+.v2 .v2-pbody .v2-row[data-pressed],
 .v2 .v2-tile2:not(:disabled):active,
 .v2 .v2-tile2[data-pressed] {
   background: linear-gradient(90deg, rgba(255, 46, 147, 0.09), rgba(139, 92, 246, 0.05));
@@ -1395,3 +1397,14 @@
 .v2 .v2-co span i { background: var(--v2-live); box-shadow: 0 0 0 3px rgba(184, 255, 41, 0.28); }
 
 @media (prefers-reduced-motion: reduce) { .v2 .v2-rail .v2-stagger > * { animation: none; } }
+
+/* The list row joins the same press rule above rather than getting one of its own. Its trailing
+   figure and its channel mark take the accent on press, which is what the chip does on a nav row —
+   the row already carries a mark, so a chip would say the same thing twice. */
+.v2 .v2-pbody .v2-row[data-click]:active em,
+.v2 .v2-pbody .v2-row[data-pressed] em { color: var(--v2-t1); }
+.v2 .v2-pbody .v2-row[data-click]:active .v2-m p,
+.v2 .v2-pbody .v2-row[data-pressed] .v2-m p { font-weight: 600; }
+/* A stagger of more than about eight rows stops reading as an entrance and starts reading as a load,
+   so the rest arrive together. */
+.v2 .v2-pbody .v2-stagger > *:nth-child(n+6) { animation-delay: 150ms; }
