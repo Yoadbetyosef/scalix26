@@ -55,13 +55,13 @@ block) so both screens see the same window onto the address book.
 be pinned to the bottom again, that is a rule on `.v2-overlay` inside the 720px media query — not a
 second component.
 
-## 4. The list is full-width, not two-pane
+## 4. Two-pane list — DONE
 
-Offered as either/or; full width was taken. Two panes — list left, selected detail right, collapsing
-to one column below 1100px — is the better answer for inbox, contacts and orders, and the detail
-screens already exist so it is a layout change rather than new work. It is a ROUTING change though:
-the list route has to render a detail for the selected row, which means either parallel routes or the
-list reading a search param and calling the detail's loader. Not started.
+Above 1100px inbox, contacts and orders render the list beside the selected record; below it they are
+one column and a row is a link again. The three detail routes were split into a `body.tsx` the route
+and the pane both render, so a detail is one implementation reachable two ways. Leads and appointments
+stay single column, since their rows route to a conversation or a contact rather than to a record of
+their own.
 
 ## 5. Groups 2-4 are unbuilt
 

@@ -1,5 +1,6 @@
 import { listOrders } from '@/lib/orders/store'
 import { STAGE_LABELS, isTerminalStage } from '@/lib/orders/stages'
+import { OrderBody } from './[id]/body'
 import { ListPage, type ListFilter, type ListRow } from '../list'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { ordersLine } from './line'
@@ -25,7 +26,8 @@ const FILTERS: ListFilter[] = [
   { id: 'done', label: 'Finished', buckets: ['done'] },
 ]
 
-export default async function V2Orders() {
+export default async function V2Orders({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
+  const { open } = await searchParams
   await listPageContext('orders')
   const orders = await listOrders()
 
@@ -49,6 +51,9 @@ export default async function V2Orders() {
 
   return (
     <ListPage
+      selectedId={open ?? null}
+      // Rendered only above 1100px; ListPage decides, so a narrow viewport never builds a record.
+      detail={open ? <OrderBody id={open} /> : null}
       title="Orders"
       line={ordersLine({
         waiting: rows.filter((r) => r.bucket === 'waiting').length,

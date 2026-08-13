@@ -165,8 +165,8 @@ describe('the detail screens read what the real pages read', () => {
   })
 
   it.each([
-    ['app/(v2)/v2/orders/[id]/page.tsx', 'getOrder'],
-    ['app/(v2)/v2/contacts/[id]/page.tsx', 'readContactProfile'],
+    ['app/(v2)/v2/orders/[id]/body.tsx', 'getOrder'],
+    ['app/(v2)/v2/contacts/[id]/body.tsx', 'readContactProfile'],
   ])('%s adds no query — it reuses %s', (file, loader) => {
     const src = code(file)
     expect(src).toContain(loader)
@@ -199,7 +199,7 @@ describe('the thread is its own shape, and the shared ones stayed shared', () =>
   })
 
   it('the v2 conversation screen adds no query and stays read-only', () => {
-    const src = code('app/(v2)/v2/inbox/[id]/page.tsx')
+    const src = code('app/(v2)/v2/inbox/[id]/body.tsx')
     expect(src).toContain('readConversation')
     expect(src).not.toMatch(/\.from\('/)
     const actions = src.slice(src.indexOf('actions={['), src.indexOf(']}', src.indexOf('actions={[')))
@@ -251,5 +251,31 @@ describe('the list reads as a designed screen, not a table', () => {
 
   it('prose spells time out; the abbreviation stays in the mono column', () => {
     expect(code('app/(v2)/v2/inbox/line.ts')).not.toMatch(/d ago|hr ago|min ago/)
+  })
+})
+
+describe('two panes are one implementation reached two ways', () => {
+  it.each(['inbox', 'contacts', 'orders'])('%s renders the same body in the route and the pane', (screen) => {
+    const route = code(`app/(v2)/v2/${screen}/[id]/page.tsx`)
+    const list = code(`app/(v2)/v2/${screen}/page.tsx`)
+    // The route is a thin wrapper; the list imports the same component for its right pane.
+    expect(route).toMatch(/from '\.\/body'/)
+    expect(list).toMatch(/from '\.\/\[id\]\/body'/)
+  })
+
+  it('the pane only exists above 1100px, and the click changes with it', () => {
+    const list = code('app/(v2)/v2/list.tsx')
+    expect(list).toMatch(/min-width: 1100px/)
+    // Wide selects, narrow navigates — the behaviour changes with the layout, not just the CSS.
+    expect(list).toMatch(/if \(twoPane\) router\.replace\(`\?open=\$\{r\.id\}`/)
+    expect(list).toMatch(/else router\.push\(r\.href!\)/)
+    // And the record is not built for a viewport that cannot show it.
+    expect(list).toMatch(/\{twoPane && <div className="v2-pane">/)
+  })
+
+  it('leads and appointments stay single column — their rows route elsewhere', () => {
+    for (const screen of ['leads', 'appointments']) {
+      expect(code(`app/(v2)/v2/${screen}/page.tsx`)).not.toMatch(/detail=\{/)
+    }
   })
 })

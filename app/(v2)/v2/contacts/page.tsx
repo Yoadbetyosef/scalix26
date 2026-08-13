@@ -1,5 +1,6 @@
 import { listContactsPage, type ContactRow } from '@/lib/contacts/page-read'
 import { isSocialChannel } from '@/lib/utils'
+import { ContactBody } from './[id]/body'
 import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { contactsLine } from './line'
@@ -23,7 +24,8 @@ const FILTERS: ListFilter[] = [
 // nothing but that address, and calling them "Unknown" hides the one thing we DO know about them.
 const displayTitle = (c: ContactRow): string => c.name || c.email || c.phone || 'Unknown'
 
-export default async function V2Contacts() {
+export default async function V2Contacts({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
+  const { open } = await searchParams
   const { tenantId } = await listPageContext('contacts')
   const { contacts, total } = await listContactsPage(tenantId)
 
@@ -47,6 +49,9 @@ export default async function V2Contacts() {
 
   return (
     <ListPage
+      selectedId={open ?? null}
+      // Rendered only above 1100px; ListPage decides, so a narrow viewport never builds a record.
+      detail={open ? <ContactBody id={open} /> : null}
       title="Contacts"
       line={contactsLine({
         total,

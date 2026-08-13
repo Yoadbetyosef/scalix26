@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import type { RudiSegment } from './rudi-line'
 
@@ -83,14 +83,38 @@ export interface ListPageProps {
   /** Shown when there is nothing at all, in any bucket. */
   empty: { title: string; body: string }
   backHref?: string
+  /** The selected row's detail, rendered beside the list above 1100px. Absent = single column. */
+  detail?: ReactNode
+  /** Which row is selected, so the list can mark it. */
+  selectedId?: string | null
 }
 
 const Chevron = () => (
   <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
 )
 
-export function ListPage({ title, line, filters, initialFilter, rows, empty, backHref }: ListPageProps) {
+// TWO PANES ABOVE 1100px. Below it there is not room for a list and a record side by side, and the row
+// simply navigates as it always did. The breakpoint is read in JS rather than CSS because it changes
+// what a click DOES, not just how it looks: wide, a row selects and the pane re-renders; narrow, a row
+// is a link to a page.
+const WIDE_QUERY = '(min-width: 1100px)'
+
+function useWide(): boolean {
+  const [wide, setWide] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_QUERY)
+    const apply = () => setWide(mq.matches)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+  return wide
+}
+
+export function ListPage({ title, line, filters, initialFilter, rows, empty, backHref, detail, selectedId }: ListPageProps) {
   const router = useRouter()
+  const wide = useWide()
+  const twoPane = wide && detail !== undefined
   const [active, setActive] = useState(initialFilter ?? filters[0]?.id ?? '')
 
   // Every chip's count, and the rows the selected one shows. One pass, so a chip's number and the list
@@ -104,7 +128,7 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
   }, [rows, filters, active])
 
   return (
-    <div className="v2-page">
+    <div className="v2-page" data-two={twoPane || undefined}>
       <header className="v2-phd">
         {backHref && (
           <button type="button" onClick={() => router.push(backHref)} className="v2-bk" aria-label="Back">
@@ -153,7 +177,14 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
                   data-muted={r.muted || undefined}
                   data-needs={r.needsYou || undefined}
                   data-click={r.href ? true : undefined}
-                  onClick={r.href ? () => router.push(r.href!) : undefined}
+                  data-selected={r.id === selectedId || undefined}
+                  onClick={r.href ? () => {
+                    // Wide: select, and the pane beside the list re-renders. Narrow: go to the page.
+                    // replace() rather than push() so the back button leaves the list rather than
+                    // walking back through every row that was looked at.
+                    if (twoPane) router.replace(`?open=${r.id}`, { scroll: false })
+                    else router.push(r.href!)
+                  } : undefined}
                 >
                   {r.marked && <span className="v2-dot" aria-hidden />}
                   {/* Same shape and weight for every channel; only the hue differs. */}
@@ -189,6 +220,10 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
           </>
         )}
       </div>
+
+      {/* The right pane. Only mounted when the layout is actually two panes, so a narrow viewport
+          never renders a record nobody can see. */}
+      {twoPane && <div className="v2-pane">{detail ?? <p className="v2-pnone">Pick something on the left.</p>}</div>}
     </div>
   )
 }

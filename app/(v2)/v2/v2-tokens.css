@@ -975,3 +975,33 @@
   .v2 .v2-pbody .v2-row { padding: 14px 16px; gap: 12px; }
   .v2 .v2-pbody .v2-row[data-needs]::before { left: 0; top: 10px; bottom: 10px; }
 }
+
+/* ── TWO PANES ───────────────────────────────────────────────────────────────────────────────────
+   Above 1100px a list screen is a list AND the selected record. Below it there is not room for both,
+   ListPage renders one column, and a row is a link to a page again — the layout and the behaviour
+   change together, which is why the breakpoint is read in JS as well as here. */
+.v2 .v2-page[data-two] {
+  display: grid;
+  grid-template-columns: minmax(380px, 42%) 1fr;
+  grid-template-rows: auto 1fr;
+  column-gap: 0;
+}
+.v2 .v2-page[data-two] .v2-phd { grid-column: 1 / -1; }
+.v2 .v2-page[data-two] .v2-pbody { border-right: 1px solid var(--v2-line); min-height: 0; }
+.v2 .v2-pane {
+  min-width: 0; min-height: 0; overflow-y: auto;
+  padding: 26px 40px 60px; background: var(--v2-paper);
+}
+/* The record beside the list is already inside a page; it must not draw a second header or a second
+   scroller of its own. */
+.v2 .v2-pane .v2-page { position: static; display: block; background: transparent; }
+.v2 .v2-pane .v2-phd { display: none; }
+.v2 .v2-pane .v2-pbody { padding: 0; overflow: visible; border: 0; }
+
+/* The selected row. Quieter than needsYou, because selection is where you ARE and the accent is what
+   needs doing — two different jobs, and the accent must not be spent on navigation. */
+.v2 .v2-pbody .v2-row[data-selected] { background: var(--v2-hover); }
+.v2 .v2-pbody .v2-row[data-selected]::after {
+  content: ''; position: absolute; right: 0; top: 8px; bottom: 8px; width: 2px;
+  border-radius: 2px; background: var(--v2-ink-42);
+}

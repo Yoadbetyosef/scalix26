@@ -1,4 +1,5 @@
 import { getDashboardData } from '@/lib/dashboard/overview'
+import { ConversationBody } from './[id]/body'
 import { ListPage, channelKey, type ListFilter, type ListRow } from '../list'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { inboxLine } from './line'
@@ -22,7 +23,8 @@ interface Conv {
   contact?: { name?: string | null; phone?: string | null } | null
 }
 
-export default async function V2Inbox() {
+export default async function V2Inbox({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
+  const { open } = await searchParams
   const { tenantId } = await listPageContext('inbox')
   const { conversations } = await getDashboardData(tenantId)
 
@@ -46,6 +48,9 @@ export default async function V2Inbox() {
 
   return (
     <ListPage
+      selectedId={open ?? null}
+      // Rendered only above 1100px; ListPage decides, so a narrow viewport never builds a record.
+      detail={open ? <ConversationBody id={open} /> : null}
       title="Inbox"
       line={inboxLine({
         total: rows.length,
