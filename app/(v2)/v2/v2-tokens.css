@@ -889,13 +889,20 @@
 
 /* A destination row in the sheet's Work pane. The four counted ones keep the tile; these are the rest,
    under their group heading, in the rail's own structure. */
+/* Ink on paper, not white on white. These were written for the reference's DARK mobile sheet — the
+   one that sits over the hero — but .v2-sin is a light pane: its sibling .v2-tile is
+   background: var(--v2-paper). So every row rendered invisible, and Sign Out was the only thing on
+   the pane because red was the one colour here that was not white.
+   44px minimum: this is the only navigation a phone has, and 13px of padding on a 15.5px line came
+   to about 40. */
 .v2 .v2-srow {
-  display: block; width: 100%; text-align: left;
-  padding: 13px 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 15.5px; font-weight: 450; color: rgba(255, 255, 255, 0.92);
+  display: flex; align-items: center; width: 100%; min-height: 44px; text-align: left;
+  padding: 11px 4px; border-bottom: 1px solid var(--v2-line);
+  font-size: 15.5px; font-weight: 450; color: var(--v2-ink);
 }
-.v2 .v2-srow:disabled { color: rgba(255, 255, 255, 0.34); }
-.v2 .v2-srow[data-out] { color: rgba(255, 92, 108, 0.8); }
+.v2 .v2-srow:disabled { color: var(--v2-ink-42); }
+/* Kept: red reads correctly on paper, and it is the one row that should not look like the others. */
+.v2 .v2-srow[data-out] { color: rgba(255, 92, 108, 0.9); }
 
 /* ── THE THREAD ──────────────────────────────────────────────────────────────────────────────────
    Authorship is the only thing that changes: which side it sits on, and which surface it wears. The
