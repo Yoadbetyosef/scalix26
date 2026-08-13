@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
+import { readAnalytics } from '@/lib/analytics/read'
 import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { MessagesSquare, CheckCircle2, Clock, Bot } from 'lucide-react'
@@ -17,28 +18,9 @@ export default async function AnalyticsPage() {
   const tenant = { id: tenantId }
   const db = createAdminClient()
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-
-  const [
-    { count: totalConversations },
-    { count: resolvedConversations },
-    { data: conversations },
-  ] = await Promise.all([
-    db.from('conversations').select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenant.id).gte('created_at', thirtyDaysAgo),
-    db.from('conversations').select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenant.id).eq('status', 'resolved').gte('created_at', thirtyDaysAgo),
-    db.from('conversations').select('channel, status, created_at, duration_seconds')
-      .eq('tenant_id', tenant.id).gte('created_at', thirtyDaysAgo),
-  ])
-
-  const total = totalConversations || 0
-  const resolved = resolvedConversations || 0
-  const fcr = total > 0 ? Math.round((resolved / total) * 100) : 0
-
-  const avgDuration = conversations?.length
-    ? Math.round(conversations.filter(c => c.duration_seconds).reduce((a, c) => a + (c.duration_seconds || 0), 0) / conversations.length)
-    : 0
+  // Moved to lib/analytics/read.ts so a second screen can read the same figures. Same window, same
+  // three queries, same derivations — see that file's header.
+  const { total, fcr, avgDuration, conversations } = await readAnalytics(tenantId)
 
   const stats = [
     { label: 'Total Conversations', value: total.toLocaleString(), sub: 'Last 30 days', icon: MessagesSquare, tone: 'bg-blue-500' },
