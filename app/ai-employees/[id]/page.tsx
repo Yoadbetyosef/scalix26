@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
-import { agentKnowledgeOrFilter } from '@/lib/knowledge/scope'
+import { readAgentEditorData } from '@/lib/agents/editor-read'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Brain } from 'lucide-react'
@@ -26,50 +26,11 @@ export default async function AIEmployeeEditPage({
   const serviceSupabase = createAdminClient()
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/setup')
-  const { data: tenant } = await serviceSupabase
-    .from('tenants').select('id, slug, google_review_url, review_automation_enabled').eq('id', tenantId).maybeSingle()
-  if (!tenant) redirect('/setup')
-
-  // Availability & reviews (tenant-level) — now edited inline on this page.
-  const { data: slots } = await serviceSupabase
-    .from('appointment_slots').select('day_of_week, slot_time').eq('tenant_id', tenant.id)
-
-  const { data: employee } = await serviceSupabase
-    .from('ai_employees')
-    .select('*, skills(*), channels(*)')
-    .eq('id', id)
-    .eq('tenant_id', tenant.id)
-    .single()
-
-  if (!employee) notFound()
-
-  // Business Knowledge is tenant-owned: return tenant-wide (ai_employee_id IS NULL) PLUS this
-  // agent's own rows. See lib/knowledge/scope.
-  const { data: kbRows } = await serviceSupabase
-    .from('knowledge_base')
-    .select('id, title, content, source, ai_employee_id')
-    .eq('tenant_id', tenant.id)
-    .or(agentKnowledgeOrFilter(id))
-    .order('created_at', { ascending: true })
-
-  // Connected OAuth mailbox (Gmail/Workspace) for this agent, if any. Uses the
-  // admin client because connected_email_accounts has RLS with no read policy
-  // (it holds encrypted tokens — server-only access).
-  const { data: emailAccounts } = await createAdminClient()
-    .from('connected_email_accounts')
-    .select('id, provider, email_address, status, is_primary')
-    .eq('ai_employee_id', id)
-    .order('is_primary', { ascending: false })
-    .order('created_at', { ascending: true })
-
-  // The 3 fixed Business-Details fields vs everything else (free-form KB).
-  const BUSINESS_TITLES = ['Pricing', 'Service Areas', "What We Don't Do"]
-  const businessDetails: Record<string, string> = {}
-  const knowledgeBase: { id: string; title: string; content: string; shared: boolean }[] = []
-  for (const r of kbRows || []) {
-    if (r.source === 'template' && BUSINESS_TITLES.includes(r.title)) businessDetails[r.title] = r.content
-    else knowledgeBase.push({ id: r.id, title: r.title, content: r.content, shared: r.ai_employee_id === null })
-  }
+  // Moved to lib/agents/editor-read.ts so /v2's agent screen reads the same rows. Same queries, same
+  // joins, same ordering — see that file's header.
+  const data = await readAgentEditorData(tenantId, id)
+  if (!data) notFound()
+  const { tenant, slots, employee, businessDetails, knowledgeBase, emailAccounts } = data
 
   return (
     <div className="flex flex-col p-4 sm:p-6 w-full max-w-3xl overflow-x-clip">
