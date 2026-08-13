@@ -1,158 +1,23 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Bot, User, Zap, AlertCircle, Mic, MicOff, Phone, PhoneOff, MessageSquare, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { useTestAi } from '@/lib/test-ai/use-test-ai'
 
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-type Mode = 'chat' | 'voice'
-
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    SpeechRecognition: any
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    webkitSpeechRecognition: any
-  }
-}
-
+// The sandbox. It talks to /api/ai/test and /api/ai/speak against this tenant's own agent and touches
+// no customer record, which is why /v2's copy of this screen is live rather than read-only: there is
+// nothing here for read-only to protect.
 export default function TestAIPage() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [conversationId, setConversationId] = useState<string | undefined>()
-  const [mode, setMode] = useState<Mode>('chat')
-  const [callActive, setCallActive] = useState(false)
-  const [listening, setListening] = useState(false)
-  const [speaking, setSpeaking] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<any>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  async function sendMessage(text: string, speak = false) {
-    if (!text.trim() || loading) return
-    setError('')
-    setMessages(prev => [...prev, { role: 'user', content: text }])
-    setLoading(true)
-
-    try {
-      const res = await fetch('/api/ai/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, conversationId }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error || 'Error'); return }
-
-      setConversationId(data.conversationId)
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-
-      if (speak && data.response) {
-        await speakText(data.response)
-      }
-    } catch {
-      setError('Network error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function speakText(text: string) {
-    setSpeaking(true)
-    try {
-      // Strip markdown bold
-      const clean = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
-      const res = await fetch('/api/ai/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean }),
-      })
-      if (!res.ok) throw new Error('TTS failed')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      audioRef.current = audio
-      audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); if (callActive) startListening() }
-      audio.onerror = () => { setSpeaking(false); if (callActive) startListening() }
-      await audio.play()
-    } catch {
-      setSpeaking(false)
-      if (callActive) startListening()
-    }
-  }
-
-  const startListening = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { setError('Speech recognition not supported in this browser'); return }
-
-    const recognition = new SR()
-    recognition.lang = 'en-US'
-    recognition.interimResults = true
-    recognition.continuous = false
-    recognitionRef.current = recognition
-
-    recognition.onstart = () => setListening(true)
-    recognition.onend = () => setListening(false)
-
-    recognition.onresult = (event: any) => {
-      const result = event.results[event.results.length - 1]
-      const text = result[0].transcript
-      setTranscript(text)
-      if (result.isFinal && text.trim()) {
-        setTranscript('')
-        sendMessage(text, true)
-      }
-    }
-
-    recognition.onerror = () => setListening(false)
-    recognition.start()
-  }, [callActive]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function startCall() {
-    setCallActive(true)
-    setMessages([])
-    setConversationId(undefined)
-    // AI greets first
-    const greeting = "Hello! Thank you for calling. How can I help you today?"
-    setMessages([{ role: 'assistant', content: greeting }])
-    speakText(greeting).then(() => {
-      if (!speaking) startListening()
-    })
-  }
-
-  function endCall() {
-    setCallActive(false)
-    setListening(false)
-    setSpeaking(false)
-    setTranscript('')
-    recognitionRef.current?.stop()
-    audioRef.current?.pause()
-  }
-
-  function handleChatSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    sendMessage(input)
-    setInput('')
-  }
-
-  function reset() {
-    setMessages([])
-    setConversationId(undefined)
-    setError('')
-    setInput('')
-  }
+  // Moved to lib/test-ai/use-test-ai.ts so /v2's Test AI drives the SAME machine. Every state
+  // declaration, both handlers and the voice refs went with it — nothing stayed behind. What differs
+  // between the surfaces is only what each one renders.
+  const {
+    messages, input, setInput, loading, error, mode, setMode,
+    callActive, listening, speaking, transcript, bottomRef,
+    startListening, startCall, endCall, handleChatSubmit, reset,
+  } = useTestAi()
 
   return (
     <div className="flex flex-col h-full">
