@@ -37,6 +37,23 @@
   --v2-amber: #ffb020;
   --v2-red: #ff5c6c;
 
+  /* ── THE SECOND COLOUR, AND THE RULE THAT GOVERNS BOTH ──────────────────────────────────────────
+     Gradient = structure and navigation. Green = TRANSIENT STATE ONLY: new, unread, live right now.
+     When nothing is new the green leaves the screen entirely, and that absence is what makes it mean
+     something when it returns. It is never decorative. */
+  --v2-live: #b8ff29;        /* the live/new signal */
+  --v2-live-wash: #eaffb0;   /* its pale ground */
+  --v2-live-ink: #4a5a12;    /* text on that ground */
+  --v2-marker: #dfff6b;      /* the highlighter swipe */
+
+  /* Four samples of the one accent, so four tiles together draw it left to right, top to bottom.
+     The cyan sub-label is darkened: #22d3ee does not hold on white. */
+  --v2-t1: #ff2e93;
+  --v2-t2: #b843c4;
+  --v2-t3: #8b5cf6;
+  --v2-t4: #22d3ee;
+  --v2-t4-ink: #0e9bb5;
+
   --v2-grad: linear-gradient(100deg, #ff2e93, #8b5cf6 60%, #22d3ee);
   --v2-grad-2: linear-gradient(100deg, #ff2e93, #8b5cf6);
   --v2-grad-v: linear-gradient(180deg, #ff2e93, #8b5cf6);
@@ -1197,3 +1214,134 @@
   .v2 .v2-figgrid { grid-template-columns: 1fr; gap: 22px; }
   .v2 .v2-figbig { font-size: 64px; }
 }
+
+/* ── THE SHEET, REDESIGNED ───────────────────────────────────────────────────────────────────────
+   Gradient carries structure; green carries transient state. Nothing below tints anything green
+   unless it is new, unread or live right now. */
+
+/* THE LIVE PILL. Absent whenever the agent is not answering — the whole point of the second colour is
+   that its absence is information too. */
+.v2 .v2-livepill {
+  display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px;
+  font-family: var(--v2-mono); font-size: 11px; letter-spacing: 0.12em;
+  color: var(--v2-live-ink); background: var(--v2-live-wash);
+  padding: 2px 7px; border-radius: 4px;
+}
+.v2 .v2-livepill i {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--v2-live);
+  box-shadow: 0 0 0 3px rgba(184, 255, 41, 0.28);
+  animation: v2-livepulse 1.8s ease-out infinite;
+}
+@keyframes v2-livepulse {
+  70% { box-shadow: 0 0 0 8px rgba(184, 255, 41, 0); }
+  100% { box-shadow: 0 0 0 3px rgba(184, 255, 41, 0.28); }
+}
+
+/* THE TILES. Four samples of one accent, so the set draws the gradient across the grid. The fill
+   stays white — the 2px bar is the only accent a tile carries. */
+.v2 .v2-tile2 {
+  position: relative; display: block; width: 100%; text-align: left; overflow: hidden;
+  background: #fff; border-radius: 14px; padding: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: transform 0.12s ease-out, background 0.18s;
+}
+.v2 .v2-tile2::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--tile); }
+.v2 .v2-tile2[data-t="1"] { --tile: var(--v2-t1); --tileink: var(--v2-t1); }
+.v2 .v2-tile2[data-t="2"] { --tile: var(--v2-t2); --tileink: var(--v2-t2); }
+.v2 .v2-tile2[data-t="3"] { --tile: var(--v2-t3); --tileink: var(--v2-t3); }
+.v2 .v2-tile2[data-t="4"] { --tile: var(--v2-t4); --tileink: var(--v2-t4-ink); }
+.v2 .v2-tnum { position: relative; display: inline-block; }
+.v2 .v2-tnum b {
+  position: relative; display: block;
+  font-size: 32px; font-weight: 500; color: #111; letter-spacing: -0.02em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* The highlighter. Behind the numeral, not a background fill on the tile. */
+.v2 .v2-marker {
+  position: absolute; left: -3px; right: -3px; bottom: 1px; height: 12px;
+  border-radius: 2px; background: var(--v2-marker);
+}
+.v2 .v2-tlab { display: block; margin-top: 7px; font-size: 14px; color: #111; }
+.v2 .v2-tsub { display: block; margin-top: 2px; font-size: 11.5px; letter-spacing: 0.04em; color: var(--tileink); }
+
+/* GROUP HEADERS. Dot, mono label, and a rule that fades out in the group's own colour. */
+.v2 .v2-group { margin-top: 26px; }
+.v2 .v2-ghead {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: #8a8a90;
+}
+.v2 .v2-ghead i { width: 5px; height: 5px; border-radius: 50%; background: var(--ghue); flex: none; }
+.v2 .v2-ghead s {
+  flex: 1; height: 1px; text-decoration: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ghue) 35%, transparent), transparent);
+}
+
+/* ROWS. One card per group; the hairline starts after the icon so the chips read as a column. */
+.v2 .v2-gcard { background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); overflow: hidden; }
+.v2 .v2-grow {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 46px; padding: 8px 12px; text-align: left;
+  transition: transform 0.12s ease-out, background 0.18s;
+}
+.v2 .v2-grow + .v2-grow::before {
+  content: ''; position: absolute; top: 0; left: 56px; right: 0; height: 1px; background: rgba(0, 0, 0, 0.06);
+}
+.v2 .v2-gchip {
+  width: 32px; height: 32px; border-radius: 10px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--ghue) 10%, transparent);
+  transition: background 0.18s;
+}
+.v2 .v2-gchip svg { width: 17px; height: 17px; stroke: var(--ghue); stroke-width: 2; fill: none; transition: stroke 0.18s; }
+.v2 .v2-glab { flex: 1; min-width: 0; font-size: 15px; color: #111; transition: font-weight 0.12s; }
+.v2 .v2-gtrail { display: flex; align-items: center; flex: none; }
+.v2 .v2-gchev { width: 18px; height: 18px; stroke: rgba(0, 0, 0, 0.22); stroke-width: 2; fill: none; transition: stroke 0.18s; }
+
+/* DELIBERATELY LOCKED, NOT BROKEN. A muted chip, a muted label, and no chevron — a chevron would
+   promise somewhere to go. */
+.v2 .v2-grow:disabled .v2-gchip { background: rgba(0, 0, 0, 0.035); }
+.v2 .v2-grow:disabled .v2-gchip svg { stroke: rgba(0, 0, 0, 0.2); }
+.v2 .v2-grow:disabled .v2-glab { color: rgba(0, 0, 0, 0.28); }
+.v2 .v2-grow:disabled .v2-gchev { display: none; }
+.v2 .v2-grow[data-out] .v2-glab { color: var(--v2-red); }
+
+/* THE PRESS STATE. Nothing here responded to a finger before. iOS Safari drops :active unless the
+   document carries a touchstart listener, so [data-pressed] is bound alongside it — see the shell. */
+.v2 .v2-grow:not(:disabled):active,
+.v2 .v2-grow[data-pressed],
+.v2 .v2-tile2:not(:disabled):active,
+.v2 .v2-tile2[data-pressed] {
+  background: linear-gradient(90deg, rgba(255, 46, 147, 0.09), rgba(139, 92, 246, 0.05));
+  transform: scale(0.985);
+}
+.v2 .v2-grow:not(:disabled):active .v2-gchip,
+.v2 .v2-grow[data-pressed] .v2-gchip { background: linear-gradient(135deg, #ff2e93, #8b5cf6); }
+.v2 .v2-grow:not(:disabled):active .v2-gchip svg,
+.v2 .v2-grow[data-pressed] .v2-gchip svg { stroke: #fff; }
+.v2 .v2-grow:not(:disabled):active .v2-glab,
+.v2 .v2-grow[data-pressed] .v2-glab { font-weight: 500; }
+.v2 .v2-grow:not(:disabled):active .v2-gchev,
+.v2 .v2-grow[data-pressed] .v2-gchev { stroke: #ff2e93; }
+
+/* ENTRANCE. 30ms apart, fade and an 8px rise. */
+.v2 .v2-stagger > * { animation: v2-rise 0.34s var(--v2-ease) both; }
+.v2 .v2-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.v2 .v2-stagger > *:nth-child(2) { animation-delay: 30ms; }
+.v2 .v2-stagger > *:nth-child(3) { animation-delay: 60ms; }
+.v2 .v2-stagger > *:nth-child(4) { animation-delay: 90ms; }
+.v2 .v2-stagger > *:nth-child(5) { animation-delay: 120ms; }
+.v2 .v2-tiles .v2-tile2 { animation: v2-rise 0.34s var(--v2-ease) both; }
+.v2 .v2-tiles .v2-tile2:nth-child(2) { animation-delay: 30ms; }
+.v2 .v2-tiles .v2-tile2:nth-child(3) { animation-delay: 60ms; }
+.v2 .v2-tiles .v2-tile2:nth-child(4) { animation-delay: 90ms; }
+@keyframes v2-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .v2 .v2-stagger > *, .v2 .v2-tiles .v2-tile2 { animation: none; }
+  .v2 .v2-livepill i { animation: none; }
+}
+/* Now / Work / Week cross-fades rather than hard-swapping. The pane is keyed on the segment, so each
+   one enters on its own rather than the content changing underneath a static frame. */
+.v2 .v2-sin > .v2-stagger, .v2 .v2-sin > .v2-pane-fade { animation: v2-panefade 0.22s var(--v2-ease) both; }
+@keyframes v2-panefade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .v2 .v2-sin > .v2-stagger { animation: none; } }

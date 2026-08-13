@@ -1,8 +1,12 @@
 'use client'
 
 import Link from 'next/link'
+import {
+  TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
+  Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut, ChevronRight,
+} from 'lucide-react'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 // The mobile pull-up sheet: Now / Work / Week over the full-bleed hero.
 //
@@ -11,6 +15,18 @@ import { useState } from 'react'
 // because the control is three words wide; the panel heading inside says what the data actually is.
 
 export interface Tile { label: string; value: number | null; sub: string; href?: string }
+
+// Presentation only — a label to a mark. No destination, no data, nothing the nav does not already
+// know; this file simply draws what nav.ts lists.
+const ICONS: Record<string, typeof TrendingUp> = {
+  Leads: TrendingUp, Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
+  'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
+  Orders: Package, Analytics: BarChart3, Reports: FileText,
+  Billing: CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
+}
+// Which sample of the accent a group wears. The heading dot, its fading rule and every icon chip
+// inside the card read from this one value.
+const GROUP_HUE: Record<string, string> = { g1: 'var(--v2-t1)', g2: 'var(--v2-t3)', g3: 'var(--v2-t4)' }
 export interface NeedsItem { title: string; detail: string; action: string }
 export interface NowItem { title: string; detail: string; progress?: number | null }
 
@@ -20,13 +36,35 @@ interface Props {
   tiles: Tile[]
   monthLabel: string
   monthStats: { label: string; value: string }[]
+  /** The agent is answering right now. Existing data — HomeData.aiOn. */
+  live?: boolean
   groups: { id: string; label: string; items: { label: string; href?: string; out?: boolean }[] }[]
 }
 
 type Pane = 'now' | 'work' | 'week'
 
-export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats }: Props) {
+export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live }: Props) {
   const [open, setOpen] = useState(false)
+
+  // iOS Safari drops :active on a scrollable surface unless the document carries a touchstart
+  // listener, so the press state is mirrored onto [data-pressed]. Presentation only — it sets an
+  // attribute and nothing else, and every rule that reads it also reads :active for every other
+  // browser.
+  useEffect(() => {
+    const mark = (e: Event) => {
+      const el = (e.target as HTMLElement | null)?.closest?.('[data-touch]') as HTMLElement | null
+      if (el && !(el as HTMLButtonElement).disabled) el.setAttribute('data-pressed', '')
+    }
+    const clear = () => document.querySelectorAll('[data-pressed]').forEach((el) => el.removeAttribute('data-pressed'))
+    document.addEventListener('touchstart', mark, { passive: true })
+    document.addEventListener('touchend', clear, { passive: true })
+    document.addEventListener('touchcancel', clear, { passive: true })
+    return () => {
+      document.removeEventListener('touchstart', mark)
+      document.removeEventListener('touchend', clear)
+      document.removeEventListener('touchcancel', clear)
+    }
+  }, [])
   const [pane, setPane] = useState<Pane>('now')
 
   return (
@@ -89,47 +127,56 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats }: Pro
           )}
 
           {pane === 'work' && (
-            <>
-              {/* The sheet is the ONLY navigation a phone has, so it carries every destination the
-                  rail does — and in the rail's structure, because thirteen tiles in one grid is a
-                  database, not a screen. The four that carry a count keep the tile treatment; the
-                  rest are rows under their group heading.
-                  A destination with no href has no screen yet and stays inert. It is never a link to
-                  nothing. */}
+            <div className="v2-stagger">
+              {/* Live is TRANSIENT state, so it is absent whenever the agent is not answering. The
+                  green never sits on this screen decoratively. */}
+              {live && (
+                <p className="v2-livepill"><i />On duty</p>
+              )}
+
               <div className="v2-tiles">
-                {tiles.map((t) => (
-                  t.href
-                    ? (
-                      <Link key={t.label} href={t.href} className="v2-tile">
-                        {t.value !== null && <s>{t.value}</s>}
-                        <b>{t.label}</b>
-                        <i>{t.sub}</i>
-                      </Link>
-                    )
-                    : (
-                      <button key={t.label} type="button" className="v2-tile" disabled title="v2 preview">
-                        {t.value !== null && <s>{t.value}</s>}
-                        <b>{t.label}</b>
-                        <i>{t.sub}</i>
-                      </button>
-                    )
-                ))}
+                {tiles.map((t, i) => {
+                  const inner = (
+                    <>
+                      <span className="v2-tnum">
+                        {/* The highlighter, behind the numeral — only when there is something new. */}
+                        {t.value !== null && t.value > 0 && <em className="v2-marker" aria-hidden />}
+                        <b>{t.value ?? '—'}</b>
+                      </span>
+                      <span className="v2-tlab">{t.label}</span>
+                      <span className="v2-tsub">{t.sub}</span>
+                    </>
+                  )
+                  const props = { className: 'v2-tile2', 'data-t': i + 1, 'data-touch': true }
+                  return t.href
+                    ? <Link key={t.label} href={t.href} {...props}>{inner}</Link>
+                    : <button key={t.label} type="button" disabled title="v2 preview" {...props}>{inner}</button>
+                })}
               </div>
 
-              {/* A group whose rows were all gated away renders nothing — not a heading with a gap
-                  under it. visibleGroups already drops empty groups; this makes the pane safe
-                  regardless of what a caller hands it. */}
               {groups.filter((g) => g.items.length > 0).map((g) => (
-                <div key={g.id}>
-                  <p className="v2-kick" style={{ margin: '26px 0 10px' }}>{g.label}</p>
-                  {g.items.map((d) => (
-                    d.href
-                      ? <Link key={d.label} href={d.href} className="v2-srow">{d.label}</Link>
-                      : <button key={d.label} type="button" className="v2-srow" disabled title="v2 preview" data-out={d.out || undefined}>{d.label}</button>
-                  ))}
+                <div key={g.id} className="v2-group" style={{ ['--ghue' as string]: GROUP_HUE[g.id] ?? 'var(--v2-t3)' }}>
+                  <p className="v2-ghead"><i />{g.label}<s /></p>
+                  <div className="v2-gcard">
+                    {g.items.map((d) => {
+                      const Icon = ICONS[d.label] ?? ChevronRight
+                      const inner = (
+                        <>
+                          <span className="v2-gchip"><Icon /></span>
+                          <span className="v2-glab">{d.label}</span>
+                          <span className="v2-gtrail"><ChevronRight className="v2-gchev" /></span>
+                        </>
+                      )
+                      const props = { className: 'v2-grow', 'data-touch': true, 'data-out': d.out || undefined }
+                      return d.href
+                        ? <Link key={d.label} href={d.href} {...props}>{inner}</Link>
+                        // Deliberately locked, not broken: no chevron, a muted chip, and it says why.
+                        : <button key={d.label} type="button" disabled title="v2 preview" {...props}>{inner}</button>
+                    })}
+                  </div>
                 </div>
               ))}
-            </>
+            </div>
           )}
 
           {pane === 'week' && (

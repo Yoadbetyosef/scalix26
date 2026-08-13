@@ -162,6 +162,7 @@ export function SheetBody({ p }: { p: P }) {
       needs={d.needsYou}
       tiles={d.tiles}
       groups={d.groups}
+      live={d.aiOn}
       monthLabel={d.monthLabel}
       monthStats={d.monthStats}
     />
