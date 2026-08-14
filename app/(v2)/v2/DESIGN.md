@@ -33,6 +33,11 @@ built to, and every other screen is held to the same one.
   should read like one.
 - **Missing is an em dash.** A metric that does not exist is omitted, not zeroed. Never invent a figure
   to fill a slot.
+- **Read the type before naming a field.** "A row says something true or says nothing" governs field
+  names as much as figures. `meta_page_name`, `subscription_status` and a previous-month comparison
+  were all written into screens in one session and none of them exists — the compiler caught each one,
+  which means the screen was designed around a value the data does not carry. Open the type first; a
+  label that names a column nobody stores is the same fault as a figure nobody measured.
 
 ## Two things are always wrong
 
