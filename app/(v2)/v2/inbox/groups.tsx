@@ -7,6 +7,7 @@ import { channelKey } from '../channels'
 import { ChannelGlyph } from './glyphs'
 import { MilesPanel, type GroupKey } from './panel'
 import type { MilesFacts } from '@/lib/miles/briefing'
+import { nextCollapsed } from './collapse'
 import type { MilesInbox, WaitingRow } from '@/lib/miles/inbox-read'
 import { heldSince } from '@/lib/miles/autonomy'
 
@@ -54,24 +55,33 @@ export function InboxGroups({ data, milesId, facts }: Props) {
   // ── THE HERO COLLAPSES AS THE LIST MOVES ─────────────────────────────────────────────────────────
   //
   // On a phone the portrait is the first CARD in the scroller rather than a banner above it, so it
-  // scrolls with everything else — and past 44px it becomes a bar. The attribute is written straight
-  // to the node rather than held in state: this fires on every scroll frame, and re-rendering the
-  // whole inbox to change one class would make the list stutter under a thumb. Everything it drives
-  // is CSS, and desktop has no rule bound to it at all.
+  // scrolls with everything else — and past 64px it becomes a bar, coming back only near the top
+  // again at 24px. That gap is the whole point: see collapse.ts.
+  //
+  // The attribute is written straight to the node rather than held in state. This runs on every
+  // scroll frame, and re-rendering the whole inbox to change one class would make the list stutter
+  // under a thumb. Everything it drives is CSS, and desktop has no rule bound to it at all.
   const scroller = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = scroller.current
     if (!el) return
+
+    // ONE WRITE PER FRAME, and only when the answer changes. The handle from requestAnimationFrame is
+    // always a positive integer, so a pending frame makes every further scroll event a no-op until it
+    // runs — the events coalesce, the reads do not stack, and the attribute is touched at most once
+    // per frame. Verified rather than assumed: the decision itself is nextCollapsed, tested against
+    // the jitter that was reported.
     let raf = 0
+    let collapsed = false
     const onScroll = () => {
       if (raf) return
       raf = requestAnimationFrame(() => {
         raf = 0
-        const min = el.scrollTop > 44
-        if ((el.dataset.min === '') !== min) {
-          if (min) el.dataset.min = ''
-          else delete el.dataset.min
-        }
+        const next = nextCollapsed(collapsed, el.scrollTop)
+        if (next === collapsed) return
+        collapsed = next
+        if (next) el.dataset.min = ''
+        else delete el.dataset.min
       })
     }
     el.addEventListener('scroll', onScroll, { passive: true })

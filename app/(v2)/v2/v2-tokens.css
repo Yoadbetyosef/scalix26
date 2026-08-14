@@ -2013,6 +2013,7 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-page[data-miles] .v2-mbody {
     display: block; flex: 1; min-height: 0; overflow-y: auto;
     padding: 0 14px 30px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+    overflow-anchor: none;
   }
   .v2 .v2-page[data-miles] .v2-pbody { overflow: visible; padding: 0; flex: none; }
 
@@ -2020,7 +2021,14 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-page[data-miles] .v2-mpanel {
     height: 330px; flex: none; overflow: hidden; border-radius: 26px;
     box-shadow: 0 10px 34px -14px rgba(0, 0, 0, 0.4);
-    transition: height 0.5s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+    /* .62s, not .5s: at half a second the change reads as a snap rather than a collapse. Same easing. */
+    transition: height 0.62s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.62s cubic-bezier(0.32, 0.72, 0, 1);
+    /* The browser compensates for content resizing ABOVE the scroll position by moving scrollTop to
+       keep what you are looking at still. That is right everywhere else and wrong here: the hero
+       shrinking by 252px is exactly such a resize, so the compensation moved scrollTop mid-animation
+       and could carry it back across the boundary — a second, hidden source of the flicker that no
+       amount of hysteresis in the handler would have caught. */
+    overflow-anchor: none;
   }
   .v2 .v2-page[data-miles] .v2-mrail { border-radius: inherit; }
   .v2 .v2-page[data-miles] .v2-mportrait { border-radius: inherit; }

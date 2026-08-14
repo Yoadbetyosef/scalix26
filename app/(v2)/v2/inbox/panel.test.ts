@@ -316,10 +316,11 @@ describe('mobile — R1', () => {
     expect(r1).toMatch(/\.v2-pbody \{ overflow: visible; padding: 0; flex: none; \}/)
   })
 
-  it('collapses to a bar past 44px, on the reference’s curve', () => {
-    expect(groups).toContain('el.scrollTop > 44')
+  it('collapses to a bar, on the reference’s curve', () => {
+    // The threshold pair lives in collapse.ts and is tested there; one line could not hold.
+    expect(groups).toContain('nextCollapsed(collapsed, el.scrollTop)')
     expect(r1).toMatch(/\[data-min\] \.v2-mpanel \{ height: 78px; border-radius: 22px; \}/)
-    expect(r1).toMatch(/cubic-bezier\(0\.32, 0\.72, 0, 1\)/)
+    expect(r1).toMatch(/height 0\.62s cubic-bezier\(0\.32, 0\.72, 0, 1\)/)
     expect(r1).toMatch(/\[data-min\] \.v2-mmic \{ width: 46px; height: 46px; border-radius: 15px; \}/)
   })
 
@@ -328,6 +329,9 @@ describe('mobile — R1', () => {
     // The attribute is written to the node; a thumb moving must not re-render the inbox.
     expect(groups).toContain('el.dataset.min')
     expect(groups).not.toMatch(/setCollapsed|useState<boolean>\(false\)/)
+    // Scroll anchoring moves scrollTop to keep visible content still when something above it
+    // resizes — which is exactly what the hero collapsing is. Left on, it fights the threshold.
+    expect(r1).toMatch(/overflow-anchor: none/)
   })
 
   it('the group header loses its dot and its coloured pill', () => {
