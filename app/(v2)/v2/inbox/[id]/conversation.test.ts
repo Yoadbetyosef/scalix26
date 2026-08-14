@@ -15,7 +15,7 @@ describe('three authors, not two', () => {
     // ThreadView has `them` and `us`. A thread an employee answered and a person then took over has
     // three, and collapsing the last two loses the only fact somebody opens this screen for.
     expect(thread).toContain("by: 'customer' | 'agent' | 'you'")
-    expect(body).toContain("by: m.direction === 'inbound' ? 'customer' : conv.human_takeover ? 'you' : 'agent'")
+    expect(body).toContain("by: m.role === 'user' ? 'customer' : m.role === 'agent' ? 'you' : 'agent'")
   })
 
   it('takes C1’s values for each of the three', () => {

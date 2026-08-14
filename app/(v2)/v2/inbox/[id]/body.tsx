@@ -31,20 +31,33 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
   const contact = conv.contact
   const who = str(contact?.name) || str(contact?.phone) || str(contact?.email) || 'Someone'
   const ch = channelKey(conv.channel)
+  // `persona` is joined now, so this is the employee's real record rather than a cast over a shape
+  // that only carried a name — which is why every thread used to wear the phone employee's colours.
   const agent = conv.ai_employee ?? null
-  const agentName = nameOf(agent as { name?: string | null; persona?: string | null } | null)
-  const persona = personaOf(agent as { persona?: string | null } | null)
+  const agentName = nameOf(agent)
+  const persona = personaOf(agent)
 
-  // `direction` is the row's own word for authorship. Three authors, not two: a message that is not
-  // inbound was sent by the employee, unless a person had taken the thread over by then.
+  // AUTHORSHIP IS PER MESSAGE, from `role` — the column the table actually has.
+  //
+  //   user       the customer
+  //   assistant  the employee answered
+  //   agent      a person sent it
+  //
+  // It was `direction`, which does not exist on the row, so the test was never true and every
+  // message rendered as the agent's. And it fell back to conv.human_takeover, which is per
+  // CONVERSATION: the moment somebody took a thread over, every reply the employee had already sent
+  // would have been relabelled as theirs. A message's author does not change because a later one had
+  // a different one.
   const lines: Line[] = messages.map((m) => ({
     id: m.id,
-    by: m.direction === 'inbound' ? 'customer' : conv.human_takeover ? 'you' : 'agent',
+    by: m.role === 'user' ? 'customer' : m.role === 'agent' ? 'you' : 'agent',
     body: str(m.content) ?? '(no content)',
     at: m.timestamp,
     agentName,
     persona: persona.key,
-    failed: m.status === 'failed' || m.status === 'undelivered',
+    // delivery_status, not status. The provider callback resolves it; until then it is null, which is
+    // not a failure — only these two are.
+    failed: m.delivery_status === 'failed' || m.delivery_status === 'undelivered',
   }))
 
   const last = lines.at(-1) ?? null

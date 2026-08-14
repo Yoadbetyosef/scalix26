@@ -46,7 +46,7 @@ export default async function ConversationPage({ params, searchParams }: { param
     phone: contact?.phone,
     email: contact?.email,
     channel: conv.channel,
-    sentiment: conv.sentiment,
+    sentiment: conv.sentiment ?? undefined,
     messageCount: messages?.length || 0,
   }
 

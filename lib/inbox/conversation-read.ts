@@ -17,20 +17,56 @@ import { getBusinessTimezone } from '@/lib/timezone'
 
 export interface ConversationRead {
   tz: string
-  // Typed as the page already treated them: select('*') on an existing row returns these, and
-  // widening channel/status to null here would only push four null-checks into a page whose behaviour
-  // is not changing.
-  conv: Record<string, unknown> & {
-    id: string; channel: string; status: string; summary: string | null
-    duration_seconds: number | null
-    human_takeover: boolean | null; sentiment?: string; created_at: string; updated_at: string | null
-    contact: { id: string; name?: string; phone?: string; email?: string; address?: string } | null
-    ai_employee: { name: string } | null
-  }
-  messages: Array<Record<string, unknown> & {
-    id: string; direction: string | null; content: string | null; timestamp: string
-    channel: string | null; status: string | null
-  }>
+  conv: ConversationRow
+  messages: MessageRow[]
+}
+
+// ── THE COLUMNS, ONCE ────────────────────────────────────────────────────────────────────────────
+//
+// `select('*')` with a `Record<string, unknown> &` type is how a screen ends up reading fields that
+// do not exist. This file declared `direction` and `status` on a message; the table has neither, so
+// `m.direction === 'inbound'` was never true and every customer message rendered as the agent's, and
+// `m.status === 'failed'` never marked an undelivered one. It joined `ai_employees(name)` while the
+// screen read `.persona`, so every thread wore the phone employee's colours.
+//
+// Nothing failed. `select('*')` returns whatever exists, the intersection type accepted any key, and
+// tsc had nothing to check the names against.
+//
+// So: the columns are named, the types are EXACT — no index signature to absorb a typo — and a test
+// asserts every declared field appears in the select list it is read from. A name that is not a
+// column now fails at the query, loudly, instead of being quietly undefined for a year.
+export const CONV_COLS = 'id, channel, status, summary, duration_seconds, human_takeover, sentiment, created_at, updated_at, ai_employee_id'
+export const CONTACT_COLS = 'id, name, phone, email, address'
+export const AGENT_COLS = 'name, persona'
+export const MESSAGE_COLS = 'id, conversation_id, role, content, timestamp, channel, delivery_status, error_code'
+
+export interface ConversationRow {
+  id: string
+  channel: string
+  status: string
+  summary: string | null
+  duration_seconds: number | null
+  human_takeover: boolean | null
+  sentiment: string | null
+  created_at: string
+  updated_at: string | null
+  ai_employee_id: string | null
+  contact: { id: string; name: string | null; phone: string | null; email: string | null; address: string | null } | null
+  /** `persona` is joined because the thread paints in that employee's own colours. */
+  ai_employee: { name: string | null; persona: string | null } | null
+}
+
+export interface MessageRow {
+  id: string
+  conversation_id: string
+  /** THE authorship field, and the only one. user = the customer, assistant = the AI, agent = a person. */
+  role: string | null
+  content: string | null
+  timestamp: string
+  channel: string | null
+  /** null until a provider callback resolves it; 'failed' / 'undelivered' / 'billing_blocked' after. */
+  delivery_status: string | null
+  error_code: string | null
 }
 
 export async function readConversation(tenantId: string, id: string): Promise<ConversationRead | null> {
@@ -44,7 +80,7 @@ export async function readConversation(tenantId: string, id: string): Promise<Co
 
   const { data: conv } = await service
     .from('conversations')
-    .select('*, contact:contacts(*), ai_employee:ai_employees(name)')
+    .select(`${CONV_COLS}, contact:contacts(${CONTACT_COLS}), ai_employee:ai_employees(${AGENT_COLS})`)
     .eq('id', id)
     .eq('tenant_id', tenant.id)
     .single()
@@ -53,13 +89,13 @@ export async function readConversation(tenantId: string, id: string): Promise<Co
 
   const { data: messages } = await service
     .from('messages')
-    .select('*')
+    .select(MESSAGE_COLS)
     .eq('conversation_id', id)
     .order('timestamp', { ascending: true })
 
   return {
     tz,
-    conv: conv as ConversationRead['conv'],
-    messages: (messages ?? []) as ConversationRead['messages'],
+    conv: conv as unknown as ConversationRow,
+    messages: (messages ?? []) as unknown as MessageRow[],
   }
 }
