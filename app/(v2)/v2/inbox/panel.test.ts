@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { PERSONAS, hexToRgb } from '@/lib/persona'
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
@@ -82,5 +83,35 @@ describe('the mesh that was generated from the portrait', () => {
     // top corners — pure acid — should hold no points at all.
     const inCorner = nodes.points.filter(([x, y]: number[]) => (x < 90 || x > 590) && y < 90)
     expect(inCorner).toHaveLength(0)
+  })
+})
+
+describe('one inbox, not two', () => {
+  it('the separate Messages screen is gone', () => {
+    // It existed for one stage, as a place to build Miles without deleting the reskin. Two inboxes is
+    // one more than a person has.
+    expect(existsSync(new URL('../messages', import.meta.url))).toBe(false)
+  })
+
+  it('the nav does not offer a second one', () => {
+    const nav = strip(read('../nav.ts'))
+    expect(nav).not.toContain('/v2/messages')
+    expect((nav.match(/label: 'Inbox'/g) ?? []).length).toBe(1)
+  })
+
+  it('the inbox route renders the groups', () => {
+    expect(strip(read('./page.tsx'))).toContain('<InboxGroups')
+  })
+
+  it('calls sit in the handled group, attributed to whoever took them', () => {
+    const groups = strip(read('./groups.tsx'))
+    expect(groups).toContain('{row.by}')
+    expect(groups).toContain("row.spoken ? ' (call)' : ''")
+  })
+
+  it('the panel counts only Miles’s own work, not the inbox total', () => {
+    // The calls in that group are Rudi's; a panel that counted them would credit the wrong employee
+    // on his own portrait.
+    expect(strip(read('./groups.tsx'))).toContain('handled.filter((r) => r.byAgentId === milesId).length')
   })
 })

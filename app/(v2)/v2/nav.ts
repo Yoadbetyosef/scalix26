@@ -36,10 +36,9 @@ export interface Group {
 /** The four primary destinations. These are the ones that carry a count. */
 export const PRIMARY: Dest[] = [
   { label: 'Leads', href: '/v2/leads', module: 'pipeline' },
+  // One inbox, three groups, every channel — and Miles's panel at the top of it. There was briefly a
+  // second row here for a separate Messages screen; two inboxes is one more than a person has.
   { label: 'Inbox', href: '/v2/inbox', module: 'inbox' },
-  // The messages employee's own surface: three approval states, no calls. Sits beside the inbox
-  // rather than replacing it — see app/(v2)/v2/messages/page.tsx.
-  { label: 'Messages', href: '/v2/messages', module: 'inbox' },
   { label: 'Appointments', href: '/v2/appointments', module: 'scheduling' },
   { label: 'Contacts', href: '/v2/contacts', module: 'contacts' },
 ]

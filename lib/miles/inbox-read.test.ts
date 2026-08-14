@@ -53,7 +53,7 @@ describe('triggerLine', () => {
 })
 
 describe('the screen shows what the classifier said, and what went out', () => {
-  const raw = readFileSync(new URL('../../app/(v2)/v2/messages/client.tsx', import.meta.url), 'utf8')
+  const raw = readFileSync(new URL('../../app/(v2)/v2/inbox/groups.tsx', import.meta.url), 'utf8')
   // Comments explain why the row does NOT say "Draft ready"; scanning them would fail the very check
   // the comment documents. Same stripping the other /v2 guards do.
   const client = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
@@ -90,5 +90,21 @@ describe('the thread no longer speaks for the wrong employee', () => {
     expect(thread).toContain("aiName || 'AI'")
     // The name may still appear in prose explaining the change; it must not be rendered as a value.
     expect(thread).not.toMatch(/\?\s*'Rudi'\s*:/)
+  })
+})
+
+describe('who answered', () => {
+  const read = readFileSync(new URL('./inbox-read.ts', import.meta.url), 'utf8')
+
+  it('credits the tenant’s default agent when a conversation records none', () => {
+    // A real inbox showed calls Rudi took attributed to Miles, because the fallback was the SCREEN's
+    // agent name rather than the agent who actually answers an unbound channel.
+    expect(read).toContain("const fallback = (agents ?? []).find((a) => a.status === 'active')")
+    expect(read).not.toMatch(/return a \? nameOf\(a\) : agentName/)
+  })
+
+  it('never puts a call in the group that means somebody is waiting', () => {
+    expect(read).toContain('if (spoken) {')
+    expect(read).toContain("sent: saidIt?.content ?? 'No transcript from this call.'")
   })
 })

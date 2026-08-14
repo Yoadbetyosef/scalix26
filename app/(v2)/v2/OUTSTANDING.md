@@ -55,10 +55,16 @@ block) so both screens see the same window onto the address book.
 be pinned to the bottom again, that is a rule on `.v2-overlay` inside the 720px media query — not a
 second component.
 
-## 4. Two-pane list — DONE
+## 4. Two-pane list — DONE for contacts and orders; the INBOX GAVE IT UP
 
-Above 1100px inbox, contacts and orders render the list beside the selected record; below it they are
-one column and a row is a link again. The three detail routes were split into a `body.tsx` the route
+Above 1100px contacts and orders render the list beside the selected record; below it they are
+one column and a row is a link again.
+
+**The inbox no longer has a pane.** It became the three-group screen (see §18), whose rows navigate to
+the conversation route rather than selecting into a right-hand pane. That is a real loss on a wide
+screen — the record used to open beside the list — and it is the price of sorting by what a thread
+NEEDS rather than listing everything. If it should come back, the pane belongs beside the groups, and
+`/v2/inbox/[id]/body.tsx` still exists and is still the one implementation. The three detail routes were split into a `body.tsx` the route
 and the pane both render, so a detail is one implementation reachable two ways. Leads and appointments
 stay single column, since their rows route to a conversation or a contact rather than to a record of
 their own.
@@ -231,6 +237,23 @@ must not inherit a convenient `true`.
 
 Also unwired: `ai_employees.autonomy_rules` is read by the classifier but nothing writes it. Writing
 it is Stage 6's job, because the rule moves by TELLING Miles — there is no settings form, by design.
+
+## 18. The inbox and the messages screen were merged
+
+`/v2/messages` existed for two stages so Miles could be built without deleting the reskinned inbox.
+It is gone: `/v2/inbox` IS the three groups, with Miles's panel at the top, and calls sit in the
+handled group beside the messages. The nav row went with it.
+
+Two things follow from putting calls in that group:
+
+- **The group is headed HANDLED, not "MILES HANDLED".** With two employees answering, one name over
+  both is a small lie in the group heading. Each row names the employee who took it instead, and a
+  call says it was a call.
+- **A call never lands in NEEDS YOU.** Whoever spoke last on a phone call, the call is over; a caller
+  is not sitting waiting for a reply to a transcript line. A call with no assistant line at all says
+  "No transcript from this call" rather than quoting the caller back as though the agent had said it.
+
+The panel counts only the rows the panel's own employee answered. The calls in that group are Rudi's.
 
 ## 17. Miles Stage 6 — what is built, and what is not
 

@@ -103,8 +103,9 @@ describe('the shared list survived four more screens', () => {
     expect(list).not.toMatch(/lead|inbox|conversation|appointment|order|contact/i)
   })
 
+  // The inbox is no longer on this list: it became the three-group screen with its own read
+  // (lib/miles/inbox-read.ts). "No new queries" was the design-migration rule, and Miles is a feature.
   it.each([
-    ['app/(v2)/v2/inbox/page.tsx', 'getDashboardData'],
     ['app/(v2)/v2/appointments/page.tsx', 'getDashboardData'],
     ['app/(v2)/v2/orders/page.tsx', 'listOrders'],
     ['app/(v2)/v2/contacts/page.tsx', 'listContactsPage'],
@@ -124,8 +125,9 @@ describe('the shared list survived four more screens', () => {
     expect(code(file)).toContain(`'${mod}'`)
   })
 
+  // Read-only, minus the inbox: its three actions (send, edit, hand over) are the feature, and they
+  // are wired. Every other list screen is still a preview.
   it.each([
-    'app/(v2)/v2/inbox/page.tsx',
     'app/(v2)/v2/appointments/page.tsx',
     'app/(v2)/v2/orders/page.tsx',
     'app/(v2)/v2/contacts/page.tsx',
@@ -209,7 +211,8 @@ describe('the thread is its own shape, and the shared ones stayed shared', () =>
   })
 
   it('every v2 list row now leads to a v2 screen', () => {
-    expect(code('app/(v2)/v2/inbox/page.tsx')).toMatch(/\/v2\/inbox\/\$\{c\.id\}/)
+    // The inbox rows moved into the groups component and navigate rather than link.
+    expect(code('app/(v2)/v2/inbox/groups.tsx')).toMatch(/\/v2\/inbox\/\$\{row\.conversationId\}/)
   })
 })
 
@@ -236,7 +239,8 @@ describe('the list reads as a designed screen, not a table', () => {
   })
 
   it.each([
-    ['app/(v2)/v2/inbox/page.tsx', 'needsYou'],
+    // The inbox says it in words now — a whole group headed NEEDS YOU — rather than as a row flag.
+    ['app/(v2)/v2/inbox/groups.tsx', 'NEEDS YOU'],
     ['app/(v2)/v2/leads/page.tsx', 'needsYou'],
     ['app/(v2)/v2/appointments/page.tsx', 'needsYou'],
     ['app/(v2)/v2/orders/page.tsx', 'needsYou'],
@@ -257,7 +261,9 @@ describe('the list reads as a designed screen, not a table', () => {
 })
 
 describe('two panes are one implementation reached two ways', () => {
-  it.each(['inbox', 'contacts', 'orders'])('%s renders the same body in the route and the pane', (screen) => {
+  // The inbox left this arrangement when it became three groups: it has no right-hand pane, and its
+  // rows navigate to the conversation route. Recorded in OUTSTANDING — it is a real loss on desktop.
+  it.each(['contacts', 'orders'])('%s renders the same body in the route and the pane', (screen) => {
     const route = code(`app/(v2)/v2/${screen}/[id]/page.tsx`)
     const list = code(`app/(v2)/v2/${screen}/page.tsx`)
     // The route is a thin wrapper; the list imports the same component for its right pane.
@@ -303,7 +309,7 @@ describe('a body rendered inside a client prop must not throw a routing signal',
   })
 
   it('a missing record is a note in the pane, not a thrown screen', () => {
-    expect(code('app/(v2)/v2/inbox/page.tsx')).toMatch(/is no longer here/)
+    expect(code('app/(v2)/v2/contacts/page.tsx')).toMatch(/is no longer here/)
   })
 })
 

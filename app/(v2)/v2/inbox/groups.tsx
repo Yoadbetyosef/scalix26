@@ -9,7 +9,12 @@ import { MilesPanel } from './panel'
 import type { MilesInbox, WaitingRow } from '@/lib/miles/inbox-read'
 import { heldSince } from '@/lib/miles/autonomy'
 
-// THREE GROUPS, THREE STATES — waiting on you, needs you, handled.
+// THE INBOX — three groups, three states: waiting on you, needs you, handled.
+//
+// This replaced the reskinned conversation list that used to live here. That screen was one filtered
+// list of everything; this one sorts by what each thread NEEDS, which is the only question an owner
+// opening an inbox is actually asking. Calls sit in the handled group beside the messages, each row
+// naming the employee who took it.
 //
 // Not the shared ListPage, and the reason is in ListPage's own comment: a caller that needs a branch
 // inside it means the shape is wrong. This screen needs three headed sections rather than one
@@ -30,7 +35,7 @@ interface Props {
 
 type Busy = { id: string; what: 'send' | 'mine' } | null
 
-export function MessagesClient({ data, milesId }: Props) {
+export function InboxGroups({ data, milesId }: Props) {
   usePressState()
   const router = useRouter()
   const { waiting, needs, handled, agentName } = data
@@ -77,14 +82,16 @@ export function MessagesClient({ data, milesId }: Props) {
         <button type="button" onClick={() => router.push('/v2')} className="v2-bk" aria-label="Back">
           <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
         </button>
-        <h2>Messages</h2>
+        <h2>Inbox</h2>
       </header>
 
       {milesId && (
         <MilesPanel
           agentId={milesId}
           agentName={agentName}
-          sent={handled.length}
+          // MILES'S OWN WORK, not the inbox's total. The calls in this group are Rudi's, and a panel
+          // that counted them would credit the wrong employee on his own portrait.
+          sent={handled.filter((r) => r.byAgentId === milesId).length}
           waiting={waiting.length}
           needs={needs.length}
         />
@@ -95,8 +102,8 @@ export function MessagesClient({ data, milesId }: Props) {
           <div className="v2-pempty">
             <p className="v2-pempty-t">Nothing is waiting on you.</p>
             <p className="v2-pempty-b">
-              Instagram, Messenger, SMS and email land here. {agentName} answers what he can and holds
-              anything that commits you to something.
+              Calls, Instagram, Messenger, SMS and email all land here. What is answered gets answered;
+              anything that would commit you waits for you.
             </p>
           </div>
         ) : (
@@ -107,7 +114,9 @@ export function MessagesClient({ data, milesId }: Props) {
               {waiting.length > 0 && <b>{waiting.length} {waiting.length === 1 ? 'draft is' : 'drafts are'} waiting on you</b>}
               {waiting.length > 0 && (needs.length > 0 || handled.length > 0) ? <span>. </span> : <span>.</span>}
               {needs.length > 0 && <span>{needs.length} {needs.length === 1 ? 'needs' : 'need'} you outright. </span>}
-              {handled.length > 0 && <span>{agentName} handled {handled.length} on his own.</span>}
+              {/* No attribution in the opening line: this group now holds Rudi's calls and Miles's
+                  messages, and one name over both would be a small lie in the first sentence. */}
+              {handled.length > 0 && <span>{handled.length} answered without you.</span>}
             </p>
 
             {waiting.length > 0 && (
@@ -253,7 +262,7 @@ export function MessagesClient({ data, milesId }: Props) {
               <>
                 <p className="v2-mgl">
                   <i style={{ background: 'var(--v2-miles)' }} />
-                  <b>{agentName.toUpperCase()} HANDLED</b>
+                  <b>HANDLED</b>
                   <em style={{ background: 'var(--v2-miles-wash)', color: 'var(--v2-miles-ink)' }}>{handled.length}</em>
                   <u style={{ background: 'linear-gradient(90deg, rgba(217,242,36,.5), transparent)' }} />
                 </p>
@@ -267,7 +276,9 @@ export function MessagesClient({ data, milesId }: Props) {
                           <p>{row.who}</p>
                           {/* THE EXACT TEXT THAT WENT OUT. A row saying "handled" without the words
                               sent in the owner's name is what would destroy trust in this. */}
-                          <span data-quote>{agentName}: “{row.sent}”</span>
+                          {/* WHO answered, in their own name. With two employees an unattributed
+                              row credits the wrong one — and a call is not a message, so it says so. */}
+                          <span data-quote>{row.by}{row.spoken ? ' (call)' : ''}: “{row.sent}”</span>
                         </span>
                         <span className="v2-mmeta">
                           <time>{heldSince(row.at)}</time>

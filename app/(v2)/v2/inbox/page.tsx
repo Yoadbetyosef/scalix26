@@ -1,75 +1,35 @@
-import { getDashboardData } from '@/lib/dashboard/overview'
-import { ConversationBody } from './[id]/body'
-import { ListPage, type ListFilter, type ListRow } from '../list'
-// From channels.ts, not list.tsx: this is called on the SERVER, and a client module's exports are
-// proxies there. See channels.ts.
-import { channelKey } from '../channels'
-import { listPageContext, relativeTime, PREVIEW } from '../list-page'
-import { inboxLine } from './line'
+import { createAdminClient } from '@/lib/supabase/server'
+import { agentByPersona, primaryAgent } from '@/lib/agents/primary'
+import { nameOf, PERSONAS } from '@/lib/persona'
+import { readMilesInbox } from '@/lib/miles/inbox-read'
+import { listPageContext } from '../list-page'
+import { InboxGroups } from './groups'
 
-// Inbox, reskinned onto the shared list. Same rows the dashboard already loads — getDashboardData
-// returns the ten most recently updated conversations with their contact — so this page adds no query.
-// READ-ONLY: actions render and are disabled with title="v2 preview".
+// THE INBOX. Three groups, three states, every channel.
+//
+// This used to be the reskinned conversation list — one filtered list of everything, with chips for
+// calls and messages. It is now sorted by what each thread NEEDS rather than by where it arrived,
+// because that is the only question somebody opening an inbox is asking. Calls sit in the handled
+// group beside the messages, and each row names the employee who took it.
+//
+// Gated on `inbox`, exactly as it was.
 
 export const dynamic = 'force-dynamic'
 
-// Channels group the way the reference's chips do: everything, spoken, typed.
-const VOICE = ['voice', 'phone']
-const FILTERS: ListFilter[] = [
-  { id: 'all', label: 'All', buckets: ['voice', 'message'] },
-  { id: 'calls', label: 'Calls', buckets: ['voice'] },
-  { id: 'messages', label: 'Messages', buckets: ['message'] },
-]
-
-interface Conv {
-  id: string; channel?: string | null; updated_at?: string | null; status?: string | null
-  contact?: { name?: string | null; phone?: string | null } | null
-}
-
-export default async function V2Inbox({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
-  const { open } = await searchParams
+export default async function V2Inbox() {
   const { tenantId } = await listPageContext('inbox')
-  const { conversations } = await getDashboardData(tenantId)
 
-  const rows: ListRow[] = (conversations as Conv[]).map((c) => {
-    const spoken = VOICE.includes((c.channel || '').toLowerCase())
-    const when = c.updated_at || null
-    return {
-      id: c.id,
-      primary: c.contact?.name || c.contact?.phone || 'Someone',
-      detail: [c.channel || 'message', c.status || null].filter(Boolean).join(' · '),
-      trailing: when ? relativeTime(when) : null,
-      // The thread is the destination the rest of the app already uses for a conversation.
-      href: `/v2/inbox/${c.id}`,
-      bucket: spoken ? 'voice' : 'message',
-      channel: channelKey(c.channel),
-      // Open is the state that needs a person; resolved and closed are settled and stay quiet.
-      needsYou: !['resolved', 'closed', 'archived'].includes((c.status || '').toLowerCase()),
-      actions: [{ label: 'Open', tone: 'primary', disabledReason: PREVIEW }],
-    }
-  })
-
-  // AWAITED HERE, on the server, whenever ?open is set — including on a narrow viewport, where
-  // ListPage will not display it. A prop is serialised whether or not the client renders it, so the
-  // work happens either way; the earlier comment claimed otherwise and was wrong. Awaiting it also
-  // lets a missing record become a note in the pane instead of a throw that blanks the screen.
-  const detail = open ? await ConversationBody({ tenantId, id: open }) ?? <p className="v2-pnone">That conversation is no longer here.</p> : null
-
-  return (
-    <ListPage
-      selectedId={open ?? null}
-      detail={detail}
-      title="Inbox"
-      line={inboxLine({
-        total: rows.length,
-        calls: rows.filter((r) => r.bucket === 'voice').length,
-        openCount: rows.filter((r) => r.needsYou).length,
-      })}
-      filters={FILTERS}
-      initialFilter="all"
-      rows={rows}
-      backHref="/v2"
-      empty={{ title: 'Nothing yet', body: 'Every call and message Rudi handles appears here.' }}
-    />
+  // Miles if he has been hired, otherwise the tenant's default agent — the screen still has to say
+  // something true about who answered, and every conversation here was answered by somebody.
+  const db = createAdminClient()
+  const miles = await agentByPersona<{ id: string; name: string | null; persona: string | null }>(
+    db, tenantId, 'miles', 'id, name, persona',
   )
+  const agent = miles ?? (await primaryAgent<{ name: string | null; persona: string | null }>(db, tenantId, 'name, persona'))
+  const agentName = miles ? nameOf(miles) : agent ? nameOf(agent) : PERSONAS.miles.name
+
+  const data = await readMilesInbox(tenantId, agentName)
+  // The panel is Miles's. Without him there is no portrait to show and no employee to talk to, so the
+  // screen is the three groups and nothing else.
+  return <InboxGroups data={data} milesId={miles?.id ?? null} />
 }
