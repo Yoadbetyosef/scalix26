@@ -352,3 +352,40 @@ describe('mobile — R1', () => {
     expect(r1).toMatch(/font-size: 15\.5px/)
   })
 })
+
+describe('he is alive on a phone', () => {
+  const canvas = readFileSync(new URL('../rudi-canvas.tsx', import.meta.url), 'utf8')
+
+  it('the collapsed path runs the SAME sweep the full engine runs', () => {
+    // It used to draw one slow band every 5.2s — about 1.8s of movement in every 5, which reads as a
+    // static photograph unless you happen to be looking at the right moment.
+    expect(canvas).toContain('function drawSweep(')
+    expect((canvas.match(/drawSweep\(/g) ?? []).length).toBe(3)   // the definition and two callers
+  })
+
+  it('and still pays for none of the rest', () => {
+    const collapsed = canvas.slice(canvas.indexOf('if (minRef.current) {'))
+    const branch = collapsed.slice(0, collapsed.indexOf('return\n      }'))
+    // No mesh, no bloom, no video, no meter in the collapsed path.
+    expect(branch).not.toMatch(/ensureNet|net\.|createRadialGradient|drawImage\(vid/)
+    expect(branch).toContain('if (v && !v.paused) v.pause()')
+  })
+
+  it('sweeps at the same rate the desktop does at idle', () => {
+    expect(canvas).toContain('const prog = (now % 3600) / 3600')
+  })
+
+  it('refuses to animate under reduced motion, exactly as before', () => {
+    // Unchanged on purpose: the guard stays, and the sweep sits inside it.
+    expect(canvas).toContain('if (running || reduced || disposed) return')
+    const collapsed = canvas.slice(canvas.indexOf('if (minRef.current) {'))
+    expect(collapsed.indexOf('if (!reduced) {')).toBeLessThan(collapsed.indexOf('drawSweep('))
+  })
+
+  it('the loop starts for someone who only ever scrolls', () => {
+    // `scroll` does not bubble, so a listener on window never hears a scroll inside an element — and
+    // the mobile inbox scroller IS an element. The capture phase reaches it.
+    expect(canvas).toContain("window.addEventListener(e, kick, { passive: true, capture: true })")
+    expect(canvas).toContain("window.removeEventListener(e, kick, { capture: true })")
+  })
+})

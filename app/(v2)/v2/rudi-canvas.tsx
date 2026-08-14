@@ -307,6 +307,33 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       return 0.04 + smoothedRef.current * 1.15
     }
 
+    /**
+     * The scan sweep: 18 displaced slices of the portrait, brightest at the band.
+     *
+     * A function rather than a block inside draw() because the COLLAPSED path runs it too. On a phone
+     * the portrait is a still — no mesh, no video, no bloom — but a photograph that never moves reads
+     * as a screenshot of an employee rather than an employee. One implementation, two callers; a
+     * second copy would be the one that stops matching.
+     */
+    function drawSweep(now: number, band: number, amount: number, displace: number) {
+      if (!img) return
+      for (let sl = 0; sl < 18; sl++) {
+        const sy = band - 96 + sl * 12
+        if (sy < 0 || sy > CH - 13) continue
+        const fall = Math.max(0, 1 - Math.abs(sy - band) / 104) * amount
+        if (fall < 0.02) continue
+        const off = Math.sin(now / 140 + sl * 0.9) * 11 * fall * displace
+        const sry = (sy - DY) / S
+        if (sry < 0 || sry > IH - 13 / S) continue
+        ctx!.drawImage(img, 0, sry, IW, 13 / S, DX + off - 16, sy, DW + 32, 13)
+        ctx!.globalCompositeOperation = 'lighter'
+        ctx!.globalAlpha = 0.26 * fall
+        ctx!.drawImage(img, 0, sry, IW, 13 / S, DX + off * 2.8 - 16, sy, DW + 32, 13)
+        ctx!.globalAlpha = 1
+        ctx!.globalCompositeOperation = 'source-over'
+      }
+    }
+
     function draw(now: number) {
       if (disposed) return
       // A missing still must not KILL the loop. Returning without re-requesting a frame ended it
@@ -317,12 +344,20 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       ctx!.setTransform(1, 0, 0, 1, 0, 0)
       ctx!.clearRect(0, 0, CW, CH)
 
-      // ── Collapsed: still frame, one slow band, nothing else. ────────────────────────────────────
+      // ── Collapsed: the still, the sweep, and nothing else. ──────────────────────────────────────
+      //
+      // Was the still plus one slow band every 5.2 seconds — about 1.8s of movement in every 5, which
+      // on a phone reads as a static photograph unless you happen to be looking at the right moment.
+      // It runs the SAME sweep the full engine does now, at the same rate, and still pays for none of
+      // the rest: no mesh, no bloom, no video, no meter. Alive without the whole engine.
       if (minRef.current) {
         ctx!.drawImage(img, DX, DY, DW, DH)
         const v = videoRef.current
         if (v && !v.paused) v.pause()
         if (!reduced) {
+          // The idle rate from the main path — 3600ms — so a phone and a desktop sweep in step.
+          const prog = (now % 3600) / 3600
+          drawSweep(now, prog * CH, 1, 1)
           const bp = (now % 5200) / 5200
           if (bp < 0.34) {
             const by = (bp / 0.34) * CH
@@ -414,21 +449,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       }
 
       // ── Scan sweep: 18 displaced slices of the portrait, brightest at the band. ─────────────────
-      for (let sl = 0; sl < 18; sl++) {
-        const sy = band - 96 + sl * 12
-        if (sy < 0 || sy > CH - 13) continue
-        const fall = Math.max(0, 1 - Math.abs(sy - band) / 104) * scanA
-        if (fall < 0.02) continue
-        const off = Math.sin(now / 140 + sl * 0.9) * 11 * fall * (st === 'idle' ? 1 : 2.2)
-        const sry = (sy - DY) / S
-        if (sry < 0 || sry > IH - 13 / S) continue
-        ctx!.drawImage(img, 0, sry, IW, 13 / S, DX + off - 16, sy, DW + 32, 13)
-        ctx!.globalCompositeOperation = 'lighter'
-        ctx!.globalAlpha = 0.26 * fall
-        ctx!.drawImage(img, 0, sry, IW, 13 / S, DX + off * 2.8 - 16, sy, DW + 32, 13)
-        ctx!.globalAlpha = 1
-        ctx!.globalCompositeOperation = 'source-over'
-      }
+      drawSweep(now, band, scanA, st === 'idle' ? 1 : 2.2)
 
       // ── Listening: white veil + monochrome level meter. ────────────────────────────────────────
       if (micA > 0.01) {
@@ -641,7 +662,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // while the cause is still unknown.
     const KICK_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'scroll'] as const
     const kick = () => {
-      KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick))
+      KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick, { capture: true }))
       if (disposed) return
       fit()
       ensureNet()
@@ -650,7 +671,12 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       // stays on screen, so repaint it in case fit() resized and cleared.
       if (!running) drawStill()
     }
-    KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, once: false }))
+    // CAPTURE. `scroll` does not bubble, so a listener on window never hears a scroll inside an
+    // element — and on the mobile inbox the scroller IS an element, not the document. Someone who
+    // loaded the page and only scrolled therefore never kicked the loop. The capture phase runs from
+    // window down to the target for non-bubbling events too, so this hears both without the canvas
+    // needing to know which element any particular screen scrolls.
+    KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, capture: true }))
 
     const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
@@ -710,7 +736,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
       ro.disconnect()
-      KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick))
+      KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick, { capture: true }))
       window.removeEventListener('resize', onResize)
       window.removeEventListener('pointerdown', onGesture)
       io.disconnect()
