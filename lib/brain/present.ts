@@ -6,9 +6,10 @@
 
 import type { BrainView } from './view'
 
-// The AI COO's voice (ElevenLabs). Set BUSINESS_BRAIN_COO_VOICE_ID to change it; the speak
-// route already maps the 'coo' key to this warm, conversational male voice (Eric).
-export const BUSINESS_BRAIN_COO_VOICE_ID = 'cjVigY5qzO86Huf0OWal'
+// The AI COO's voice. Was an ElevenLabs id with expressive settings (stability/style/speaker boost)
+// that Aura has no equivalent for; the briefing now speaks in the same voice family as the phone and
+// the sandbox. A cached briefing sounds different than it did — the deliberate price of one vendor.
+export const BUSINESS_BRAIN_COO_VOICE = 'aura-2-arcas-en'
 
 const DNA_LABEL: Record<string, string> = { sales: 'Sales', pricing: 'Pricing', communication: 'Communication', customer: 'Customer', operations: 'Operations' }
 

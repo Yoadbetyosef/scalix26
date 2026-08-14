@@ -84,7 +84,29 @@ until they can:
 
 A row that cannot say something true about its state does not belong on the page.
 
-## 7. Sandbox vs phone voice divergence (pre-existing, NOT a migration regression)
+## 7. Sandbox vs phone voice divergence — DONE, by deleting a vendor rather than resolving one
+
+Fixed as Miles Stage 2. The plan had been a `voiceFor(agent, surface)` resolver able to tell an Aura
+id from an ElevenLabs one; the better answer was that there is nothing to resolve. `/api/tts` had been
+serving every phone call from Deepgram Aura all along, and a live check showed Aura covers everything
+the sandbox route needed — `aura-2-arcas-en` returns 200 `audio/mpeg`, the only limit being 2000
+characters (verified: 2100 returns 413), where the route already sliced at 900.
+
+So: one `speakAura()` in `lib/deepgram/speak.ts` behind all three surfaces, one catalogue in
+`lib/voices.ts`, `/api/ai/preview-voice` deleted (it had no callers — both pickers had already moved
+to `/api/tts`), the dead `voice === 'coo'` branch deleted, and the four legacy ElevenLabs values
+rewritten in the database by `normalise_voices_to_aura.sql` so no legacy branch survives in code.
+
+**What did change for a person:** the Business Brain briefing speaks in `aura-2-arcas-en` instead of
+an ElevenLabs voice with expressive settings Aura has no equivalent for. A deliberate trade — a
+character change to a cached briefing against deleting a vendor.
+
+What remains from the original item is the *prompt* half, untouched and still true: the sandbox builds
+its prompt through `runAIPipeline` while the phone assembles its own Deepgram Voice Agent config in
+the Twilio webhook, and it is **unconfirmed** whether they load the same playbook rows. One vendor did
+not make that one prompt builder.
+
+### The original entry, for the record
 
 Found while wiring the voice UI onto /v2/test-ai. Both faults predate the /v2 work; the migration only
 made them visible by putting the two surfaces side by side.
@@ -99,12 +121,8 @@ made them visible by putting the two surfaces side by side.
   Agent config in the Twilio webhook (the `catalogPromptLine` block, `voice/route.ts:301-318`).
   **Unconfirmed** whether they load the same playbook rows.
 
-**Fix shape:** one `voiceFor(agent, surface)` resolver owning both directions and able to tell an Aura
-id from an ElevenLabs one, rather than each route inferring; and one prompt builder with two surfaces.
-Same pattern as the `getIntegrations` unification, and the same reason — two copies of one thing drift,
-and this pair already has.
-
-**Scope this as its own task, not part of the /v2 migration.** It touches the live voice path.
+**Fix shape (superseded):** a `voiceFor(agent, surface)` resolver owning both directions. The vendor
+was deleted instead — a resolver between two vendors is only worth building if you are keeping both.
 
 ## 8. Connections rows blocked on a loader
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { businessHoursToDayHours, dayHoursToBusinessHours, slotsToHours, type DayHours } from '@/lib/appointments'
 import { toast } from 'sonner'
 import type { Props } from './ai-employee-edit-client'
+import { DEFAULT_VOICE } from '@/lib/voices'
 
 // THE AGENT EDITOR'S STATE MACHINE, AS A HOOK.
 //
@@ -55,7 +56,9 @@ export function useAgentEditor(props: Props) {
   const [form, setForm] = useState({
     name: employee.name || '',
     greeting: employee.greeting || '',
-    voice: employee.voice || 'professional_female',
+    // Was 'professional_female' — an ElevenLabs key from a vendor this product no longer uses, and a
+    // value the picker had already stopped offering. An empty column now falls to the Aura default.
+    voice: employee.voice || DEFAULT_VOICE,
     voice_language: employee.voice_language || 'en',
     system_prompt: employee.system_prompt || '',
     status: employee.status || 'draft',

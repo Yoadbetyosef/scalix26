@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
+import { primaryAgent } from '@/lib/agents/primary'
+import { speakAura } from '@/lib/deepgram/speak'
 import { enforce } from '@/lib/ratelimit'
 
+// The sandbox's voice. Same vendor as the phone now — this route used to call ElevenLabs through a
+// map keyed by `professional_female | professional_male | friendly_female | friendly_male`, and since
+// an Aura id was not a key in that map, EVERY agent configured with a real voice fell through to a
+// hardcoded default. The sandbox could not speak the configured voice at all; that was the divergence.
+//
+// The route survives the vendor because it carries two things /api/tts deliberately does not: a
+// logged-in user, and the tenant-scoped lookup of whose voice this is. /api/tts is public by
+// necessity (Twilio fetches it) and is told which voice to use; here we work it out.
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -13,57 +23,23 @@ export async function POST(req: NextRequest) {
   const { text, voice } = await req.json()
   if (!text?.trim()) return NextResponse.json({ error: 'Text required' }, { status: 400 })
 
-  const apiKey = process.env.ELEVENLABS_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'No TTS key' }, { status: 503 })
-
-  const VOICE_MAP: Record<string, string> = {
-    professional_female: 'XrExE9yKIg1WjnnlVkGX', // Matilda
-    professional_male:   'onwK4e9ZLuTAKqWW03F9', // Daniel
-    friendly_female:     'cgSgspJ2msm6clMCkdW9', // Jessica
-    friendly_male:       'cjVigY5qzO86Huf0OWal', // Eric
-  }
-
-  let voiceId = 'onwK4e9ZLuTAKqWW03F9' // Daniel (default)
-
-  // The AI COO: a warm, natural, conversational male voice — should NOT sound like an AI.
-  const isCoo = voice === 'coo'
-  if (isCoo) {
-    voiceId = 'cjVigY5qzO86Huf0OWal' // Eric — relaxed, human, conversational
-  } else if (voice && VOICE_MAP[voice]) {
-    voiceId = VOICE_MAP[voice]
-  } else {
-    // Otherwise use the ACTIVE business's active AI employee voice (owner tenant, or the operated
-    // client tenant) — never resolved from user_id.
+  // An explicit voice wins (nothing sends one today); otherwise the ACTIVE business's default agent —
+  // the owner tenant, or the client tenant a White Label partner is operating. Never resolved from
+  // user_id.
+  let chosen: string | null = typeof voice === 'string' ? voice : null
+  if (!chosen) {
     const activeTenantId = await getActiveTenantId()
     if (activeTenantId) {
-      const { data: employee } = await createAdminClient()
-        .from('ai_employees').select('voice').eq('tenant_id', activeTenantId)
-        .eq('status', 'active').limit(1).maybeSingle()
-      if (employee?.voice && VOICE_MAP[employee.voice]) voiceId = VOICE_MAP[employee.voice]
+      const agent = await primaryAgent<{ voice: string | null }>(createAdminClient(), activeTenantId, 'voice')
+      chosen = agent?.voice ?? null
     }
   }
 
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-    method: 'POST',
-    headers: {
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-      'Accept': 'audio/mpeg',
-    },
-    body: JSON.stringify({
-      text: text.slice(0, 900),
-      // COO → higher-quality model + expressive settings (lower stability = more human/varied).
-      model_id: isCoo ? 'eleven_multilingual_v2' : 'eleven_turbo_v2_5',
-      voice_settings: isCoo
-        ? { stability: 0.4, similarity_boost: 0.85, style: 0.45, use_speaker_boost: true }
-        : { stability: 0.65, similarity_boost: 0.75 },
-    }),
-  })
-
-  if (!res.ok) return NextResponse.json({ error: 'TTS failed' }, { status: 500 })
-
-  const audio = await res.arrayBuffer()
-  return new NextResponse(audio, {
-    headers: { 'Content-Type': 'audio/mpeg' },
-  })
+  // 900 rather than Deepgram's 2000: a sandbox reply that long is a bug in the reply, not a voice
+  // budget, and this was the slice the route already applied.
+  const audio = await speakAura(text.slice(0, 900), chosen)
+  if (!audio.ok || !audio.body) {
+    return NextResponse.json({ error: audio.error ?? 'TTS failed' }, { status: audio.status })
+  }
+  return new NextResponse(audio.body, { headers: { 'Content-Type': 'audio/mpeg' } })
 }

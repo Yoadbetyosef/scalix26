@@ -4,15 +4,13 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { Play } from 'lucide-react'
 
-export const VOICES = [
-  { id: 'aura-2-asteria-en', name: 'Asteria', gender: 'Female', description: 'Warm & friendly' },
-  { id: 'aura-2-andromeda-en', name: 'Andromeda', gender: 'Female', description: 'Professional & clear' },
-  { id: 'aura-2-thalia-en', name: 'Thalia', gender: 'Female', description: 'Energetic & bright' },
-  { id: 'aura-2-odysseus-en', name: 'Odysseus', gender: 'Male', description: 'Deep & professional' },
-  { id: 'aura-2-arcas-en', name: 'Arcas', gender: 'Male', description: 'Natural & smooth' },
-]
+// The catalogue is in lib/voices — three copies of these five rows had already accumulated, and the
+// TTS routes were reading a fourth, different vocabulary entirely. Re-exported so existing importers
+// of `VOICES` keep working.
+import { AURA_VOICES as VOICES } from '@/lib/voices'
+export { VOICES }
 
-const avatarUrl = (name: string) => `/avatars/${name.toLowerCase()}.png`
+import { voiceHeadshot as avatarUrl } from '@/lib/voices'
 const PREVIEW_TEXT = 'Hi! Thanks for calling. How can I help you today?'
 
 type Mode = 'idle' | 'listening' | 'thinking' | 'speaking'

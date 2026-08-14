@@ -8,6 +8,7 @@ import { WeeklyHoursGrid } from '@/components/ai-employees/hours-controls'
 import { GlassInput, GlassSelect, GlassChoice, StatusPill, NeedsConnection } from '../../controls'
 import { FacebookGlyph, InstagramGlyph } from '../../brand-glyphs'
 import { usePressState } from '../../use-press'
+import { AURA_VOICES } from '@/lib/voices'
 
 // THE AGENT SCREEN — what makes this agent that agent.
 //
@@ -21,12 +22,10 @@ import { usePressState } from '../../use-press'
 //
 // Sections 1 of 4: identity, details, persona, voice. Hours, channel bindings and the rest follow.
 
-const VOICES = [
-  { value: 'professional_female', label: 'Professional (female)' },
-  { value: 'professional_male', label: 'Professional (male)' },
-  { value: 'friendly_female', label: 'Friendly (female)' },
-  { value: 'friendly_male', label: 'Friendly (male)' },
-]
+// These were four legacy labels no longer offered anywhere — the real editor has shown the five Aura
+// voices for a long time, so this select was a list of values the product had stopped writing. One
+// catalogue now, in lib/voices.
+const VOICES = AURA_VOICES.map((v) => ({ value: v.id, label: `${v.name} — ${v.description}` }))
 
 const LANGUAGES = [
   { value: 'english', label: 'English' },

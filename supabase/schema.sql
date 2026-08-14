@@ -73,7 +73,7 @@ CREATE TABLE ai_employees (
   tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL DEFAULT 'Alex',
   avatar_url TEXT DEFAULT '/avatars/avatar-1.png',
-  voice TEXT DEFAULT 'professional_female',
+  voice TEXT DEFAULT 'aura-2-asteria-en',  -- a Deepgram Aura model id; see lib/voices.ts
   greeting TEXT DEFAULT 'Hi! Thank you for contacting us. How can I help you today?',
   personality TEXT DEFAULT 'friendly',
   personality_score INTEGER DEFAULT 70 CHECK (personality_score BETWEEN 0 AND 100),
