@@ -34,18 +34,6 @@ interface Args {
   handle: RefObject<HTMLElement | null>
 }
 
-// ── TEMPORARY INSTRUMENTATION ───────────────────────────────────────────────────────────────────────
-//
-// Deliberately not gated on NODE_ENV: the device that cannot drag is a phone against a deployed
-// build, and a log that only runs locally would answer nothing. REMOVE once the gesture is confirmed.
-const D = (...a: unknown[]) => console.info('[sheet]', ...a)
-const where = (t: EventTarget | null) => {
-  const el = t as HTMLElement | null
-  if (!el?.tagName) return '(none)'
-  const cls = typeof el.className === 'string' && el.className ? `.${el.className.split(/\s+/).join('.')}` : ''
-  return `${el.tagName.toLowerCase()}${cls}`.slice(0, 70)
-}
-
 export function useSheetDrag({ open, setOpen, sheet, scroller, handle }: Args) {
   // Everything the move handler needs, in refs: the listeners are attached once and must not be
   // re-subscribed mid-gesture by a re-render.
@@ -61,17 +49,6 @@ export function useSheetDrag({ open, setOpen, sheet, scroller, handle }: Args) {
     if (!el) return
 
     const height = () => el.getBoundingClientRect().height || window.innerHeight * 0.88
-
-    // What the browser has ALREADY decided about these elements, before a finger touches them. If
-    // touch-action is anything but `none`, the browser owns a vertical drag and this hook will only
-    // ever see pointerdown followed by pointercancel.
-    D('bound', {
-      sheet: !!el,
-      sheetTouchAction: getComputedStyle(el).touchAction,
-      handleTouchAction: handle.current ? getComputedStyle(handle.current).touchAction : '(no handle)',
-      heroTouchAction: getComputedStyle(document.body).touchAction,
-      pointerEventsSupported: typeof window.PointerEvent !== 'undefined',
-    })
 
     /** While a finger is down the sheet follows it, so the transition must not fight the movement. */
     const follow = (dy: number) => {
@@ -107,10 +84,6 @@ export function useSheetDrag({ open, setOpen, sheet, scroller, handle }: Args) {
       from.current = { y: e.clientY, t: e.timeStamp }
       dragging.current = false
       moved.current = false
-      D('down', {
-        on: where(e.target), type: e.pointerType, y: Math.round(e.clientY),
-        open: openRef.current, scrollTop: scroller.current?.scrollTop ?? null,
-      })
     }
 
     const onMove = (e: PointerEvent) => {
@@ -131,18 +104,13 @@ export function useSheetDrag({ open, setOpen, sheet, scroller, handle }: Args) {
       moved.current = true
       // Non-passive, so this can stop the page rubber-banding under the drag.
       if (e.cancelable) e.preventDefault()
-      D('move', { dy: Math.round(dy), wanted: Math.round(wanted), cancelable: e.cancelable })
       follow(dy)
     }
 
     const onUp = (e: PointerEvent) => {
       const start = from.current
       from.current = null
-      if (!start || !dragging.current) {
-        D('up (no drag)', { started: !!start, dragging: dragging.current })
-        dragging.current = false
-        return
-      }
+      if (!start || !dragging.current) { dragging.current = false; return }
       dragging.current = false
 
       const dy = e.clientY - start.y
@@ -150,10 +118,6 @@ export function useSheetDrag({ open, setOpen, sheet, scroller, handle }: Args) {
       const ms = Math.max(1, e.timeStamp - start.t)
       const velocity = travelled / ms
 
-      D('up', {
-        travelled: Math.round(travelled), velocity: Number(velocity.toFixed(3)),
-        commit: velocity > FLICK || travelled > height() * COMMIT, third: Math.round(height() * COMMIT),
-      })
       release()
       // Either is enough: a fast flick commits even if short, and a slow drag commits once it has
       // covered a third of the sheet. Anything else springs back to where it started, which is what
@@ -161,14 +125,10 @@ export function useSheetDrag({ open, setOpen, sheet, scroller, handle }: Args) {
       if (velocity > FLICK || travelled > height() * COMMIT) setOpen(!openRef.current)
     }
 
-    const onCancel = (e: PointerEvent) => {
-      // THE ONE TO WATCH. A cancel arriving straight after a down means the browser took the gesture
-      // for panning — which is what touch-action anything-but-none tells it to do.
-      D('CANCEL — the browser took the gesture', { on: where(e.target), dragging: dragging.current })
-      from.current = null
-      dragging.current = false
-      release()
-    }
+    // A cancel means the browser took the gesture for itself — which is what touch-action anything
+    // but `none` tells it to do. The transform must go back to CSS or the sheet stays where the
+    // finger left it.
+    const onCancel = () => { from.current = null; dragging.current = false; release() }
 
     // A drag that moved must not also register as a tap on whatever was under the finger.
     const onClick = (e: MouseEvent) => {

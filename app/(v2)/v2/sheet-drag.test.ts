@@ -51,11 +51,28 @@ describe('a drag mid-scroll belongs to the list', () => {
   it('the handle is always draggable, scrolled or not', () => {
     expect(src).toContain('const onHandle = !!handle.current && !!target && handle.current.contains(target)')
     // And the browser must not claim that drag first.
-    expect(css).toContain('.v2-sh { touch-action: none; }')
+    // Written at (0,2,0). A bare `.v2-sh` is (0,1,0) and loses to globals.css's
+    // `button:not(:disabled) { touch-action: manipulation }` at (0,1,1) — which is what made the
+    // whole gesture inert, in both directions.
+    expect(css).toContain('.v2 .v2-sh, .v2 .v2-grab { touch-action: none; }')
+    expect(css).not.toMatch(/^\.v2-sh \{ touch-action/m)
   })
 
   it('the scroller is NOT given touch-action: none — the list must still scroll', () => {
     expect(css).not.toMatch(/\.v2-sin \{[^}]*touch-action: none/)
+  })
+
+  it('the hero owns its vertical drag too, or "swipe up anywhere" is not true', () => {
+    expect(css).toContain('.v2 .v2-face { touch-action: none; }')
+  })
+
+  it('and only on a phone, where the gesture exists', () => {
+    // The rules sit between the section's own heading and the media query that follows it. Slicing
+    // to the first `}` would land inside the comment, which quotes a CSS rule.
+    const block = css.slice(css.indexOf('THE SURFACES THAT OWN A VERTICAL DRAG'))
+    const media = block.indexOf('@media (max-width: 719.98px)')
+    expect(media).toBeGreaterThan(-1)
+    expect(media).toBeLessThan(block.indexOf('.v2 .v2-sh, .v2 .v2-grab'))
   })
 })
 
@@ -87,5 +104,12 @@ describe('opening', () => {
 
   it('drags the sheet up from its resting position rather than snapping it to the finger', () => {
     expect(src).toContain('translateY(calc(100% - ${Math.max(0, -dy)}px))')
+  })
+})
+
+describe('the instrumentation is gone', () => {
+  it('no console lines left behind', () => {
+    expect(src).not.toContain('console.')
+    expect(src).not.toMatch(/\[sheet\]/)
   })
 })

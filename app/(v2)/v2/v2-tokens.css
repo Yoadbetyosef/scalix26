@@ -2088,7 +2088,23 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   }
 }
 
-/* The handle owns its own gesture: without this the browser claims a vertical drag on it and the
-   sheet never sees the move. The sheet's scroller is deliberately NOT given this — a drag there is
-   the list's until the list is at the top, which is the rule the gesture itself enforces. */
-.v2-sh { touch-action: none; }
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   THE SURFACES THAT OWN A VERTICAL DRAG
+
+   `.v2-sh` alone lost to globals.css, where `button:not(:disabled) { touch-action: manipulation }`
+   is (0,1,1) against a bare class at (0,1,0). The handle is a <button>, so it computed to
+   `manipulation` — which still lets the browser own vertical panning — and the gesture never saw a
+   move, only a pointerdown followed by a cancel. Written `.v2 .v2-x` at (0,2,0) now, which is the
+   form the rest of this file uses for exactly this reason.
+
+   Scoped to the phone, where the gesture exists. The sheet's SCROLLER is deliberately absent from
+   this list: a drag there belongs to the list until the list is at its top, and that rule is the
+   gesture's own, not the browser's. */
+@media (max-width: 719.98px) {
+  /* The handle, and the affordance that says SWIPE UP — the two places a drag is most likely to
+     begin, and both of them buttons. */
+  .v2 .v2-sh, .v2 .v2-grab { touch-action: none; }
+  /* The hero itself: the portrait fills the screen behind the sheet, and "swipe up anywhere on the
+     hero" is only true if the browser is not taking that drag first. */
+  .v2 .v2-face { touch-action: none; }
+}
