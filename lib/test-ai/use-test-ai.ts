@@ -44,6 +44,15 @@ export function useTestAi(agentId?: string) {
   const [conversationId, setConversationId] = useState<string | undefined>()
   const [mode, setMode] = useState<Mode>('chat')
   const [callActive, setCallActive] = useState(false)
+  /**
+   * The live value, for the handlers that outlive the render that made them.
+   *
+   * `startCall` sets callActive and then speaks in the SAME pass, so the greeting's `ended` handler
+   * closed over `false` and skipped `startListening()` — the conversation opened, greeted, and then
+   * listened to nothing for as long as anyone was willing to wait. State for rendering, a ref for
+   * anything an audio element or a recogniser will call later.
+   */
+  const callActiveRef = useRef(false)
   const [listening, setListening] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   /** Audio has been asked for and has not started yet. Not speaking — nothing is audible. */
@@ -106,13 +115,13 @@ export function useTestAi(agentId?: string) {
       audioRef.current = audio
       // The element itself says when sound starts and stops. Every exit clears both flags.
       audio.onplaying = () => { setPending(false); setSpeaking(true) }
-      audio.onended = () => { setSpeaking(false); setPending(false); URL.revokeObjectURL(url); if (callActive) startListening() }
-      audio.onerror = () => { setSpeaking(false); setPending(false); if (callActive) startListening() }
+      audio.onended = () => { setSpeaking(false); setPending(false); URL.revokeObjectURL(url); if (callActiveRef.current) startListening() }
+      audio.onerror = () => { setSpeaking(false); setPending(false); if (callActiveRef.current) startListening() }
       await audio.play()
     } catch {
       setSpeaking(false)
       setPending(false)
-      if (callActive) startListening()
+      if (callActiveRef.current) startListening()
     }
   }
 
@@ -134,8 +143,13 @@ export function useTestAi(agentId?: string) {
     recognition.continuous = false
     recognitionRef.current = recognition
 
-    recognition.onstart = () => setListening(true)
-    recognition.onend = () => setListening(false)
+    // BOUND TO THIS INSTANCE. Every recogniser shares one `listening` flag, and aborting the previous
+    // one fires ITS `onend` asynchronously — after the new one's `onstart`. The stale handler then
+    // switched listening back off while a live recogniser was running, which is the canvas sitting in
+    // `armed` with an open microphone. A handler that is no longer the current recogniser says nothing.
+    const mine = () => recognitionRef.current === recognition
+    recognition.onstart = () => { if (mine()) setListening(true) }
+    recognition.onend = () => { if (mine()) setListening(false) }
 
     // One phrase, one send. A recogniser can deliver a final result and then deliver another as it
     // winds down; without this latch the same sentence is answered twice.
@@ -153,11 +167,21 @@ export function useTestAi(agentId?: string) {
       }
     }
 
-    recognition.onerror = () => setListening(false)
-    recognition.start()
+    recognition.onerror = () => { if (mine()) setListening(false) }
+    // start() throws InvalidStateError if the engine has not finished releasing the previous session.
+    // Uncaught inside an `ended` handler that would be invisible, and the conversation would simply
+    // stop — which is the failure this whole turn was about.
+    try {
+      recognition.start()
+    } catch (err) {
+      console.warn('[voice] could not start listening —', err instanceof Error ? err.message : err)
+      if (mine()) recognitionRef.current = null
+      setListening(false)
+    }
   }, [callActive]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function startCall() {
+    callActiveRef.current = true
     setCallActive(true)
     setMessages([])
     setConversationId(undefined)
@@ -172,6 +196,7 @@ export function useTestAi(agentId?: string) {
   }
 
   function endCall() {
+    callActiveRef.current = false
     setCallActive(false)
     setListening(false)
     setSpeaking(false)

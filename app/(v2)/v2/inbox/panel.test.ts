@@ -244,3 +244,29 @@ describe('the three faults in the voice panel', () => {
     expect(press).toMatch(/border-color: var\(--v2-miles\)/)
   })
 })
+
+describe('the conversation that greeted and then listened to nothing', () => {
+  const hook = strip(read('../../../../lib/test-ai/use-test-ai.ts'))
+
+  it('handlers that outlive their render read the live call state, not a captured one', () => {
+    // startCall sets callActive and speaks in the SAME pass, so the greeting's `ended` handler closed
+    // over `false` and never started listening. The whole conversation then sat armed: no transcript,
+    // no send, no reply, and a meter the canvas flattens by design because it is not in `listening`.
+    expect(hook).toContain('if (callActiveRef.current) startListening()')
+    expect(hook).not.toMatch(/audio\.onended = [^\n]*if \(callActive\)/)
+    expect(hook).toContain('callActiveRef.current = true')
+    expect(hook).toContain('callActiveRef.current = false')
+  })
+
+  it('a recogniser only speaks for itself', () => {
+    // Aborting the previous one fires ITS onend after the new one's onstart, and both wrote the same
+    // flag — so a live recogniser could be marked "not listening".
+    expect(hook).toContain('const mine = () => recognitionRef.current === recognition')
+    expect(hook).toContain('recognition.onstart = () => { if (mine()) setListening(true) }')
+    expect(hook).toContain('recognition.onend = () => { if (mine()) setListening(false) }')
+  })
+
+  it('a recogniser that refuses to start says so instead of ending the conversation silently', () => {
+    expect(hook).toContain('[voice] could not start listening')
+  })
+})
