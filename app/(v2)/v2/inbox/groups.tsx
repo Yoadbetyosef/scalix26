@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { usePressState } from '../use-press'
 import { channelKey } from '../channels'
 import { ChannelGlyph } from './glyphs'
-import { MilesPanel } from './panel'
+import { MilesPanel, type GroupKey } from './panel'
 import type { MilesInbox, WaitingRow } from '@/lib/miles/inbox-read'
 import { heldSince } from '@/lib/miles/autonomy'
 
@@ -45,6 +45,8 @@ export function InboxGroups({ data, milesId }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState<Busy>(null)
   const [failed, setFailed] = useState<Record<string, string>>({})
+  // The rail's counts are filters. Null = every group, which is what a phone always shows.
+  const [only, setOnly] = useState<GroupKey | null>(null)
 
   async function decide(row: WaitingRow, what: 'send' | 'mine') {
     setBusy({ id: row.draftId, what })
@@ -85,6 +87,9 @@ export function InboxGroups({ data, milesId }: Props) {
         <h2>Inbox</h2>
       </header>
 
+      {/* `display: contents` below 1100px, a two-column grid above it — so the phone layout is this
+          exact DOM in this exact order, and the desktop one is a gutter and a list. */}
+      <div className="v2-mbody">
       {milesId && (
         <MilesPanel
           agentId={milesId}
@@ -94,10 +99,13 @@ export function InboxGroups({ data, milesId }: Props) {
           sent={handled.filter((r) => r.byAgentId === milesId).length}
           waiting={waiting.length}
           needs={needs.length}
+          only={only}
+          onOnly={setOnly}
         />
       )}
 
       <div className="v2-pbody" data-scroll>
+        <div className="v2-minner">
         {nothing ? (
           <div className="v2-pempty">
             <p className="v2-pempty-t">Nothing is waiting on you.</p>
@@ -128,7 +136,7 @@ export function InboxGroups({ data, milesId }: Props) {
               </p>
             )}
 
-            {waiting.length > 0 && (
+            {waiting.length > 0 && (!only || only === 'waiting') && (
               <>
                 <p className="v2-mgl">
                   <i style={{ background: 'var(--v2-hold)' }} />
@@ -147,6 +155,7 @@ export function InboxGroups({ data, milesId }: Props) {
                         <button
                           type="button"
                           className="v2-mrow"
+                          data-hold
                           data-open={isOpen || undefined}
                           data-alarm={!row.announced && row.announceError ? true : undefined}
                           data-touch
@@ -238,7 +247,7 @@ export function InboxGroups({ data, milesId }: Props) {
               </>
             )}
 
-            {needs.length > 0 && (
+            {needs.length > 0 && (!only || only === 'needs') && (
               <>
                 <p className="v2-mgl">
                   <i style={{ background: 'var(--v2-pink)' }} />
@@ -267,7 +276,7 @@ export function InboxGroups({ data, milesId }: Props) {
               </>
             )}
 
-            {handled.length > 0 && (
+            {handled.length > 0 && (!only || only === 'handled') && (
               <>
                 <p className="v2-mgl">
                   <i style={{ background: 'var(--v2-miles)' }} />
@@ -301,6 +310,8 @@ export function InboxGroups({ data, milesId }: Props) {
             )}
           </>
         )}
+        </div>
+      </div>
       </div>
     </div>
   )

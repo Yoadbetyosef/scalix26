@@ -156,3 +156,43 @@ describe('the five things the merge broke', () => {
     expect(groups).toContain('{!milesId && (')
   })
 })
+
+describe('the floating rail', () => {
+  const css = read('../v2-tokens.css')
+  const rail = css.slice(css.indexOf('THE FLOATING RAIL'))
+  const panel = strip(read('./panel.tsx'))
+
+  it('is a card in a gutter, at the reference’s own values', () => {
+    expect(rail).toMatch(/grid-template-columns: 300px 1fr/)
+    expect(rail).toMatch(/padding: 20px 0 20px 20px/)
+    expect(rail).toMatch(/border-radius: 18px/)
+    expect(rail).toMatch(/box-shadow: 0 6px 26px rgba\(0, 0, 0, 0\.10\), 0 1px 3px rgba\(0, 0, 0, 0\.05\)/)
+    expect(rail).toMatch(/height: 330px/)
+  })
+
+  it('the button cannot be clipped at any window height', () => {
+    // A flex column at full height, a spacer that absorbs everything left over, and stats that are
+    // allowed to scroll (min-height: 0) so the shortfall never comes out of the button.
+    expect(css).toMatch(/\.v2 \.v2-mrail \{ display: flex; flex-direction: column; height: 100%; \}/)
+    expect(rail).toMatch(/\.v2-mspacer \{ display: block; flex: 1 1 auto; min-height: 0; \}/)
+    expect(rail).toMatch(/\.v2-mstats \{[^}]*min-height: 0; overflow-y: auto/)
+    expect(rail).toMatch(/\.v2-mask \{[^}]*flex: none/)
+  })
+
+  it('caps the threads so rows stop running the monitor width', () => {
+    expect(rail).toMatch(/\.v2-minner \{ max-width: 820px/)
+  })
+
+  it('tints a held row', () => {
+    expect(css).toMatch(/linear-gradient\(90deg, rgba\(245, 165, 36, 0\.055\), transparent\)/)
+  })
+
+  it('leaves the phone alone — the rail’s blocks do not exist below the breakpoint', () => {
+    expect(css).toMatch(/\.v2 \.v2-msay, \.v2 \.v2-mstats, \.v2 \.v2-mspacer, \.v2 \.v2-mask \{ display: none; \}/)
+    expect(css).toMatch(/\.v2 \.v2-mbody \{ display: contents; \}/)
+  })
+
+  it('the counts are the filter', () => {
+    expect(panel).toContain("onOnly(only === key ? null : key)")
+  })
+})
