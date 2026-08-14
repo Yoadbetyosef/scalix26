@@ -55,7 +55,7 @@ export const GROUPS: Group[] = [
     label: 'Business',
     items: [{ label: 'Orders', href: '/v2/orders', module: 'orders' }, { label: 'Analytics', href: '/v2/analytics', module: 'analytics' }, { label: 'Reports', href: '/v2/reports', module: 'analytics' }],
   },
-  { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Connections', href: '/v2/settings/connections' }, { label: 'Settings' }, { label: 'Sign Out', out: true, action: 'signout' }] },
+  { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Connections', href: '/v2/settings/connections' }, { label: 'Settings', href: '/v2/settings' }, { label: 'Sign Out', out: true, action: 'signout' }] },
 ]
 
 /** Applied once, to both surfaces. A tenant without the module never sees the row. */
