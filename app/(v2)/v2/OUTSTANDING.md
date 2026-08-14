@@ -140,3 +140,25 @@ screen first.
 
 **Facebook and Instagram rows show a Page id, not a Page name.** `Channel` carries `meta_page_id` and
 nothing else; a name would be a new read.
+
+## 10. The tenant Settings screen — the unbuilt half of the split
+
+`/v2/settings/connections` shipped. The tenant settings screen did not, so the **Settings** row in the
+rail and the sheet stays inert — correctly, since linking it to `/settings` would leave the preview
+and `no-escape.test.ts` fails on that by design.
+
+What it still needs, from the approved STEP 0 mapping of `components/settings/settings-client.tsx`:
+
+- **Missed-call capture** — reads the `channels` prop, no endpoint
+- **Personal booking link** — `appUrl` state, clipboard only
+- **Plan / Free Trial / upgrade** — `POST /api/stripe/checkout`
+- **Billing portal** — `POST /api/stripe/portal`
+
+**`hideBilling` is workspace-mode-dependent.** `app/settings/page.tsx` passes
+`hideBilling={ws.mode === 'operator'}`, because a White Label client's plan is governed by the partner
+and never Scalix Stripe. In operator mode the plan and portal rows must be **absent, not disabled** —
+this is the one place a v2 screen's content depends on workspace mode rather than on module gating.
+
+Knowledge and Billing rows stay inert for a different reason: neither has a route to reach at all.
+Billing exists only as `app/admin/billing`, `app/admin/wl-billing` and `app/partner/(app)/billing` —
+all admin or partner planes, none tenant-facing.
