@@ -62,8 +62,9 @@ describe('the screen', () => {
   })
 
   it('the channel word wears the channel’s own hue, from the one table', () => {
+    // As TEXT on white it takes --chan-ink: cyan and amber at full strength are unreadable there.
     expect(body).toContain('<span data-channel={ch ?? undefined}>')
-    expect(conv).toContain('color: var(--chan, var(--v2-ink-42))')
+    expect(conv).toContain('color: var(--chan-ink, var(--v2-ink-42))')
   })
 
   it('the agent pill wears the agent’s wash', () => {

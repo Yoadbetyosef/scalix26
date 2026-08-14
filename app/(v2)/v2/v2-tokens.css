@@ -1010,15 +1010,30 @@
 /* ONE MAPPING, EVERYWHERE A CHANNEL APPEARS. The hue is declared once as a custom property on the
    element carrying data-channel, and the list mark, the detail chip and the thread's meta line all
    read it. A second table would drift; there is one. */
-/* `--chan-wash` is the same hue at 10%, written out rather than computed: color-mix() is not
-   available on every browser this ships to, and a tile whose background silently falls back to
-   transparent is a channel mark that disappears. Same table, one more column. */
-.v2 [data-channel="voice"]     { --chan: #8b5cf6; --chan-wash: rgba(139, 92, 246, 0.1); }
-.v2 [data-channel="sms"]       { --chan: #22d3ee; --chan-wash: rgba(34, 211, 238, 0.1); }
-.v2 [data-channel="email"]     { --chan: #ffb020; --chan-wash: rgba(255, 176, 32, 0.1); }
-.v2 [data-channel="facebook"]  { --chan: #4267ff; --chan-wash: rgba(66, 103, 255, 0.1); }
-.v2 [data-channel="instagram"] { --chan: #ff2e93; --chan-wash: rgba(255, 46, 147, 0.1); }
-.v2 [data-channel="web"]       { --chan: #0f9d58; --chan-wash: rgba(15, 157, 88, 0.1); }
+/* THREE VALUES PER CHANNEL, ONE TABLE.
+
+     --chan       the mark and the glyph, at full strength
+     --chan-wash  the same hue at 10%, for the chip it sits in
+     --chan-ink   the same hue DARKENED far enough to read as text on white
+
+   The wash is written out rather than computed: color-mix() is not available on every browser this
+   ships to, and a chip whose background silently falls back to transparent is a mark that disappears.
+
+   The ink exists because two of these fail as text at full strength — cyan and amber are bright by
+   nature, and a label in them on white is unreadable however correct the hue is. It is the same
+   distinction --v2-t4-ink already draws for the cyan accent. Where a hue reads as text unchanged, the
+   ink is that hue; the column is still there so a caller never has to know which case it is in.
+   
+   L1's brand hues replaced the earlier approximations here rather than beside them: Instagram is its
+   own crimson instead of the accent magenta it was borrowing, Messenger its own blue, email its own
+   amber. Every channel mark in /v2 reads this table — the list row, the tile, the conversation header
+   — so a thread and the row that led to it cannot disagree about what channel they are. */
+.v2 [data-channel="voice"]     { --chan: #8B5CF6; --chan-wash: rgba(139, 92, 246, 0.1); --chan-ink: #8B5CF6; }
+.v2 [data-channel="sms"]       { --chan: #22D3EE; --chan-wash: rgba(34, 211, 238, 0.1);  --chan-ink: #0E9BB5; }
+.v2 [data-channel="instagram"] { --chan: #E1306C; --chan-wash: rgba(225, 48, 108, 0.1);  --chan-ink: #E1306C; }
+.v2 [data-channel="facebook"]  { --chan: #1877F2; --chan-wash: rgba(24, 119, 242, 0.1);  --chan-ink: #1877F2; }
+.v2 [data-channel="email"]     { --chan: #F5A524; --chan-wash: rgba(245, 165, 36, 0.1);  --chan-ink: #B87A0C; }
+.v2 [data-channel="web"]       { --chan: #0F9D58; --chan-wash: rgba(15, 157, 88, 0.1);   --chan-ink: #0F9D58; }
 
 /* THE MARK HAS TO READ AT A GLANCE. An 8px flat dot was something to look FOR. It is now 10px with a
    soft halo of its own hue and a hairline of white between it and the row, so a column of rows sorts
@@ -2128,8 +2143,9 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   display: flex; gap: 7px; margin-top: 3px;
   font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.13em; color: var(--v2-ink-42);
 }
-/* The channel word in the channel's own hue — the same table the list marks read. */
-.v2 .v2-chmeta span[data-channel] { color: var(--chan, var(--v2-ink-42)); }
+/* The channel word is TEXT on white, so it takes --chan-ink rather than the mark's own hue: at full
+   strength cyan and amber are unreadable here. Same table, the column meant for this. */
+.v2 .v2-chmeta span[data-channel] { color: var(--chan-ink, var(--v2-ink-42)); }
 .v2 .v2-cagent {
   flex: none; font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em;
   padding: 4px 9px; border-radius: 6px; text-transform: uppercase;

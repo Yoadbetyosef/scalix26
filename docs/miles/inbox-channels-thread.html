@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Channels & thread — options</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--acid:#D9F224;--aink:#41490A;--awash:#F2FBB8;--magenta:#FF2E93;--violet:#8B5CF6;
+ --cyan:#22D3EE;--live:#B8FF29;--hold:#F5A524;--holdw:#FEF3DC;--holdi:#6B4708;
+ --ink:#111114;--mut:#8A8A90;--faint:#B4B4BA;--line:rgba(0,0,0,.06);--paper:#F6F6F7;
+ --c-voice:#8B5CF6;--c-sms:#22D3EE;--c-ig:#E1306C;--c-fb:#1877F2;--c-mail:#F5A524}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:20px 14px 60px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-width:640px}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;
+ padding:8px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.7);cursor:pointer;min-height:34px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.sect{font-size:9.5px;letter-spacing:.18em;color:rgba(255,255,255,.28);margin-top:2px}
+.stage{display:none}.stage[data-on]{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.cap{font-size:12.5px;color:rgba(255,255,255,.45);text-align:center;max-width:640px;line-height:1.65;margin-top:14px}
+.cap b{color:rgba(255,255,255,.82);font-weight:500}
+.ph{width:340px;height:620px;border-radius:30px;overflow:hidden;position:relative;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.dk{width:600px;height:620px;border-radius:14px;overflow:hidden;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.lbl{font-size:9px;letter-spacing:.16em;color:rgba(255,255,255,.3);text-align:center;margin-top:7px}
+.hd{padding:14px 16px 11px;display:flex;align-items:center;gap:11px;flex:none;border-bottom:1px solid var(--line)}
+.hd h1{font-size:18px;font-weight:500;color:var(--ink)}
+.bk{font-size:19px;color:var(--faint)}
+.scr{flex:1;overflow-y:auto;padding:14px}
+
+/* ============ LIST bits ============ */
+.grp{display:flex;align-items:baseline;gap:10px;margin:18px 2px 9px}
+.grp:first-child{margin-top:2px}
+.grp .t{font-size:10px;letter-spacing:.18em;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.grp .n{font-size:10px;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.grp .r{flex:1;height:1px;background:var(--line);transform:translateY(-3px)}
+.card{background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 22px -12px rgba(0,0,0,.14)}
+.row{display:flex;gap:13px;padding:14px;min-height:68px;align-items:center;position:relative}
+.mid{flex:1;min-width:0}
+.n1{font-size:15px;color:var(--ink);font-weight:500}
+.n2{font-size:12.5px;color:var(--mut);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none}
+.tm{font-size:10.5px;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.dot{width:7px;height:7px;border-radius:7px;background:var(--magenta)}
+.sp{height:1px;background:var(--line);margin-left:62px}
+.ic{width:36px;height:36px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center}
+.ic svg{width:17px;height:17px}
+
+/* L2 — avatar + channel badge */
+.ava{width:38px;height:38px;border-radius:12px;flex:none;position:relative;
+ background:linear-gradient(135deg,#E8E8EA,#D6D6DA);display:flex;align-items:center;justify-content:center;
+ font-size:14px;font-weight:500;color:#6B6B70}
+.bdg{position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:999px;
+ border:2px solid #fff;display:flex;align-items:center;justify-content:center}
+.bdg svg{width:9px;height:9px;stroke-width:2.4}
+
+/* L3 — left stripe */
+.stripe{position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0}
+.chn{font-size:9px;letter-spacing:.13em;font-family:'JetBrains Mono',monospace;margin-bottom:3px}
+
+/* ============ THREAD bits ============ */
+.tscr{flex:1;overflow-y:auto;padding:16px 14px 20px;display:flex;flex-direction:column;gap:14px}
+.day{align-self:center;font-size:9.5px;letter-spacing:.16em;color:var(--faint);
+ font-family:'JetBrains Mono',monospace;margin:4px 0}
+.thead{padding:14px 16px;border-bottom:1px solid var(--line);flex:none;background:#fff}
+.tw{display:flex;align-items:center;gap:11px}
+.twn{font-size:17px;font-weight:500;color:var(--ink)}
+.twc{font-size:11px;letter-spacing:.12em;font-family:'JetBrains Mono',monospace;margin-top:3px;
+ display:flex;align-items:center;gap:5px}
+.twc svg{width:11px;height:11px;stroke-width:2.2}
+
+/* T1 — sided bubbles, two colours */
+.b{max-width:78%;padding:11px 14px;font-size:14.5px;line-height:1.45}
+.b-them{align-self:flex-start;background:#fff;color:var(--ink);border-radius:16px 16px 16px 5px;
+ box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.b-ai{align-self:flex-end;background:#EEF0FE;color:#1E2140;border-radius:16px 16px 5px 16px}
+.b-you{align-self:flex-end;background:var(--ink);color:#fff;border-radius:16px 16px 5px 16px}
+.who{font-size:9px;letter-spacing:.14em;font-family:'JetBrains Mono',monospace;margin-bottom:5px;opacity:.55}
+.stamp{font-size:9.5px;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-top:5px}
+.b-them .stamp{text-align:left}.b-ai .stamp,.b-you .stamp{text-align:right}
+
+/* T2 — single column, author rail */
+.e{display:flex;gap:11px}
+.erail{width:3px;border-radius:3px;flex:none}
+.ebody{flex:1;min-width:0}
+.ewho{display:flex;align-items:baseline;gap:8px}
+.ename{font-size:11px;letter-spacing:.13em;font-family:'JetBrains Mono',monospace}
+.etime{font-size:10px;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.etext{font-size:14.5px;line-height:1.5;color:var(--ink);margin-top:5px}
+
+/* T3 — cards with header strip */
+.mc{background:#fff;border-radius:15px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.mch{padding:8px 13px;display:flex;align-items:center;justify-content:space-between;
+ font-size:9.5px;letter-spacing:.14em;font-family:'JetBrains Mono',monospace}
+.mcb{padding:12px 13px;font-size:14.5px;line-height:1.48;color:var(--ink)}
+.mc-them .mch{background:var(--paper);color:var(--mut)}
+.mc-ai .mch{background:#EEF0FE;color:#4B4FA8}
+.mc-ai{margin-left:26px}
+.mc-you .mch{background:var(--ink);color:rgba(255,255,255,.75)}
+.mc-you{margin-left:26px}
+</style></head><body>
+
+<svg style="display:none">
+ <symbol id="voice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.9v2.6a1.6 1.6 0 0 1-1.8 1.6 16.3 16.3 0 0 1-7.1-2.5 16 16 0 0 1-5-5A16.3 16.3 0 0 1 4.6 6.5 1.6 1.6 0 0 1 6.2 4.7h2.6a1.6 1.6 0 0 1 1.6 1.4c.1.9.3 1.7.6 2.5a1.6 1.6 0 0 1-.4 1.7l-1.1 1.1a13 13 0 0 0 5 5l1.1-1.1a1.6 1.6 0 0 1 1.7-.4c.8.3 1.6.5 2.5.6a1.6 1.6 0 0 1 1.4 1.6z"/></symbol>
+ <symbol id="sms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></symbol>
+ <symbol id="ig" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.1" fill="currentColor" stroke="none"/></symbol>
+ <symbol id="fb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M14 8.5V7c0-1 .4-1.5 1.6-1.5H17V3h-2.3C12.2 3 11 4.4 11 6.7v1.8H9V11h2v10h3V11h2.2l.4-2.5H14z"/></symbol>
+ <symbol id="mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
+</svg>
+
+<div class="tabs">
+ <button data-t="L1" data-on>L1 · TINTED CHIP</button>
+ <button data-t="L2">L2 · AVATAR + BADGE</button>
+ <button data-t="L3">L3 · STRIPE + LABEL</button>
+ <button data-t="T1">T1 · SIDED</button>
+ <button data-t="T2">T2 · AUTHOR RAIL</button>
+ <button data-t="T3">T3 · LABELLED CARDS</button>
+</div>
+<p class="sect mono">L = LIST · T = INSIDE A CONVERSATION</p>
+
+<!-- ============ L1 ============ -->
+<div class="stage" id="s-L1" data-on>
+ <div><div class="ph">
+  <div class="hd"><span class="bk">‹</span><h1>Inbox</h1></div>
+  <div class="scr">
+   <div class="grp"><span class="t">NEEDS YOU</span><span class="n">2</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ic" style="background:rgba(225,48,108,.1);color:var(--c-ig)"><svg><use href="#ig"/></svg></div>
+     <div class="mid"><div class="n1">Sarah M.</div><div class="n2">What would a custom setting cost?</div></div>
+     <div class="mt"><span class="tm">4m</span><span class="dot"></span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ic" style="background:rgba(24,119,242,.1);color:var(--c-fb)"><svg><use href="#fb"/></svg></div>
+     <div class="mid"><div class="n1">Marcus T.</div><div class="n2">This is taking forever</div></div>
+     <div class="mt"><span class="tm">22m</span><span class="dot"></span></div></div>
+   </div>
+   <div class="grp"><span class="t">HANDLED</span><span class="n">36</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ic" style="background:rgba(139,92,246,.1);color:var(--c-voice)"><svg><use href="#voice"/></svg></div>
+     <div class="mid"><div class="n1">+1 212 838 1400</div><div class="n2">Rudi: "Hi! Thank you for contacting us."</div></div>
+     <div class="mt"><span class="tm">5d</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ic" style="background:rgba(34,211,238,.1);color:#0E9BB5"><svg><use href="#sms"/></svg></div>
+     <div class="mid"><div class="n1">test-user</div><div class="n2">Rudi: "Confirming Tuesday 11am…"</div></div>
+     <div class="mt"><span class="tm">3h</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ic" style="background:rgba(245,165,36,.12);color:#B87A0C"><svg><use href="#mail"/></svg></div>
+     <div class="mid"><div class="n1">Priya S.</div><div class="n2">Miles: "We ship across Bergen County."</div></div>
+     <div class="mt"><span class="tm">1d</span></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="hd"><span class="bk">‹</span><h1>Inbox</h1></div>
+  <div class="scr">
+   <div class="grp"><span class="t">NEEDS YOU</span><span class="n">2</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ic" style="background:rgba(225,48,108,.1);color:var(--c-ig)"><svg><use href="#ig"/></svg></div>
+     <div class="mid"><div class="n1">Sarah M.</div><div class="n2">What would a custom setting cost?</div></div>
+     <div class="mt"><span class="tm">4m</span><span class="dot"></span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ic" style="background:rgba(24,119,242,.1);color:var(--c-fb)"><svg><use href="#fb"/></svg></div>
+     <div class="mid"><div class="n1">Marcus T.</div><div class="n2">This is taking forever, I ordered 3 weeks ago</div></div>
+     <div class="mt"><span class="tm">22m</span><span class="dot"></span></div></div>
+   </div>
+   <div class="grp"><span class="t">HANDLED</span><span class="n">36</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ic" style="background:rgba(139,92,246,.1);color:var(--c-voice)"><svg><use href="#voice"/></svg></div>
+     <div class="mid"><div class="n1">+1 212 838 1400</div><div class="n2">Rudi: "Hi! Thank you for contacting us. How can I help?"</div></div>
+     <div class="mt"><span class="tm">5d</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ic" style="background:rgba(34,211,238,.1);color:#0E9BB5"><svg><use href="#sms"/></svg></div>
+     <div class="mid"><div class="n1">test-user</div><div class="n2">Rudi: "Confirming Tuesday 11am for the AC repair…"</div></div>
+     <div class="mt"><span class="tm">3h</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ic" style="background:rgba(245,165,36,.12);color:#B87A0C"><svg><use href="#mail"/></svg></div>
+     <div class="mid"><div class="n1">Priya S.</div><div class="n2">Miles: "We ship across Bergen County."</div></div>
+     <div class="mt"><span class="tm">1d</span></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>L1 · Tinted chip.</b> The chip you already have, but every channel gets its own hue and glyph — voice violet, SMS cyan, Instagram pink, Facebook blue, email amber. Cheapest change; the channel reads at a glance without adding anything to the row.</p>
+</div>
+
+<!-- ============ L2 ============ -->
+<div class="stage" id="s-L2">
+ <div><div class="ph">
+  <div class="hd"><span class="bk">‹</span><h1>Inbox</h1></div>
+  <div class="scr">
+   <div class="grp"><span class="t">NEEDS YOU</span><span class="n">2</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ava">SM<div class="bdg" style="background:var(--c-ig);color:#fff"><svg><use href="#ig"/></svg></div></div>
+     <div class="mid"><div class="n1">Sarah M.</div><div class="n2">What would a custom setting cost?</div></div>
+     <div class="mt"><span class="tm">4m</span><span class="dot"></span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ava">MT<div class="bdg" style="background:var(--c-fb);color:#fff"><svg><use href="#fb"/></svg></div></div>
+     <div class="mid"><div class="n1">Marcus T.</div><div class="n2">This is taking forever</div></div>
+     <div class="mt"><span class="tm">22m</span><span class="dot"></span></div></div>
+   </div>
+   <div class="grp"><span class="t">HANDLED</span><span class="n">36</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ava">+1<div class="bdg" style="background:var(--c-voice);color:#fff"><svg><use href="#voice"/></svg></div></div>
+     <div class="mid"><div class="n1">+1 212 838 1400</div><div class="n2">Rudi: "Hi! Thank you for contacting us."</div></div>
+     <div class="mt"><span class="tm">5d</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ava">tu<div class="bdg" style="background:var(--c-sms);color:#053A44"><svg><use href="#sms"/></svg></div></div>
+     <div class="mid"><div class="n1">test-user</div><div class="n2">Rudi: "Confirming Tuesday 11am…"</div></div>
+     <div class="mt"><span class="tm">3h</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ava">PS<div class="bdg" style="background:var(--c-mail);color:#3D2703"><svg><use href="#mail"/></svg></div></div>
+     <div class="mid"><div class="n1">Priya S.</div><div class="n2">Miles: "We ship across Bergen County."</div></div>
+     <div class="mt"><span class="tm">1d</span></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="hd"><span class="bk">‹</span><h1>Inbox</h1></div>
+  <div class="scr">
+   <div class="grp"><span class="t">NEEDS YOU</span><span class="n">2</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ava">SM<div class="bdg" style="background:var(--c-ig);color:#fff"><svg><use href="#ig"/></svg></div></div>
+     <div class="mid"><div class="n1">Sarah M.</div><div class="n2">What would a custom setting cost?</div></div>
+     <div class="mt"><span class="tm">4m</span><span class="dot"></span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ava">MT<div class="bdg" style="background:var(--c-fb);color:#fff"><svg><use href="#fb"/></svg></div></div>
+     <div class="mid"><div class="n1">Marcus T.</div><div class="n2">This is taking forever, I ordered 3 weeks ago</div></div>
+     <div class="mt"><span class="tm">22m</span><span class="dot"></span></div></div>
+   </div>
+   <div class="grp"><span class="t">HANDLED</span><span class="n">36</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><div class="ava">+1<div class="bdg" style="background:var(--c-voice);color:#fff"><svg><use href="#voice"/></svg></div></div>
+     <div class="mid"><div class="n1">+1 212 838 1400</div><div class="n2">Rudi: "Hi! Thank you for contacting us. How can I help?"</div></div>
+     <div class="mt"><span class="tm">5d</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ava">tu<div class="bdg" style="background:var(--c-sms);color:#053A44"><svg><use href="#sms"/></svg></div></div>
+     <div class="mid"><div class="n1">test-user</div><div class="n2">Rudi: "Confirming Tuesday 11am for the AC repair…"</div></div>
+     <div class="mt"><span class="tm">3h</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><div class="ava">PS<div class="bdg" style="background:var(--c-mail);color:#3D2703"><svg><use href="#mail"/></svg></div></div>
+     <div class="mid"><div class="n1">Priya S.</div><div class="n2">Miles: "We ship across Bergen County."</div></div>
+     <div class="mt"><span class="tm">1d</span></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>L2 · Avatar + badge.</b> The person gets the chip; the channel becomes a small badge on its corner. Reads as an address book — you recognise the customer first and the channel second. Best if the same person writes on more than one channel.</p>
+</div>
+
+<!-- ============ L3 ============ -->
+<div class="stage" id="s-L3">
+ <div><div class="ph">
+  <div class="hd"><span class="bk">‹</span><h1>Inbox</h1></div>
+  <div class="scr">
+   <div class="grp"><span class="t">NEEDS YOU</span><span class="n">2</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><span class="stripe" style="background:var(--c-ig)"></span>
+     <div class="ic" style="background:rgba(225,48,108,.1);color:var(--c-ig);margin-left:6px"><svg><use href="#ig"/></svg></div>
+     <div class="mid"><div class="chn" style="color:var(--c-ig)">INSTAGRAM</div><div class="n1">Sarah M.</div>
+      <div class="n2">What would a custom setting cost?</div></div>
+     <div class="mt"><span class="tm">4m</span><span class="dot"></span></div></div>
+    <div class="sp"></div>
+    <div class="row"><span class="stripe" style="background:var(--c-fb)"></span>
+     <div class="ic" style="background:rgba(24,119,242,.1);color:var(--c-fb);margin-left:6px"><svg><use href="#fb"/></svg></div>
+     <div class="mid"><div class="chn" style="color:var(--c-fb)">MESSENGER</div><div class="n1">Marcus T.</div>
+      <div class="n2">This is taking forever</div></div>
+     <div class="mt"><span class="tm">22m</span><span class="dot"></span></div></div>
+   </div>
+   <div class="grp"><span class="t">HANDLED</span><span class="n">36</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><span class="stripe" style="background:var(--c-voice)"></span>
+     <div class="ic" style="background:rgba(139,92,246,.1);color:var(--c-voice);margin-left:6px"><svg><use href="#voice"/></svg></div>
+     <div class="mid"><div class="chn" style="color:var(--c-voice)">CALL</div><div class="n1">+1 212 838 1400</div>
+      <div class="n2">Rudi: "Hi! Thank you for contacting us."</div></div>
+     <div class="mt"><span class="tm">5d</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><span class="stripe" style="background:var(--c-sms)"></span>
+     <div class="ic" style="background:rgba(34,211,238,.1);color:#0E9BB5;margin-left:6px"><svg><use href="#sms"/></svg></div>
+     <div class="mid"><div class="chn" style="color:#0E9BB5">SMS</div><div class="n1">test-user</div>
+      <div class="n2">Rudi: "Confirming Tuesday 11am…"</div></div>
+     <div class="mt"><span class="tm">3h</span></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="hd"><span class="bk">‹</span><h1>Inbox</h1></div>
+  <div class="scr">
+   <div class="grp"><span class="t">NEEDS YOU</span><span class="n">2</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><span class="stripe" style="background:var(--c-ig)"></span>
+     <div class="ic" style="background:rgba(225,48,108,.1);color:var(--c-ig);margin-left:6px"><svg><use href="#ig"/></svg></div>
+     <div class="mid"><div class="chn" style="color:var(--c-ig)">INSTAGRAM</div><div class="n1">Sarah M.</div>
+      <div class="n2">What would a custom setting cost?</div></div>
+     <div class="mt"><span class="tm">4m</span><span class="dot"></span></div></div>
+    <div class="sp"></div>
+    <div class="row"><span class="stripe" style="background:var(--c-fb)"></span>
+     <div class="ic" style="background:rgba(24,119,242,.1);color:var(--c-fb);margin-left:6px"><svg><use href="#fb"/></svg></div>
+     <div class="mid"><div class="chn" style="color:var(--c-fb)">MESSENGER</div><div class="n1">Marcus T.</div>
+      <div class="n2">This is taking forever, I ordered 3 weeks ago</div></div>
+     <div class="mt"><span class="tm">22m</span><span class="dot"></span></div></div>
+   </div>
+   <div class="grp"><span class="t">HANDLED</span><span class="n">36</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><span class="stripe" style="background:var(--c-voice)"></span>
+     <div class="ic" style="background:rgba(139,92,246,.1);color:var(--c-voice);margin-left:6px"><svg><use href="#voice"/></svg></div>
+     <div class="mid"><div class="chn" style="color:var(--c-voice)">CALL</div><div class="n1">+1 212 838 1400</div>
+      <div class="n2">Rudi: "Hi! Thank you for contacting us. How can I help?"</div></div>
+     <div class="mt"><span class="tm">5d</span></div></div>
+    <div class="sp"></div>
+    <div class="row"><span class="stripe" style="background:var(--c-mail)"></span>
+     <div class="ic" style="background:rgba(245,165,36,.12);color:#B87A0C;margin-left:6px"><svg><use href="#mail"/></svg></div>
+     <div class="mid"><div class="chn" style="color:#B87A0C">EMAIL</div><div class="n1">Priya S.</div>
+      <div class="n2">Miles: "We ship across Bergen County."</div></div>
+     <div class="mt"><span class="tm">1d</span></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>L3 · Stripe + label.</b> Names the channel in words as well as colour. Unambiguous, and the stripe makes the group scannable down the left edge — but it's a third line in every row, so the list holds fewer at a glance.</p>
+</div>
+
+<!-- ============ T1 ============ -->
+<div class="stage" id="s-T1">
+ <div><div class="ph">
+  <div class="thead"><div class="tw"><span class="bk">‹</span><div>
+   <div class="twn">Sarah M.</div>
+   <div class="twc" style="color:var(--c-ig)"><svg><use href="#ig"/></svg>INSTAGRAM · ANSWERED BY MILES</div></div></div></div>
+  <div class="tscr">
+   <div class="day">2026-08-14</div>
+   <div class="b b-them"><div class="who">SARAH</div>What would a custom setting run me?<div class="stamp">16:41</div></div>
+   <div class="b b-ai"><div class="who">MILES</div>Customs start at $1,200 depending on the stone. Want me to book a call?<div class="stamp">16:41</div></div>
+   <div class="b b-them"><div class="who">SARAH</div>Can I see some examples first?<div class="stamp">16:44</div></div>
+   <div class="b b-you"><div class="who">YOU</div>Sending you a few now — one sec.<div class="stamp">16:52</div></div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="thead"><div class="tw"><span class="bk">‹</span><div>
+   <div class="twn">Sarah M.</div>
+   <div class="twc" style="color:var(--c-ig)"><svg><use href="#ig"/></svg>INSTAGRAM · ANSWERED BY MILES</div></div></div></div>
+  <div class="tscr">
+   <div class="day">2026-08-14</div>
+   <div class="b b-them"><div class="who">SARAH</div>What would a custom setting run me?<div class="stamp">16:41</div></div>
+   <div class="b b-ai"><div class="who">MILES</div>Customs start at $1,200 depending on the stone. Want me to book a call this week to go through options?<div class="stamp">16:41</div></div>
+   <div class="b b-them"><div class="who">SARAH</div>Can I see some examples first?<div class="stamp">16:44</div></div>
+   <div class="b b-you"><div class="who">YOU</div>Sending you a few now — one sec.<div class="stamp">16:52</div></div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>T1 · Sided.</b> The customer on the left, your side on the right — and your side is two colours: pale indigo when the AI wrote it, solid ink when you did. Familiar as a messaging app, and the AI/you distinction is impossible to miss.</p>
+</div>
+
+<!-- ============ T2 ============ -->
+<div class="stage" id="s-T2">
+ <div><div class="ph">
+  <div class="thead"><div class="tw"><span class="bk">‹</span><div>
+   <div class="twn">Sarah M.</div>
+   <div class="twc" style="color:var(--c-ig)"><svg><use href="#ig"/></svg>INSTAGRAM · ANSWERED BY MILES</div></div></div></div>
+  <div class="tscr" style="gap:18px">
+   <div class="day">2026-08-14</div>
+   <div class="e"><span class="erail" style="background:#D6D6DA"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--mut)">SARAH</span><span class="etime">16:41</span></div>
+    <div class="etext">What would a custom setting run me?</div></div></div>
+   <div class="e"><span class="erail" style="background:var(--acid)"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--aink)">MILES</span><span class="etime">16:41</span></div>
+    <div class="etext">Customs start at $1,200 depending on the stone. Want me to book a call?</div></div></div>
+   <div class="e"><span class="erail" style="background:#D6D6DA"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--mut)">SARAH</span><span class="etime">16:44</span></div>
+    <div class="etext">Can I see some examples first?</div></div></div>
+   <div class="e"><span class="erail" style="background:var(--ink)"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--ink)">YOU</span><span class="etime">16:52</span></div>
+    <div class="etext">Sending you a few now — one sec.</div></div></div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="thead"><div class="tw"><span class="bk">‹</span><div>
+   <div class="twn">Sarah M.</div>
+   <div class="twc" style="color:var(--c-ig)"><svg><use href="#ig"/></svg>INSTAGRAM · ANSWERED BY MILES</div></div></div></div>
+  <div class="tscr" style="gap:18px">
+   <div class="day">2026-08-14</div>
+   <div class="e"><span class="erail" style="background:#D6D6DA"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--mut)">SARAH</span><span class="etime">16:41</span></div>
+    <div class="etext">What would a custom setting run me?</div></div></div>
+   <div class="e"><span class="erail" style="background:var(--acid)"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--aink)">MILES</span><span class="etime">16:41</span></div>
+    <div class="etext">Customs start at $1,200 depending on the stone. Want me to book a call this week to go through options?</div></div></div>
+   <div class="e"><span class="erail" style="background:#D6D6DA"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--mut)">SARAH</span><span class="etime">16:44</span></div>
+    <div class="etext">Can I see some examples first?</div></div></div>
+   <div class="e"><span class="erail" style="background:var(--ink)"></span><div class="ebody">
+    <div class="ewho"><span class="ename" style="color:var(--ink)">YOU</span><span class="etime">16:52</span></div>
+    <div class="etext">Sending you a few now — one sec.</div></div></div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>T2 · Author rail.</b> One column, no bubbles — a thin coloured rail and a name carry the author. Reads like a transcript, which is what a call actually is, and long replies don't get squeezed into a narrow bubble. Calmest of the three.</p>
+</div>
+
+<!-- ============ T3 ============ -->
+<div class="stage" id="s-T3">
+ <div><div class="ph">
+  <div class="thead"><div class="tw"><span class="bk">‹</span><div>
+   <div class="twn">Sarah M.</div>
+   <div class="twc" style="color:var(--c-ig)"><svg><use href="#ig"/></svg>INSTAGRAM · ANSWERED BY MILES</div></div></div></div>
+  <div class="tscr" style="gap:11px">
+   <div class="day">2026-08-14</div>
+   <div class="mc mc-them"><div class="mch"><span>SARAH</span><span>16:41</span></div>
+    <div class="mcb">What would a custom setting run me?</div></div>
+   <div class="mc mc-ai"><div class="mch"><span>MILES · SENT</span><span>16:41</span></div>
+    <div class="mcb">Customs start at $1,200 depending on the stone. Want me to book a call?</div></div>
+   <div class="mc mc-them"><div class="mch"><span>SARAH</span><span>16:44</span></div>
+    <div class="mcb">Can I see some examples first?</div></div>
+   <div class="mc mc-you"><div class="mch"><span>YOU</span><span>16:52</span></div>
+    <div class="mcb">Sending you a few now — one sec.</div></div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="thead"><div class="tw"><span class="bk">‹</span><div>
+   <div class="twn">Sarah M.</div>
+   <div class="twc" style="color:var(--c-ig)"><svg><use href="#ig"/></svg>INSTAGRAM · ANSWERED BY MILES</div></div></div></div>
+  <div class="tscr" style="gap:11px">
+   <div class="day">2026-08-14</div>
+   <div class="mc mc-them"><div class="mch"><span>SARAH</span><span>16:41</span></div>
+    <div class="mcb">What would a custom setting run me?</div></div>
+   <div class="mc mc-ai"><div class="mch"><span>MILES · SENT</span><span>16:41</span></div>
+    <div class="mcb">Customs start at $1,200 depending on the stone. Want me to book a call this week to go through options?</div></div>
+   <div class="mc mc-them"><div class="mch"><span>SARAH</span><span>16:44</span></div>
+    <div class="mcb">Can I see some examples first?</div></div>
+   <div class="mc mc-you"><div class="mch"><span>YOU</span><span>16:52</span></div>
+    <div class="mcb">Sending you a few now — one sec.</div></div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>T3 · Labelled cards.</b> Every message is a card with a header strip naming the author and the time. The most explicit — and the header has room to say more, like SENT, HELD or EDITED BY YOU, which the other two have nowhere to put.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+</script></body></html>
