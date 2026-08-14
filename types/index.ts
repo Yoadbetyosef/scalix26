@@ -3,6 +3,8 @@ export type ChannelType = 'sms' | 'whatsapp' | 'voice' | 'instagram' | 'facebook
 export type ConversationStatus = 'open' | 'resolved' | 'closed'
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show'
 export type AIEmployeeStatus = 'active' | 'draft'
+/** Which employee a row IS. The record lives in lib/persona; this is the key that selects it. */
+export type AgentPersona = 'rudi' | 'miles'
 export type ChannelStatus = 'connected' | 'disconnected' | 'pending'
 export type MessageRole = 'user' | 'assistant' | 'system' | 'agent'
 export type Sentiment = 'positive' | 'neutral' | 'negative'
@@ -68,6 +70,8 @@ export interface AIEmployee {
   personality_score: number
   system_prompt: string | null
   status: AIEmployeeStatus
+  /** Optional because rows selected before add_miles_persona.sql runs do not carry it. Absent = Rudi. */
+  persona?: AgentPersona
   // Per-agent business identity
   business_name: string | null
   industry: string | null

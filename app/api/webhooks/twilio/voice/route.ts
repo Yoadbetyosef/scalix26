@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { runAIPipeline, DEFAULT_TONE } from '@/lib/anthropic/pipeline'
 import { intakeLead } from '@/lib/leads/speed-to-lead'
@@ -188,11 +189,24 @@ export async function POST(req: NextRequest) {
 
   // Fresh call — load agent config (forward_to_phone + greeting live on the agent)
   if (channel) {
-    const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language, business_hours').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language, business_hours').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
-
-    const { data: agent } = await agentQuery
+    const agentCols = 'id, forward_to_phone, greeting, status, system_prompt, name, business_name, voice, voice_language, business_hours'
+    // A number with no agent bound to it falls back to the tenant's default agent. That fallback was
+    // a bare maybeSingle(), so a tenant's second active employee turned it into null — no forwarding
+    // number, no greeting, no prompt, on a live call. Bounded to one row now.
+    const agent = channel.ai_employee_id
+      ? (await supabase.from('ai_employees').select(agentCols).eq('id', channel.ai_employee_id).single()).data
+      : await primaryAgent<{
+          id: string
+          forward_to_phone: string | null
+          greeting: string | null
+          status: string
+          system_prompt: string | null
+          name: string | null
+          business_name: string | null
+          voice: string | null
+          voice_language: string | null
+          business_hours: unknown
+        }>(supabase, channel.tenant_id, agentCols)
 
     const forwardTo = agent?.forward_to_phone
     const greeting = agent?.greeting || 'Hello! Thank you for calling. How can I help you today?'

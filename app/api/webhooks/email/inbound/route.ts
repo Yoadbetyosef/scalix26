@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
 import { assertPartnerActive } from '@/lib/billing/gate'
@@ -97,8 +98,19 @@ export async function POST(req: NextRequest) {
 
   // Real agent only: active preferred, else the tenant's earliest agent.
   const agentCols = 'id, name, system_prompt, business_name, email_auto_reply, reply_from_email, email_handoff_after_first_reply'
-  let agent = (await supabase.from('ai_employees').select(agentCols)
-    .eq('tenant_id', tenant.id).eq('status', 'active').maybeSingle()).data
+  type AgentRow = {
+    id: string
+    name: string | null
+    system_prompt: string | null
+    business_name: string | null
+    email_auto_reply: boolean | null
+    reply_from_email: string | null
+    email_handoff_after_first_reply: boolean | null
+  }
+  // The "active preferred" half was a bare maybeSingle(): with two active agents it returns PGRST116
+  // rather than a row, and this fell through to the earliest agent of ANY status — so a tenant with
+  // Miles would have started answering email from a draft. Same two steps, both now bounded to one row.
+  let agent = await primaryAgent<AgentRow>(supabase, tenant.id, agentCols)
   if (!agent) {
     agent = (await supabase.from('ai_employees').select(agentCols)
       .eq('tenant_id', tenant.id).order('created_at', { ascending: true }).limit(1).maybeSingle()).data

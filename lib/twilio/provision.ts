@@ -1,5 +1,6 @@
 import twilio from 'twilio'
 import { createAdminClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { deriveAreaCode, stateToAbbr } from '@/lib/twilio/area-code'
 
 // `partnerTwilio` routes provisioning through a White Label partner's OWN Twilio account (they pay
@@ -143,12 +144,10 @@ export async function provisionAgentPhoneNumber(
 export async function provisionTenantPhoneNumber(tenantId: string): Promise<string | null> {
   const supabase = createAdminClient()
 
-  const { data: agent } = await supabase
-    .from('ai_employees')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('status', 'active')
-    .maybeSingle()
+  // NOT in the original mapping, and the most expensive instance of the fault: this runs from the
+  // Stripe checkout webhook. Unbounded maybeSingle() + a second active employee = null agent = the
+  // tenant pays for a plan and never gets a number, with a caught-and-logged error as the only trace.
+  const agent = await primaryAgent<{ id: string }>(supabase, tenantId, 'id')
 
   if (!agent) return null
   return provisionAgentPhoneNumber(tenantId, agent.id)

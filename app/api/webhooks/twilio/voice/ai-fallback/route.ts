@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { requestBaseUrl } from '@/lib/request-url'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 
@@ -69,10 +70,11 @@ export async function POST(req: NextRequest) {
 
   let greeting = 'Hello! Thank you for calling. Sorry I missed you — how can I help?'
   if (channel) {
-    const agentQuery = channel.ai_employee_id
-      ? supabase.from('ai_employees').select('greeting').eq('id', channel.ai_employee_id).single()
-      : supabase.from('ai_employees').select('greeting').eq('tenant_id', channel.tenant_id).eq('status', 'active').maybeSingle()
-    const { data: employee } = await agentQuery
+    // Same fallback, same fault: an unbound number plus a second active employee left the missed-call
+    // rescue reading a null row and speaking the generic line instead of the agent's own greeting.
+    const employee = channel.ai_employee_id
+      ? (await supabase.from('ai_employees').select('greeting').eq('id', channel.ai_employee_id).single()).data
+      : await primaryAgent<{ greeting: string | null }>(supabase, channel.tenant_id, 'greeting')
     if (employee?.greeting) greeting = employee.greeting
   }
 

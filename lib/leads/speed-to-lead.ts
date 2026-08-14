@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { sendSMS } from '@/lib/twilio/client'
 import { assertPartnerActive } from '@/lib/billing/gate'
 import type { LeadSource } from '@/types'
@@ -50,12 +51,14 @@ export async function runSpeedToLead(input: SpeedToLeadInput): Promise<SpeedToLe
   // Tenant (for business name fallback) + active AI employee (name + from number)
   const [tenantRes, employeeRes, channelRes] = await Promise.all([
     supabase.from('tenants').select('business_name').eq('id', tenantId).maybeSingle(),
-    supabase.from('ai_employees').select('id, name, business_name').eq('tenant_id', tenantId).eq('status', 'active').maybeSingle(),
+    // Was tenant+active straight into maybeSingle(): a second active employee made this null, and the
+    // instant lead text went out signed "our team" from a business called "us".
+    primaryAgent<{ id: string; name: string | null; business_name: string | null }>(supabase, tenantId, 'id, name, business_name'),
     supabase.from('channels').select('twilio_number').eq('tenant_id', tenantId).eq('type', 'sms').not('twilio_number', 'is', null).limit(1).maybeSingle(),
   ])
 
   const tenant = tenantRes.data
-  const employee = employeeRes.data
+  const employee = employeeRes
   const fromNumber = channelRes.data?.twilio_number || undefined
 
   const employeeName = employee?.name || 'our team'
@@ -171,11 +174,11 @@ export async function intakeLead(input: IntakeLeadInput): Promise<IntakeLeadResu
   // Best-effort — never block or fail lead intake.
   try {
     const [empRes, chRes, tenantRes] = await Promise.all([
-      supabase.from('ai_employees').select('business_name').eq('tenant_id', tenantId).eq('status', 'active').maybeSingle(),
+      primaryAgent<{ business_name: string | null }>(supabase, tenantId, 'business_name'),
       supabase.from('channels').select('twilio_number').eq('tenant_id', tenantId).eq('type', 'sms').not('twilio_number', 'is', null).limit(1).maybeSingle(),
       supabase.from('tenants').select('business_name').eq('id', tenantId).maybeSingle(),
     ])
-    const businessName = empRes.data?.business_name || tenantRes.data?.business_name || 'us'
+    const businessName = empRes?.business_name || tenantRes.data?.business_name || 'us'
     const fromNumber = chRes.data?.twilio_number || null
     const nextSendAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
     await supabase.from('drip_campaigns').insert({

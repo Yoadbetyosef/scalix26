@@ -151,4 +151,44 @@ operator mode plan and portal are ABSENT rather than disabled, from
 The Settings row is live in nav.ts. Knowledge and Billing stay inert for a different reason: neither
 has a route to reach at all. Billing exists only as `app/admin/billing`, `app/admin/wl-billing` and
 `app/partner/(app)/billing` — all admin or partner planes, none tenant-facing.
-all admin or partner planes, none tenant-facing.
+
+## 11. There is no push notification infrastructure, and Miles is not building it
+
+Established by the Stage 0 mapping and worth writing down so it is not re-litigated: this codebase has
+**no** service worker, no `manifest.json`, no VAPID keys, no `web-push`, no FCM/APNs, no device-token
+table and no mobile app. `lib/dashboard/attention-store.ts` is a client store persisted to
+`localStorage`, so it is per-browser and cannot back a notification.
+
+**Decision:** Miles's approvals ride the paths that exist — `sendSMS` / `sendEmail` carrying the full
+draft text, and the tokenized public page pattern from `app/approval/[token]` + `lib/orders/approval-token.ts`
+for Send / Edit / I'll handle it without logging in. The lock-screen experience the mockups draw is
+what a real push implementation would render; the token page is the same three actions reachable from
+the same message.
+
+**Real push is a separate project**, and it starts with a PWA manifest and a subscription table.
+
+## 12. The single-active-agent fault was NINE sites, not seven
+
+The Stage 0 table listed seven `.eq('tenant_id', …).eq('status','active').maybeSingle()` sites. Two
+more surfaced while fixing them, both unbounded, both worse than average:
+
+- **`lib/twilio/provision.ts:144`** (`provisionTenantPhoneNumber`) — runs from the **Stripe checkout
+  webhook**. A second active employee made it return null, so the tenant would pay and never receive a
+  phone number, with a caught-and-logged error as the only trace.
+- **`app/api/conversations/voice/route.ts:44`** — writes a conversation with no agent attached rather
+  than failing loudly.
+
+All nine now go through `primaryAgent()` in `lib/agents/primary.ts`: oldest ACTIVE agent, `.limit(1)`
+before `.maybeSingle()` so PGRST116 is unreachable rather than unlikely. `lib/timezone.ts` was already
+bounded and moved onto it anyway, so "the tenant's default agent" has exactly one implementation.
+
+**The lesson worth keeping:** `maybeSingle()` reads like "0 or 1" and behaves like "exactly 1, or an
+error you will mistake for an empty result". Any `maybeSingle()` without a `.limit(1)` above it is a
+latent version of this bug.
+
+## 13. Pending migration: `add_miles_persona.sql`
+
+Adds `ai_employees.persona` (default `'rudi'`) and a partial unique index giving each tenant at most
+one Miles. Until it is run in the Supabase SQL editor, `/api/agents/miles` cannot create the record —
+everything else in Stage 1 is live without it, because `primaryAgent()` deliberately does not filter
+on a column that may not exist yet.

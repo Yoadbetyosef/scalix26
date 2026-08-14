@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { cronAuthorized } from '@/lib/reviews'
 import { generateEmailReply } from '@/lib/email/reply'
 import { sendEmailReply } from '@/lib/email/send'
@@ -26,9 +27,16 @@ async function handle(req: NextRequest) {
   for (const conv of due || []) {
     if (conv.human_takeover) { await clearDue(conv.id); skipped++; continue }
 
-    const { data: agent } = await supabase
-      .from('ai_employees').select('id, name, system_prompt, business_name, email_auto_reply, reply_from_email')
-      .eq('tenant_id', conv.tenant_id).eq('status', 'active').maybeSingle()
+    // Was a bare maybeSingle() on tenant+active: two active agents returned PGRST116 instead of a
+    // row, and this loop reads that as "no agent" and silently drops every due reply.
+    const agent = await primaryAgent<{
+      id: string
+      name: string | null
+      system_prompt: string | null
+      business_name: string | null
+      email_auto_reply: boolean | null
+      reply_from_email: string | null
+    }>(supabase, conv.tenant_id, 'id, name, system_prompt, business_name, email_auto_reply, reply_from_email')
     if (!agent || !agent.email_auto_reply) { await clearDue(conv.id); skipped++; continue }
 
     const { data: contact } = await supabase.from('contacts').select('email').eq('id', conv.contact_id).maybeSingle()

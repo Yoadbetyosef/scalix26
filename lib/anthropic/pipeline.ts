@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { anthropic, MODEL, VOICE_MODEL } from './client'
 import { createServiceClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
 import { FINANCIAL_TOOLS, executeFinancialTool, isFinancialTool, isFinancialCapabilityAvailable, detectFinancialIntent, financialIntentPrompt } from './financial-intent'
@@ -143,9 +144,13 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   const [tenantRes, contactRes, employeeRes, kbRes] = await Promise.all([
     supabase.from('tenants').select('*').eq('id', input.tenantId).single(),
     supabase.from('contacts').select('*').eq('tenant_id', input.tenantId).eq('phone', input.from).maybeSingle(),
+    // An unbound channel (no ai_employee_id) falls back to the tenant's default agent. That fallback
+    // used to be a bare maybeSingle(), which returns PGRST116 — not a row — as soon as a tenant has a
+    // second active employee, and this function THROWS on a missing employee. A second agent would
+    // have taken every SMS, WhatsApp, Instagram and Messenger reply down with it.
     input.agentId
-      ? supabase.from('ai_employees').select('*').eq('id', input.agentId).single()
-      : supabase.from('ai_employees').select('*').eq('tenant_id', input.tenantId).eq('status', 'active').maybeSingle(),
+      ? supabase.from('ai_employees').select('*').eq('id', input.agentId).single().then((r) => r.data)
+      : primaryAgent<AIEmployee>(supabase, input.tenantId, '*'),
     supabase.from('knowledge_base').select('*').eq('tenant_id', input.tenantId),
   ])
 
@@ -155,7 +160,8 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   // estimate handling requires `estimates`. Disabled modules → the tool/skill is never offered.
   const enabledModules = enabledModulesOf(tenant)
 
-  const employee = employeeRes.data
+  // Both branches above resolve to the ROW (or null), not a postgrest response.
+  const employee = employeeRes
   if (!employee) throw new Error('No active AI employee found')
 
   // Scope KB to this agent (plus any tenant-wide entries) — not other agents'.

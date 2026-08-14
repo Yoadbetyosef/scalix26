@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 import { looksLikeName } from '@/lib/utils'
 
 type TranscriptItem = { role?: string; content?: string }
@@ -41,12 +42,9 @@ export async function POST(req: NextRequest) {
   if (!tenant) return NextResponse.json({ error: 'invalid token' }, { status: 404 })
   const tenantId = tenant.id
 
-  const { data: agent } = await supabase
-    .from('ai_employees')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('status', 'active')
-    .maybeSingle()
+  // Also not in the original mapping: same unbounded maybeSingle(), and a null here writes a
+  // conversation with no agent attached rather than failing loudly.
+  const agent = await primaryAgent<{ id: string }>(supabase, tenantId, 'id')
 
   // Find or create the contact by phone + tenant.
   let contactId: string | null = null

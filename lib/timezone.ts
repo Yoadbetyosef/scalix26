@@ -1,5 +1,6 @@
 import { parseAreaCode } from '@/lib/twilio/area-code'
 import { createAdminClient } from '@/lib/supabase/server'
+import { primaryAgent } from '@/lib/agents/primary'
 
 export const DEFAULT_TIMEZONE = 'America/New_York'
 
@@ -84,9 +85,9 @@ export function resolveTimezone(input: { browserTz?: string | null; phone?: stri
 // own admin client (these are public routes scoped to the resolved tenant).
 export async function getBusinessTimezone(tenantId: string, tenantTimezone?: string | null): Promise<string> {
   try {
-    const { data: agent } = await createAdminClient()
-      .from('ai_employees').select('timezone').eq('tenant_id', tenantId).eq('status', 'active')
-      .order('created_at', { ascending: true }).limit(1).maybeSingle()
+    // Already bounded, so never a fault — moved onto the shared resolver so "the tenant's default
+    // agent" has exactly one implementation to find, and one place to change.
+    const agent = await primaryAgent<{ timezone: string | null }>(createAdminClient(), tenantId, 'timezone')
     if (isValidIanaTz(agent?.timezone)) return agent!.timezone as string
   } catch { /* fall through */ }
   if (isValidIanaTz(tenantTimezone)) return tenantTimezone as string

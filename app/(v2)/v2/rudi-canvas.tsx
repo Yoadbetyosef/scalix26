@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { mark } from './timing'
+import { PERSONAS, portraitOf, hexToRgb } from '@/lib/persona'
 
 // Rudi's face. A reproduction of the reference's canvas engine.
 //
@@ -69,21 +70,31 @@ interface Props {
 
 interface Node { x: number; y: number }
 
+// WHO THIS CANVAS PAINTS.
+//
+// The portrait, the loop, the mesh, the stage and the ramp were five literals here, which is fine for
+// one employee and is how you end up with a second canvas for the second one. They live in
+// lib/persona now, and this module reads the record. The engine takes the persona as an ARGUMENT when
+// Miles gets his panel; until then it paints the one it always painted, from the same data.
+const PERSONA = PERSONAS.rudi
+
 const IW = 680
 const IH = 907
-const STILL = '/v2/rudi-still.webp'
-/** The stage ground. Matches --v2-stage in v2-tokens.css; a literal because the canvas cannot read
- *  a custom property, and the two must move together if either changes. */
-const STAGE_BG = '#0d0d10'
-const VIDEO = '/v2/rudi-speaking.mp4'
-const NODES = '/v2/rudi-nodes.json'
+const STILL = portraitOf(PERSONA)
+/** The stage ground. Matches --v2-stage in v2-tokens.css; the canvas cannot read a custom property,
+ *  so the token and the persona's `ground` must move together. */
+const STAGE_BG = PERSONA.ground
+// Rudi carries all three assets. A persona that does not — Miles, until his portrait lands — cannot
+// be painted by this canvas yet, and giving that case a silent empty string here would hide it. The
+// per-persona guard belongs with the panel that first renders a second employee.
+const VIDEO = PERSONA.video!
+const NODES = PERSONA.nodes!
 
-// The reference's three-stop ramp: cyan → violet → pink.
-const STOPS: [number, [number, number, number]][] = [
-  [0, [34, 211, 238]],
-  [0.5, [139, 92, 246]],
-  [1, [255, 46, 147]],
-]
+// The reference's three-stop ramp: cyan → violet → pink. Same three hues as before, now read from the
+// persona rather than transcribed into RGB by hand.
+const STOPS: [number, [number, number, number]][] = PERSONA.ramp!.map(
+  (hex, i, all) => [i / (all.length - 1), hexToRgb(hex)],
+)
 function hue(t: number): [number, number, number] {
   let i = 0
   while (i < STOPS.length - 2 && t > STOPS[i + 1][0]) i++
