@@ -79,7 +79,7 @@ describe('the screen', () => {
 
 describe('WHAT HAPPENED is a card, not an invention', () => {
   it('renders only when something written exists', () => {
-    expect(body).toContain('{str(conv.summary) && (')
+    expect(body).toContain('const whatHappened = str(conv.summary) ? (')
   })
 
   it('never assembles a recap from the messages', () => {
@@ -104,5 +104,41 @@ describe('never show a composer that cannot send', () => {
 
   it('says what taking over costs, in the employee’s own name', () => {
     expect(takeover).toContain('{agentName} stops answering this thread.')
+  })
+})
+
+describe('desktop', () => {
+  const wide = css.slice(css.indexOf('THE CONVERSATION ON A WIDE SCREEN'))
+
+  it('caps the thread at 720px and puts the sidebar at 320px', () => {
+    expect(wide).toMatch(/grid-template-columns: minmax\(0, 720px\) 320px/)
+  })
+
+  it('carries three headings, not one grid', () => {
+    // The person and the conversation are different kinds of fact; a single grid asks the reader to
+    // sort them.
+    expect(body).toContain("factList('CONTACT', facts)")
+    expect(body).toContain("factList('THIS CONVERSATION', about)")
+    expect(body).toContain('{whatHappened}')
+  })
+
+  it('moves the action into the header rather than rendering a second one', () => {
+    // Two <TakeOver>s would be two `live` states, and the hidden one is the one that falls out of
+    // step. The header placement is a grid area on the single node.
+    expect((body.match(/<TakeOver /g) ?? []).length).toBe(1)
+    expect(wide).toMatch(/grid-template-areas: "head act" "strip strip" "scroll scroll"/)
+    expect(wide).toMatch(/\.v2-conv > \.v2-cmp \{\s*grid-area: act/)
+  })
+
+  it('the sidebar blocks are the same nodes the phone stacks', () => {
+    // One render, placed by CSS. Two copies of a list are two lists to keep in step.
+    expect((body.match(/factList\(/g) ?? []).length).toBe(2)   // two calls; the definition is `factList = (`
+    expect(body).toContain('className="v2-cside"')
+  })
+
+  it('is entirely inside a min-width query — the phone layout is untouched', () => {
+    expect(wide).toContain('@media (min-width: 1100px)')
+    const inside = wide.slice(wide.indexOf('@media (min-width: 1100px) {'))
+    expect((inside.match(/\{/g) ?? []).length).toBe((inside.match(/\}/g) ?? []).length)
   })
 })

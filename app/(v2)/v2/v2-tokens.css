@@ -2232,3 +2232,51 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   width: 44px; height: 44px; border-radius: 999px; border: none; flex: none; cursor: pointer;
   background: var(--v2-ink); color: #fff; font-size: 17px;
 }
+
+/* ── THE CONVERSATION ON A WIDE SCREEN ───────────────────────────────────────────────────────────
+   The thread stops running the monitor: a 720px column, with the facts beside it rather than beneath
+   it. Three headings in the sidebar, not one grid — WHAT HAPPENED, CONTACT, THIS CONVERSATION — for
+   the reason the two lists exist at all: the person and the conversation are different kinds of fact,
+   and a single grid asks the reader to sort them.
+
+   NOTHING IS RENDERED TWICE. The action and the three blocks each exist once in the DOM; this query
+   moves them. Two copies of a control are two things to keep in step, and the disabled state is
+   exactly the sort of thing that would fall out of step. */
+
+@media (min-width: 1100px) {
+  .v2 .v2-cscr { padding: 24px 28px 40px; }
+  .v2 .v2-cinner {
+    display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 34px;
+    align-items: start; margin: 0 auto; max-width: 1100px;
+  }
+  /* The thread column: the label and the thread, in that order, down the left. */
+  .v2 .v2-cinner > .v2-ctlab { grid-column: 1; }
+  .v2 .v2-cthread { grid-column: 1; }
+  /* The sidebar: the same three blocks, moved. */
+  .v2 .v2-cside { grid-column: 2; grid-row: 1 / span 3; display: flex; flex-direction: column; gap: 22px; }
+  .v2 .v2-cside .v2-csum { margin-bottom: 0; }
+  .v2 .v2-cside .v2-cabout { margin-top: 0; }
+
+  /* THE ACTION MOVES INTO THE HEADER ROW — the same node, placed. `.v2-conv` becomes a two-column
+     grid whose first row is the header and the action; the strip and the scroller span both. The
+     alternative was a second <TakeOver> in the header, which is two controls with two `live` states,
+     and the hidden one is the one that falls out of step. */
+  .v2 .v2-conv {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "head act" "strip strip" "scroll scroll";
+  }
+  .v2 .v2-conv > .v2-chd { grid-area: head; }
+  .v2 .v2-conv > .v2-cstrip { grid-area: strip; }
+  .v2 .v2-conv > .v2-cscr { grid-area: scroll; min-height: 0; }
+  .v2 .v2-conv > .v2-cmp {
+    grid-area: act; align-self: center; justify-self: end;
+    padding: 0 20px 0 0; background: none; border: 0;
+  }
+  .v2 .v2-conv > .v2-cmp .v2-takeover { width: auto; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; }
+  /* The line under the button is a phone's affordance. In a header row, beside the employee's own
+     name, the control is already read in context. */
+  .v2 .v2-conv > .v2-cmp .v2-tosub { display: none; }
+  .v2 .v2-conv > .v2-cmp .v2-live input { min-width: 280px; }
+}

@@ -69,6 +69,27 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
     { k: 'LAST MESSAGE', v: last ? relativeTime(last.at) : null },
   ]
 
+  const whatHappened = str(conv.summary) ? (
+    <section className="v2-csum">
+      <p className="v2-csumh"><i style={{ background: persona.accent }} />WHAT HAPPENED</p>
+      <p className="v2-csumt">{str(conv.summary)}</p>
+    </section>
+  ) : null
+
+  const factList = (title: string, rows: { k: string; v: string | null }[]) => (
+    <section className="v2-cabout">
+      <p className="v2-ctlab">{title}</p>
+      <dl className="v2-cfacts">
+        {rows.map((f) => (
+          <div key={f.k}>
+            <dt>{f.k}</dt>
+            <dd data-empty={f.v ? undefined : true}>{f.v ?? '—'}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+
   return (
     <div className="v2-conv">
       <header className="v2-chd">
@@ -106,35 +127,28 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
 
       <div className="v2-cscr" data-scroll>
         <div className="v2-cinner">
+          {/* On a phone these sit in the flow; above 1100px the same nodes move into the sidebar.
+              See the media query — nothing is rendered twice. */}
           {/* WHAT HAPPENED — the card exists; the recap does not. It needs a written summary, which is
               a new read and possibly a model call, and inventing one from the last message would be a
               screen asserting something nobody wrote. Rendered only when there is something real to show;
               `summary` is the one field that already carries a written line. */}
-          {str(conv.summary) && (
-            <section className="v2-csum">
-              <p className="v2-csumh"><i style={{ background: persona.accent }} />WHAT HAPPENED</p>
-              <p className="v2-csumt">{str(conv.summary)}</p>
-            </section>
-          )}
+          <div className="v2-cside">
+            {whatHappened}
+            {factList('CONTACT', facts)}
+            {factList('THIS CONVERSATION', about)}
+          </div>
 
           <p className="v2-ctlab">CONVERSATION</p>
           <ConversationThread lines={lines} who={who} emptyLabel={`Nothing has been said to ${who} yet.`} />
 
-          {/* THIS CONVERSATION, on mobile, under the thread. On desktop it moves to the sidebar. */}
-          <section className="v2-cabout">
-            <p className="v2-ctlab">THIS CONVERSATION</p>
-            <dl className="v2-cfacts">
-              {about.map((f) => (
-                <div key={f.k}>
-                  <dt>{f.k}</dt>
-                  <dd data-empty={f.v ? undefined : true}>{f.v ?? '—'}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
         </div>
       </div>
 
+      {/* ONE instance, and one `live` state with it. On a phone it is the pinned block at the
+          bottom; above 1100px `.v2-conv` becomes a grid and this same node sits in the header row
+          beside the employee's name. Rendering it twice would be two controls with two states, and
+          the one that is hidden is the one that would fall out of step. */}
       <TakeOver agentName={agentName} canSend={false} disabledReason={PREVIEW} />
     </div>
   )
