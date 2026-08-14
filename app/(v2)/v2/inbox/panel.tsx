@@ -70,7 +70,7 @@ export function MilesPanel({ agentId, agentName, sent, waiting, needs, only, onO
   // the waveform belongs to neither person in the room.
   const level = useRef<((v: number) => void) | null>(null)
   useEffect(() => { level.current = (v) => face.current?.level(v) }, [])
-  useVoiceLevels({ send: level, audio: audioRef, callActive, listening, speaking })
+  const { prime } = useVoiceLevels({ send: level, audio: audioRef, callActive, listening, speaking })
 
   // AT REST HE IS A PHOTOGRAPH. `minimised` is the canvas's own still-frame mode — no network, no
   // sweep, no video — and on a phone that is what he should be until the mic is pressed. The hook
@@ -103,6 +103,8 @@ export function MilesPanel({ agentId, agentName, sent, waiting, needs, only, onO
 
   function toggle() {
     if (callActive) { endCall(); return }
+    // Inside the gesture, before anything awaits: this is what keeps the audio context running.
+    prime()
     if (mode !== 'voice') setMode('voice')
     startCall()
   }

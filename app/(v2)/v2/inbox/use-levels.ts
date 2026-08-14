@@ -41,6 +41,20 @@ function rms(bytes: Uint8Array): number {
 
 export function useVoiceLevels({ send, audio, callActive, listening, speaking }: Args) {
   const ctxRef = useRef<AudioContext | null>(null)
+
+  /**
+   * An AudioContext created outside a user gesture starts SUSPENDED, and a suspended context's
+   * analyser reads flat silence — which is exactly what a meter showing nothing looks like. This one
+   * was built inside the getUserMedia callback, after an await, so the gesture was long over.
+   *
+   * Created and resumed together, every time, because resume() is also what recovers a context the
+   * browser suspended on its own when the tab lost focus.
+   */
+  const context = async (): Promise<AudioContext> => {
+    const ctx = (ctxRef.current ??= new AudioContext())
+    if (ctx.state === 'suspended') { try { await ctx.resume() } catch { /* stays silent */ } }
+    return ctx
+  }
   const micRef = useRef<{ stream: MediaStream; analyser: AnalyserNode } | null>(null)
   const spkRef = useRef<AnalyserNode | null>(null)
   // A MediaElementSource can be created ONCE per element, and useTestAi makes a new Audio() per
@@ -56,12 +70,16 @@ export function useVoiceLevels({ send, audio, callActive, listening, speaking }:
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         if (stopped) { stream.getTracks().forEach((t) => t.stop()); return }
-        const ctx = (ctxRef.current ??= new AudioContext())
+        const ctx = await context()
         const analyser = ctx.createAnalyser()
         analyser.fftSize = 512
         ctx.createMediaStreamSource(stream).connect(analyser)
         micRef.current = { stream, analyser }
-      } catch {
+        // One line, once per call: whether the meter is measuring anything. A silent meter and an
+        // absent meter look identical on screen, and this is the difference between them.
+        console.info(`[v2 levels] microphone open, context ${ctx.state}`)
+      } catch (err) {
+        console.warn('[v2 levels] no microphone —', err instanceof Error ? err.message : err)
         // Denied or unavailable. The canvas falls back to its own envelope, which is honest: it
         // labels itself DEMO precisely so movement is never mistaken for something being heard.
       }
@@ -79,7 +97,9 @@ export function useVoiceLevels({ send, audio, callActive, listening, speaking }:
     const el = audio.current
     if (!speaking || !el) { spkRef.current = null; return }
     try {
-      const ctx = (ctxRef.current ??= new AudioContext())
+      const ctx = ctxRef.current ?? new AudioContext()
+      ctxRef.current = ctx
+      if (ctx.state === 'suspended') void ctx.resume()
       let analyser = wired.current.get(el)
       if (!analyser) {
         analyser = ctx.createAnalyser()
@@ -90,7 +110,6 @@ export function useVoiceLevels({ send, audio, callActive, listening, speaking }:
         src.connect(ctx.destination)
         wired.current.set(el, analyser)
       }
-      if (ctx.state === 'suspended') void ctx.resume()
       spkRef.current = analyser
     } catch {
       spkRef.current = null
@@ -118,4 +137,13 @@ export function useVoiceLevels({ send, audio, callActive, listening, speaking }:
   }, [callActive, listening, speaking, send])
 
   useEffect(() => () => { void ctxRef.current?.close() }, [])
+
+  /**
+   * Call this from the click that starts the conversation.
+   *
+   * The reliable way to get a running AudioContext in Chrome is to create it INSIDE the gesture. The
+   * effects above run after the click has been handled and after an await, which is exactly the case
+   * the autoplay policy suspends — so the meter came up silent even with the microphone open.
+   */
+  return { prime: () => { void context() } }
 }

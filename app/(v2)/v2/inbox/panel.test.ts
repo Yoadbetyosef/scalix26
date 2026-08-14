@@ -196,3 +196,51 @@ describe('the floating rail', () => {
     expect(panel).toContain("onOnly(only === key ? null : key)")
   })
 })
+
+describe('the three faults in the voice panel', () => {
+  const hook = strip(read('../../../../lib/test-ai/use-test-ai.ts'))
+  const levels = strip(read('./use-levels.ts'))
+  const panel = strip(read('./panel.tsx'))
+  const css = read('../v2-tokens.css')
+
+  it('1. one recogniser at a time', () => {
+    // A new SpeechRecognition was built on every call and the old one left running, so two of them
+    // heard the same sentence and each sent it.
+    expect(hook).toMatch(/if \(recognitionRef\.current\) \{\s*try \{ recognitionRef\.current\.abort\(\)/)
+  })
+
+  it('1. one phrase, one send', () => {
+    expect(hook).toContain('let sent = false')
+    expect(hook).toContain('if (result.isFinal && text.trim() && !sent)')
+  })
+
+  it('1. the microphone does not open while he is still talking', () => {
+    // speakText resolves when play() STARTS. `.then(startListening)` opened the mic over the
+    // greeting, so he transcribed himself and answered his own hello.
+    expect(hook).toContain('void speakText(greeting)')
+    expect(hook).not.toMatch(/speakText\(greeting\)\.then/)
+  })
+
+  it('1. ending a call cannot post one last message', () => {
+    // stop() emits a final result on the way out; abort() does not.
+    expect(hook).not.toMatch(/recognitionRef\.current\?\.stop\(\)/)
+  })
+
+  it('2. the audio context is created inside the gesture and resumed', () => {
+    expect(levels).toContain("if (ctx.state === 'suspended')")
+    expect(levels).toContain('return { prime: () => { void context() } }')
+    expect(panel).toContain('prime()')
+  })
+
+  it('2. and says whether it is measuring anything', () => {
+    expect(levels).toContain('[v2 levels] microphone open')
+    expect(levels).toContain('[v2 levels] no microphone')
+  })
+
+  it('3. the mic answers a press, at the reference’s values', () => {
+    const press = css.slice(css.indexOf('THE PRESS.'))
+    expect(press).toMatch(/transform: scale\(0\.92\)/)
+    expect(press).toMatch(/background: rgba\(217, 242, 36, 0\.22\)/)
+    expect(press).toMatch(/border-color: var\(--v2-miles\)/)
+  })
+})

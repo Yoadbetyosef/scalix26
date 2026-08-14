@@ -120,6 +120,14 @@ export function useTestAi(agentId?: string) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { setError('Speech recognition not supported in this browser'); return }
 
+    // ONE RECOGNISER AT A TIME. This built a new one on every call and left the old one running, so
+    // two of them heard the same sentence and each sent it — one turn, two answers. abort() rather
+    // than stop(): stop() delivers a final result on the way out, which would send a third time.
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort() } catch { /* already gone */ }
+      recognitionRef.current = null
+    }
+
     const recognition = new SR()
     recognition.lang = 'en-US'
     recognition.interimResults = true
@@ -129,12 +137,18 @@ export function useTestAi(agentId?: string) {
     recognition.onstart = () => setListening(true)
     recognition.onend = () => setListening(false)
 
+    // One phrase, one send. A recogniser can deliver a final result and then deliver another as it
+    // winds down; without this latch the same sentence is answered twice.
+    let sent = false
     recognition.onresult = (event: any) => {
       const result = event.results[event.results.length - 1]
       const text = result[0].transcript
       setTranscript(text)
-      if (result.isFinal && text.trim()) {
+      if (result.isFinal && text.trim() && !sent) {
+        sent = true
         setTranscript('')
+        try { recognition.abort() } catch { /* fine */ }
+        if (recognitionRef.current === recognition) recognitionRef.current = null
         sendMessage(text, true)
       }
     }
@@ -150,9 +164,11 @@ export function useTestAi(agentId?: string) {
     // AI greets first
     const greeting = "Hello! Thank you for calling. How can I help you today?"
     setMessages([{ role: 'assistant', content: greeting }])
-    speakText(greeting).then(() => {
-      if (!speaking) startListening()
-    })
+    // NOT `.then(startListening)`. speakText resolves when play() STARTS, so that opened the
+    // microphone while the greeting was still coming out of the speaker — he transcribed himself and
+    // answered his own greeting. The audio element's `ended` handler is what starts listening, and it
+    // is the only thing that does.
+    void speakText(greeting)
   }
 
   function endCall() {
@@ -160,7 +176,10 @@ export function useTestAi(agentId?: string) {
     setListening(false)
     setSpeaking(false)
     setTranscript('')
-    recognitionRef.current?.stop()
+    // abort(), not stop(): stop() emits one last result, which would send a message after the call
+    // the owner just ended.
+    try { recognitionRef.current?.abort() } catch { /* already gone */ }
+    recognitionRef.current = null
     audioRef.current?.pause()
   }
 

@@ -1792,7 +1792,17 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   background: rgba(12, 12, 10, 0.72); backdrop-filter: blur(14px);
   transition: transform 0.16s, border-color 0.3s, background 0.3s;
 }
-.v2 .v2-mmic:active { transform: scale(0.94); }
+/* THE PRESS. The reference's own values — every other control in /v2 answers a finger, and this one
+   looked inert. `data-touch` is what usePressState sets on a real touch, so the same treatment lands
+   on a phone where :active is unreliable. */
+.v2 .v2-mmic:active,
+.v2 .v2-mmic[data-touch]:active,
+.v2 .v2-mmic[data-pressed] {
+  transform: scale(0.92);
+  background: rgba(217, 242, 36, 0.22);
+  border-color: var(--v2-miles);
+}
+.v2 .v2-mmic:hover { background: rgba(12, 12, 10, 0.9); }
 .v2 .v2-mmic svg { width: 25px; height: 25px; }
 .v2 .v2-mmic .rng { stroke: rgba(255, 255, 255, 0.3); stroke-width: 1.25; fill: none; }
 .v2 .v2-mmic .bar { stroke: rgba(255, 255, 255, 0.8); stroke-width: 2; stroke-linecap: round; }
