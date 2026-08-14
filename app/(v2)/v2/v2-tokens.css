@@ -1547,3 +1547,13 @@
 .v2 .v2-grow[data-static] .v2-glab { font-size: 13px; color: var(--v2-ink-46); }
 /* The header pill sits beside the title rather than after it. */
 .v2 .v2-phd .v2-pill { margin-left: auto; }
+
+/* The weekly grid sits inside a card that already has its own padding, so it brings none of its own.
+   On a phone the day rows stack rather than compressing three controls into a line that cannot hold
+   them, and every control keeps its 44px. */
+.v2 .v2-hours { padding: 4px 12px 12px; }
+.v2 .v2-hours select, .v2 .v2-hours button { min-height: 44px; }
+@media (max-width: 719.98px) {
+  .v2 .v2-hours [class*="flex"] { flex-wrap: wrap; }
+  .v2 .v2-hours select { flex: 1 1 44%; min-width: 0; }
+}

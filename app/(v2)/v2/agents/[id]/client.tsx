@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, Sparkles, AudioLines, FileText } from 'lucide-react'
+import { Building2, Sparkles, AudioLines, FileText, Clock, CalendarCheck } from 'lucide-react'
 import { useAgentEditor } from '@/components/ai-employees/use-agent-editor'
 import type { Props } from '@/components/ai-employees/ai-employee-edit-client'
+import { WeeklyHoursGrid } from '@/components/ai-employees/hours-controls'
 import { GlassInput, GlassSelect, StatusPill } from '../../controls'
 import { usePressState } from '../../use-press'
 
@@ -34,7 +35,7 @@ const LANGUAGES = [
 
 export function AgentClient(props: Props) {
   usePressState()
-  const { form, setForm, isDirty } = useAgentEditor(props)
+  const { form, setForm, isDirty, businessHours, updateBusinessHours, appointmentHours, updateAppointmentHours } = useAgentEditor(props)
   const { employee } = props
   // Typed against the hook's own form shape, so a field name that does not exist fails to compile
   // rather than silently writing a key nobody reads.
@@ -109,6 +110,28 @@ export function AgentClient(props: Props) {
               <GlassSelect label="Call language" value={form.voice_language || 'english'}
                 onChange={set('voice_language')} options={LANGUAGES}
                 hint="Bilingual switches per caller, on every turn." />
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+            <p className="v2-ghead"><i />Business hours<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static><span className="v2-gchip"><Clock /></span>
+                <span className="v2-glab">When you are open. Rudi answers around the clock; this is what it tells people.</span></div>
+              <div className="v2-hours">
+                <WeeklyHoursGrid hours={businessHours} onUpdate={updateBusinessHours} />
+              </div>
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+            <p className="v2-ghead"><i />Appointment availability<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static><span className="v2-gchip"><CalendarCheck /></span>
+                <span className="v2-glab">The hours Rudi may actually book into — narrower than opening hours, usually.</span></div>
+              <div className="v2-hours">
+                <WeeklyHoursGrid hours={appointmentHours} onUpdate={updateAppointmentHours} />
+              </div>
             </div>
           </section>
         </div>
