@@ -204,9 +204,67 @@ bounded and moved onto it anyway, so "the tenant's default agent" has exactly on
 error you will mistake for an empty result". Any `maybeSingle()` without a `.limit(1)` above it is a
 latent version of this bug.
 
-## 13. Pending migration: `add_miles_persona.sql`
+## 13. Migrations — DONE
 
-Adds `ai_employees.persona` (default `'rudi'`) and a partial unique index giving each tenant at most
-one Miles. Until it is run in the Supabase SQL editor, `/api/agents/miles` cannot create the record —
-everything else in Stage 1 is live without it, because `primaryAgent()` deliberately does not filter
-on a column that may not exist yet.
+`add_miles_persona.sql` and `normalise_voices_to_aura.sql` are both run. `ELEVENLABS_API_KEY` is out
+of Vercel, and the sandbox was verified in a browser speaking the agent's configured voice — the
+symptom §7 existed for.
+
+## 14. The partner BYO ElevenLabs field collects a credential nothing consumes
+
+`KEY_PROVIDERS` (`lib/partner/integrations.ts:9`) accepts, encrypts, masks, verifies against
+`api.elevenlabs.io/v1/user` and re-verifies an ElevenLabs API key. `partner_integrations.provider`
+allows it at the schema level (`add_growth_os_7_wl_platform.sql:10`) and the Infrastructure screen
+renders a field for it (`wholesale-infrastructure.tsx:17`).
+
+**Nothing reads it back.** The only credential getter anything imports is `getPartnerTwilio`; there is
+no `getPartnerElevenlabs`, and no synthesis path takes a partner key — the platform's own Deepgram key
+serves every partner's tenants. So a partner is asked for a secret, told it verified, and it does
+nothing.
+
+Predates the vendor removal — it was already true when the platform used ElevenLabs, because even
+then the TTS routes read `process.env`, never a partner's key.
+
+**Two ways out, and they are genuinely different products:**
+
+- **Drop it** — remove `'elevenlabs'` from `KEY_PROVIDERS` and the field from the screen. The provider
+  stays in the CHECK constraint (dropping a value from a constraint means a migration and orphaned
+  rows), and any stored key becomes inert data to purge. Smallest, honest.
+- **Wire it** — a partner's own Deepgram/ElevenLabs key serving their own tenants' TTS. That is real
+  wholesale infrastructure and it means a per-tenant vendor resolution in the synthesis path, which is
+  the resolver §7 just deleted, back in a different place. Only worth it if partners actually want to
+  bring their own voice vendor.
+
+The same question hangs over `openai` in `KEY_PROVIDERS`, which is not checked here and probably has
+the same answer.
+
+## 15. Provisioning a number off a payment webhook cannot fail loudly
+
+`app/api/webhooks/stripe/route.ts:120`, on `checkout.session.completed`:
+
+```ts
+provisionTenantPhoneNumber(session.metadata.tenantId).catch(err =>
+  console.error('[provision] Failed to provision phone number:', err)
+)
+```
+
+Three separate faults, and the Stage 1 fix addressed none of them — it removed one *cause*, not the
+silence:
+
+1. **The `.catch()` is mostly unreachable.** `provisionTenantPhoneNumber` and
+   `provisionAgentPhoneNumber` RETURN NULL for the likely failures — no agent, no available number in
+   any of the four search steps — and swallow their own errors internally
+   (`trySearch` catches per step). A null return is not a rejection, so the handler logs nothing at
+   all for the ordinary failure.
+2. **It is not awaited.** Fire-and-forget in a serverless webhook: the response returns, and the work
+   may be killed mid-flight. Nothing retries.
+3. **Nobody is told.** No owner email, no admin alert, no row recording the attempt. The customer has
+   paid; the product's first act is to silently not deliver the thing they bought.
+
+**Fix shape:** await it, give it a result type (`{ok}` / `{failed, reason}`) rather than
+`string | null`, and on failure notify — the owner and `lib/admin/notify.ts` — plus a record that
+supports a retry. The webhook must still return 200 to Stripe; failing to provision is not a reason to
+make Stripe replay the payment event.
+
+**Do not fold this into a Miles stage.** It is a paid-conversion path and deserves its own commit and
+its own verification.
