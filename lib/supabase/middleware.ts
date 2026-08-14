@@ -43,6 +43,11 @@ export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-passw
     // The customer's copy of an order document (estimate / quote / invoice). The token in the URL is
     // the sole credential — the recipient has no account — exactly like /d/ and /approval/ above.
     '/e/',
+    // Deciding a held draft from the SMS/email link. The OWNER is the recipient here rather than a
+    // customer, but the arrangement is identical: no session, the token in the URL is the sole
+    // credential, and it resolves to exactly one draft. ('/d/' was already taken by the studio
+    // document page, hence '/m/'.)
+    '/m/', '/api/m/',
     // Scheduled jobs: Vercel/external cron requests carry NO user session, so they must bypass the
     // login redirect to reach the route — where cronAuthorized (the fail-closed CRON_SECRET bearer)
     // is the real gate. These are NOT open: a request without the secret gets 401 at the route.

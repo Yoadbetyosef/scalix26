@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
+import { maybeHold } from '@/lib/miles/intercept'
 import { sendSMS } from '@/lib/twilio/client'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, failEvent, fingerprint } from '@/lib/webhooks/idempotency'
@@ -66,8 +67,18 @@ export async function POST(req: NextRequest) {
       messageContent: Body,
     })
 
-    // Send SMS response (unless a human has taken over this conversation)
-    if (!result.skipped && result.response) {
+    // Miles's autonomy rule sits between deciding what to say and saying it. It is a no-op unless
+    // THIS channel's agent is the messages employee; for every other tenant it returns immediately
+    // and the send below is unchanged.
+    const held = !result.skipped && result.response
+      ? await maybeHold({
+          db: supabase, tenantId: channel.tenant_id, agentId: channel.ai_employee_id,
+          conversationId: result.conversationId, channel: 'sms', inbound: Body, reply: result.response,
+        })
+      : { held: false }
+
+    // Send SMS response (unless a human has taken over, or Miles is holding it for a decision)
+    if (!result.skipped && result.response && !held.held) {
       try {
         const msg = await sendSMS(From, result.response, To, { tenantId: channel.tenant_id })
         console.log('[SMS] Sent successfully. SID:', msg.sid)

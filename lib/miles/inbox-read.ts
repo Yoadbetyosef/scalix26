@@ -28,6 +28,13 @@ export interface WaitingRow {
   body: string
   reasons: Commitment[]
   /**
+   * False when the draft was held but neither the SMS nor the email reached the owner. Shown on the
+   * row, because a draft nobody was told about is the one state this whole arrangement exists to
+   * prevent, and hiding it would make the queue look healthy while a customer waits.
+   */
+  announced: boolean
+  announceError: string | null
+  /**
    * The classifier's reason IN ITS OWN WORDS, with the text that triggered it quoted.
    *
    * "Draft ready" is what the mockup's row says and it is not enough: a row that does not say why it
@@ -106,7 +113,7 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
       .limit(40),
     db
       .from('held_drafts')
-      .select('id, conversation_id, channel, body, reasons, inbound_excerpt, created_at, contact_id')
+      .select('id, conversation_id, channel, body, reasons, inbound_excerpt, created_at, contact_id, notified_at, notify_error')
       .eq('tenant_id', tenantId)
       .eq('status', 'pending')
       .order('created_at', { ascending: true }),
@@ -116,6 +123,7 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
   const drafts = (draftRes.data ?? []) as unknown as Array<{
     id: string; conversation_id: string | null; channel: string | null; body: string
     reasons: Commitment[]; inbound_excerpt: string | null; created_at: string
+    notified_at: string | null; notify_error: string | null
   }>
 
   // The last message on each of those threads, in one read rather than one per conversation.
@@ -144,6 +152,8 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
       question: d.inbound_excerpt,
       body: d.body,
       reasons: d.reasons ?? [],
+      announced: !!d.notified_at,
+      announceError: d.notified_at ? null : d.notify_error,
       trigger: triggerLine(d.reasons ?? []),
     }
   })

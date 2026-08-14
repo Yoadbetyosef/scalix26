@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
+import { maybeHold } from '@/lib/miles/intercept'
 import { sendSMS } from '@/lib/twilio/client'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, failEvent, fingerprint } from '@/lib/webhooks/idempotency'
@@ -29,7 +30,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createServiceClient()
   const { data: channel } = await supabase
     .from('channels')
-    .select('tenant_id')
+    // ai_employee_id so the autonomy rule can tell whether the messages employee owns this number.
+    .select('tenant_id, ai_employee_id')
     .eq('twilio_number', toNumber)
     .eq('type', 'whatsapp')
     .single()
@@ -49,8 +51,14 @@ export async function POST(req: NextRequest) {
       messageContent: Body,
     })
 
-    // Skip the AI reply when a human has taken over this conversation
-    if (!result.skipped && result.response) {
+    // Skip the AI reply when a human has taken over, or when Miles is holding it for a decision.
+    const held = !result.skipped && result.response
+      ? await maybeHold({
+          db: supabase, tenantId: channel.tenant_id, agentId: channel.ai_employee_id,
+          conversationId: result.conversationId, channel: 'whatsapp', inbound: Body, reply: result.response,
+        })
+      : { held: false }
+    if (!result.skipped && result.response && !held.held) {
       await sendSMS(`whatsapp:${fromNumber}`, result.response, `whatsapp:${toNumber}`, { tenantId: channel.tenant_id })
     }
     await completeEvent(claim, channel.tenant_id)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createServiceClient, createAdminClient } from '@/lib/supabase/server'
 import { primaryAgent } from '@/lib/agents/primary'
+import { maybeHold } from '@/lib/miles/intercept'
 import { sendEmail, sendEmailReply } from '@/lib/email/send'
 import { generateEmailReply } from '@/lib/email/reply'
 import { assertPartnerActive } from '@/lib/billing/gate'
@@ -192,6 +193,20 @@ export async function POST(req: NextRequest) {
         tenantId: tenant.id, agent, tenantBusinessName: tenant.business_name, emailText: text || '', subject,
       })
       console.log('[email-inbound] reply generated, length', reply.length)
+
+      // Miles's autonomy rule. Unlike the pipeline channels, nothing has been written to the
+      // transcript yet on this path — the assistant message is only stored after a successful send —
+      // so holding here leaves no trace to clean up.
+      const held = await maybeHold({
+        db: supabase, tenantId: tenant.id, agentId: agent.id,
+        conversationId: convId, channel: 'email', inbound: text || '', reply,
+      })
+      if (held.held) {
+        console.log('[email-inbound] held for approval, draft', held.draftId ?? '(none)')
+        await completeEvent(claim, tenant.id)
+        return NextResponse.json({ ok: true, held: true })
+      }
+
       const sent = await sendEmailReply(fromEmail, agent.reply_from_email, subject, reply, inboundMessageId, { tenantId: tenant.id })
       if (sent.success) {
         console.log('[email-inbound] reply SENT to', fromEmail)

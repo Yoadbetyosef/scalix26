@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { runAIPipeline } from '@/lib/anthropic/pipeline'
+import { maybeHold } from '@/lib/miles/intercept'
 import { transcribeAudioUrl } from '@/lib/deepgram/transcribe'
 import { verifyMetaSignature, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, fingerprint, type Claim } from '@/lib/webhooks/idempotency'
@@ -124,7 +125,15 @@ export async function POST(req: NextRequest) {
           messageContent: text,
         })
 
-        if (!result.skipped && result.response) {
+        // Miles's autonomy rule. A no-op unless this Page's agent is the messages employee.
+        const held = !result.skipped && result.response
+          ? await maybeHold({
+              db: supabase, tenantId: channel.tenant_id, agentId: channel.ai_employee_id,
+              conversationId: result.conversationId, channel: 'instagram', inbound: text, reply: result.response,
+            })
+          : { held: false }
+
+        if (!result.skipped && result.response && !held.held) {
           const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
           await sendInstagramReply(senderId, result.response, accessToken)
         }
@@ -169,7 +178,14 @@ export async function POST(req: NextRequest) {
           messageContent: text,
         })
 
-        if (!result.skipped && result.response) {
+        const held = !result.skipped && result.response
+          ? await maybeHold({
+              db: supabase, tenantId: channel.tenant_id, agentId: channel.ai_employee_id,
+              conversationId: result.conversationId, channel: 'facebook', inbound: text, reply: result.response,
+            })
+          : { held: false }
+
+        if (!result.skipped && result.response && !held.held) {
           const accessToken = (channel.credentials as Record<string, string>)?.access_token || ''
           await sendFacebookReply(senderId, result.response, accessToken)
         }

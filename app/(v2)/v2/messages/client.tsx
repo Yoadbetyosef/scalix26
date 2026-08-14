@@ -174,6 +174,14 @@ export function MessagesClient({ data }: Props) {
                               </button>
                             </div>
 
+                            {/* Held, but the owner was never reached. Said in the same place the
+                                held line goes, because it changes what the owner should do next. */}
+                            {!row.announced && row.announceError && (
+                              <p className="v2-mheld" data-error>
+                                We could not reach you about this one ({row.announceError}). It has been
+                                waiting here since it was held.
+                              </p>
+                            )}
                             {failed[row.draftId] ? (
                               <p className="v2-mheld" data-error>{failed[row.draftId]} It is still waiting for you.</p>
                             ) : (
