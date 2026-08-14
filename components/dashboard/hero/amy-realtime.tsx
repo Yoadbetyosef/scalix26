@@ -30,7 +30,12 @@ export type AmyMoment =
   | { type: 'said'; text: string }
   | { type: 'reply'; text: string }
 
-export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, surface = 'v1' }: { briefing: AmyBriefing; audioCtx?: AudioContext | null; onClose: () => void; onType: () => void; onMoment?: (m: AmyMoment) => void; surface?: 'v1' | 'v2' }) {
+// `prompt` and `snapshotUrl` are how a SECOND employee uses this session without a second
+// implementation of it. Absent, both default to Amy's — the dashboard assistant, unchanged. Supplied,
+// the socket, the mic, the noise gate, the drain guard and every moment emitted are identical; only
+// what the agent is told about itself differs. That is the whole of "persona", plus the voice id the
+// briefing already carries.
+export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, surface = 'v1', prompt, snapshotUrl = '/api/ai/amy/snapshot' }: { briefing: AmyBriefing; audioCtx?: AudioContext | null; onClose: () => void; onType: () => void; onMoment?: (m: AmyMoment) => void; surface?: 'v1' | 'v2'; prompt?: string; snapshotUrl?: string | null }) {
   // Held in a ref so emitting never re-subscribes the socket effect below.
   const momentRef = useRef<((m: AmyMoment) => void) | undefined>(onMoment)
   momentRef.current = onMoment
@@ -326,7 +331,10 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
         // LAYER 2 — mic, socket, and the data snapshot all start in PARALLEL from the tap.
         // The socket needs no stream, so it connects immediately (not after getUserMedia).
         const snapshotPromise = (async () => {
-          try { const r = await fetch('/api/ai/amy/snapshot'); if (r.ok) return ((await r.json()).snapshot || '') as string } catch { /* fine without it */ }
+          // Null = this employee's brief already contains everything it should know, and the
+          // dashboard's snapshot would be somebody else's job description.
+          if (!snapshotUrl) return ''
+          try { const r = await fetch(snapshotUrl); if (r.ok) return ((await r.json()).snapshot || '') as string } catch { /* fine without it */ }
           return ''
         })()
 
@@ -456,7 +464,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
           ws.send(JSON.stringify({
             type: 'config',
             voice: TTS_VOICE(briefing.employeeVoice),
-            prompt: buildRealtimePrompt(briefing) + (snapshot ? `\n\nCURRENT BUSINESS DATA (real, this business only — answer from it, never say you lack access):\n${snapshot}` : ''),
+            prompt: (prompt ?? buildRealtimePrompt(briefing)) + (snapshot ? `\n\nCURRENT BUSINESS DATA (real, this business only — answer from it, never say you lack access):\n${snapshot}` : ''),
             // No spoken greeting — open straight into Listening so the user can talk immediately.
             greeting: '',
             inputSampleRate: ctx.sampleRate,

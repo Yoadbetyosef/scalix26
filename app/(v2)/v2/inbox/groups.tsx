@@ -6,6 +6,7 @@ import { usePressState } from '../use-press'
 import { channelKey } from '../channels'
 import { ChannelGlyph } from './glyphs'
 import { MilesPanel, type GroupKey } from './panel'
+import type { MilesFacts } from '@/lib/miles/briefing'
 import type { MilesInbox, WaitingRow } from '@/lib/miles/inbox-read'
 import { heldSince } from '@/lib/miles/autonomy'
 
@@ -26,6 +27,8 @@ import { heldSince } from '@/lib/miles/autonomy'
 
 interface Props {
   data: MilesInbox
+  /** What Miles is told about his own job when the owner talks to him. */
+  facts?: MilesFacts | null
   /**
    * Miles's own agent row, when the tenant has hired him. Absent = no panel: a portrait and an ON DUTY
    * pill for an employee who does not exist would be the screen inventing a colleague.
@@ -35,7 +38,7 @@ interface Props {
 
 type Busy = { id: string; what: 'send' | 'mine' } | null
 
-export function InboxGroups({ data, milesId }: Props) {
+export function InboxGroups({ data, milesId, facts }: Props) {
   usePressState()
   const router = useRouter()
   const { waiting, needs, handled, agentName } = data
@@ -90,10 +93,10 @@ export function InboxGroups({ data, milesId }: Props) {
       {/* `display: contents` below 1100px, a two-column grid above it — so the phone layout is this
           exact DOM in this exact order, and the desktop one is a gutter and a list. */}
       <div className="v2-mbody">
-      {milesId && (
+      {milesId && facts && (
         <MilesPanel
-          agentId={milesId}
           agentName={agentName}
+          facts={facts}
           // MILES'S OWN WORK, not the inbox's total. The calls in this group are Rudi's, and a panel
           // that counted them would credit the wrong employee on his own portrait.
           sent={handled.filter((r) => r.byAgentId === milesId).length}

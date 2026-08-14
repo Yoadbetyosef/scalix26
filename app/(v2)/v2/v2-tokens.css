@@ -1934,3 +1934,21 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 /* Below the breakpoint the wrapper is not a layout at all: the panel and the list are the page's own
    flex children, exactly as they were before the rail existed. */
 .v2 .v2-mbody { display: contents; }
+
+/* THE TALK CONTROL ON A PORTRAIT.
+   The same button the composer bar carries — same geometry, same states, same shine — sitting over
+   the photograph instead of in a bar. Only the ground it stands on changes: dark glass so it reads on
+   a bright acid background, and the press is the acid wash every other control in /v2 uses. */
+.v2 .v2-mtalk { position: absolute; right: 14px; bottom: 14px; z-index: 10; }
+.v2 .v2-ctl.v2-talk[data-variant="portrait"] {
+  min-width: 0; padding: 0 16px 0 12px; height: 48px; border-radius: 15px;
+  background: rgba(12, 12, 10, 0.74); backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.18); color: #fff;
+}
+.v2 .v2-ctl.v2-talk[data-variant="portrait"]:hover { background: rgba(12, 12, 10, 0.9); }
+.v2 .v2-ctl.v2-talk[data-variant="portrait"]:active,
+.v2 .v2-ctl.v2-talk[data-variant="portrait"][data-pressed] {
+  transform: scale(0.92); background: rgba(217, 242, 36, 0.22); border-color: var(--v2-miles);
+}
+.v2 .v2-ctl.v2-talk[data-variant="portrait"] .v2-lab { color: #fff; }
+.v2 .v2-ctl.v2-talk[data-variant="portrait"][data-on] { border-color: var(--v2-miles); }

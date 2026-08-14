@@ -1,34 +1,40 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { RudiCanvas, type RudiHandle } from '../rudi-canvas'
+import { useCallback, useRef, useState } from 'react'
+import { RudiCanvas, type RudiHandle, type RudiState } from '../rudi-canvas'
+import { TalkButton } from '../talk-button'
 import { useIsMobile } from '../use-breakpoint'
-import { useVoiceLevels } from './use-levels'
-import { useTestAi } from '@/lib/test-ai/use-test-ai'
+import { AmyRealtime, type AmyMoment } from '@/components/dashboard/hero/amy-realtime'
+import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
+import { milesBriefing, buildMilesPrompt, type MilesFacts } from '@/lib/miles/briefing'
 
 // MILES, AT THE TOP OF HIS OWN SCREEN.
 //
 // A hero panel, not a floating button: he is an employee, not a help widget. Portrait, ON DUTY, one
-// line about what happened, and a mic — and the mic is the point. Typing is the fallback.
+// line about what happened, and the same press-to-talk control the phone employee has.
 //
-// ── THE SAME ENGINE, A DIFFERENT RECORD ─────────────────────────────────────────────────────────────
+// ── ONE VOICE LOOP IN THE CODEBASE ──────────────────────────────────────────────────────────────────
 //
-// The canvas is Rudi's canvas with `persona="miles"`. Portrait, speaking loop, mesh, stage and ramp
-// all come from lib/persona; the scan sweep, the meter, the crossfade and the state machine are
-// literally the same code. That was the point of making the persona data.
+// This used to run its own: SpeechRecognition, /api/ai/test, /api/ai/speak, an <audio> element and a
+// hand-rolled turn machine. It failed in a new way every time it was touched — the mouth moved before
+// any sound existed, a stale closure meant recognition never started, two recognisers answered one
+// sentence — and none of those were failures of the design; they were failures of writing turn-taking
+// twice.
 //
-// ── ONE STATE MACHINE ───────────────────────────────────────────────────────────────────────────────
+// It now runs the SAME session the home screen runs: one socket to the Deepgram Voice Agent, which
+// owns endpointing, barge-in and turn-taking, and which streams audio both ways. Everything hard
+// comes with it, including the noise gate that exists because an employee's own TTS gets transcribed
+// as user speech — that gate is not reimplemented here, and must not be.
 //
-// useTestAi owns the turn-taking, the recognition lifecycle and the audio teardown. This does not
-// re-implement any of it; it PROJECTS the three booleans it already exposes onto the canvas handle.
-// A second machine would be a second set of the bugs that one took a long time to stop having.
+// What the persona changes: the portrait, the ground, the voice id — and the brief, because an
+// employee who knows the business but not his own job is not a persona, it is a costume.
 
 export type GroupKey = 'waiting' | 'needs' | 'handled'
 
 interface Props {
-  /** Miles's own agent row. The sandbox machine answers as whoever this is. */
-  agentId: string
   agentName: string
+  /** Everything he is told about his own job. See lib/miles/briefing.ts. */
+  facts: MilesFacts
   /** What actually happened. Every one of these is a count of real rows. */
   sent: number
   waiting: number
@@ -44,183 +50,150 @@ const Chat = () => (
   </svg>
 )
 
-const Mic = () => (
-  // The mockup's SVG, exactly: two concentric rings and five signal bars. Technical, not a toy glyph.
-  <svg viewBox="0 0 24 24" aria-hidden>
-    <circle className="rng" cx="12" cy="12" r="10" />
-    <circle className="rng" cx="12" cy="12" r="6.5" />
-    <path className="bar" d="M7 10v4M10 7.5v9M13 6v12M16 9v6M19 11v2" />
-  </svg>
-)
-
-export function MilesPanel({ agentId, agentName, sent, waiting, needs, only, onOnly }: Props) {
+export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnly }: Props) {
   const face = useRef<RudiHandle | null>(null)
-  const {
-    mode, setMode, callActive, listening, speaking, pending, startCall, endCall, messages, audioRef,
-    input, setInput, handleChatSubmit,
-  } = useTestAi(agentId)
-  const [asking, setAsking] = useState(false)
+  const [state, setState] = useState<RudiState>('idle')
+  const [reply, setReply] = useState<string | null>(null)
+  const session = useAmySession()
 
-  // The last thing he actually said, spoken or typed. It replaces his standing line in the say box —
-  // asking a question and getting the same sentence back would read as nothing having happened.
-  const answer = [...messages].reverse().find((m) => m.role === 'assistant')?.content ?? null
-
-  // The meter reads whoever is actually making sound: the microphone while he is listening, the
-  // reply's own audio while he is speaking. Without this the canvas runs its synthetic envelope, and
-  // the waveform belongs to neither person in the room.
-  const level = useRef<((v: number) => void) | null>(null)
-  useEffect(() => { level.current = (v) => face.current?.level(v) }, [])
-  const { prime } = useVoiceLevels({ send: level, audio: audioRef, callActive, listening, speaking })
-
-  // AT REST HE IS A PHOTOGRAPH. `minimised` is the canvas's own still-frame mode — no network, no
-  // sweep, no video — and on a phone that is what he should be until the mic is pressed. The hook
-  // returns null before it has measured, and `!null` is `true`, so the tri-state is read explicitly
-  // rather than negated: unknown is treated as not-mobile, which keeps the desktop behaviour.
-  const isMobile = useIsMobile()
-  const stillAtRest = isMobile === true && !callActive
-
-  // The projection. Three booleans in, four canvas states out — and nothing decided here.
-  const lastSpoken = useRef('')
-  useEffect(() => {
+  // The portrait, driven by the session's own moments — the same projection the home screen uses.
+  // Every branch calls a method the canvas already exposes; nothing here decides anything about the
+  // conversation, including when a turn begins or ends.
+  const onMoment = useCallback((m: AmyMoment) => {
     const f = face.current
     if (!f) return
-    if (speaking) {
-      const reply = [...messages].reverse().find((m) => m.role === 'assistant')?.content ?? ''
-      if (reply !== lastSpoken.current) {
-        lastSpoken.current = reply
-        // ~14 characters a second is the rate Aura reads at; the canvas only needs a duration to hold
-        // the mouth open for, and stopSpeaking() below is what actually ends it.
-        f.speak(reply, Math.max(1200, reply.length * 70))
-      }
-    } else if (listening) {
-      f.listen()
-    } else if (callActive) {
-      f.arm()
-    } else {
-      f.endSession()
-    }
-  }, [speaking, listening, callActive, messages])
+    if (m.type === 'listen') f.listen()
+    else if (m.type === 'level') f.level(m.value)
+    else if (m.type === 'speak') { setReply(m.text || null); f.speak(m.text, m.ms) }
+    else if (m.type === 'stopSpeaking') f.stopSpeaking()
+    else if (m.type === 'arm') f.arm()
+    else if (m.type === 'reply') setReply(m.text)
+  }, [])
 
-  function toggle() {
-    if (callActive) { endCall(); return }
-    // Inside the gesture, before anything awaits: this is what keeps the audio context running.
-    prime()
-    if (mode !== 'voice') setMode('voice')
-    startCall()
-  }
+  const live = session.mode === 'live'
+
+  const toggle = useCallback(() => {
+    // Live already → this is the END the control promises, not a second session.
+    if (session.mode !== 'idle') {
+      session.close()
+      face.current?.endSession()
+      setReply(null)
+      return
+    }
+    // goLive unlocks the AudioContext INSIDE the tap, which is what the autoplay policy requires.
+    session.goLive()
+  }, [session])
+
+  // AT REST HE IS A PHOTOGRAPH. `minimised` is the canvas's own still-frame mode — no network, no
+  // sweep, no video — and on a phone that is what he should be until the control is pressed. The hook
+  // returns null before it has measured, and `!null` is `true`, so the tri-state is read explicitly:
+  // unknown is treated as not-mobile, which keeps the desktop behaviour.
+  const isMobile = useIsMobile()
+  const stillAtRest = isMobile === true && !live
 
   // SILENT WHEN THERE IS NOTHING. No drafts, nothing needing a person, nothing sent — then no line and
   // no count. A panel that says "0 drafts waiting" every morning teaches its owner to stop reading it.
   const somethingHappened = sent > 0 || waiting > 0 || needs > 0
 
   return (
-    <div className="v2-mpanel" data-live={callActive || undefined}>
+    <div className="v2-mpanel" data-live={live || undefined}>
       {/* The panel is the gutter; the rail is the card that sits in it. On a phone the card has no
           border, no radius and no shadow and simply fills the top of the screen — same DOM. */}
       <div className="v2-mrail">
-      <div className="v2-mportrait">
-      <RudiCanvas
-        // Keyed by persona: the canvas resolves its assets once, at mount.
-        key="miles"
-        persona="miles"
-        handleRef={face}
-        className="v2-mface"
-        minimised={stillAtRest}
-        onClick={toggle}
-      />
-      <div className="v2-mveil" aria-hidden />
-
-      <div className="v2-mtop">
-        <span className="v2-mname">{agentName.toUpperCase()} · MESSAGES</span>
-        {/* What is actually happening, in the order it happens. `pending` is the gap between asking
-            for audio and hearing it, and calling that "speaking" is what made the mouth move first. */}
-        <span className="v2-mduty"><i />
-          {speaking ? 'SPEAKING' : pending ? 'THINKING' : listening ? 'LISTENING' : callActive ? 'YOUR TURN' : 'ON DUTY'}
-        </span>
-      </div>
-
-      {somethingHappened && (
-        <div className="v2-mfoot">
-          <p className="v2-msum">
-            {sent > 0 && <>Sent <b>{sent}</b>. </>}
-            {waiting > 0 && <><b>{waiting}</b> {waiting === 1 ? 'draft is' : 'drafts are'} waiting on you. </>}
-            {needs > 0 && <><b>{needs}</b> {needs === 1 ? 'needs' : 'need'} you outright.</>}
-          </p>
-        </div>
-      )}
-
-        <button
-          type="button"
-          className="v2-mmic"
-          data-on={callActive || undefined}
-          data-hearing={listening || undefined}
-          data-talking={speaking || undefined}
-          onClick={toggle}
-          aria-label={callActive ? `End the conversation with ${agentName}` : `Talk to ${agentName}`}
-        >
-          <Mic />
-        </button>
-      </div>
-
-      {/* ── THE REST OF THE RAIL. Desktop only: on a phone the panel is the portrait and its line,
-             and these three blocks are the groups already below it. ─────────────────────────────── */}
-
-      {/* His line, in a paper box rather than over the photograph. Same sentence, different placement
-          — the reference puts it under the portrait once there is a column to put it in. */}
-      <p className="v2-msay">
-        {answer ?? (somethingHappened
-          ? [
-              sent > 0 ? `Sent ${sent}.` : null,
-              waiting > 0 ? `${waiting} ${waiting === 1 ? 'draft is' : 'drafts are'} waiting on you.` : null,
-              needs > 0 ? `${needs} ${needs === 1 ? 'needs' : 'need'} you outright.` : null,
-            ].filter(Boolean).join(' ')
-          : `I've got your inbox. I'll pull you in when I actually need you.`)}
-      </p>
-
-      {/* The three counts, as filters. Clicking one shows that group alone. */}
-      <div className="v2-mstats">
-        {([
-          ['waiting', 'Waiting on you', waiting, 'var(--v2-hold)'],
-          ['needs', 'Needs you', needs, 'var(--v2-pink)'],
-          ['handled', 'Handled', sent, 'var(--v2-miles)'],
-        ] as const).map(([key, label, count, dot]) => (
-          <button
-            key={key}
-            type="button"
-            className="v2-mstat"
-            data-on={only === key || undefined}
-            onClick={() => onOnly(only === key ? null : key)}
-          >
-            <span className="k" style={{ background: dot }} />
-            <span className="l">{label}</span>
-            <span className="v">{count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* The spacer is what keeps the button at the bottom of the card at every window height, and
-          the stats scroll rather than the button being clipped. */}
-      <div className="v2-mspacer" />
-
-      {asking ? (
-        <form
-          className="v2-mask"
-          onSubmit={(e) => { e.preventDefault(); if (input.trim()) handleChatSubmit(e) }}
-        >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={`Ask ${agentName} something`}
-            aria-label={`Ask ${agentName} something`}
-            autoFocus
+        <div className="v2-mportrait">
+          <RudiCanvas
+            key="miles"
+            persona="miles"
+            handleRef={face}
+            onStateChange={setState}
+            className="v2-mface"
+            minimised={stillAtRest}
+            onClick={toggle}
           />
-        </form>
-      ) : (
-        <button type="button" className="v2-mask" onClick={() => { setMode('chat'); setAsking(true) }}>
+          <div className="v2-mveil" aria-hidden />
+
+          <div className="v2-mtop">
+            <span className="v2-mname">{agentName.toUpperCase()} · MESSAGES</span>
+            <span className="v2-mduty"><i />{live ? 'LIVE' : 'ON DUTY'}</span>
+          </div>
+
+          {(reply || somethingHappened) && (
+            <div className="v2-mfoot">
+              <p className="v2-msum">
+                {reply ?? (
+                  <>
+                    {sent > 0 && <>Sent <b>{sent}</b>. </>}
+                    {waiting > 0 && <><b>{waiting}</b> {waiting === 1 ? 'draft is' : 'drafts are'} waiting on you. </>}
+                    {needs > 0 && <><b>{needs}</b> {needs === 1 ? 'needs' : 'need'} you outright.</>}
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
+          {/* THE SAME CONTROL THE PHONE EMPLOYEE HAS, in the same place relative to the portrait. */}
+          <div className="v2-mtalk">
+            <TalkButton state={state} onTalk={toggle} hint={false} variant="onPortrait" />
+          </div>
+        </div>
+
+        {/* ── THE REST OF THE RAIL. Desktop only: on a phone the panel is the portrait and its line,
+               and these three blocks are the groups already below it. ───────────────────────────── */}
+
+        <p className="v2-msay">
+          {reply ?? (somethingHappened
+            ? [
+                sent > 0 ? `Sent ${sent}.` : null,
+                waiting > 0 ? `${waiting} ${waiting === 1 ? 'draft is' : 'drafts are'} waiting on you.` : null,
+                needs > 0 ? `${needs} ${needs === 1 ? 'needs' : 'need'} you outright.` : null,
+              ].filter(Boolean).join(' ')
+            : `I've got your inbox. I'll pull you in when I actually need you.`)}
+        </p>
+
+        {/* The three counts, as filters. Clicking one shows that group alone. */}
+        <div className="v2-mstats">
+          {([
+            ['waiting', 'Waiting on you', waiting, 'var(--v2-hold)'],
+            ['needs', 'Needs you', needs, 'var(--v2-pink)'],
+            ['handled', 'Handled', sent, 'var(--v2-miles)'],
+          ] as const).map(([key, label, count, dot]) => (
+            <button
+              key={key}
+              type="button"
+              className="v2-mstat"
+              data-on={only === key || undefined}
+              onClick={() => onOnly(only === key ? null : key)}
+            >
+              <span className="k" style={{ background: dot }} />
+              <span className="l">{label}</span>
+              <span className="v">{count}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* The spacer is what keeps the button at the bottom of the card at every window height, and
+            the stats scroll rather than the button being clipped. */}
+        <div className="v2-mspacer" />
+
+        <button type="button" className="v2-mask" onClick={toggle}>
           <Chat />Ask {agentName} something
         </button>
-      )}
       </div>
+
+      {/* The session itself. Renders nothing on this surface — the portrait IS its interface. */}
+      {live && (
+        <AmyRealtime
+          briefing={milesBriefing(facts)}
+          audioCtx={session.audioCtx}
+          onClose={() => { session.close(); face.current?.endSession(); setReply(null) }}
+          onType={session.goText}
+          onMoment={onMoment}
+          surface="v2"
+          prompt={buildMilesPrompt(facts)}
+          // His brief already carries the inbox. The dashboard's snapshot is another employee's job.
+          snapshotUrl={null}
+        />
+      )}
     </div>
   )
 }

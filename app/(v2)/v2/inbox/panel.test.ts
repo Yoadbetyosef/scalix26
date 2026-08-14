@@ -12,7 +12,9 @@ describe('the panel is silent when there is nothing', () => {
   it('shows no line and no count unless something actually happened', () => {
     // A panel that says "0 drafts waiting" every morning teaches its owner to stop reading it.
     expect(panel).toContain('const somethingHappened = sent > 0 || waiting > 0 || needs > 0')
-    expect(panel).toContain('{somethingHappened && (')
+    // The line appears when something happened OR when he has just said something — silence means
+    // silence, but an answer is not silence.
+    expect(panel).toContain('{(reply || somethingHappened) && (')
   })
 
   it('never renders a zero', () => {
@@ -26,15 +28,13 @@ describe('the panel is silent when there is nothing', () => {
 describe('one state machine, not two', () => {
   const panel = strip(read('./panel.tsx'))
 
-  it('drives the canvas from useTestAi rather than owning turn-taking', () => {
-    expect(panel).toContain('useTestAi(agentId)')
-    // No microphone, no recognition, no thresholds, no silence timers in here.
+  it('owns no turn-taking: no microphone, no recognition, no timers', () => {
     expect(panel).not.toMatch(/SpeechRecognition|getUserMedia|MediaRecorder|setInterval/)
   })
 
-  it('talks to MILES, not to whoever answers the phone', () => {
-    expect(panel).toContain('agentId: string')
-    expect(panel).toContain('useTestAi(agentId)')
+  it('talks as MILES — his voice and his brief, not the tenant’s default employee', () => {
+    expect(panel).toContain('milesBriefing(facts)')
+    expect(panel).toContain('buildMilesPrompt(facts)')
   })
 })
 
@@ -116,47 +116,6 @@ describe('one inbox, not two', () => {
   })
 })
 
-describe('the five things the merge broke', () => {
-  const panel = strip(read('./panel.tsx'))
-  const groups = strip(read('./groups.tsx'))
-
-  it('2. the panel is a portrait on desktop, not a full-bleed strip', () => {
-    const css = read('../v2-tokens.css')
-    const wide = css.slice(css.indexOf('THE PANEL IS A PORTRAIT'))
-    expect(wide).toMatch(/width: 400px/)
-  })
-
-  it('3. at rest on a phone he is a still frame', () => {
-    expect(panel).toContain('minimised={stillAtRest}')
-    // `useIsMobile` is a tri-state and `!null` is true — the unknown case must not read as mobile.
-    expect(panel).toContain('isMobile === true && !callActive')
-  })
-
-  it('4. the meter measures whoever is making the sound', () => {
-    expect(panel).toContain('useVoiceLevels({ send: level, audio: audioRef, callActive, listening, speaking })')
-    const levels = strip(read('./use-levels.ts'))
-    expect(levels).toContain('getUserMedia')            // yours, while he listens
-    expect(levels).toContain('createMediaElementSource') // his, while he speaks
-  })
-
-  it('4. speaking means audible, not requested', () => {
-    // It used to flip true before the TTS request was sent, so the mouth moved through the silence.
-    const hook = strip(read('../../../../lib/test-ai/use-test-ai.ts'))
-    expect(hook).toContain('audio.onplaying = () => { setPending(false); setSpeaking(true) }')
-    expect(hook).not.toMatch(/async function speakText\(text: string\) \{\s*setSpeaking\(true\)/)
-  })
-
-  it('5. the opening line has no separator of its own to leave behind', () => {
-    // ".2 need you outright." — the full stop was in a ternary that rendered even when the clause
-    // before it did not.
-    expect(groups).not.toMatch(/\? <span>\. <\/span> : <span>\.<\/span>/)
-  })
-
-  it('5. and it is not said twice when the panel is already saying it', () => {
-    expect(groups).toContain('{!milesId && (')
-  })
-})
-
 describe('the floating rail', () => {
   const css = read('../v2-tokens.css')
   const rail = css.slice(css.indexOf('THE FLOATING RAIL'))
@@ -197,54 +156,6 @@ describe('the floating rail', () => {
   })
 })
 
-describe('the three faults in the voice panel', () => {
-  const hook = strip(read('../../../../lib/test-ai/use-test-ai.ts'))
-  const levels = strip(read('./use-levels.ts'))
-  const panel = strip(read('./panel.tsx'))
-  const css = read('../v2-tokens.css')
-
-  it('1. one recogniser at a time', () => {
-    // A new SpeechRecognition was built on every call and the old one left running, so two of them
-    // heard the same sentence and each sent it.
-    expect(hook).toMatch(/if \(recognitionRef\.current\) \{\s*try \{ recognitionRef\.current\.abort\(\)/)
-  })
-
-  it('1. one phrase, one send', () => {
-    expect(hook).toContain('let sent = false')
-    expect(hook).toContain('if (result.isFinal && text.trim() && !sent)')
-  })
-
-  it('1. the microphone does not open while he is still talking', () => {
-    // speakText resolves when play() STARTS. `.then(startListening)` opened the mic over the
-    // greeting, so he transcribed himself and answered his own hello.
-    expect(hook).toContain('void speakText(greeting)')
-    expect(hook).not.toMatch(/speakText\(greeting\)\.then/)
-  })
-
-  it('1. ending a call cannot post one last message', () => {
-    // stop() emits a final result on the way out; abort() does not.
-    expect(hook).not.toMatch(/recognitionRef\.current\?\.stop\(\)/)
-  })
-
-  it('2. the audio context is created inside the gesture and resumed', () => {
-    expect(levels).toContain("if (ctx.state === 'suspended')")
-    expect(levels).toContain('return { prime: () => { void context() } }')
-    expect(panel).toContain('prime()')
-  })
-
-  it('2. and says whether it is measuring anything', () => {
-    expect(levels).toContain('[v2 levels] microphone open')
-    expect(levels).toContain('[v2 levels] no microphone')
-  })
-
-  it('3. the mic answers a press, at the reference’s values', () => {
-    const press = css.slice(css.indexOf('THE PRESS.'))
-    expect(press).toMatch(/transform: scale\(0\.92\)/)
-    expect(press).toMatch(/background: rgba\(217, 242, 36, 0\.22\)/)
-    expect(press).toMatch(/border-color: var\(--v2-miles\)/)
-  })
-})
-
 describe('the conversation that greeted and then listened to nothing', () => {
   const hook = strip(read('../../../../lib/test-ai/use-test-ai.ts'))
 
@@ -268,5 +179,85 @@ describe('the conversation that greeted and then listened to nothing', () => {
 
   it('a recogniser that refuses to start says so instead of ending the conversation silently', () => {
     expect(hook).toContain('[voice] could not start listening')
+  })
+})
+
+describe('one voice loop in the codebase', () => {
+  const panel = strip(read('./panel.tsx'))
+
+  it('the panel runs the SAME session the home screen runs', () => {
+    expect(panel).toContain("import { AmyRealtime, type AmyMoment } from '@/components/dashboard/hero/amy-realtime'")
+    expect(panel).toContain("import { useAmySession } from '@/components/dashboard/hero/use-amy-session'")
+  })
+
+  it('and owns no turn-taking of its own', () => {
+    // Every one of these was in the second implementation, and every one of them failed in its own
+    // way: recognition it started and stopped, an audio element it timed, an analyser it read.
+    for (const ghost of [
+      'useTestAi', 'useVoiceLevels', 'SpeechRecognition', 'getUserMedia',
+      'createMediaElementSource', 'new Audio', 'onplaying', 'setSpeaking',
+    ]) {
+      expect(panel).not.toContain(ghost)
+    }
+  })
+
+  it('projects the session’s moments onto the canvas and decides nothing', () => {
+    expect(panel).toContain("if (m.type === 'listen') f.listen()")
+    expect(panel).toContain("else if (m.type === 'level') f.level(m.value)")
+    expect(panel).toContain("else if (m.type === 'speak')")
+    expect(panel).toContain("else if (m.type === 'arm') f.arm()")
+  })
+
+  it('unlocks the audio context inside the tap, via the session that already did', () => {
+    // The autoplay policy needs the context created in the gesture; useAmySession does that and plays
+    // a one-sample buffer for iOS. The panel does not have its own copy of that either.
+    expect(panel).toContain('session.goLive()')
+    expect(panel).not.toContain('new AudioContext')
+  })
+
+  it('does not weaken the noise gate it inherits', () => {
+    // The gate exists because an employee's own TTS is transcribed as user speech. It lives in the
+    // session; nothing here may re-implement, disable or duplicate it.
+    const realtime = readFileSync(new URL('../../../../components/dashboard/hero/amy-realtime.tsx', import.meta.url), 'utf8')
+    expect(realtime).toContain('LAYER 4 client gate')
+    expect(panel).not.toMatch(/floor|hangover|gate/i)
+  })
+
+  it('the persona changes the portrait, the ground, the voice and the brief — and nothing else', () => {
+    expect(panel).toContain('persona="miles"')
+    expect(panel).toContain('briefing={milesBriefing(facts)}')
+    expect(panel).toContain('prompt={buildMilesPrompt(facts)}')
+    // The dashboard's data snapshot is another employee's job description.
+    expect(panel).toContain('snapshotUrl={null}')
+  })
+
+  it('has the same press-to-talk control, over the portrait', () => {
+    expect(panel).toContain('<TalkButton state={state} onTalk={toggle}')
+    expect(panel).toContain('variant="onPortrait"')
+    const composer = strip(read('../composer.tsx'))
+    expect(composer).toContain('<TalkButton')
+  })
+})
+
+describe('the brief is his own job', () => {
+  const brief = readFileSync(new URL('../../../../lib/miles/briefing.ts', import.meta.url), 'utf8')
+
+  it('tells him what he is holding, what needs a person, and what he sent', () => {
+    expect(brief).toContain('HELD, AND WHY')
+    expect(brief).toContain('WAITING ON A PERSON')
+    expect(brief).toMatch(/drafts are.*held, waiting on a decision/)
+  })
+
+  it('names the drafts rather than only counting them', () => {
+    expect(brief).toContain('f.held.map')
+    expect(brief).toContain('f.unanswered.map')
+  })
+
+  it('says out loud that he does not take calls', () => {
+    expect(brief).toContain('You do not take phone calls')
+  })
+
+  it('zeroes the dashboard fields it does not use rather than inventing them', () => {
+    expect(brief).toContain('handled: 0, booked: 0, recovered: 0, coverage: null')
   })
 })

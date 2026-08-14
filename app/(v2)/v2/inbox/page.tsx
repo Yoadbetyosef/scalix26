@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { agentByPersona, primaryAgent } from '@/lib/agents/primary'
 import { nameOf, PERSONAS } from '@/lib/persona'
 import { readMilesInbox } from '@/lib/miles/inbox-read'
+import { milesFactsFrom } from '@/lib/miles/briefing'
 import { listPageContext } from '../list-page'
 import { InboxGroups } from './groups'
 
@@ -29,7 +30,10 @@ export default async function V2Inbox() {
   const agentName = miles ? nameOf(miles) : agent ? nameOf(agent) : PERSONAS.miles.name
 
   const data = await readMilesInbox(tenantId, agentName)
+  // His brief: the inbox he owns, in his own voice. Built here because the counts are already read.
+  const { data: tenant } = await db.from('tenants').select('business_name').eq('id', tenantId).maybeSingle()
+  const facts = miles ? milesFactsFrom(data, PERSONAS.miles.voice, tenant?.business_name ?? null) : null
   // The panel is Miles's. Without him there is no portrait to show and no employee to talk to, so the
   // screen is the three groups and nothing else.
-  return <InboxGroups data={data} milesId={miles?.id ?? null} />
+  return <InboxGroups data={data} milesId={miles?.id ?? null} facts={facts} />
 }

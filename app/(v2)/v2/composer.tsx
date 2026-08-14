@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { RudiState } from './rudi-canvas'
-import { rudiState } from './rudi-line'
+import { TalkButton } from './talk-button'
 
 // ONE control, not two.
 //
@@ -78,25 +78,15 @@ export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange
   return (
     <div className="v2-composer" data-full={full || undefined}>
       {/* Both faces share .v2-ctl, which owns the geometry. Only the skin differs.
-          
-          Armed takes the SAME treatment as listening, because they are the same state: the mic is
-          open and it is the caller's turn in both. Only the label differs. Giving armed its own skin
-          made it read as a separate screen rather than a moment inside a conversation. */}
-      <button
-        ref={buttonRef}
-        type="button"
-        className="v2-ctl v2-talk"
-        data-on={state !== 'idle' || undefined}
-        data-hidden={typing || undefined}
-        onClick={onTalk}
-        aria-hidden={typing}
-        tabIndex={typing ? -1 : 0}
-      >
-        <span className="v2-mic"><MicIcon /></span>
-        <span className="v2-lab">{rudiState(state)}</span>
-        {!full && <span className="v2-kbd">{state === 'idle' ? 'SPACE' : 'END'}</span>}
-        <span className="v2-shine" aria-hidden><i /></span>
-      </button>
+          The button itself lives in talk-button.tsx now: the messages panel renders the SAME control,
+          and a copied one would drift the moment either screen changed. */}
+      <TalkButton
+        state={state}
+        onTalk={onTalk}
+        hidden={typing}
+        hint={!full}
+        buttonRef={buttonRef}
+      />
 
       <div className="v2-ctl v2-tin" data-hidden={!typing || undefined}>
         <button
