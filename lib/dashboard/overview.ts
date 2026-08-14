@@ -67,7 +67,10 @@ export async function getDashboardData(tenantId: string) {
       .limit(10),
     supabase.from('ai_employees')
       .select('*, channels(*), skills(*)')
-      .eq('tenant_id', tenantId),
+      .eq('tenant_id', tenantId)
+      // Oldest first. Every consumer that picks "the" employee from this array gets a stable answer,
+      // rather than whatever order the database happened to return.
+      .order('created_at', { ascending: true }),
     // Leads — resilient: if the table doesn't exist yet, data is null -> []
     supabase.from('leads')
       .select('*')

@@ -115,3 +115,44 @@ describe('one inbox, not two', () => {
     expect(strip(read('./groups.tsx'))).toContain('handled.filter((r) => r.byAgentId === milesId).length')
   })
 })
+
+describe('the five things the merge broke', () => {
+  const panel = strip(read('./panel.tsx'))
+  const groups = strip(read('./groups.tsx'))
+
+  it('2. the panel is a portrait on desktop, not a full-bleed strip', () => {
+    const css = read('../v2-tokens.css')
+    const wide = css.slice(css.indexOf('THE PANEL IS A PORTRAIT'))
+    expect(wide).toMatch(/width: 400px/)
+  })
+
+  it('3. at rest on a phone he is a still frame', () => {
+    expect(panel).toContain('minimised={stillAtRest}')
+    // `useIsMobile` is a tri-state and `!null` is true — the unknown case must not read as mobile.
+    expect(panel).toContain('isMobile === true && !callActive')
+  })
+
+  it('4. the meter measures whoever is making the sound', () => {
+    expect(panel).toContain('useVoiceLevels({ send: level, audio: audioRef, callActive, listening, speaking })')
+    const levels = strip(read('./use-levels.ts'))
+    expect(levels).toContain('getUserMedia')            // yours, while he listens
+    expect(levels).toContain('createMediaElementSource') // his, while he speaks
+  })
+
+  it('4. speaking means audible, not requested', () => {
+    // It used to flip true before the TTS request was sent, so the mouth moved through the silence.
+    const hook = strip(read('../../../../lib/test-ai/use-test-ai.ts'))
+    expect(hook).toContain('audio.onplaying = () => { setPending(false); setSpeaking(true) }')
+    expect(hook).not.toMatch(/async function speakText\(text: string\) \{\s*setSpeaking\(true\)/)
+  })
+
+  it('5. the opening line has no separator of its own to leave behind', () => {
+    // ".2 need you outright." — the full stop was in a ternary that rendered even when the clause
+    // before it did not.
+    expect(groups).not.toMatch(/\? <span>\. <\/span> : <span>\.<\/span>/)
+  })
+
+  it('5. and it is not said twice when the panel is already saying it', () => {
+    expect(groups).toContain('{!milesId && (')
+  })
+})

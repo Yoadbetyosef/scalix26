@@ -108,16 +108,25 @@ export function InboxGroups({ data, milesId }: Props) {
           </div>
         ) : (
           <>
-            {/* The one true line, built from this screen's own numbers. Nothing is invented: a figure
-                that is zero is left out of the sentence rather than written as "0". */}
-            <p className="v2-lin">
-              {waiting.length > 0 && <b>{waiting.length} {waiting.length === 1 ? 'draft is' : 'drafts are'} waiting on you</b>}
-              {waiting.length > 0 && (needs.length > 0 || handled.length > 0) ? <span>. </span> : <span>.</span>}
-              {needs.length > 0 && <span>{needs.length} {needs.length === 1 ? 'needs' : 'need'} you outright. </span>}
-              {/* No attribution in the opening line: this group now holds Rudi's calls and Miles's
-                  messages, and one name over both would be a small lie in the first sentence. */}
-              {handled.length > 0 && <span>{handled.length} answered without you.</span>}
-            </p>
+            {/* THE OPENING LINE, AND ONLY WHEN THE PANEL IS NOT ALREADY SAYING IT.
+                With Miles hired the same sentence appeared twice, once over his portrait and once
+                under it. The panel's version wins when there is a panel — it is the one attached to
+                the employee who did the work.
+
+                Each clause carries its own separator. The previous version put the full stop in a
+                ternary of its own, so a screen with no drafts opened with a bare "." before the
+                first word: ".2 need you outright." */}
+            {!milesId && (
+              <p className="v2-lin">
+                {waiting.length > 0 && (
+                  <b>{waiting.length} {waiting.length === 1 ? 'draft is' : 'drafts are'} waiting on you. </b>
+                )}
+                {needs.length > 0 && <span>{needs.length} {needs.length === 1 ? 'needs' : 'need'} you outright. </span>}
+                {/* No attribution here: this group holds Rudi's calls and Miles's messages, and one
+                    name over both would be a small lie in the first sentence. */}
+                {handled.length > 0 && <span>{handled.length} answered without you.</span>}
+              </p>
+            )}
 
             {waiting.length > 0 && (
               <>

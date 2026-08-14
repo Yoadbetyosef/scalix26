@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { primaryAgent, agentByPersona } from './primary'
+import { primaryAgent, agentByPersona, primaryOf } from './primary'
 
 // A postgrest stand-in that reproduces the ONE behaviour this module exists for: `maybeSingle()`
 // tolerates zero rows and errors on two. That rule is enforced client-side in
@@ -153,5 +153,41 @@ describe('the shape this module replaced', () => {
 
     expect(data).toBeNull()
     expect(error?.code).toBe('PGRST116')
+  })
+})
+
+describe('primaryOf — the same rule, for rows already loaded', () => {
+  // The dashboard reads every agent in one query and picks one in JS. That pick used to be
+  // `.find(active)` over an unordered result: fine with one agent, a coin toss with two — and it
+  // decides the hero's name, its voice, its portrait and whose Business Brain loads. Rudi started
+  // speaking in Miles's voice on the home screen the day Miles was hired.
+  const a = { id: 'rudi', status: 'active', created_at: '2026-01-01T00:00:00Z' }
+  const b = { id: 'miles', status: 'active', created_at: '2026-08-14T00:00:00Z' }
+
+  it('gives the same answer whatever order the rows arrive in', () => {
+    expect(primaryOf([a, b])?.id).toBe('rudi')
+    expect(primaryOf([b, a])?.id).toBe('rudi')
+  })
+
+  it('agrees with primaryAgent: oldest ACTIVE, not oldest', () => {
+    const draft = { id: 'old-draft', status: 'draft', created_at: '2025-01-01T00:00:00Z' }
+    expect(primaryOf([draft, b, a])?.id).toBe('rudi')
+  })
+
+  it('falls back to the oldest row when none is active', () => {
+    const d1 = { id: 'd1', status: 'draft', created_at: '2026-03-01T00:00:00Z' }
+    const d2 = { id: 'd2', status: 'draft', created_at: '2026-01-01T00:00:00Z' }
+    expect(primaryOf([d1, d2])?.id).toBe('d2')
+  })
+
+  it('does not mutate the caller’s array', () => {
+    const rows = [b, a]
+    primaryOf(rows)
+    expect(rows[0].id).toBe('miles')
+  })
+
+  it('has nothing to say about an empty tenant', () => {
+    expect(primaryOf([])).toBeUndefined()
+    expect(primaryOf(null)).toBeUndefined()
   })
 })

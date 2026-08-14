@@ -30,7 +30,10 @@ export async function POST(req: NextRequest) {
   if (!message) return NextResponse.json({ error: 'message required' }, { status: 400 })
 
   const { data: emp } = await admin
-    .from('ai_employees').select('name').eq('tenant_id', tenant.id).eq('status', 'active').limit(1).maybeSingle()
+    // Ordered: `limit(1)` without it picks an arbitrary active employee, and this is the name the
+    // assistant introduces itself with.
+    .from('ai_employees').select('name').eq('tenant_id', tenant.id).eq('status', 'active')
+    .order('created_at', { ascending: true }).limit(1).maybeSingle()
 
   const text = await answerAsAmy({
     tenantId: tenant.id,

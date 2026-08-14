@@ -46,6 +46,8 @@ export function useTestAi(agentId?: string) {
   const [callActive, setCallActive] = useState(false)
   const [listening, setListening] = useState(false)
   const [speaking, setSpeaking] = useState(false)
+  /** Audio has been asked for and has not started yet. Not speaking — nothing is audible. */
+  const [pending, setPending] = useState(false)
   const [transcript, setTranscript] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<any>(null)
@@ -84,7 +86,11 @@ export function useTestAi(agentId?: string) {
   }
 
   async function speakText(text: string) {
-    setSpeaking(true)
+    // NOT set here. `speaking` used to flip true before the TTS request was even sent, so anything
+    // watching it — a mouth, a meter, a pill — moved during the silence while audio was being
+    // synthesised, and could be finished by the time sound actually arrived. It means what it says
+    // now: audio is playing. `pending` covers the gap for anything that wants to show the wait.
+    setPending(true)
     try {
       // Strip markdown bold
       const clean = text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
@@ -98,11 +104,14 @@ export function useTestAi(agentId?: string) {
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       audioRef.current = audio
-      audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); if (callActive) startListening() }
-      audio.onerror = () => { setSpeaking(false); if (callActive) startListening() }
+      // The element itself says when sound starts and stops. Every exit clears both flags.
+      audio.onplaying = () => { setPending(false); setSpeaking(true) }
+      audio.onended = () => { setSpeaking(false); setPending(false); URL.revokeObjectURL(url); if (callActive) startListening() }
+      audio.onerror = () => { setSpeaking(false); setPending(false); if (callActive) startListening() }
       await audio.play()
     } catch {
       setSpeaking(false)
+      setPending(false)
       if (callActive) startListening()
     }
   }
@@ -178,7 +187,10 @@ export function useTestAi(agentId?: string) {
 
   return {
     messages, input, setInput, loading, error, mode, setMode,
-    callActive, listening, speaking, transcript, bottomRef,
+    callActive, listening, speaking, pending, transcript, bottomRef,
+    // The element that is actually making the sound, so a caller can measure it. Nothing else in the
+    // hook exposes the audio, and a meter that is not measuring the real thing is a decoration.
+    audioRef,
     sendMessage, speakText, startListening, startCall, endCall, handleChatSubmit, reset,
   }
 }

@@ -1823,3 +1823,15 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-mpanel { height: 320px; }
   .v2 .v2-mpanel[data-live] { height: 420px; }
 }
+
+/* THE PANEL IS A PORTRAIT, NOT A BANNER.
+   Full-bleed at desktop width the canvas covers a 3:4 photograph across ~1200px of screen, which
+   crops him to a letterbox strip. The reference never does this: it gives him a 400px side column.
+   Until that column exists, the panel is capped at the column's width and sits at the start of the
+   content, so the image keeps a portrait's proportions instead of being stretched across the page. */
+@media (min-width: 1100px) {
+  .v2 .v2-mpanel {
+    width: 400px; max-width: 100%; margin: 18px 0 0 18px;
+    border-radius: 16px; box-shadow: var(--v2-card-shadow);
+  }
+}

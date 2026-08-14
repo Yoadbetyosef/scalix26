@@ -2,6 +2,7 @@ import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 import type { getImpactData } from './impact'
 import type { getDashboardData } from './overview'
+import { primaryOf } from '@/lib/agents/primary'
 
 // The hero's inputs, moved here VERBATIM from app/dashboard/page.tsx.
 //
@@ -42,8 +43,10 @@ export function buildHeroInputs(
   leads_list: Dash['leads_list'],
   stats: Dash['stats'],
 ): HeroInputs {
-  const employeesTyped = aiEmployees as { id?: string; name?: string | null; status?: string | null; voice?: string | null }[]
-  const primaryEmployee = employeesTyped.find((e) => e.status === 'active') || employeesTyped[0]
+  const employeesTyped = aiEmployees as { id?: string; name?: string | null; status?: string | null; voice?: string | null; created_at?: string | null }[]
+  // Was `.find(active) || [0]` over an unordered query. See primaryOf: with two active employees that
+  // is a coin toss, and it decides this hero's name, voice, portrait and which brain it loads.
+  const primaryEmployee = primaryOf(employeesTyped)
   const employeeName = primaryEmployee?.name || 'Your AI'
   const employeeVoice = primaryEmployee?.voice ?? null
   const brainAgentId = primaryEmployee?.id

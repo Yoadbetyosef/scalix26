@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from 'react'
 import { RudiCanvas, type RudiHandle } from '../rudi-canvas'
+import { useIsMobile } from '../use-breakpoint'
+import { useVoiceLevels } from './use-levels'
 import { useTestAi } from '@/lib/test-ai/use-test-ai'
 
 // MILES, AT THE TOP OF HIS OWN SCREEN.
@@ -42,7 +44,21 @@ const Mic = () => (
 
 export function MilesPanel({ agentId, agentName, sent, waiting, needs }: Props) {
   const face = useRef<RudiHandle | null>(null)
-  const { mode, setMode, callActive, listening, speaking, startCall, endCall, messages } = useTestAi(agentId)
+  const { mode, setMode, callActive, listening, speaking, pending, startCall, endCall, messages, audioRef } = useTestAi(agentId)
+
+  // The meter reads whoever is actually making sound: the microphone while he is listening, the
+  // reply's own audio while he is speaking. Without this the canvas runs its synthetic envelope, and
+  // the waveform belongs to neither person in the room.
+  const level = useRef<((v: number) => void) | null>(null)
+  useEffect(() => { level.current = (v) => face.current?.level(v) }, [])
+  useVoiceLevels({ send: level, audio: audioRef, callActive, listening, speaking })
+
+  // AT REST HE IS A PHOTOGRAPH. `minimised` is the canvas's own still-frame mode — no network, no
+  // sweep, no video — and on a phone that is what he should be until the mic is pressed. The hook
+  // returns null before it has measured, and `!null` is `true`, so the tri-state is read explicitly
+  // rather than negated: unknown is treated as not-mobile, which keeps the desktop behaviour.
+  const isMobile = useIsMobile()
+  const stillAtRest = isMobile === true && !callActive
 
   // The projection. Three booleans in, four canvas states out — and nothing decided here.
   const lastSpoken = useRef('')
@@ -84,13 +100,18 @@ export function MilesPanel({ agentId, agentName, sent, waiting, needs }: Props) 
         persona="miles"
         handleRef={face}
         className="v2-mface"
+        minimised={stillAtRest}
         onClick={toggle}
       />
       <div className="v2-mveil" aria-hidden />
 
       <div className="v2-mtop">
         <span className="v2-mname">{agentName.toUpperCase()} · MESSAGES</span>
-        <span className="v2-mduty"><i />{callActive ? 'LISTENING' : 'ON DUTY'}</span>
+        {/* What is actually happening, in the order it happens. `pending` is the gap between asking
+            for audio and hearing it, and calling that "speaking" is what made the mouth move first. */}
+        <span className="v2-mduty"><i />
+          {speaking ? 'SPEAKING' : pending ? 'THINKING' : listening ? 'LISTENING' : callActive ? 'YOUR TURN' : 'ON DUTY'}
+        </span>
       </div>
 
       {somethingHappened && (

@@ -73,3 +73,22 @@ export async function agentByPersona<T = Record<string, unknown>>(
     .maybeSingle()
   return (data as T | null) ?? null
 }
+
+/**
+ * The same rule as `primaryAgent`, applied to rows that are ALREADY loaded.
+ *
+ * The dashboard reads every agent in one query and then picks one in JavaScript. That pick was
+ * `list.find((e) => e.status === 'active')` over an UNORDERED result, which is deterministic while a
+ * tenant has one agent and arbitrary the moment it has two — and it decides the hero's name, its
+ * voice, its portrait and which agent's Business Brain loads. Hiring Miles flipped it, and Rudi
+ * started speaking in his voice on the home screen.
+ *
+ * Oldest active, then oldest of any status: the same answer `primaryAgent` gives from the database,
+ * so the two cannot disagree about who the tenant's employee is.
+ */
+export function primaryOf<T extends { status?: string | null; created_at?: string | null }>(
+  rows: readonly T[] | null | undefined,
+): T | undefined {
+  const list = [...(rows ?? [])].sort((a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))
+  return list.find((r) => r.status === 'active') ?? list[0]
+}
