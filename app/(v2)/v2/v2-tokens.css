@@ -1561,3 +1561,23 @@
 /* A binding row carries a state pill on the right, so its label must yield rather than push it off. */
 .v2 .v2-grow[data-static] .v2-gtrail { flex: none; }
 .v2 .v2-grow[data-static] .v2-glab { overflow-wrap: anywhere; }
+
+/* Save sits on its own, not inside a card: it acts on the whole screen rather than on a section. */
+.v2 .v2-savebar { display: flex; flex-wrap: wrap; gap: 8px; margin: 26px 0 8px; }
+
+/* THE DANGER ZONE. Solid red, no gradient anywhere, and no press accent — it must not read as one
+   more row. The one destructive control in /v2 gets the one treatment nothing else uses. */
+.v2 .v2-group[data-danger] { margin-top: 40px; }
+.v2 .v2-ghead[data-danger] { color: var(--v2-red); }
+.v2 .v2-ghead[data-danger] i { background: var(--v2-red); }
+.v2 .v2-ghead[data-danger] s { background: linear-gradient(90deg, rgba(255, 92, 108, 0.35), transparent); }
+.v2 .v2-gchip[data-danger] { background: rgba(255, 92, 108, 0.1); }
+.v2 .v2-gchip[data-danger] svg { stroke: var(--v2-red); }
+.v2 .v2-danger {
+  min-height: 40px; padding: 8px 16px; border-radius: 999px;
+  background: var(--v2-red); color: #fff; font-size: 13.5px; font-weight: 600;
+  transition: filter 0.16s;
+}
+.v2 .v2-danger:hover { filter: brightness(0.94); }
+/* Deliberately no scale on press. Every other control springs; this one does not, because a
+   destructive button should not feel playful under a finger. */

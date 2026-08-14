@@ -124,3 +124,19 @@ Related, from the same mapping: buying or releasing a number, choosing a Page an
 all run through `/api/agents/:id/channels`. Connections shows their STATE; the binding stays on the
 agent, because moving the connect action would mean changing agent endpoints inside a design-only
 pass.
+
+## 9. The agent screen: two sections are read-only, and one header does not exist
+
+**Skills and Knowledge Base render as summaries on /v2/agents/[id].** Both are edited by their own
+components on the real screen — Skills by its own panel, Knowledge by `KnowledgeBaseEditor` — and
+wiring those is not a reskin of the agent screen; it is those components' own migration. The v2
+sections state what is on and how much is taught, which is true and useful, and stop there.
+
+**There is no SCALIX PLAYBOOK header to preserve.** It was specified as read-only on Custom
+Instructions, but `app/ai-employees/[id]` renders `system_prompt` as a plain textarea with no header,
+prefix or read-only region anywhere. Adding one would be inventing a control, so Custom Instructions
+is the textarea it has always been. If the playbook header is wanted, it is a new feature on the real
+screen first.
+
+**Facebook and Instagram rows show a Page id, not a Page name.** `Channel` carries `meta_page_id` and
+nothing else; a name would be a new read.

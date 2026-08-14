@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, Sparkles, AudioLines, FileText, Clock, CalendarCheck, Phone, Mail } from 'lucide-react'
+import { Building2, Sparkles, AudioLines, FileText, Clock, CalendarCheck, Phone, Mail, ScrollText, Zap, BookOpen, Power, Trash2 } from 'lucide-react'
 import { useAgentEditor } from '@/components/ai-employees/use-agent-editor'
 import type { Props } from '@/components/ai-employees/ai-employee-edit-client'
 import { WeeklyHoursGrid } from '@/components/ai-employees/hours-controls'
@@ -39,8 +39,10 @@ export function AgentClient(props: Props) {
   const {
     form, setForm, isDirty, businessHours, updateBusinessHours, appointmentHours, updateAppointmentHours,
     phoneChannel, fbChannel, igChannel,
+    saving, handleSave, finishing, finishSetup, handleDelete, toggleStatus,
   } = useAgentEditor(props)
   const mailbox = props.emailAccounts?.find((a) => a.is_primary) ?? props.emailAccounts?.[0]
+  const skills = props.skills ?? []
   const { employee } = props
   // Typed against the hook's own form shape, so a field name that does not exist fails to compile
   // rather than silently writing a key nobody reads.
@@ -231,6 +233,107 @@ export function AgentClient(props: Props) {
                   placeholder="hello@yourbusiness.com"
                   disabled={!mailbox}
                 />
+              </div>
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+            <p className="v2-ghead"><i />Custom instructions<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static><span className="v2-gchip"><ScrollText /></span>
+                <span className="v2-glab">Rules this agent follows on every call and message.</span></div>
+              <GlassInput
+                label="Instructions"
+                value={form.system_prompt}
+                onChange={(v) => setForm((f) => ({ ...f, system_prompt: v }))}
+                multiline
+                placeholder="Always mention our 24/7 emergency line. Never quote over $500 without approval."
+              />
+            </div>
+          </section>
+
+          {/* Skills and Knowledge are READ-ONLY here. Both are edited by their own components on the
+              real screen — Skills by its own panel, Knowledge by KnowledgeBaseEditor — and rendering a
+              summary is the honest half. Wiring their editors is not a reskin of this screen; it is
+              those components' own migration, and it gets its own pass. */}
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+            <p className="v2-ghead"><i />Skills<s /></p>
+            <div className="v2-gcard">
+              {skills.length === 0
+                ? <div className="v2-grow" data-static><span className="v2-gchip"><Zap /></span>
+                    <span className="v2-glab">No skills switched on yet.</span></div>
+                : skills.map((sk) => (
+                  <div key={sk.type} className="v2-grow" data-static>
+                    <span className="v2-gchip"><Zap /></span>
+                    <span className="v2-glab">{sk.type.replace(/_/g, ' ')}</span>
+                    <span className="v2-gtrail">
+                      <StatusPill state={sk.active ? 'live' : 'off'}>{sk.active ? 'On' : 'Off'}</StatusPill>
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+            <p className="v2-ghead"><i />Knowledge<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip"><BookOpen /></span>
+                <span className="v2-glab">
+                  {props.knowledgeBase.length === 0
+                    ? 'Nothing taught yet — Rudi answers from your website and details above.'
+                    : `${props.knowledgeBase.length} ${props.knowledgeBase.length === 1 ? 'entry' : 'entries'} this agent can quote from.`}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+            <p className="v2-ghead"><i />This agent<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip"><Power /></span>
+                <span className="v2-glab">{form.status === 'active' ? 'On duty — answering right now.' : 'Paused — nothing is being answered.'}</span>
+                <span className="v2-gtrail">
+                  <button type="button" data-touch className="v2-ract" onClick={toggleStatus}>
+                    {form.status === 'active' ? 'Pause' : 'Resume'}
+                  </button>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* SAVE. The accent goes on it only when there is something to save — otherwise the one
+              gradient on the screen would be pointing at a no-op. */}
+          <div className="v2-savebar">
+            <button
+              type="button"
+              data-touch
+              className="v2-ract"
+              data-tone={isDirty ? 'primary' : 'quiet'}
+              disabled={saving || !isDirty}
+              onClick={handleSave}
+            >
+              {saving ? 'Saving…' : isDirty ? 'Save changes' : 'Saved'}
+            </button>
+            {props.onboarding && (
+              <button type="button" data-touch className="v2-ract" disabled={finishing} onClick={finishSetup}>
+                {finishing ? 'Finishing…' : 'Finish setup'}
+              </button>
+            )}
+          </div>
+
+          {/* DANGER ZONE. Solid red, no gradient, no press accent — it must not read as one more row.
+              handleDelete keeps its own confirmation exactly as it is. */}
+          <section className="v2-group" data-danger>
+            <p className="v2-ghead" data-danger><i />Danger zone<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip" data-danger><Trash2 /></span>
+                <span className="v2-glab">Deleting this agent removes its number, its channels and everything it has learned.</span>
+                <span className="v2-gtrail">
+                  <button type="button" className="v2-danger" onClick={handleDelete}>Delete agent</button>
+                </span>
               </div>
             </div>
           </section>
