@@ -98,7 +98,10 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   // column; a phone has no centre column, so there is nothing for it to reveal and the collapsed
   // state was only ever a smaller portrait on an empty screen. On mobile a session simply ends and
   // she stays full-screen, back at the resting caption and the Talk button — the state it started in.
-  const collapse = useCallback(() => { if (!isMobile) setMinimised(true) }, [isMobile])
+  // isMobile is boolean | null — null until the media query resolves after mount. `!isMobile` read
+  // that unresolved state as desktop and collapsed the hero on a phone, where nothing fills the space
+  // behind it. Explicitly false, so "not yet known" is never mistaken for "definitely wide".
+  const collapse = useCallback(() => { if (isMobile === false) setMinimised(true) }, [isMobile])
 
   const wake = useCallback(() => { setMinimised(false); kick() }, [kick])
 

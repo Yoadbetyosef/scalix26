@@ -264,37 +264,43 @@
 }
 
 /* Collapsed: the hero shrinks to the corner and the dashboard fades up behind it. */
-.v2-root[data-min] .v2-face {
-  left: 32px; bottom: 32px; top: auto; right: auto;
-  width: 172px; height: 230px; border-radius: 16px;
-  box-shadow: 0 14px 40px rgba(14, 14, 17, 0.22), 0 0 0 1px rgba(14, 14, 17, 0.07);
-  z-index: 6;
+/* COLLAPSE IS DESKTOP-ONLY, AND THIS IS THE GUARD THAT CANNOT HAVE A HOLE. The JS guard depends on
+   when a media query resolved; this does not. A phone has no centre column for the dashboard to fill,
+   so a collapsed hero there is a small card on a black screen. Desktop rules unchanged, only scoped. */
+@media (min-width: 720px) {
+  .v2-root[data-min] .v2-face {
+    left: 32px; bottom: 32px; top: auto; right: auto;
+    width: 172px; height: 230px; border-radius: 16px;
+    box-shadow: 0 14px 40px rgba(14, 14, 17, 0.22), 0 0 0 1px rgba(14, 14, 17, 0.07);
+    z-index: 6;
+  }
+  /* THE COLLAPSED TILE MUST OUTRANK THE DASHBOARD.
+     .v2-face carries z-index 6 and .v2-dash carries 4, which worked while they were SIBLINGS inside
+     .v2-stage. Since the hoist they are in different stacking contexts — the face inside .v2-hero (z 1),
+     the dash inside .v2-app (z 2) — so the entire hero subtree paints below the entire chrome subtree
+     and 6 can never beat 4. The tile was rendering correctly and was simply underneath the dashboard,
+     which is why the media looked blank with nothing to click.
+     Collapsed, the hero rises above the chrome and stops painting its own dark ground so the dashboard
+     shows through; only the tile itself takes the pointer. */
+  .v2-root[data-min] .v2-hero {
+    z-index: 5;
+    background: transparent;
+    pointer-events: none;
+  }
+  .v2-root[data-min] .v2-face { pointer-events: auto; cursor: pointer; }
+  .v2-root[data-min] .v2-scrim { opacity: 0; }
+  .v2-root[data-min] .v2-overlay { opacity: 0; pointer-events: none; }
+  .v2-dash {
+    position: absolute; inset: 0; background: var(--v2-paper); padding: 38px 44px 32px; z-index: 4;
+    opacity: 0; pointer-events: none; overflow-y: auto;
+    /* visibility, not just opacity: an opacity-0 panel is still hit-tested and still focusable, so it
+       could swallow a click or a tab stop while being invisible. Transitioned with a delay so it fades
+       out fully before it leaves the stack. */
+    visibility: hidden;
+    transition: opacity 0.4s, visibility 0s linear 0.4s;
+  }
 }
-/* THE COLLAPSED TILE MUST OUTRANK THE DASHBOARD.
-   .v2-face carries z-index 6 and .v2-dash carries 4, which worked while they were SIBLINGS inside
-   .v2-stage. Since the hoist they are in different stacking contexts — the face inside .v2-hero (z 1),
-   the dash inside .v2-app (z 2) — so the entire hero subtree paints below the entire chrome subtree
-   and 6 can never beat 4. The tile was rendering correctly and was simply underneath the dashboard,
-   which is why the media looked blank with nothing to click.
-   Collapsed, the hero rises above the chrome and stops painting its own dark ground so the dashboard
-   shows through; only the tile itself takes the pointer. */
-.v2-root[data-min] .v2-hero {
-  z-index: 5;
-  background: transparent;
-  pointer-events: none;
-}
-.v2-root[data-min] .v2-face { pointer-events: auto; cursor: pointer; }
-.v2-root[data-min] .v2-scrim { opacity: 0; }
-.v2-root[data-min] .v2-overlay { opacity: 0; pointer-events: none; }
-.v2-dash {
-  position: absolute; inset: 0; background: var(--v2-paper); padding: 38px 44px 32px; z-index: 4;
-  opacity: 0; pointer-events: none; overflow-y: auto;
-  /* visibility, not just opacity: an opacity-0 panel is still hit-tested and still focusable, so it
-     could swallow a click or a tab stop while being invisible. Transitioned with a delay so it fades
-     out fully before it leaves the stack. */
-  visibility: hidden;
-  transition: opacity 0.4s, visibility 0s linear 0.4s;
-}
+
 .v2-root[data-min] .v2-dash {
   opacity: 1; pointer-events: auto; visibility: visible;
   transition: opacity 0.4s, visibility 0s;
