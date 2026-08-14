@@ -231,11 +231,37 @@ describe('one voice loop in the codebase', () => {
     expect(panel).toContain('snapshotUrl={null}')
   })
 
-  it('has the same press-to-talk control, over the portrait', () => {
-    expect(panel).toContain('<TalkButton state={state} onTalk={toggle}')
-    expect(panel).toContain('variant="onPortrait"')
+  it('has ONE control on the portrait, and it is the mic', () => {
+    // The technical mic is what the mockups draw and what belongs on his photograph. The lifted
+    // TalkButton stays where it came from — the composer bar on the home screen.
+    expect(panel).toContain('className="v2-mmic"')
+    expect(panel).not.toContain('<TalkButton')
     const composer = strip(read('../composer.tsx'))
     expect(composer).toContain('<TalkButton')
+  })
+
+  it('the mic and the ring are the same button on the same handler', () => {
+    // The hover state is a skin. A second element with its own onClick would be a third path into the
+    // session, which is the thing this whole change exists to prevent.
+    const clicks = [...panel.matchAll(/onClick=\{toggle\}/g)]
+    expect(clicks.length).toBeGreaterThanOrEqual(2)   // the canvas, and the mic
+    expect(panel).toContain('<em className="v2-mmlab">{live ? \'END\' : \'TALK\'}</em>')
+  })
+
+  it('borrows the ring’s own values rather than inventing them', () => {
+    const css = read('../v2-tokens.css')
+    const ring = css.slice(css.indexOf('THE MIC, AND THE RING IT BECOMES'))
+    expect(ring).toMatch(/width: 84px; height: 84px; border-radius: 50%/)
+    expect(ring).toMatch(/background: rgba\(255, 255, 255, 0\.1\); border-color: rgba\(255, 255, 255, 0\.75\)/)
+    expect(ring).toMatch(/font-size: 9px; letter-spacing: 0\.18em/)
+  })
+
+  it('never dims a portrait under a finger', () => {
+    const css = read('../v2-tokens.css')
+    const ring = css.slice(css.indexOf('THE MIC, AND THE RING IT BECOMES'))
+    expect(ring).toMatch(/@media \(hover: hover\) and \(pointer: fine\)/)
+    // The dim and the morph are both inside that query.
+    expect(ring.slice(ring.indexOf('@media'))).toContain('.v2-mdim { opacity: 1; }')
   })
 })
 

@@ -1952,3 +1952,47 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 .v2 .v2-ctl.v2-talk[data-variant="portrait"] .v2-lab { color: #fff; }
 .v2 .v2-ctl.v2-talk[data-variant="portrait"][data-on] { border-color: var(--v2-miles); }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   THE MIC, AND THE RING IT BECOMES
+
+   Two faces of ONE button. At rest it is the technical mic the mockups draw. On hover it becomes the
+   treatment the phone employee's portrait already uses — the custom cursor in interactions.tsx —
+   at its own values: 84px, rgba(255,255,255,.1) fill, a .75 white outline, and a 9px/.18em mono
+   label inside. Reusing those numbers rather than picking new ones is the point: it is meant to read
+   as the same control the other portrait has.
+
+   Hover only where there IS hover. A tap fires mouseenter on some browsers, and a portrait left
+   dimmed under a finger would be a control that looks stuck. */
+
+.v2 .v2-mdim {
+  position: absolute; inset: 0; z-index: 8; pointer-events: none;
+  background: rgba(10, 10, 8, 0.45); opacity: 0;
+  transition: opacity 0.32s var(--v2-ease);
+}
+.v2 .v2-mmlab {
+  position: absolute; font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.18em;
+  font-style: normal; color: #fff; opacity: 0; transition: opacity 0.2s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .v2 .v2-mportrait[data-hover] .v2-mdim { opacity: 1; }
+
+  /* The mic dissolves into the ring: same element, same centre, no reflow — width/height and radius
+     animate, and the two glyphs cross-fade. */
+  .v2 .v2-mportrait[data-hover] .v2-mmic {
+    width: 84px; height: 84px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.75);
+    backdrop-filter: none;
+  }
+  .v2 .v2-mportrait[data-hover] .v2-mmic svg { opacity: 0; }
+  .v2 .v2-mportrait[data-hover] .v2-mmic .v2-mmlab { opacity: 1; }
+  /* The press still answers, at the ring's size. */
+  .v2 .v2-mportrait[data-hover] .v2-mmic:active { transform: scale(0.92); }
+}
+
+.v2 .v2-mmic {
+  transition: transform 0.14s, background 0.3s, border-color 0.3s,
+              width 0.38s var(--v2-ease), height 0.38s var(--v2-ease), border-radius 0.38s var(--v2-ease);
+}
+.v2 .v2-mmic svg { transition: opacity 0.2s; }

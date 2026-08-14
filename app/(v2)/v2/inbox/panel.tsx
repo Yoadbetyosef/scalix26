@@ -2,7 +2,6 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { RudiCanvas, type RudiHandle, type RudiState } from '../rudi-canvas'
-import { TalkButton } from '../talk-button'
 import { useIsMobile } from '../use-breakpoint'
 import { AmyRealtime, type AmyMoment } from '@/components/dashboard/hero/amy-realtime'
 import { useAmySession } from '@/components/dashboard/hero/use-amy-session'
@@ -44,6 +43,15 @@ interface Props {
   onOnly: (k: GroupKey | null) => void
 }
 
+const Mic = () => (
+  // The mockup's SVG, exactly: two concentric rings and five signal bars. Technical, not a toy glyph.
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <circle className="rng" cx="12" cy="12" r="10" />
+    <circle className="rng" cx="12" cy="12" r="6.5" />
+    <path className="bar" d="M7 10v4M10 7.5v9M13 6v12M16 9v6M19 11v2" />
+  </svg>
+)
+
 const Chat = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M20 11a7.5 7.5 0 0 1-10.8 6.7L4 19l1.3-4.6A7.5 7.5 0 1 1 20 11z" />
@@ -54,6 +62,9 @@ export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnl
   const face = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [reply, setReply] = useState<string | null>(null)
+  // Hover is held in state rather than in CSS `:has()`, which is not available everywhere this ships,
+  // and the styling is gated behind (hover: hover) so a tap can never leave the portrait dimmed.
+  const [hovering, setHovering] = useState(false)
   const session = useAmySession()
 
   // The portrait, driven by the session's own moments — the same projection the home screen uses.
@@ -100,7 +111,7 @@ export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnl
       {/* The panel is the gutter; the rail is the card that sits in it. On a phone the card has no
           border, no radius and no shadow and simply fills the top of the screen — same DOM. */}
       <div className="v2-mrail">
-        <div className="v2-mportrait">
+        <div className="v2-mportrait" data-hover={hovering || undefined}>
           <RudiCanvas
             key="miles"
             persona="miles"
@@ -131,10 +142,31 @@ export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnl
             </div>
           )}
 
-          {/* THE SAME CONTROL THE PHONE EMPLOYEE HAS, in the same place relative to the portrait. */}
-          <div className="v2-mtalk">
-            <TalkButton state={state} onTalk={toggle} hint={false} variant="onPortrait" />
-          </div>
+          {/* The portrait dims behind the ring. Rendered always, opaque only on hover, so nothing
+              moves when the pointer arrives. */}
+          <div className="v2-mdim" aria-hidden />
+
+          {/* ONE CONTROL, TWO FACES.
+              At rest: the technical mic — concentric rings, signal bars, rounded square, dark glass.
+              On hover: it becomes the ring Rudi's portrait uses, at the same 84px, the same
+              rgba(255,255,255,.1) fill and .75 outline, with the same mono label inside it.
+              Same button, same onClick — the hover is a skin, not a second path. */}
+          <button
+            type="button"
+            className="v2-mmic"
+            data-on={live || undefined}
+            data-hearing={state === 'listening' || undefined}
+            data-talking={state === 'speaking' || undefined}
+            data-touch
+            onClick={toggle}
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
+            aria-label={live ? `End the conversation with ${agentName}` : `Talk to ${agentName}`}
+          >
+            <Mic />
+            {/* The label the ring carries. Same vocabulary as the cursor over her portrait. */}
+            <em className="v2-mmlab">{live ? 'END' : 'TALK'}</em>
+          </button>
         </div>
 
         {/* ── THE REST OF THE RAIL. Desktop only: on a phone the panel is the portrait and its line,
