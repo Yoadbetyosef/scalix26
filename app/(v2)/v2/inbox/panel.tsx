@@ -142,6 +142,15 @@ export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnl
             </div>
           )}
 
+          {/* THE COLLAPSED LINE. In the DOM always, revealed by CSS when the scroller says the hero
+              is a bar — so nothing re-renders as a thumb moves. Counts only, vertically centred. */}
+          <p className="v2-mminlab">
+            {waiting > 0 && <><b>{waiting}</b> waiting</>}
+            {waiting > 0 && needs > 0 && <> · </>}
+            {needs > 0 && <><b>{needs}</b> need you</>}
+            {waiting === 0 && needs === 0 && <>All clear</>}
+          </p>
+
           {/* The portrait dims behind the ring. Rendered always, opaque only on hover, so nothing
               moves when the pointer arrives. */}
           <div className="v2-mdim" aria-hidden />

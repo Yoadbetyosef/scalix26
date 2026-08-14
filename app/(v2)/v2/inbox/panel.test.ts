@@ -287,3 +287,64 @@ describe('the brief is his own job', () => {
     expect(brief).toContain('handled: 0, booked: 0, recovered: 0, coverage: null')
   })
 })
+
+describe('mobile — R1', () => {
+  const css = read('../v2-tokens.css')
+  const r1 = css.slice(css.indexOf('MOBILE — R1'))
+  const groups = strip(read('./groups.tsx'))
+  const panel = strip(read('./panel.tsx'))
+
+  it('is entirely inside a max-width query — desktop cannot reach any of it', () => {
+    expect(r1).toMatch(/@media \(max-width: 1099px\)/)
+    // Everything after the query opener stays inside it: no rule closes back out to the top level.
+    const body = r1.slice(r1.indexOf('@media (max-width: 1099px) {'))
+    const opens = (body.match(/\{/g) ?? []).length
+    const closes = (body.match(/\}/g) ?? []).length
+    expect(opens).toBe(closes)
+  })
+
+  it('the hero is a card in the scroller, at the reference’s values', () => {
+    expect(r1).toMatch(/height: 330px;[^}]*border-radius: 26px/)
+    expect(r1).toMatch(/box-shadow: 0 10px 34px -14px rgba\(0, 0, 0, 0\.4\)/)
+    expect(r1).toMatch(/padding: 0 14px 30px/)
+  })
+
+  it('one scroll container, not two', () => {
+    // .v2-mbody was `display: contents` on a phone — a wrapper that did nothing. It scrolls now, and
+    // .v2-pbody stops scrolling, so the hero and the groups move together.
+    expect(r1).toMatch(/\.v2-mbody \{\s*display: block; flex: 1; min-height: 0; overflow-y: auto/)
+    expect(r1).toMatch(/\.v2-pbody \{ overflow: visible; padding: 0; flex: none; \}/)
+  })
+
+  it('collapses to a bar past 44px, on the reference’s curve', () => {
+    expect(groups).toContain('el.scrollTop > 44')
+    expect(r1).toMatch(/\[data-min\] \.v2-mpanel \{ height: 78px; border-radius: 22px; \}/)
+    expect(r1).toMatch(/cubic-bezier\(0\.32, 0\.72, 0, 1\)/)
+    expect(r1).toMatch(/\[data-min\] \.v2-mmic \{ width: 46px; height: 46px; border-radius: 15px; \}/)
+  })
+
+  it('swaps the long line for the counts, without re-rendering the list', () => {
+    expect(panel).toContain('className="v2-mminlab"')
+    // The attribute is written to the node; a thumb moving must not re-render the inbox.
+    expect(groups).toContain('el.dataset.min')
+    expect(groups).not.toMatch(/setCollapsed|useState<boolean>\(false\)/)
+  })
+
+  it('the group header loses its dot and its coloured pill', () => {
+    expect(r1).toMatch(/\.v2-mgl i \{ display: none; \}/)
+    expect(r1).toMatch(/letter-spacing: 0\.18em; color: var\(--v2-ink-42\)/)
+    expect(r1).toMatch(/\.v2-mgl em \{[^}]*background: none !important/)
+  })
+
+  it('"new" is a dot', () => {
+    expect(r1).toMatch(/\.v2-mnew \{\s*width: 7px; height: 7px;[^}]*background: var\(--v2-pink\)/)
+  })
+
+  it('rows and cards take the refined values', () => {
+    expect(r1).toMatch(/\.v2-mrow \{ gap: 13px; padding: 15px 14px; min-height: 70px; \}/)
+    expect(r1).toMatch(/\.v2-mav \{ width: 38px; height: 38px; border-radius: 12px; \}/)
+    expect(r1).toMatch(/box-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.04\), 0 8px 22px -12px rgba\(0, 0, 0, 0\.14\)/)
+    expect(r1).toMatch(/\.v2-msep \{ margin-left: 65px/)
+    expect(r1).toMatch(/font-size: 15\.5px/)
+  })
+})

@@ -1996,3 +1996,86 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
               width 0.38s var(--v2-ease), height 0.38s var(--v2-ease), border-radius 0.38s var(--v2-ease);
 }
 .v2 .v2-mmic svg { transition: opacity 0.2s; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   MOBILE — R1, from docs/miles/inbox-mobile-refined.html. Values taken directly.
+
+   The portrait stops being a banner ABOVE the list and becomes the first card INSIDE it. One scroll
+   container holds the hero and every group, so the photograph scrolls away with the threads instead
+   of sitting on top of them — and past 44px it becomes a bar.
+
+   Entirely inside a max-width query. Desktop keeps the floating rail, untouched: no rule below is
+   reachable at 1100px and up, and nothing above 1100px was edited. */
+
+@media (max-width: 1099px) {
+  /* ONE SCROLLER. `.v2-mbody` was `display: contents` — a wrapper that did nothing on a phone. It is
+     the scroll container now, and .v2-pbody stops being one, so there is exactly one. */
+  .v2 .v2-page[data-miles] .v2-mbody {
+    display: block; flex: 1; min-height: 0; overflow-y: auto;
+    padding: 0 14px 30px; scroll-behavior: smooth; -webkit-overflow-scrolling: touch;
+  }
+  .v2 .v2-page[data-miles] .v2-pbody { overflow: visible; padding: 0; flex: none; }
+
+  /* THE HERO CARD. Inset by the scroller's own 14px, and it scrolls with the list. */
+  .v2 .v2-page[data-miles] .v2-mpanel {
+    height: 330px; flex: none; overflow: hidden; border-radius: 26px;
+    box-shadow: 0 10px 34px -14px rgba(0, 0, 0, 0.4);
+    transition: height 0.5s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .v2 .v2-page[data-miles] .v2-mrail { border-radius: inherit; }
+  .v2 .v2-page[data-miles] .v2-mportrait { border-radius: inherit; }
+
+  /* COLLAPSED. The bar keeps the mic and the counts and nothing else. */
+  .v2 .v2-page[data-miles] .v2-mbody[data-min] .v2-mpanel { height: 78px; border-radius: 22px; }
+  .v2 .v2-page[data-miles] .v2-mbody[data-min] .v2-mfoot { opacity: 0; }
+  .v2 .v2-page[data-miles] .v2-mbody[data-min] .v2-mtop { opacity: 0; }
+  .v2 .v2-mfoot, .v2 .v2-mtop { transition: opacity 0.3s; }
+
+  .v2 .v2-mminlab {
+    position: absolute; left: 18px; top: 50%; transform: translateY(-50%); z-index: 5;
+    opacity: 0; transition: opacity 0.3s 0.1s; font-size: 14px; color: #fff;
+  }
+  .v2 .v2-mminlab b { color: var(--v2-miles); font-weight: 500; }
+  .v2 .v2-page[data-miles] .v2-mbody[data-min] .v2-mminlab { opacity: 1; }
+
+  /* The mic shrinks with the card. */
+  .v2 .v2-mmic { width: 54px; height: 54px; border-radius: 17px; right: 16px; bottom: 16px; }
+  .v2 .v2-mmic svg { width: 23px; height: 23px; }
+  .v2 .v2-page[data-miles] .v2-mbody[data-min] .v2-mmic { width: 46px; height: 46px; border-radius: 15px; }
+  .v2 .v2-page[data-miles] .v2-mbody[data-min] .v2-mmic svg { width: 20px; height: 20px; }
+
+  /* ── THE LIST ITSELF ────────────────────────────────────────────────────────────────────────────
+     The group headers lose their coloured dot and their coloured count pill. Three stacked pills
+     going down a phone screen was three things competing to be read first; the label, a plain count
+     and a hairline say the same thing and let the rows have the colour. */
+  .v2 .v2-mgl { display: flex; align-items: baseline; gap: 10px; margin: 22px 2px 10px; }
+  .v2 .v2-mgl:first-child { margin-top: 4px; }
+  .v2 .v2-mgl i { display: none; }
+  .v2 .v2-mgl b { font-size: 10.5px; letter-spacing: 0.18em; color: var(--v2-ink-42); }
+  .v2 .v2-mgl em {
+    font-family: var(--v2-mono); font-size: 10.5px; color: var(--v2-ink-42);
+    background: none !important; padding: 0; border-radius: 0;
+  }
+  .v2 .v2-mgl u { background: var(--v2-line) !important; transform: translateY(-3px); }
+
+  .v2 .v2-mcard {
+    border-radius: 18px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 22px -12px rgba(0, 0, 0, 0.14);
+  }
+  .v2 .v2-mrow { gap: 13px; padding: 15px 14px; min-height: 70px; }
+  .v2 .v2-mav { width: 38px; height: 38px; border-radius: 12px; }
+  .v2 .v2-mav svg { width: 18px; height: 18px; }
+  .v2 .v2-mmid p { font-size: 15.5px; letter-spacing: -0.005em; }
+  .v2 .v2-mmid span { font-size: 13px; margin-top: 3px; line-height: 1.35; }
+  .v2 .v2-mmeta { gap: 6px; }
+  .v2 .v2-mmeta time { font-size: 11px; color: var(--v2-ink-42); }
+  .v2 .v2-mtag { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.12em; padding: 3px 7px; border-radius: 5px; }
+  .v2 .v2-msep { margin-left: 65px; background: var(--v2-line); height: 1px; }
+
+  /* "new" is a dot, not a pill. A word in a magenta capsule was shouting the same thing the row's
+     position in the NEEDS YOU group already says. */
+  .v2 .v2-mnew {
+    width: 7px; height: 7px; padding: 0; border-radius: 7px; background: var(--v2-pink);
+    font-size: 0; color: transparent; overflow: hidden;
+  }
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePressState } from '../use-press'
 import { channelKey } from '../channels'
@@ -51,6 +51,33 @@ export function InboxGroups({ data, milesId, facts }: Props) {
   // The rail's counts are filters. Null = every group, which is what a phone always shows.
   const [only, setOnly] = useState<GroupKey | null>(null)
 
+  // ── THE HERO COLLAPSES AS THE LIST MOVES ─────────────────────────────────────────────────────────
+  //
+  // On a phone the portrait is the first CARD in the scroller rather than a banner above it, so it
+  // scrolls with everything else — and past 44px it becomes a bar. The attribute is written straight
+  // to the node rather than held in state: this fires on every scroll frame, and re-rendering the
+  // whole inbox to change one class would make the list stutter under a thumb. Everything it drives
+  // is CSS, and desktop has no rule bound to it at all.
+  const scroller = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const min = el.scrollTop > 44
+        if ((el.dataset.min === '') !== min) {
+          if (min) el.dataset.min = ''
+          else delete el.dataset.min
+        }
+      })
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => { el.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf) }
+  }, [])
+
   async function decide(row: WaitingRow, what: 'send' | 'mine') {
     setBusy({ id: row.draftId, what })
     setFailed((f) => ({ ...f, [row.draftId]: '' }))
@@ -92,7 +119,7 @@ export function InboxGroups({ data, milesId, facts }: Props) {
 
       {/* `display: contents` below 1100px, a two-column grid above it — so the phone layout is this
           exact DOM in this exact order, and the desktop one is a gutter and a list. */}
-      <div className="v2-mbody">
+      <div className="v2-mbody" ref={scroller}>
       {milesId && facts && (
         <MilesPanel
           agentName={agentName}
