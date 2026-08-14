@@ -43,10 +43,24 @@ export interface Persona {
   ground: string
   /** THE hue that marks this employee, and only where they are. */
   accent: string
-  /** Ink on `wash`. */
-  ink: string
-  /** The pale ground for accent-tinted surfaces. */
+  /**
+   * The pale ground this employee's own messages sit on, and the ink that reads on it.
+   *
+   * ── HAND-PICKED. DO NOT REPLACE WITH A FORMULA. ──────────────────────────────────────────────────
+   *
+   * The obvious tidy-up is `accent at 9%`, and it is wrong. Magenta at 9% on white is a clean blush;
+   * acid yellow at 9% is a murky stain. The SAME rule produces two very different results, because
+   * the accents differ in luminance far more than in saturation — and a thread with both employees in
+   * it shows it immediately: one bubble looks designed and the other looks dirty.
+   *
+   * So each pair is chosen by eye, shifted and lightened until it reads at the SAME WEIGHT as the
+   * others rather than at the same percentage. Acid becomes a soft citrus rather than a stain.
+   *
+   * A new persona needs its own pair, judged next to these two and not on its own. It costs one more
+   * value in this map and buys a thread where every employee looks deliberate.
+   */
   wash: string
+  washInk: string
   /**
    * The canvas's three-stop ramp, portrait-dependent — it has to suit the face it paints. Absent
    * means "not specified yet", which is the honest state for an employee whose portrait has not
@@ -68,8 +82,8 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     nodes: '/v2/rudi-nodes.json',
     ground: '#0d0d10',
     accent: '#FF2E93',
-    ink: '#5A0033',
-    wash: '#FFE6F2',
+    wash: '#FFEDF6',
+    washInk: '#B0126A',
     ramp: ['#22D3EE', '#8B5CF6', '#FF2E93'],
   },
   // The second employee: inbound messages — Instagram, Messenger, SMS, email. Rudi keeps the phone.
@@ -90,8 +104,9 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     // different job — it marks where he is, and it never has to match a photograph.
     ground: '#d5fb48',
     accent: '#D9F224',
-    ink: '#41490A',
-    wash: '#F2FBB8',
+    // Not #F2FBB8 (the acid at a flat percentage) — that is the murky one. See `wash` above.
+    wash: '#F4FAD5',
+    washInk: '#5E6D0C',
     // Rudi's ramp ends on pink. Miles's ends on his own acid, and starts on the cyan his mic ripples
     // while listening — the two colours the brief already gives him. The mesh is drawn over a dark
     // subject, so both read; over the acid ground it would not, which is why the mesh follows him.

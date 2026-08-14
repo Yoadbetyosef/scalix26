@@ -2108,3 +2108,127 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
      hero" is only true if the browser is not taking that drag first. */
   .v2 .v2-face { touch-action: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   THE CONVERSATION — docs/miles/conversation-colours.html (C1) and agent-tint-options.html (V2).
+   Values taken directly. Mobile first; the desktop arrangement is its own block below.
+
+   C1's premise: the AGENT's bubble carries the tint and everybody else takes a fixed treatment. The
+   customer is white on the left, the owner is solid ink on the right, and the employee is right with
+   their OWN wash — so a thread both employees have touched says who said what before a word is read. */
+
+.v2 .v2-conv { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--v2-quiet); }
+
+/* ── Header ───────────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-chd { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 13px 15px; }
+.v2 .v2-chr { display: flex; align-items: center; gap: 11px; }
+.v2 .v2-cwho-h { flex: 1; min-width: 0; }
+.v2 .v2-chn { font-size: 17px; font-weight: 500; color: var(--v2-ink); }
+.v2 .v2-chmeta {
+  display: flex; gap: 7px; margin-top: 3px;
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.13em; color: var(--v2-ink-42);
+}
+/* The channel word in the channel's own hue — the same table the list marks read. */
+.v2 .v2-chmeta span[data-channel] { color: var(--chan, var(--v2-ink-42)); }
+.v2 .v2-cagent {
+  flex: none; font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em;
+  padding: 4px 9px; border-radius: 6px; text-transform: uppercase;
+}
+
+/* ── Contact strip ────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-cstrip { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 0 15px; }
+.v2 .v2-cs { display: flex; overflow-x: auto; scrollbar-width: none; }
+.v2 .v2-cs::-webkit-scrollbar { display: none; }
+.v2 .v2-ci { flex: none; padding: 11px 16px 11px 0; margin-right: 16px; border-right: 1px solid var(--v2-line); }
+.v2 .v2-ci:last-child { border-right: 0; margin-right: 0; }
+.v2 .v2-cik { font-family: var(--v2-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-42); }
+.v2 .v2-civ { font-size: 13px; font-weight: 500; color: var(--v2-ink); margin-top: 3px; white-space: nowrap; }
+/* An absent fact is an em dash in the muted weight — present, and visibly empty. */
+.v2 .v2-civ[data-empty] { color: var(--v2-ink-42); font-weight: 400; }
+
+/* ── The scroller ─────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-cscr { flex: 1; overflow-y: auto; padding: 15px 15px 20px; }
+.v2 .v2-ctlab {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; color: var(--v2-ink-42);
+  margin: 0 2px 12px;
+}
+
+/* WHAT HAPPENED. The card, not the recap — see body.tsx. */
+.v2 .v2-csum {
+  background: var(--v2-paper); border-radius: 16px; padding: 13px; margin-bottom: 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.v2 .v2-csumh {
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; color: var(--v2-ink-42);
+}
+.v2 .v2-csumh i { width: 4px; height: 4px; border-radius: 4px; flex: none; }
+.v2 .v2-csumt { font-size: 14px; line-height: 1.5; color: var(--v2-ink); margin-top: 8px; }
+
+/* ── The thread ───────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-cthread { display: flex; flex-direction: column; gap: 12px; }
+.v2 .v2-cwrap { display: flex; flex-direction: column; }
+.v2 .v2-cday {
+  align-self: center; font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.16em;
+  color: var(--v2-ink-42); margin: 2px 0 6px;
+}
+.v2 .v2-cb { max-width: 80%; padding: 11px 14px; font-size: 14.5px; line-height: 1.45; }
+.v2 .v2-cwho { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em; margin-bottom: 5px; }
+.v2 .v2-cstamp { font-family: var(--v2-mono); font-size: 9.5px; margin-top: 5px; opacity: 0.42; }
+
+/* THEM — white, left, the corner tucked into the left edge. */
+.v2 .v2-cb[data-by="customer"] {
+  align-self: flex-start; background: var(--v2-paper); color: var(--v2-ink);
+  border-radius: 17px 17px 17px 5px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.v2 .v2-cb[data-by="customer"] .v2-cwho { color: var(--v2-ink-42); }
+
+/* THE EMPLOYEE — right, filled with their OWN wash. The two custom properties come from the persona
+   record; nothing here knows which employee it is drawing. */
+.v2 .v2-cb[data-by="agent"] {
+  align-self: flex-end; background: var(--wash); color: var(--v2-ink); border-radius: 17px 17px 5px 17px;
+}
+.v2 .v2-cb[data-by="agent"] .v2-cwho { color: var(--wash-ink); }
+
+/* YOU — right, solid ink. The owner's own words are the one thing on the screen with full weight. */
+.v2 .v2-cb[data-by="you"] {
+  align-self: flex-end; background: var(--v2-ink); color: #fff; border-radius: 17px 17px 5px 17px;
+}
+.v2 .v2-cb[data-by="you"] .v2-cwho { color: rgba(255, 255, 255, 0.5); }
+
+/* Both right-hand authors align their label and stamp to the right. */
+.v2 .v2-cb[data-by="agent"] .v2-cwho, .v2 .v2-cb[data-by="agent"] .v2-cstamp,
+.v2 .v2-cb[data-by="you"] .v2-cwho, .v2 .v2-cb[data-by="you"] .v2-cstamp { text-align: right; }
+
+.v2 .v2-cb[data-failed] { outline: 1px solid rgba(255, 92, 108, 0.5); }
+
+/* THIS CONVERSATION, under the thread on a phone. */
+.v2 .v2-cabout { margin-top: 26px; }
+.v2 .v2-cfacts { display: grid; gap: 1px; background: var(--v2-line); border-radius: 14px; overflow: hidden; }
+.v2 .v2-cfacts > div { display: flex; justify-content: space-between; gap: 14px; background: var(--v2-paper); padding: 11px 13px; }
+.v2 .v2-cfacts dt { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em; color: var(--v2-ink-42); }
+.v2 .v2-cfacts dd { font-size: 13.5px; color: var(--v2-ink); text-align: right; }
+.v2 .v2-cfacts dd[data-empty] { color: var(--v2-ink-42); }
+
+/* ── Take over, pinned ────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-cmp {
+  flex: none; background: var(--v2-paper); border-top: 1px solid var(--v2-line);
+  padding: 11px 14px calc(14px + env(safe-area-inset-bottom));
+}
+.v2 .v2-takeover {
+  width: 100%; padding: 14px; border-radius: 15px; border: none; cursor: pointer;
+  background: var(--v2-ink); color: #fff; font-size: 14.5px; font-weight: 500; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 9px; transition: transform 0.15s;
+}
+.v2 .v2-takeover:active, .v2 .v2-takeover[data-pressed] { transform: scale(0.97); }
+.v2 .v2-takeover:disabled { opacity: 0.5; cursor: default; transform: none; }
+.v2 .v2-tosub { font-size: 11.5px; color: var(--v2-ink-42); text-align: center; margin-top: 9px; }
+.v2 .v2-live { display: flex; gap: 9px; align-items: center; }
+.v2 .v2-live input {
+  flex: 1; height: 44px; border-radius: 999px; border: 1px solid var(--v2-line); background: var(--v2-quiet);
+  padding: 0 16px; font-size: 14.5px; font-family: inherit; outline: none; color: var(--v2-ink);
+}
+.v2 .v2-snd {
+  width: 44px; height: 44px; border-radius: 999px; border: none; flex: none; cursor: pointer;
+  background: var(--v2-ink); color: #fff; font-size: 17px;
+}

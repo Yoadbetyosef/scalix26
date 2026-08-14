@@ -201,13 +201,14 @@ describe('the thread is its own shape, and the shared ones stayed shared', () =>
   })
 
   it('the v2 conversation screen adds no query and stays read-only', () => {
+    // The screen left DetailPage — it is a header, a strip, a thread and a pinned action now — so the
+    // read-only promise is expressed differently. It is the same promise: one existing read, and the
+    // only thing that would write is handed `canSend={false}` and the preview's own reason.
     const src = code('app/(v2)/v2/inbox/[id]/body.tsx')
     expect(src).toContain('readConversation')
     expect(src).not.toMatch(/\.from\('/)
-    const actions = src.slice(src.indexOf('actions={['), src.indexOf(']}', src.indexOf('actions={[')))
-    const labels = actions.match(/\{ label: [^}]*\}/g) ?? []
-    expect(labels.length).toBeGreaterThan(0)
-    for (const a of labels) expect(a).toContain('disabledReason: PREVIEW')
+    expect(src).toContain('canSend={false}')
+    expect(src).toContain('disabledReason={PREVIEW}')
   })
 
   it('every v2 list row now leads to a v2 screen', () => {

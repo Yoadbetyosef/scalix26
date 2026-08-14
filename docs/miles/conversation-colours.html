@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conversation — colour study</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--acid:#D9F224;--aink:#41490A;--awash:#F2FBB8;--magenta:#FF2E93;--violet:#8B5CF6;
+ --cyan:#22D3EE;--live:#B8FF29;--hold:#F5A524;--holdw:#FEF3DC;--holdi:#6B4708;
+ --ink:#111114;--mut:#8A8A90;--faint:#B4B4BA;--line:rgba(0,0,0,.06);--paper:#F6F6F7;
+ --c-voice:#8B5CF6;--c-ig:#E1306C}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:20px 14px 60px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;max-width:560px}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.11em;
+ padding:9px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);cursor:pointer;min-height:36px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.stage{display:none}.stage[data-on]{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.cap{font-size:12.5px;color:rgba(255,255,255,.45);text-align:center;max-width:620px;line-height:1.7;margin-top:14px}
+.cap b{color:rgba(255,255,255,.84);font-weight:500}
+.ph{width:372px;height:790px;border-radius:34px;overflow:hidden;position:relative;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.lbl{font-size:9px;letter-spacing:.16em;color:rgba(255,255,255,.3);text-align:center;margin-top:7px}
+
+/* header */
+.hd{flex:none;background:#fff;border-bottom:1px solid var(--line);padding:13px 15px}
+.hr1{display:flex;align-items:center;gap:11px}
+.bk{font-size:20px;color:var(--faint);line-height:1}
+.chip{width:38px;height:38px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center}
+.chip svg{width:18px;height:18px}
+.hwho{flex:1;min-width:0}
+.hn{font-size:17px;font-weight:500;color:var(--ink)}
+.hmeta{font-size:10.5px;letter-spacing:.13em;font-family:'JetBrains Mono',monospace;margin-top:3px;
+ display:flex;gap:7px;color:var(--faint)}
+.st{font-size:9px;letter-spacing:.14em;padding:3px 8px;border-radius:5px;font-family:'JetBrains Mono',monospace}
+
+/* contact strip — now at top */
+.cstrip{flex:none;background:#fff;border-bottom:1px solid var(--line);padding:0 15px}
+.cs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none}
+.cs::-webkit-scrollbar{display:none}
+.ci{flex:none;padding:11px 16px 11px 0;margin-right:16px;border-right:1px solid var(--line)}
+.ci:last-child{border:none;margin:0}
+.cik{font-size:8.5px;letter-spacing:.16em;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.civ{font-size:13px;color:var(--ink);margin-top:3px;font-weight:500;white-space:nowrap}
+.civ.em{color:var(--faint);font-weight:400}
+
+.scr{flex:1;overflow-y:auto;padding:15px 15px 20px}
+.sum{background:#fff;border-radius:16px;padding:13px;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:18px}
+.sumh{font-size:9.5px;letter-spacing:.18em;color:var(--faint);font-family:'JetBrains Mono',monospace;
+ display:flex;align-items:center;gap:7px}
+.sumh .b{width:4px;height:4px;border-radius:4px;background:var(--acid)}
+.sumt{font-size:14px;line-height:1.5;color:var(--ink);margin-top:8px}
+.tlab{font-size:9.5px;letter-spacing:.18em;color:var(--faint);font-family:'JetBrains Mono',monospace;margin:0 2px 12px}
+.thread{display:flex;flex-direction:column;gap:12px}
+.day{align-self:center;font-size:9.5px;letter-spacing:.16em;color:var(--faint);
+ font-family:'JetBrains Mono',monospace;margin:2px 0 4px}
+.who{font-size:9px;letter-spacing:.14em;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+.stamp{font-size:9.5px;font-family:'JetBrains Mono',monospace;margin-top:5px;opacity:.42}
+
+/* composer with take over */
+.cmp{flex:none;padding:11px 14px calc(14px + env(safe-area-inset-bottom));background:#fff;
+ border-top:1px solid var(--line)}
+.takeover{width:100%;padding:14px;border-radius:15px;border:none;cursor:pointer;
+ background:var(--ink);color:#fff;font-size:14.5px;font-family:inherit;font-weight:500;
+ display:flex;align-items:center;justify-content:center;gap:9px;transition:transform .15s}
+.takeover:active{transform:scale(.97)}
+.takeover svg{width:16px;height:16px}
+.tosub{font-size:11.5px;color:var(--faint);text-align:center;margin-top:9px}
+.live{display:none;gap:9px;align-items:center}
+.cmp[data-live] .live{display:flex}
+.cmp[data-live] .takeover,.cmp[data-live] .tosub{display:none}
+.live input{flex:1;height:44px;border-radius:999px;border:1px solid var(--line);background:var(--paper);
+ padding:0 16px;font-size:14.5px;font-family:inherit;outline:none;color:var(--ink)}
+.snd{width:44px;height:44px;border-radius:999px;border:none;flex:none;cursor:pointer;
+ background:var(--ink);color:#fff;font-size:17px}
+
+/* ===== C1 · AGENT TINT ===== */
+.C1 .b{max-width:80%;padding:11px 14px;font-size:14.5px;line-height:1.45}
+.C1 .b-them{align-self:flex-start;background:#fff;color:var(--ink);border-radius:17px 17px 17px 5px;
+ box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.C1 .b-them .who{color:var(--faint)}
+.C1 .b-ai{align-self:flex-end;background:rgba(255,46,147,.09);color:var(--ink);border-radius:17px 17px 5px 17px}
+.C1 .b-ai .who{color:#B0126A}
+.C1 .b-you{align-self:flex-end;background:var(--ink);color:#fff;border-radius:17px 17px 5px 17px}
+.C1 .b-you .who{color:rgba(255,255,255,.5)}
+.C1 .b-ai .stamp,.C1 .b-you .stamp{text-align:right}
+
+/* ===== C2 · INK & PAPER ===== */
+.C2 .b{max-width:80%;padding:11px 14px;font-size:14.5px;line-height:1.45}
+.C2 .b-them{align-self:flex-start;background:#fff;color:var(--ink);border-radius:17px 17px 17px 5px;
+ box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.C2 .b-them .who{color:var(--faint)}
+.C2 .b-ai{align-self:flex-end;background:var(--ink);color:#fff;border-radius:17px 17px 5px 17px}
+.C2 .b-ai .who{color:var(--magenta)}
+.C2 .b-you{align-self:flex-end;background:var(--ink);color:#fff;border-radius:17px 17px 5px 17px}
+.C2 .b-you .who{color:rgba(255,255,255,.5)}
+.C2 .b-ai .stamp,.C2 .b-you .stamp{text-align:right}
+
+/* ===== C3 · EDGE ===== */
+.C3 .b{max-width:82%;padding:11px 14px;font-size:14.5px;line-height:1.45;background:#fff;color:var(--ink);
+ box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.C3 .b-them{align-self:flex-start;border-radius:5px 17px 17px 5px;border-left:3px solid #D6D6DA}
+.C3 .b-them .who{color:var(--faint)}
+.C3 .b-ai{align-self:flex-end;border-radius:17px 5px 5px 17px;border-right:3px solid var(--magenta)}
+.C3 .b-ai .who{color:#B0126A;text-align:right}
+.C3 .b-you{align-self:flex-end;border-radius:17px 5px 5px 17px;border-right:3px solid var(--ink)}
+.C3 .b-you .who{color:var(--ink);text-align:right}
+.C3 .b-ai .stamp,.C3 .b-you .stamp{text-align:right}
+</style></head><body>
+
+<svg style="display:none">
+ <symbol id="voice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.9v2.6a1.6 1.6 0 0 1-1.8 1.6 16.3 16.3 0 0 1-7.1-2.5 16 16 0 0 1-5-5A16.3 16.3 0 0 1 4.6 6.5 1.6 1.6 0 0 1 6.2 4.7h2.6a1.6 1.6 0 0 1 1.6 1.4c.1.9.3 1.7.6 2.5a1.6 1.6 0 0 1-.4 1.7l-1.1 1.1a13 13 0 0 0 5 5l1.1-1.1a1.6 1.6 0 0 1 1.7-.4c.8.3 1.6.5 2.5.6a1.6 1.6 0 0 1 1.4 1.6z"/></symbol>
+ <symbol id="hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+</svg>
+
+<div class="tabs">
+ <button data-t="1" data-on>C1 · AGENT TINT</button>
+ <button data-t="2">C2 · INK &amp; PAPER</button>
+ <button data-t="3">C3 · EDGE</button>
+</div>
+
+<div class="stage" id="s-1" data-on>
+ <div><div class="ph C1">
+  <div class="hd"><div class="hr1"><span class="bk">‹</span>
+   <div class="chip" style="background:rgba(139,92,246,.1);color:var(--c-voice)"><svg><use href="#voice"/></svg></div>
+   <div class="hwho"><div class="hn">+1 212 838 1400</div>
+    <div class="hmeta"><span style="color:var(--c-voice);font-weight:500">CALL</span><span>·</span><span>9 AUG</span></div></div>
+   <span class="st mono" style="background:rgba(255,46,147,.1);color:#B0126A">RUDI</span></div></div>
+  <div class="cstrip"><div class="cs">
+   <div class="ci"><div class="cik">PHONE</div><div class="civ">+1 212 838 1400</div></div>
+   <div class="ci"><div class="cik">EMAIL</div><div class="civ em">—</div></div>
+   <div class="ci"><div class="cik">STATUS</div><div class="civ">Resolved</div></div>
+   <div class="ci"><div class="cik">LENGTH</div><div class="civ">1m 48s</div></div>
+  </div></div>
+  <div class="scr">
+   <div class="sum"><div class="sumh"><span class="b"></span>WHAT HAPPENED</div>
+    <div class="sumt">They called about an AC repair and asked what a visit costs. Rudi gave the call-out price and offered Tuesday morning. They said they'd check and call back.</div></div>
+   <div class="tlab">CONVERSATION</div>
+   <div class="thread">
+    <div class="day">2026-08-09</div>
+    <div class="b b-ai"><div class="who">RUDI</div>Hi! Thank you for contacting us. How can I help you today?<div class="stamp">16:48</div></div>
+    <div class="b b-them"><div class="who">CALLER</div>Yeah hi — how much for someone to come look at my AC?<div class="stamp">16:48</div></div>
+    <div class="b b-ai"><div class="who">RUDI</div>A standard call-out is $95, and it comes off the repair if you go ahead. I could get someone out Tuesday morning.<div class="stamp">16:49</div></div>
+    <div class="b b-them"><div class="who">CALLER</div>Let me check with my wife, I'll call back.<div class="stamp">16:50</div></div>
+    <div class="b b-you"><div class="who">YOU</div>No problem — I'll hold Tuesday 9am for you until tomorrow.<div class="stamp">17:02</div></div>
+   </div>
+  </div>
+  <div class="cmp" id="c1">
+   <button class="takeover" onclick="go('c1')"><svg><use href="#hand"/></svg>Take over and reply</button>
+   <div class="tosub">Rudi stops answering this thread.</div>
+   <div class="live"><input placeholder="Reply as Smith HVAC…" autofocus><button class="snd">↑</button></div>
+  </div>
+ </div><div class="lbl mono">TAP TAKE OVER</div></div>
+ <p class="cap"><b>C1 · Agent tint.</b> The agent's own colour, at 9% — Rudi magenta, Miles acid — so the bubble says which employee wrote it without a second system. You stay solid ink, because you're the one exception that should stand out. Three authors, two intensities, all colours already in the product.</p>
+</div>
+
+<div class="stage" id="s-2">
+ <div><div class="ph C2">
+  <div class="hd"><div class="hr1"><span class="bk">‹</span>
+   <div class="chip" style="background:rgba(139,92,246,.1);color:var(--c-voice)"><svg><use href="#voice"/></svg></div>
+   <div class="hwho"><div class="hn">+1 212 838 1400</div>
+    <div class="hmeta"><span style="color:var(--c-voice);font-weight:500">CALL</span><span>·</span><span>9 AUG</span></div></div>
+   <span class="st mono" style="background:rgba(255,46,147,.1);color:#B0126A">RUDI</span></div></div>
+  <div class="cstrip"><div class="cs">
+   <div class="ci"><div class="cik">PHONE</div><div class="civ">+1 212 838 1400</div></div>
+   <div class="ci"><div class="cik">EMAIL</div><div class="civ em">—</div></div>
+   <div class="ci"><div class="cik">STATUS</div><div class="civ">Resolved</div></div>
+   <div class="ci"><div class="cik">LENGTH</div><div class="civ">1m 48s</div></div>
+  </div></div>
+  <div class="scr">
+   <div class="sum"><div class="sumh"><span class="b"></span>WHAT HAPPENED</div>
+    <div class="sumt">They called about an AC repair and asked what a visit costs. Rudi gave the call-out price and offered Tuesday morning. They said they'd check and call back.</div></div>
+   <div class="tlab">CONVERSATION</div>
+   <div class="thread">
+    <div class="day">2026-08-09</div>
+    <div class="b b-ai"><div class="who">RUDI</div>Hi! Thank you for contacting us. How can I help you today?<div class="stamp">16:48</div></div>
+    <div class="b b-them"><div class="who">CALLER</div>Yeah hi — how much for someone to come look at my AC?<div class="stamp">16:48</div></div>
+    <div class="b b-ai"><div class="who">RUDI</div>A standard call-out is $95, and it comes off the repair if you go ahead. I could get someone out Tuesday morning.<div class="stamp">16:49</div></div>
+    <div class="b b-them"><div class="who">CALLER</div>Let me check with my wife, I'll call back.<div class="stamp">16:50</div></div>
+    <div class="b b-you"><div class="who">YOU</div>No problem — I'll hold Tuesday 9am for you until tomorrow.<div class="stamp">17:02</div></div>
+   </div>
+  </div>
+  <div class="cmp" id="c2">
+   <button class="takeover" onclick="go('c2')"><svg><use href="#hand"/></svg>Take over and reply</button>
+   <div class="tosub">Rudi stops answering this thread.</div>
+   <div class="live"><input placeholder="Reply as Smith HVAC…"><button class="snd">↑</button></div>
+  </div>
+ </div><div class="lbl mono">TAP TAKE OVER</div></div>
+ <p class="cap"><b>C2 · Ink &amp; paper.</b> Two colours only, as you said — the customer is paper, your business is ink. Who spoke for the business is carried by the label alone: RUDI in magenta, YOU in grey. The most restrained, and the most likely to still look right in three years — but you have to read a label to tell the AI from yourself.</p>
+</div>
+
+<div class="stage" id="s-3">
+ <div><div class="ph C3">
+  <div class="hd"><div class="hr1"><span class="bk">‹</span>
+   <div class="chip" style="background:rgba(139,92,246,.1);color:var(--c-voice)"><svg><use href="#voice"/></svg></div>
+   <div class="hwho"><div class="hn">+1 212 838 1400</div>
+    <div class="hmeta"><span style="color:var(--c-voice);font-weight:500">CALL</span><span>·</span><span>9 AUG</span></div></div>
+   <span class="st mono" style="background:rgba(255,46,147,.1);color:#B0126A">RUDI</span></div></div>
+  <div class="cstrip"><div class="cs">
+   <div class="ci"><div class="cik">PHONE</div><div class="civ">+1 212 838 1400</div></div>
+   <div class="ci"><div class="cik">EMAIL</div><div class="civ em">—</div></div>
+   <div class="ci"><div class="cik">STATUS</div><div class="civ">Resolved</div></div>
+   <div class="ci"><div class="cik">LENGTH</div><div class="civ">1m 48s</div></div>
+  </div></div>
+  <div class="scr">
+   <div class="sum"><div class="sumh"><span class="b"></span>WHAT HAPPENED</div>
+    <div class="sumt">They called about an AC repair and asked what a visit costs. Rudi gave the call-out price and offered Tuesday morning. They said they'd check and call back.</div></div>
+   <div class="tlab">CONVERSATION</div>
+   <div class="thread">
+    <div class="day">2026-08-09</div>
+    <div class="b b-ai"><div class="who">RUDI</div>Hi! Thank you for contacting us. How can I help you today?<div class="stamp">16:48</div></div>
+    <div class="b b-them"><div class="who">CALLER</div>Yeah hi — how much for someone to come look at my AC?<div class="stamp">16:48</div></div>
+    <div class="b b-ai"><div class="who">RUDI</div>A standard call-out is $95, and it comes off the repair if you go ahead. I could get someone out Tuesday morning.<div class="stamp">16:49</div></div>
+    <div class="b b-them"><div class="who">CALLER</div>Let me check with my wife, I'll call back.<div class="stamp">16:50</div></div>
+    <div class="b b-you"><div class="who">YOU</div>No problem — I'll hold Tuesday 9am for you until tomorrow.<div class="stamp">17:02</div></div>
+   </div>
+  </div>
+  <div class="cmp" id="c3">
+   <button class="takeover" onclick="go('c3')"><svg><use href="#hand"/></svg>Take over and reply</button>
+   <div class="tosub">Rudi stops answering this thread.</div>
+   <div class="live"><input placeholder="Reply as Smith HVAC…"><button class="snd">↑</button></div>
+  </div>
+ </div><div class="lbl mono">TAP TAKE OVER</div></div>
+ <p class="cap"><b>C3 · Edge.</b> Every bubble is white; a 3px edge carries the author. The lightest possible — the thread reads as one document rather than a fight between two fills, and adding a fourth author later costs one colour, not one more fill to balance.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+function go(id){const c=document.getElementById(id);c.dataset.live='';
+ setTimeout(()=>c.querySelector('input').focus(),80)}
+</script></body></html>

@@ -1,23 +1,28 @@
 import { readConversation } from '@/lib/inbox/conversation-read'
-import { DetailPage, type DetailFact } from '../../detail'
-import { ThreadView, type ThreadMessage } from '../../thread'
+import { personaOf, nameOf } from '@/lib/persona'
 import { relativeTime, PREVIEW } from '../../list-page'
 import { channelKey, CHANNEL_LABEL } from '../../channels'
-import { conversationLine } from './line'
+import { ChannelGlyph } from '../glyphs'
+import { ConversationThread, type Line } from './thread'
+import { TakeOver } from './takeover'
 
-// One conversation, reskinned. readConversation is the /inbox/[id] page's own read, extracted verbatim
-// — same queries, same join, same ordering. No new query. READ-ONLY: the composer and the takeover
-// control render disabled with title="v2 preview".
+// ONE CONVERSATION. Same read, same data, new screen.
+//
+// It was a DetailPage: a title, some chips, a list of label/value facts and the thread inside a
+// section. That shape says "a record with fields", and a conversation is not one — it is a thing that
+// happened between three parties, and the questions somebody opens it with are who it was, what was
+// said, and whether it still needs them. So: the header answers who, the strip answers what we know
+// about them, and the thread answers the rest with authorship carried in colour.
+//
+// READ-ONLY, as every /v2 screen is. The take-over button renders and is disabled with
+// title="v2 preview", which is also why the composer never appears — see takeover.tsx.
 
 const str = (v: string | null | undefined) => (v && v.trim() ? v : null)
 
 // Returns NULL when the record is missing rather than calling notFound(). This body renders in two
-// places: as the route, where notFound() is the right answer, and as a PROP of ListPage — a client
-// component — where the same throw is no longer a routing signal and lands in error.tsx as a blank
-// screen instead. The route decides; the body reports. Same rule as the lib/ extractions.
-//
-// tenantId is an argument for the same reason: listPageContext() calls redirect() on a missing module,
-// and a redirect thrown from inside a client component's prop fails the same way.
+// places: as the route, where notFound() is the right answer, and as a PROP of a client component,
+// where the same throw is no longer a routing signal and lands in error.tsx as a blank screen. The
+// route decides; the body reports.
 export async function ConversationBody({ tenantId, id }: { tenantId: string; id: string }) {
   const read = await readConversation(tenantId, id)
   if (!read) return null
@@ -25,72 +30,112 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
 
   const contact = conv.contact
   const who = str(contact?.name) || str(contact?.phone) || str(contact?.email) || 'Someone'
+  const ch = channelKey(conv.channel)
+  const agent = conv.ai_employee ?? null
+  const agentName = nameOf(agent as { name?: string | null; persona?: string | null } | null)
+  const persona = personaOf(agent as { persona?: string | null } | null)
 
-  // `direction` is the row's own word for authorship — inbound is them, everything else is us.
-  const thread: ThreadMessage[] = messages.map((m) => ({
+  // `direction` is the row's own word for authorship. Three authors, not two: a message that is not
+  // inbound was sent by the employee, unless a person had taken the thread over by then.
+  const lines: Line[] = messages.map((m) => ({
     id: m.id,
-    side: m.direction === 'inbound' ? 'them' : 'us',
+    by: m.direction === 'inbound' ? 'customer' : conv.human_takeover ? 'you' : 'agent',
     body: str(m.content) ?? '(no content)',
     at: m.timestamp,
-    channel: m.channel,
-    // The agent answered unless a person had taken the conversation over by then.
-    byAi: m.direction !== 'inbound' && !conv.human_takeover,
+    agentName,
+    persona: persona.key,
     failed: m.status === 'failed' || m.status === 'undelivered',
   }))
 
-  const last = thread.at(-1) ?? null
+  const last = lines.at(-1) ?? null
+  const started = conv.created_at.slice(0, 10)
 
-  const facts: DetailFact[] = [
-    { label: 'Phone', value: str(contact?.phone) },
-    { label: 'Email', value: str(contact?.email) },
-    { label: 'Channel', value: str(conv.channel) },
-    { label: 'Status', value: str(conv.status) },
-    { label: 'Answered by', value: conv.human_takeover ? 'You' : str(conv.ai_employee?.name) ?? 'Rudi' },
-    { label: 'Started', value: conv.created_at.slice(0, 10) },
+  // The strip. A fact with no value renders an em dash rather than disappearing: "we do not have an
+  // email for them" is a different thing from "there is no such field", and the first is worth knowing.
+  const facts: { k: string; v: string | null }[] = [
+    { k: 'PHONE', v: str(contact?.phone) },
+    { k: 'EMAIL', v: str(contact?.email) },
+    { k: 'FIRST SEEN', v: started },
+    { k: 'MESSAGES', v: String(lines.length) },
+  ]
+
+  // THIS CONVERSATION — facts about the thread rather than about the person. Deliberately a separate
+  // list from the one above: the two answer different questions and merging them into one grid asks
+  // the reader to sort them.
+  const about: { k: string; v: string | null }[] = [
+    { k: 'CHANNEL', v: ch ? CHANNEL_LABEL[ch] ?? conv.channel : str(conv.channel) },
+    { k: 'STATUS', v: str(conv.status) },
+    { k: 'ANSWERED BY', v: conv.human_takeover ? 'You' : agentName },
+    { k: 'LAST MESSAGE', v: last ? relativeTime(last.at) : null },
   ]
 
   return (
-    <DetailPage
-      backHref="/v2/inbox"
-      backLabel="Inbox"
-      eyebrow={str(contact?.phone) ?? str(contact?.email)}
-      title={who}
-      chips={[
-        ...(str(conv.channel) ? [{ label: CHANNEL_LABEL[channelKey(conv.channel)!] ?? conv.channel, channel: channelKey(conv.channel) }] : []),
-        ...(conv.human_takeover ? [{ label: 'You took over', tone: 'accent' as const }] : []),
-      ]}
-      line={conversationLine({
-        who,
-        messages: thread.length,
-        handledByAi: !!conv.ai_employee,
-        takenOver: conv.human_takeover === true,
-        lastFrom: last?.side ?? null,
-        lastAgo: last ? relativeTime(last.at) : null,
-      })}
-      actions={[
-        { label: conv.human_takeover ? 'Hand back to Rudi' : 'Take over', tone: 'primary', disabledReason: PREVIEW },
-        { label: 'Close conversation', disabledReason: PREVIEW },
-      ]}
-      sections={[
-        ...(str(conv.summary) ? [{ title: 'What Rudi took from it', facts: [{ label: 'Summary', value: str(conv.summary) }] }] : []),
-        {
-          title: 'Conversation',
-          extra: (
-            <ThreadView
-              // The thread's own agent, not a hardcoded name — `readConversation` already joins it.
-              aiName={str(conv.ai_employee?.name) ?? undefined}
-              messages={thread}
-              emptyLabel={`Nothing has been said to ${who} yet.`}
-              composer={
-                <div className="v2-dacts" style={{ marginTop: 18 }}>
-                  <button type="button" className="v2-ract" data-tone="primary" disabled title={PREVIEW}>Reply</button>
+    <div className="v2-conv">
+      <header className="v2-chd">
+        <div className="v2-chr">
+          <a href="/v2/inbox" className="v2-bk" aria-label="Inbox">
+            <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
+          </a>
+          <ChannelGlyph channel={ch} />
+          <div className="v2-cwho-h">
+            <p className="v2-chn">{who}</p>
+            <p className="v2-chmeta">
+              {/* The channel word wears the channel's own hue — the same table the list marks use. */}
+              <span data-channel={ch ?? undefined}>{(ch ? CHANNEL_LABEL[ch] ?? conv.channel : conv.channel ?? 'MESSAGE').toUpperCase()}</span>
+              <span>·</span>
+              <span>{started}</span>
+            </p>
+          </div>
+          {/* Whose thread it is, in that employee's own colours. */}
+          <span className="v2-cagent" style={{ background: persona.wash, color: persona.washInk }}>
+            {agentName}
+          </span>
+        </div>
+      </header>
+
+      <div className="v2-cstrip">
+        <div className="v2-cs">
+          {facts.map((f) => (
+            <div key={f.k} className="v2-ci">
+              <p className="v2-cik">{f.k}</p>
+              <p className="v2-civ" data-empty={f.v ? undefined : true}>{f.v ?? '—'}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="v2-cscr" data-scroll>
+        <div className="v2-cinner">
+          {/* WHAT HAPPENED — the card exists; the recap does not. It needs a written summary, which is
+              a new read and possibly a model call, and inventing one from the last message would be a
+              screen asserting something nobody wrote. Rendered only when there is something real to show;
+              `summary` is the one field that already carries a written line. */}
+          {str(conv.summary) && (
+            <section className="v2-csum">
+              <p className="v2-csumh"><i style={{ background: persona.accent }} />WHAT HAPPENED</p>
+              <p className="v2-csumt">{str(conv.summary)}</p>
+            </section>
+          )}
+
+          <p className="v2-ctlab">CONVERSATION</p>
+          <ConversationThread lines={lines} who={who} emptyLabel={`Nothing has been said to ${who} yet.`} />
+
+          {/* THIS CONVERSATION, on mobile, under the thread. On desktop it moves to the sidebar. */}
+          <section className="v2-cabout">
+            <p className="v2-ctlab">THIS CONVERSATION</p>
+            <dl className="v2-cfacts">
+              {about.map((f) => (
+                <div key={f.k}>
+                  <dt>{f.k}</dt>
+                  <dd data-empty={f.v ? undefined : true}>{f.v ?? '—'}</dd>
                 </div>
-              }
-            />
-          ),
-        },
-        { title: 'Contact', facts },
-      ]}
-    />
+              ))}
+            </dl>
+          </section>
+        </div>
+      </div>
+
+      <TakeOver agentName={agentName} canSend={false} disabledReason={PREVIEW} />
+    </div>
   )
 }

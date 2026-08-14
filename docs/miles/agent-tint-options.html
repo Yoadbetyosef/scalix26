@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent tint — how the colour should work</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--acid:#D9F224;--aink:#41490A;--magenta:#FF2E93;--violet:#8B5CF6;--cyan:#22D3EE;
+ --ink:#111114;--mut:#8A8A90;--faint:#B4B4BA;--line:rgba(0,0,0,.06);--paper:#F6F6F7}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:22px 14px 70px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.mono{font-family:'JetBrains Mono',monospace}
+.intro{max-width:640px;font-size:13.5px;line-height:1.7;color:rgba(255,255,255,.55);text-align:center}
+.intro b{color:#fff;font-weight:500}
+.tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;max-width:620px}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.11em;
+ padding:9px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);cursor:pointer;min-height:36px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.stage{display:none}.stage[data-on]{display:block}
+.cap{font-size:12.5px;color:rgba(255,255,255,.46);text-align:center;max-width:620px;line-height:1.7;margin-top:14px}
+.cap b{color:rgba(255,255,255,.85);font-weight:500}
+.verdict{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;
+ padding:4px 10px;border-radius:6px;margin-bottom:10px}
+.v-no{background:rgba(255,59,92,.14);color:#FF6E88}
+.v-ok{background:rgba(184,255,41,.14);color:#B8FF29}
+.v-mid{background:rgba(245,165,36,.16);color:#F5A524}
+
+.pane{width:min(400px,94vw);background:var(--paper);border-radius:26px;padding:18px 16px;
+ box-shadow:0 20px 60px rgba(0,0,0,.55)}
+.day{text-align:center;font-size:9.5px;letter-spacing:.16em;color:var(--faint);
+ font-family:'JetBrains Mono',monospace;margin-bottom:14px}
+.thread{display:flex;flex-direction:column;gap:11px}
+.b{max-width:82%;padding:11px 14px;font-size:14.5px;line-height:1.45}
+.who{font-size:9px;letter-spacing:.14em;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+.stamp{font-size:9.5px;font-family:'JetBrains Mono',monospace;margin-top:5px;opacity:.4}
+.them{align-self:flex-start;background:#fff;color:var(--ink);border-radius:17px 17px 17px 5px;
+ box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.them .who{color:var(--faint)}
+.mine{align-self:flex-end;border-radius:17px 17px 5px 17px}
+.mine .who,.mine .stamp{text-align:right}
+.you{align-self:flex-end;background:var(--ink);color:#fff;border-radius:17px 17px 5px 17px}
+.you .who{color:rgba(255,255,255,.5);text-align:right}
+.you .stamp{text-align:right}
+.swatch{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+.sw{display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(255,255,255,.5);
+ font-family:'JetBrains Mono',monospace;letter-spacing:.06em}
+.sw i{width:22px;height:22px;border-radius:7px;display:block;border:1px solid rgba(255,255,255,.12)}
+
+/* ---- V1 flat 9% ---- */
+.V1 .rudi{background:rgba(255,46,147,.09);color:var(--ink)}
+.V1 .rudi .who{color:#B0126A}
+.V1 .miles{background:rgba(217,242,36,.09);color:var(--ink)}
+.V1 .miles .who{color:#7A8A12}
+
+/* ---- V2 tuned per agent ---- */
+.V2 .rudi{background:#FFEDF6;color:var(--ink)}
+.V2 .rudi .who{color:#B0126A}
+.V2 .miles{background:#F4FAD5;color:var(--ink)}
+.V2 .miles .who{color:#5E6D0C}
+
+/* ---- V3 neutral fill, colour in label + edge ---- */
+.V3 .mine{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.V3 .rudi{border-right:3px solid var(--magenta);border-radius:17px 5px 5px 17px}
+.V3 .rudi .who{color:#B0126A}
+.V3 .miles{border-right:3px solid var(--acid);border-radius:17px 5px 5px 17px}
+.V3 .miles .who{color:#5E6D0C}
+.V3 .you{border-radius:17px 5px 5px 17px;border-right:3px solid var(--ink)}
+
+/* ---- V4 colour in the label only ---- */
+.V4 .mine{background:#EFEFF1;color:var(--ink)}
+.V4 .rudi .who{color:var(--magenta)}
+.V4 .miles .who{color:#6E7F0E}
+</style></head><body>
+
+<p class="intro"><b>The problem.</b> Magenta at 9% on white is a clean blush. Acid yellow at 9% is a murky wash — the same rule gives two very different results. Each option below is the same thread with both agents in it, so the acid is judged next to the magenta rather than on its own.</p>
+
+<div class="tabs">
+ <button data-t="1" data-on>V1 · FLAT 9%</button>
+ <button data-t="2">V2 · TUNED PER AGENT</button>
+ <button data-t="3">V3 · EDGE + LABEL</button>
+ <button data-t="4">V4 · LABEL ONLY</button>
+</div>
+
+<!-- V1 -->
+<div class="stage" id="s-1" data-on>
+ <div style="text-align:center"><span class="verdict v-no mono">THE ACID FAILS</span></div>
+ <div class="pane V1">
+  <div class="day">2026-08-14</div>
+  <div class="thread">
+   <div class="b them"><div class="who">SARAH</div>What would a custom setting run me?<div class="stamp">16:41</div></div>
+   <div class="b mine miles"><div class="who">MILES</div>Customs start at $1,200 depending on the stone. Want me to book a call?<div class="stamp">16:41</div></div>
+   <div class="b them"><div class="who">SARAH</div>Actually can someone just call me?<div class="stamp">16:44</div></div>
+   <div class="b mine rudi"><div class="who">RUDI</div>Of course — I can call you now, or book a time that suits you better.<div class="stamp">16:45</div></div>
+   <div class="b you"><div class="who">YOU</div>Calling you in five minutes.<div class="stamp">16:52</div></div>
+  </div>
+  <div class="swatch">
+   <span class="sw"><i style="background:rgba(255,46,147,.09)"></i>RUDI 9%</span>
+   <span class="sw"><i style="background:rgba(217,242,36,.09)"></i>MILES 9%</span>
+  </div>
+ </div>
+ <p class="cap"><b>V1 · Flat 9% of each agent's colour.</b> One rule, applied literally. Magenta reads as intentional; acid reads as a stain — yellow has almost no contrast against white, so 9% is barely a colour at all, and the label has to carry the whole distinction anyway. A rule that produces one good result and one bad one isn't a rule.</p>
+</div>
+
+<!-- V2 -->
+<div class="stage" id="s-2">
+ <div style="text-align:center"><span class="verdict v-ok mono">BOTH READ</span></div>
+ <div class="pane V2">
+  <div class="day">2026-08-14</div>
+  <div class="thread">
+   <div class="b them"><div class="who">SARAH</div>What would a custom setting run me?<div class="stamp">16:41</div></div>
+   <div class="b mine miles"><div class="who">MILES</div>Customs start at $1,200 depending on the stone. Want me to book a call?<div class="stamp">16:41</div></div>
+   <div class="b them"><div class="who">SARAH</div>Actually can someone just call me?<div class="stamp">16:44</div></div>
+   <div class="b mine rudi"><div class="who">RUDI</div>Of course — I can call you now, or book a time that suits you better.<div class="stamp">16:45</div></div>
+   <div class="b you"><div class="who">YOU</div>Calling you in five minutes.<div class="stamp">16:52</div></div>
+  </div>
+  <div class="swatch">
+   <span class="sw"><i style="background:#FFEDF6"></i>#FFEDF6</span>
+   <span class="sw"><i style="background:#F4FAD5"></i>#F4FAD5</span>
+  </div>
+ </div>
+ <p class="cap"><b>V2 · Tuned per agent.</b> Each persona carries a hand-picked wash rather than a formula — a hue shifted and lightened until it reads at the same weight as the others. Acid becomes a soft citrus, not a stain. Costs one more value per persona in the map; buys a thread where both agents look deliberate.</p>
+</div>
+
+<!-- V3 -->
+<div class="stage" id="s-3">
+ <div style="text-align:center"><span class="verdict v-ok mono">SCALES TO ANY COLOUR</span></div>
+ <div class="pane V3">
+  <div class="day">2026-08-14</div>
+  <div class="thread">
+   <div class="b them"><div class="who">SARAH</div>What would a custom setting run me?<div class="stamp">16:41</div></div>
+   <div class="b mine miles"><div class="who">MILES</div>Customs start at $1,200 depending on the stone. Want me to book a call?<div class="stamp">16:41</div></div>
+   <div class="b them"><div class="who">SARAH</div>Actually can someone just call me?<div class="stamp">16:44</div></div>
+   <div class="b mine rudi"><div class="who">RUDI</div>Of course — I can call you now, or book a time that suits you better.<div class="stamp">16:45</div></div>
+   <div class="b you"><div class="who">YOU</div>Calling you in five minutes.<div class="stamp">16:52</div></div>
+  </div>
+  <div class="swatch">
+   <span class="sw"><i style="background:var(--magenta)"></i>FULL STRENGTH</span>
+   <span class="sw"><i style="background:var(--acid)"></i>FULL STRENGTH</span>
+  </div>
+ </div>
+ <p class="cap"><b>V3 · Edge + label.</b> The bubble stays white; the agent's colour appears at full strength as a 3px edge, where a saturated hue is legible instead of murky. No tint to tune — any colour works, including a fourth employee you haven't hired yet. Quietest of the four, and the closest to how the group headers already work.</p>
+</div>
+
+<!-- V4 -->
+<div class="stage" id="s-4">
+ <div style="text-align:center"><span class="verdict v-mid mono">SAFE, BUT FLAT</span></div>
+ <div class="pane V4">
+  <div class="day">2026-08-14</div>
+  <div class="thread">
+   <div class="b them"><div class="who">SARAH</div>What would a custom setting run me?<div class="stamp">16:41</div></div>
+   <div class="b mine miles"><div class="who">MILES</div>Customs start at $1,200 depending on the stone. Want me to book a call?<div class="stamp">16:41</div></div>
+   <div class="b them"><div class="who">SARAH</div>Actually can someone just call me?<div class="stamp">16:44</div></div>
+   <div class="b mine rudi"><div class="who">RUDI</div>Of course — I can call you now, or book a time that suits you better.<div class="stamp">16:45</div></div>
+   <div class="b you"><div class="who">YOU</div>Calling you in five minutes.<div class="stamp">16:52</div></div>
+  </div>
+  <div class="swatch">
+   <span class="sw"><i style="background:#EFEFF1"></i>ONE FILL FOR ALL AGENTS</span>
+  </div>
+ </div>
+ <p class="cap"><b>V4 · Label only.</b> Every agent shares one neutral fill; only the name is coloured. Nothing can ever clash and nothing needs tuning — but at a glance the thread is grey-on-grey, and you have to read to know whether an employee or a person wrote it. The colour stops doing work.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+</script></body></html>

@@ -25,8 +25,8 @@ describe('Miles’s tokens', () => {
   it('are exactly the ones specified', () => {
     expect(PERSONAS.miles).toMatchObject({
       accent: '#D9F224',
-      ink: '#41490A',
-      wash: '#F2FBB8',
+      wash: '#F4FAD5',
+      washInk: '#5E6D0C',
       voice: 'aura-2-arcas-en',
     })
   })
@@ -69,5 +69,33 @@ describe('nameOf', () => {
     expect(nameOf({ name: '', persona: 'miles' })).toBe('Miles')
     expect(nameOf({ name: '   ', persona: 'rudi' })).toBe('Rudi')
     expect(nameOf(null)).toBe('Rudi')
+  })
+})
+
+describe('every persona carries its own wash', () => {
+  // The pair is hand-picked per employee, never derived: magenta at a flat percentage is a blush and
+  // acid at the same percentage is a stain. A persona added without its own pair would fall back to
+  // somebody else's or to a formula, and the thread would show it.
+  it.each(Object.entries(PERSONAS))('%s defines wash and washInk', (_key, p) => {
+    expect(p.wash).toMatch(/^#[0-9A-Fa-f]{6}$/)
+    expect(p.washInk).toMatch(/^#[0-9A-Fa-f]{6}$/)
+  })
+
+  it('no two personas share a wash', () => {
+    const washes = Object.values(PERSONAS).map((p) => p.wash)
+    expect(new Set(washes).size).toBe(washes.length)
+  })
+
+  it('the ink is dark enough to read on its own wash', () => {
+    // Not a formula for the colours — a floor under them. Relative luminance, sRGB.
+    const lum = (hex: string) => {
+      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+        .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    }
+    for (const p of Object.values(PERSONAS)) {
+      const contrast = (Math.max(lum(p.wash), lum(p.washInk)) + 0.05) / (Math.min(lum(p.wash), lum(p.washInk)) + 0.05)
+      expect(contrast).toBeGreaterThan(4.5)
+    }
   })
 })
