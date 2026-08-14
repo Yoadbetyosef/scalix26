@@ -15,7 +15,7 @@ import { testAiLine } from './line'
 // hook exactly as they are. No handler, no state and no effect was added here — if this file ever
 // needs one, the machine has leaked out of the hook and that is the bug.
 
-export function TestAiClient() {
+export function TestAiClient({ agentName }: { agentName: string }) {
   const {
     messages, input, setInput, loading, error, handleChatSubmit, reset, bottomRef,
     mode, setMode, callActive, listening, speaking, transcript, startCall, endCall, startListening,
@@ -23,7 +23,7 @@ export function TestAiClient() {
 
   // What the call is doing, in the caller's own words. Only one of these is ever true, and the order
   // matters: speaking wins over listening because her audio ends the turn.
-  const callState = speaking ? 'Rudi is speaking' : listening ? 'Listening' : loading ? 'Thinking' : 'Your turn'
+  const callState = speaking ? `${agentName} is speaking` : listening ? 'Listening' : loading ? 'Thinking' : 'Your turn'
 
   const thread: ThreadMessage[] = messages.map((m, i) => ({
     id: `${i}`,
@@ -74,6 +74,7 @@ export function TestAiClient() {
         )}
 
         <ThreadView
+          aiName={agentName}
           messages={thread}
           emptyLabel={mode === 'voice' ? 'Start the call and say something.' : 'Nothing said yet.'}
           composer={mode === 'voice' ? (

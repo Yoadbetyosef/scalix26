@@ -22,7 +22,7 @@ export interface ThreadMessage {
   at: string
   /** Shown when a thread spans more than one channel; hidden when it does not. */
   channel?: string | null
-  /** Rudi rather than a person. Both sit on the `us` side; only the label differs. */
+  /** The agent rather than a person. Both sit on the `us` side; only the label differs. */
   byAi?: boolean
   /** Delivery failed. A message state, not something to bury in the body. */
   failed?: boolean
@@ -32,6 +32,15 @@ export interface ThreadViewProps {
   messages: ThreadMessage[]
   emptyLabel: string
   composer?: ReactNode
+  /**
+   * WHO THE AI IS ON THIS THREAD.
+   *
+   * This was the literal string 'Rudi', which was true while there was one employee and became a lie
+   * the moment there were two: a message Miles sent would have been labelled with the phone agent's
+   * name. The conversation knows its own agent (`conversations.ai_employee_id`), so the caller passes
+   * it. 'AI' when the caller genuinely does not know — truthful, where a guessed name is not.
+   */
+  aiName?: string
 }
 
 const dayOf = (iso: string) => iso.slice(0, 10)
@@ -50,7 +59,7 @@ const timeOf = (iso: string) => {
   return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(11, 16)
 }
 
-export function ThreadView({ messages, emptyLabel, composer }: ThreadViewProps) {
+export function ThreadView({ messages, emptyLabel, composer, aiName }: ThreadViewProps) {
   if (messages.length === 0) {
     return (
       <>
@@ -80,7 +89,7 @@ export function ThreadView({ messages, emptyLabel, composer }: ThreadViewProps) 
                   {/* The same hue the row carried, when a thread actually spans channels. */}
                   {showChannel && m.channel && <i data-channel={m.channel} aria-hidden />}
                   {[
-                    m.side === 'us' ? (m.byAi ? 'Rudi' : 'You') : null,
+                    m.side === 'us' ? (m.byAi ? aiName || 'AI' : 'You') : null,
                     showChannel ? m.channel : null,
                     timeOf(m.at),
                     m.failed ? 'not delivered' : null,

@@ -46,7 +46,8 @@ describe('drafts and waits — the right column', () => {
   it('holds any figure with a currency', () => {
     const d = send('That would be $1,200 including the setting.')
     expect(d.verdict).toBe('hold')
-    expect(d.commitments[0]).toMatchObject({ kind: 'price', evidence: '$1' })
+    // The whole figure, not the first digit of it: this row exists so a person can read the price.
+    expect(d.commitments[0]).toMatchObject({ kind: 'price', evidence: '$1,200' })
     expect(d.summary).toBe('Quotes a price')
   })
 

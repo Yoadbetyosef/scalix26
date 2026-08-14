@@ -46,6 +46,22 @@
   --v2-live-ink: #4a5a12;    /* text on that ground */
   --v2-marker: #dfff6b;      /* the highlighter swipe */
 
+  /* ── MILES: acid, and the amber that means held ─────────────────────────────────────────────────
+     Taken from the mockups rather than approximated. Two rules govern them:
+
+     ACID IS MILES, and appears only where he is. It never enters navigation — that stays the
+     gradient. AMBER IS NEW AND MEANS ONE THING ONLY: held, waiting on you. Named --v2-hold rather
+     than --v2-amber-2 so a second meaning cannot quietly attach itself to it, and kept separate from
+     the existing --v2-amber (#ffb020, already used by the kick row) which is a different value doing
+     a different job. */
+  --v2-quiet: #f7f7f8;      /* the mockup's --paper: the grey a card sits on, and a draft box fills */
+  --v2-miles: #d9f224;
+  --v2-miles-ink: #41490a;
+  --v2-miles-wash: #f2fbb8;
+  --v2-hold: #f5a524;
+  --v2-hold-wash: #fef3dc;
+  --v2-hold-ink: #6b4708;
+
   /* Four samples of the one accent, so four tiles together draw it left to right, top to bottom.
      The cyan sub-label is darkened: #22d3ee does not hold on white. */
   --v2-t1: #ff2e93;
@@ -994,12 +1010,15 @@
 /* ONE MAPPING, EVERYWHERE A CHANNEL APPEARS. The hue is declared once as a custom property on the
    element carrying data-channel, and the list mark, the detail chip and the thread's meta line all
    read it. A second table would drift; there is one. */
-.v2 [data-channel="voice"]     { --chan: #8b5cf6; }
-.v2 [data-channel="sms"]       { --chan: #22d3ee; }
-.v2 [data-channel="email"]     { --chan: #ffb020; }
-.v2 [data-channel="facebook"]  { --chan: #4267ff; }
-.v2 [data-channel="instagram"] { --chan: #ff2e93; }
-.v2 [data-channel="web"]       { --chan: #0f9d58; }
+/* `--chan-wash` is the same hue at 10%, written out rather than computed: color-mix() is not
+   available on every browser this ships to, and a tile whose background silently falls back to
+   transparent is a channel mark that disappears. Same table, one more column. */
+.v2 [data-channel="voice"]     { --chan: #8b5cf6; --chan-wash: rgba(139, 92, 246, 0.1); }
+.v2 [data-channel="sms"]       { --chan: #22d3ee; --chan-wash: rgba(34, 211, 238, 0.1); }
+.v2 [data-channel="email"]     { --chan: #ffb020; --chan-wash: rgba(255, 176, 32, 0.1); }
+.v2 [data-channel="facebook"]  { --chan: #4267ff; --chan-wash: rgba(66, 103, 255, 0.1); }
+.v2 [data-channel="instagram"] { --chan: #ff2e93; --chan-wash: rgba(255, 46, 147, 0.1); }
+.v2 [data-channel="web"]       { --chan: #0f9d58; --chan-wash: rgba(15, 157, 88, 0.1); }
 
 /* THE MARK HAS TO READ AT A GLANCE. An 8px flat dot was something to look FOR. It is now 10px with a
    soft halo of its own hue and a hairline of white between it and the row, so a column of rows sorts
@@ -1602,3 +1621,114 @@
 .v2 .v2-grow[data-out] .v2-gchev, .v2 .v2-nav[data-out] .v2-gchev { display: none; }
 .v2 .v2-grow[data-out] .v2-gchip { background: rgba(255, 92, 108, 0.1); }
 .v2 .v2-grow[data-out] .v2-gchip svg, .v2 .v2-nav[data-out] .v2-gchip svg { stroke: var(--v2-red); }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   MILES — THE THREE-GROUP INBOX
+   ══════════════════════════════════════════════════════════════════════════════════════════════════
+
+   Values taken from docs/miles/miles-approvals.html directly, not approximated: the group label and
+   its fading rule, the card and its rows, the draft box and its 2px left border, the three action
+   buttons, and the held line. Where the mockup used a raw hex that already exists as a v2 token
+   (#F7F7F8 = the app's paper grey, .07 lines) the token is used, so this section cannot drift away
+   from the rest of the design on its own.
+
+   The one deliberate departure is the row's detail line. The mockup says "Draft ready · price quote";
+   the row here quotes the classifier's own trigger text, because a row that does not say WHY it was
+   held gets approved without being read — and that is the one failure this feature cannot survive. */
+
+/* The group label: a dot in the group's colour, mono caps, a count, and a rule that fades out. */
+.v2 .v2-mgl { display: flex; align-items: center; gap: 9px; margin: 16px 2px 9px; }
+.v2 .v2-mgl:first-child { margin-top: 2px; }
+.v2 .v2-mgl i { width: 5px; height: 5px; border-radius: 5px; flex: none; }
+.v2 .v2-mgl b {
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.16em; font-weight: 400;
+  color: var(--v2-ink-55);
+}
+.v2 .v2-mgl u { flex: 1; height: 1px; text-decoration: none; }
+.v2 .v2-mgl em {
+  font-style: normal; font-family: var(--v2-mono); font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
+}
+
+/* Each group is one card; rows are divided by a hairline that starts past the icon. */
+.v2 .v2-mcard {
+  background: var(--v2-paper); border-radius: 14px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.v2 .v2-mrow {
+  display: flex; gap: 11px; padding: 12px; min-height: 62px; align-items: center;
+  width: 100%; text-align: left; background: none; border: 0; font: inherit; cursor: pointer;
+  transition: background 0.16s;
+}
+.v2 .v2-mrow:hover, .v2 .v2-mrow[data-open] {
+  background: linear-gradient(90deg, rgba(255, 46, 147, 0.07), rgba(139, 92, 246, 0.04));
+}
+.v2 .v2-msep { height: 0.5px; background: var(--v2-line); margin-left: 59px; }
+
+/* The channel tile: one shape, one size, the channel's own hue. */
+.v2 .v2-mav {
+  width: 36px; height: 36px; border-radius: 11px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  /* The channel's own hue, from the one table. A channel with no mapping gets the muted ink rather
+     than a colour of its own, so "unknown" never looks like a seventh channel. */
+  background: var(--chan-wash, var(--v2-hover)); color: var(--chan, var(--v2-ink-55));
+}
+.v2 .v2-mav svg { width: 18px; height: 18px; }
+
+.v2 .v2-mmid { flex: 1; min-width: 0; }
+.v2 .v2-mmid p { font-size: 14.5px; color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-mmid span {
+  display: block; font-size: 12.5px; color: var(--v2-ink-55); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The quoted trigger, and the exact words that went out, both read as speech rather than metadata. */
+.v2 .v2-mmid span[data-quote] { color: var(--v2-ink-70); }
+
+.v2 .v2-mmeta { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: none; }
+.v2 .v2-mmeta time { font-family: var(--v2-mono); font-size: 11px; color: var(--v2-ink-40); }
+.v2 .v2-mtag {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 4px;
+}
+.v2 .v2-mtag[data-tone="hold"] { background: var(--v2-hold-wash); color: var(--v2-hold-ink); }
+.v2 .v2-mtag[data-tone="sent"] { background: var(--v2-miles-wash); color: var(--v2-miles-ink); }
+.v2 .v2-mnew {
+  font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+  background: var(--v2-pink); color: #fff;
+}
+
+/* The draft, expanded in place. Aligned past the icon so it reads as belonging to that row. */
+.v2 .v2-mdraft { padding: 0 12px 12px 59px; background: var(--v2-paper); }
+.v2 .v2-mbox {
+  background: var(--v2-quiet); border-left: 2px solid var(--v2-hold); border-radius: 10px;
+  padding: 11px 12px; font-size: 14px; line-height: 1.45; color: var(--v2-ink);
+  width: 100%; font-family: inherit; resize: vertical; min-height: 76px;
+}
+/* The editable draft is the same box, because editing is not a different screen. */
+textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
+
+.v2 .v2-macts { display: flex; gap: 7px; margin-top: 10px; }
+.v2 .v2-macts button {
+  flex: 1; padding: 9px; border-radius: 10px; border: none; cursor: pointer;
+  font-size: 12.5px; font-weight: 500; font-family: inherit; min-height: 38px;
+}
+.v2 .v2-macts button:disabled { opacity: 0.55; cursor: default; }
+/* Acid is the send. It is the only acid on the screen, and it is where Miles acts. */
+.v2 .v2-macts button[data-act="send"] { background: var(--v2-miles); color: #20260a; }
+.v2 .v2-macts button[data-act="edit"],
+.v2 .v2-macts button[data-act="mine"] {
+  background: var(--v2-paper); color: var(--v2-ink); border: 1px solid var(--v2-line);
+}
+
+.v2 .v2-mheld {
+  font-size: 11.5px; color: var(--v2-hold-ink); background: var(--v2-hold-wash); border-radius: 8px;
+  padding: 7px 10px; margin-top: 9px; line-height: 1.4;
+}
+/* A send that failed leaves the draft pending and says so in the same place. */
+.v2 .v2-mheld[data-error] { color: #7a1020; background: rgba(255, 92, 108, 0.12); }
+
+@media (prefers-reduced-motion: reduce) {
+  .v2 .v2-mrow { transition: none; }
+}
+
+/* The groups screen sits on the mockup's grey so the white cards read as cards. Scoped to this
+   screen: the rest of /v2 is white pages with bordered cards, and neither should follow the other. */
+.v2 .v2-page[data-miles] .v2-pbody { background: var(--v2-quiet); }

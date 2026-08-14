@@ -37,6 +37,9 @@ export interface Group {
 export const PRIMARY: Dest[] = [
   { label: 'Leads', href: '/v2/leads', module: 'pipeline' },
   { label: 'Inbox', href: '/v2/inbox', module: 'inbox' },
+  // The messages employee's own surface: three approval states, no calls. Sits beside the inbox
+  // rather than replacing it — see app/(v2)/v2/messages/page.tsx.
+  { label: 'Messages', href: '/v2/messages', module: 'inbox' },
   { label: 'Appointments', href: '/v2/appointments', module: 'scheduling' },
   { label: 'Contacts', href: '/v2/contacts', module: 'contacts' },
 ]

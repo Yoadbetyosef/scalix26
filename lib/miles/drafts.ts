@@ -180,3 +180,21 @@ export async function markHandled(
   }
   return draft
 }
+
+/**
+ * Put a claimed draft back.
+ *
+ * The send path claims the row FIRST (markSent) and delivers second, because the failure that must
+ * never happen is sending twice: the claim is what makes a double tap idempotent. That ordering has a
+ * cost — a delivery that fails after the claim would leave a draft marked sent that never went out —
+ * so the caller reverts it here and tells the owner. Pending is the truthful state for a reply the
+ * customer did not receive.
+ */
+export async function unclaim(db: SupabaseClient, tenantId: string, id: string): Promise<void> {
+  await db
+    .from('held_drafts')
+    .update({ status: 'pending', sent_body: null, sent_message_id: null, decided_at: null, decided_by: null })
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .eq('status', 'sent')
+}

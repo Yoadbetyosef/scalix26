@@ -83,7 +83,12 @@ export interface AutonomyDecision {
 
 const PRICE = [
   // A figure with a currency, either side: "$1,200", "1200 dollars", "£45.50", "₪300"
-  /[$€£₪]\s?\d/,
+  //
+  // The trailing digits are captured, not just the first one. The pattern matched `$1` of `$1,200`,
+  // which decided correctly and then quoted the owner a price that was off by three orders of
+  // magnitude on the row that exists so they can read it. Verdicts are unchanged — this widens what
+  // is QUOTED, not what matches.
+  /[$€£₪]\s?\d[\d,.]*/,
   /\b\d[\d,.]*\s?(dollars?|usd|eur|euros?|pounds?|gbp|shekels?|nis|pesos?)\b/i,
   /\b(price|priced|pricing|cost|costs|quote|quoted|quotation|estimate|fee|fees|charge|charges|rate|rates|deposit|invoice)\b/i,
   /\bthe total\b|\btotal (is|comes to|of)\b/i,
@@ -167,7 +172,12 @@ function firstMatch(text: string, patterns: RegExp[]): string | null {
   return null
 }
 
-const LABEL: Record<CommitmentKind, string> = {
+/**
+ * What each kind is called on a screen. Exported so the inbox row can quote the reason in the same
+ * words the classifier used — a row that says only "draft ready" gets approved without being read.
+ * Presentation only: nothing here decides anything.
+ */
+export const COMMITMENT_LABEL: Record<CommitmentKind, string> = {
   price: 'Quotes a price',
   schedule: 'Commits to a date',
   grievance: 'A complaint, refund or compensation',
@@ -179,7 +189,7 @@ const LABEL: Record<CommitmentKind, string> = {
 function summarise(commitments: Commitment[]): string {
   if (commitments.length === 0) return 'Nothing here commits you to anything.'
   const seen: string[] = []
-  for (const c of commitments) if (!seen.includes(LABEL[c.kind])) seen.push(LABEL[c.kind])
+  for (const c of commitments) if (!seen.includes(COMMITMENT_LABEL[c.kind])) seen.push(COMMITMENT_LABEL[c.kind])
   if (seen.length === 1) return seen[0]
   return `${seen.slice(0, -1).join(', ')} · ${seen[seen.length - 1]}`
 }

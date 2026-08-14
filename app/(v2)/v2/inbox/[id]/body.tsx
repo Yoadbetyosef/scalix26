@@ -77,6 +77,8 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
           title: 'Conversation',
           extra: (
             <ThreadView
+              // The thread's own agent, not a hardcoded name — `readConversation` already joins it.
+              aiName={str(conv.ai_employee?.name) ?? undefined}
               messages={thread}
               emptyLabel={`Nothing has been said to ${who} yet.`}
               composer={

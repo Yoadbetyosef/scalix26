@@ -22,7 +22,15 @@ const walk = (dir: string): string[] =>
 const files = walk(V2).filter((f) => !f.includes('.test.') && !f.endsWith('.md'))
 
 // An absolute app path that is not under /v2. Relative hrefs and external URLs are not this fault.
-const OUTSIDE = /(?:href:\s*|href=\{?["'`]|href="|`)(\/(?!v2\/|v2["'`\s]|auth\/)[a-z][a-z0-9-]*(?:\/|["'`]))/g
+//
+// `/api/` is excluded for the same reason `/auth/` already was: neither is a DESTINATION. This guard
+// exists because a row that navigates out of the preview is a dead end in one tap on a phone — an
+// endpoint a button posts to is data, and never somewhere a person lands.
+//
+// It also watches router.push/replace. It did not, and this screen navigates ONLY that way — a guard
+// that covers hrefs while the code has moved to programmatic navigation is a guard that passes
+// because it is looking somewhere else. Verified by mutation: pointing a row at /dashboard fails.
+const OUTSIDE = /(?:href:\s*|href=\{?["'`]|href="|router\.(?:push|replace)\(\s*["'`]|`)(\/(?!v2\/|v2["'`\s]|auth\/|api\/)[a-z][a-z0-9-]*(?:\/|["'`]))/g
 
 describe('no row leaves the preview', () => {
   it.each(files.map((f) => [f.slice(V2.length + 1), f]))('%s links nowhere outside /v2', (_name, file) => {
