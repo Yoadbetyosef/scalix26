@@ -652,7 +652,15 @@
   color: var(--v2-ink-55); background: rgba(0, 0, 0, 0.045); transition: 0.16s;
 }
 .v2-segs button[data-on="true"] { background: var(--v2-grad-2); color: #fff; box-shadow: 0 2px 12px rgba(139, 92, 246, 0.4); }
-.v2-sin { flex: 1; overflow-y: auto; padding: 4px 18px calc(28px + env(safe-area-inset-bottom)); }
+/* TOP: 4px let the first group's own margin-top collapse against the scroll container, so the RUDI
+   header sat flush at the clip edge and lost its first pixels. The clearance belongs to the scroller,
+   not to a margin on a child — a child margin is whatever the first child happens to carry.
+   BOTTOM: 28px cleared the safe area and nothing else, while .v2-sticky floats a ~72px control over
+   this pane. The Work tab is the longest of the three, so it was the one that reached under it. */
+.v2-sin {
+  flex: 1; overflow-y: auto;
+  padding: 22px 18px calc(104px + env(safe-area-inset-bottom));
+}
 .v2-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .v2-tile {
   background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: var(--v2-radius-card);
