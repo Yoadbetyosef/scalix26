@@ -7,7 +7,8 @@ import {
   Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut, ChevronRight,
 } from 'lucide-react'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { useSheetDrag } from './use-sheet-drag'
 
 // The mobile pull-up sheet: Now / Work / Week over the full-bleed hero.
 //
@@ -48,6 +49,14 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live 
   const signOut = useSignOut()
   const [open, setOpen] = useState(false)
 
+  // The sheet said SWIPE UP and only opened on tap. The gesture is added here and nothing else
+  // changes: the tap still calls the same setOpen, and the sheet still settles on the same CSS
+  // transition — the drag only borrows the transform while a finger is down.
+  const sheetEl = useRef<HTMLDivElement>(null)
+  const scrollEl = useRef<HTMLDivElement>(null)
+  const handleEl = useRef<HTMLButtonElement>(null)
+  useSheetDrag({ open, setOpen, sheet: sheetEl, scroller: scrollEl, handle: handleEl })
+
   const [pane, setPane] = useState<Pane>('now')
 
   return (
@@ -65,8 +74,8 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live 
         </button>
       )}
 
-      <div className="v2-sheet" data-open={open || undefined}>
-        <button type="button" className="v2-sh" onClick={() => setOpen((v) => !v)} aria-label={open ? 'Close' : 'Open'}>
+      <div className="v2-sheet" ref={sheetEl} data-open={open || undefined}>
+        <button ref={handleEl} type="button" className="v2-sh" onClick={() => setOpen((v) => !v)} aria-label={open ? 'Close' : 'Open'}>
           <s />
         </button>
 
@@ -78,7 +87,7 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live 
           ))}
         </div>
 
-        <div className="v2-sin" data-scroll>
+        <div className="v2-sin" ref={scrollEl} data-scroll>
           {pane === 'now' && (
             <>
               <p className="v2-kick" data-tone="live"><i />Right now</p>
