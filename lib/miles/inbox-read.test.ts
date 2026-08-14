@@ -27,6 +27,19 @@ describe('triggerLine', () => {
     expect(triggerLine(d.commitments)).toMatch(/\+1$/)
   })
 
+  it('counts KINDS, not reasons — one complaint found twice is still one thing to know', () => {
+    // A grievance in the customer's message AND in the reply used to render as "+1", which reads as
+    // a second, different reason the owner has not been told.
+    const d = classifyReply({
+      reply: 'We can refund you in full.',
+      inbound: 'The clasp broke and I want a refund.',
+      grounded: true,
+    })
+    expect(d.commitments.length).toBe(2)
+    expect(new Set(d.commitments.map((c) => c.kind)).size).toBe(1)
+    expect(triggerLine(d.commitments)).not.toMatch(/\+/)
+  })
+
   it('does not put a placeholder in quotation marks', () => {
     // "(not answered from what the business has told us)" is a note, not something anybody said.
     const d = classifyReply({ reply: 'I believe so, yes.', inbound: '', grounded: false })

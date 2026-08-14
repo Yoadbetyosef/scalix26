@@ -114,6 +114,7 @@ export function MessagesClient({ data }: Props) {
                           type="button"
                           className="v2-mrow"
                           data-open={isOpen || undefined}
+                          data-alarm={!row.announced && row.announceError ? true : undefined}
                           data-touch
                           onClick={() => setOpen(isOpen ? null : row.draftId)}
                           aria-expanded={isOpen}
@@ -127,7 +128,11 @@ export function MessagesClient({ data }: Props) {
                           </span>
                           <span className="v2-mmeta">
                             <time>{heldSince(row.heldSince)}</time>
-                            <span className="v2-mtag" data-tone="hold">DRAFT</span>
+                            {/* An unannounced draft is not a draft with a note attached — it is a
+                                different situation, and the row says so where the state goes. */}
+                            <span className="v2-mtag" data-tone={row.announced || !row.announceError ? 'hold' : 'alarm'}>
+                              {row.announced || !row.announceError ? 'DRAFT' : 'NOT SENT TO YOU'}
+                            </span>
                           </span>
                         </button>
 
@@ -178,8 +183,9 @@ export function MessagesClient({ data }: Props) {
                                 held line goes, because it changes what the owner should do next. */}
                             {!row.announced && row.announceError && (
                               <p className="v2-mheld" data-error>
-                                We could not reach you about this one ({row.announceError}). It has been
-                                waiting here since it was held.
+                                <strong>This never reached you.</strong> The text and the email both failed
+                                ({row.announceError}), so it has been sitting here unanswered since it was
+                                held — and the customer is still waiting.
                               </p>
                             )}
                             {failed[row.draftId] ? (

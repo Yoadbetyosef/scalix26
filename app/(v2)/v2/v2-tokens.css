@@ -1732,3 +1732,12 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 /* The groups screen sits on the mockup's grey so the white cards read as cards. Scoped to this
    screen: the rest of /v2 is white pages with bordered cards, and neither should follow the other. */
 .v2 .v2-page[data-miles] .v2-pbody { background: var(--v2-quiet); }
+
+/* A DRAFT THE OWNER WAS NEVER TOLD ABOUT.
+   Amber means "held, waiting on you", which is a working state. This is not one: the text and the
+   email both failed, so a customer is waiting on a message nobody knows exists. It gets the red the
+   rest of the app uses for a fault, and it gets it on the row — a note inside the expanded draft
+   would only be read by someone who already opened it. */
+.v2 .v2-mrow[data-alarm] { background: rgba(255, 92, 108, 0.07); }
+.v2 .v2-mrow[data-alarm]:hover { background: rgba(255, 92, 108, 0.12); }
+.v2 .v2-mtag[data-tone="alarm"] { background: rgba(255, 92, 108, 0.16); color: #7a1020; }

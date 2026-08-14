@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { smsBody, emailBody } from './message'
+import { smsBody, emailBody, smsCost, isGsm7, SMS_SEGMENT_BUDGET } from './message'
 import type { HeldDraft } from './drafts'
 
 // THE POINT OF THE NOTIFICATION IS THE DRAFT.
@@ -33,7 +33,9 @@ describe('the SMS', () => {
   })
 
   it('says why it was held, in the classifier’s own words', () => {
-    expect(body).toContain('Quotes a price · “$1,200”')
+    // Straight quotes and a hyphen: the typographic version costs a UCS-2 message and halves what
+    // fits in a segment. The screens and the email keep the real punctuation.
+    expect(body).toContain('Held: Quotes a price - "$1,200"')
   })
 
   it('promises that nothing goes out without a decision', () => {
@@ -84,5 +86,59 @@ describe('the email', () => {
 
   it('links to the decision page', () => {
     expect(html).toContain(`href="${URL}"`)
+  })
+
+  it('keeps the real punctuation — an email has no segments to pay for', () => {
+    expect(html).toContain('Quotes a price · “$1,200”')
+  })
+})
+
+describe('what a long draft costs', () => {
+  // Measured before this existed: a typical 81-character draft made a 344-character message in UCS-2,
+  // which is SIX segments, and a ten-character draft still cost four. The characters forcing UCS-2
+  // were not the customer's — they were a "·" and a pair of curly quotes in our own template.
+  const URL_ = 'https://app.scalix26.com/m/' + 'x'.repeat(43)
+  const long = 'Thank you for getting in touch about the engagement ring. '.repeat(8)
+
+  it('stays in the alphabet that fits 153 characters per segment', () => {
+    const body = smsBody(draft(), 'Sarah M.', 'Miles', URL_)
+    expect(isGsm7(body)).toBe(true)
+    expect(smsCost(body).encoding).toBe('GSM-7')
+  })
+
+  it('does not mangle the customer’s own words to save a segment', () => {
+    // An accented name is content, not decoration. It may cost UCS-2; that is the right trade.
+    const body = smsBody(draft({ inbound_excerpt: 'היי, כמה זה עולה?' }), 'Yosef', 'Miles', URL_)
+    expect(body).toContain('היי')
+  })
+
+  it('never runs past the segment budget, however long the draft', () => {
+    for (const n of [1, 10, 40, 80, 200, 400, 1200]) {
+      const body = smsBody(draft({ body: 'x'.repeat(n) }), 'Sarah M.', 'Miles', URL_)
+      expect(smsCost(body).segments).toBeLessThanOrEqual(SMS_SEGMENT_BUDGET)
+    }
+  })
+
+  it('says when it cut the draft, rather than quietly shortening it', () => {
+    // Approving words you believe you have read in full is the failure this avoids.
+    const body = smsBody(draft({ body: long }), 'Sarah M.', 'Miles', URL_)
+    expect(body).toContain('[cut - full reply in your email and at the link]')
+  })
+
+  it('cuts the draft and nothing else', () => {
+    const body = smsBody(draft({ body: long }), 'Sarah M.', 'Miles', URL_)
+    expect(body).toContain(URL_)
+    expect(body).toContain('Nothing goes out until you decide')
+    expect(body).toContain('Held:')
+  })
+
+  it('leaves an ordinary reply whole', () => {
+    const body = smsBody(draft(), 'Sarah M.', 'Miles', URL_)
+    expect(body).toContain('Customs start at $1,200 depending on the stone. Want me to book a call this week?')
+    expect(body).not.toContain('[cut')
+  })
+
+  it('the email is never cut — it has no segments to run out of', () => {
+    expect(emailBody(draft({ body: long }), 'Sarah M.', 'Miles', URL_)).toContain(long.trim().slice(0, 200))
   })
 })

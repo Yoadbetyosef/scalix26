@@ -97,7 +97,11 @@ export function triggerLine(reasons: Commitment[]): string {
   // An evidence string that is a placeholder rather than a quotation reads badly in quotes.
   const quoted = first.evidence?.startsWith('(') ? null : first.evidence
   const head = quoted ? `${label} · “${quoted}”` : label
-  return reasons.length > 1 ? `${head} +${reasons.length - 1}` : head
+  // Counted by KIND, not by reason. The same complaint found in both the customer's message and the
+  // reply is one thing to know about, and "+1" implying a second, different reason is the row telling
+  // a small lie about what it is showing.
+  const kinds = new Set(reasons.map((r) => r.kind))
+  return kinds.size > 1 ? `${head} +${kinds.size - 1}` : head
 }
 
 export async function readMilesInbox(tenantId: string, agentName: string): Promise<MilesInbox> {

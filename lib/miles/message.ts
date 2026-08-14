@@ -10,17 +10,75 @@ import type { HeldDraft } from './drafts'
 // "You have a draft waiting, open the app" is the version of this that fails: the owner has to find
 // their password before they can find out what was written. The whole draft travels in the body.
 
+// ── WHAT A LONG DRAFT COSTS ─────────────────────────────────────────────────────────────────────────
+//
+// An SMS is not one message. GSM-7 fits 160 characters, or 153 each once it concatenates; a single
+// character outside that alphabet switches the WHOLE message to UCS-2, where those numbers become 70
+// and 67. Twilio bills per segment.
+//
+// Measured before any of this was written: a typical 81-character draft produced a 344-character
+// message in UCS-2 — SIX segments — and a ten-character draft still cost four. The characters
+// responsible were not the customer's; they were the decoration in this file, a "·" and a pair of
+// curly quotes. Those are now ASCII in the SMS (the email and the screens keep the typography), which
+// roughly doubles what fits per segment.
+//
+// What remains is a real limit, and the honest answer to "what happens when the draft is long" is:
+// it splits up to a cap, then the DRAFT is the only part that gets shortened, and the email always
+// carries the whole thing. Never the link, never the line promising nothing goes out.
+
+/** Three segments. Enough for any reply the SMS/social prompt asks for, and a bounded bill. */
+export const SMS_SEGMENT_BUDGET = 3
+
+const GSM7 =
+  "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡" +
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+/** These cost two characters each in GSM-7. */
+const GSM7_EXT = '^{}\\[~]|€'
+
+export const isGsm7 = (s: string) => [...s].every((c) => GSM7.includes(c) || GSM7_EXT.includes(c))
+
+/** How many characters this message actually costs, and how many segments that is. */
+export function smsCost(s: string): { encoding: 'GSM-7' | 'UCS-2'; length: number; segments: number } {
+  if (isGsm7(s)) {
+    const length = [...s].reduce((n, c) => n + (GSM7_EXT.includes(c) ? 2 : 1), 0)
+    return { encoding: 'GSM-7', length, segments: length <= 160 ? 1 : Math.ceil(length / 153) }
+  }
+  const length = [...s].reduce((n, c) => n + (c.codePointAt(0)! > 0xffff ? 2 : 1), 0)
+  return { encoding: 'UCS-2', length, segments: length <= 70 ? 1 : Math.ceil(length / 67) }
+}
+
+/**
+ * OUR typography, flattened for the wire. The customer's own words are left alone: an accented name
+ * or a Hebrew sentence is content, and mangling it to save a segment would be answering the wrong
+ * question. Only the punctuation this file adds is normalised.
+ */
+const plain = (s: string) =>
+  s.replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-').replace(/…/g, '...').replace(/·/g, '-')
+    .replace(/ /g, ' ')
+
 /** SMS is one screen on a lock screen. Question, draft, why, link — in that order, nothing else. */
 export function smsBody(draft: HeldDraft, who: string, agentName: string, url: string): string {
-  const lines = [
+  const build = (body: string) => plain([
     `${agentName} drafted a reply to ${who}${draft.channel ? ` (${draft.channel})` : ''}.`,
     draft.inbound_excerpt ? `\nThey asked: ${draft.inbound_excerpt}` : '',
-    `\n"${draft.body}"`,
+    `\n"${body}"`,
     `\nHeld: ${triggerLine(draft.reasons ?? [])}`,
     `\nSend, edit or take it over: ${url}`,
     `\nNothing goes out until you decide.`,
-  ]
-  return lines.filter(Boolean).join('\n')
+  ].filter(Boolean).join('\n'))
+
+  const full = build(draft.body)
+  if (smsCost(full).segments <= SMS_SEGMENT_BUDGET) return full
+
+  // Over budget: shorten the draft, and SAY SO. A silently truncated reply is worse than a long one —
+  // the owner would approve words believing they had read all of them.
+  const tail = ' [cut - full reply in your email and at the link]'
+  let body = draft.body
+  while (body.length > 40 && smsCost(build(body + tail)).segments > SMS_SEGMENT_BUDGET) {
+    body = body.slice(0, Math.max(40, Math.floor(body.length * 0.9)))
+  }
+  return build(body.trimEnd() + tail)
 }
 
 const escapeHtml = (s: string) =>
