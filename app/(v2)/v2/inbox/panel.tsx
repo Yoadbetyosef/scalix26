@@ -95,12 +95,16 @@ export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnl
     session.goLive()
   }, [session])
 
-  // AT REST HE IS A PHOTOGRAPH. `minimised` is the canvas's own still-frame mode — no network, no
-  // sweep, no video — and on a phone that is what he should be until the control is pressed. The hook
-  // returns null before it has measured, and `!null` is `true`, so the tri-state is read explicitly:
-  // unknown is treated as not-mobile, which keeps the desktop behaviour.
+  // AT REST HE IS ALIVE. The still-frame mode is gone from this panel: it removed the mesh, and the
+  // mesh with the sweep crossing it — nodes lighting cyan above the line and violet below — IS the
+  // thing that makes a portrait look like an employee rather than a screenshot of one. The full
+  // engine runs here, exactly as it does on a desktop.
+  //
+  // What that costs, and what stops it: the loop halts when the tab is hidden (visibilitychange) and
+  // when the portrait leaves the viewport (IntersectionObserver at 0.01). On a phone the hero scrolls
+  // with the list, so scrolling past him stops it — the expensive case is looking straight at him,
+  // which is the case worth paying for.
   const isMobile = useIsMobile()
-  const stillAtRest = isMobile === true && !live
 
   // SILENT WHEN THERE IS NOTHING. No drafts, nothing needing a person, nothing sent — then no line and
   // no count. A panel that says "0 drafts waiting" every morning teaches its owner to stop reading it.
@@ -118,8 +122,11 @@ export function MilesPanel({ agentName, facts, sent, waiting, needs, only, onOnl
             handleRef={face}
             onStateChange={setState}
             className="v2-mface"
-            minimised={stillAtRest}
-            onClick={toggle}
+            // TOUCH SCANS, IT DOES NOT ANSWER. On a phone the mic is the only way into a
+            // conversation: a portrait that fills the screen is far too easy to open by accident,
+            // and an accidental call is a real one. Read at CLICK time, not at render — useIsMobile
+            // returns null until it has measured, and a first render must not decide this.
+            onClick={() => (isMobile === true ? face.current?.scan() : toggle())}
           />
           <div className="v2-mveil" aria-hidden />
 

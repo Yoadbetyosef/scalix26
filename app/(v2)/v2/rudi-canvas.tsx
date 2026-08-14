@@ -56,6 +56,14 @@ export interface RudiHandle {
   arm: () => void
   /** Close the conversation and return to idle. */
   endSession: () => void
+  /**
+   * Run a scan across the portrait, now.
+   *
+   * PRESENTATION ONLY. It restarts the sweep from the top and displaces the slices harder for about
+   * a second; it changes no state, starts nothing and ends nothing. It exists so that touching the
+   * portrait does something visible on a device where there is no hover to do it.
+   */
+  scan: () => void
   state: () => RudiState
 }
 
@@ -143,6 +151,8 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
   // Whether level() has ever been called. The only thing this component can honestly say about the
   // number's provenance: that it was given one, or that it was not.
   const levelledRef = useRef(false)
+  // When the last tap-to-scan happened. 0 = never, which is the sweep's original phase exactly.
+  const scanAtRef = useRef(0)
 
   useEffect(() => { minRef.current = minimised }, [minimised])
 
@@ -183,6 +193,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     listen() { if (stateRef.current !== 'listening') setState('listening') },
     stopListening() { if (stateRef.current === 'listening') setState('idle') },
     arm() { if (stateRef.current !== 'armed') setState('armed') },
+    scan() { scanAtRef.current = performance.now() },
     endSession() {
       if (timerRef.current) clearTimeout(timerRef.current)
       speakEndRef.current = 0
@@ -383,7 +394,11 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       const open = st === 'listening' || st === 'armed'
       const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150) : open ? 1.22 : 1
       const period = open ? 1300 : 3600
-      const prog = (now % period) / period
+      // Relative to the last tap, so a tap starts a scan from the top rather than joining one
+      // already halfway down. Zero until something taps, and `now % period` is what that reduces to.
+      const prog = ((now - scanAtRef.current) % period) / period
+      // ~900ms of harder displacement after a tap, easing out. Nothing else changes.
+      const burst = scanAtRef.current ? Math.max(0, 1 - (now - scanAtRef.current) / 900) : 0
       const band = prog * CH
       const hc = hue(STOPS, prog)
 
@@ -449,7 +464,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       }
 
       // ── Scan sweep: 18 displaced slices of the portrait, brightest at the band. ─────────────────
-      drawSweep(now, band, scanA, st === 'idle' ? 1 : 2.2)
+      drawSweep(now, band, scanA, (st === 'idle' ? 1 : 2.2) + burst * 1.8)
 
       // ── Listening: white veil + monochrome level meter. ────────────────────────────────────────
       if (micA > 0.01) {

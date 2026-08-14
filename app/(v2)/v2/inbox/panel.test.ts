@@ -355,6 +355,35 @@ describe('mobile — R1', () => {
 
 describe('he is alive on a phone', () => {
   const canvas = readFileSync(new URL('../rudi-canvas.tsx', import.meta.url), 'utf8')
+  const panel = strip(read('./panel.tsx'))
+
+  it('runs the FULL engine at rest — mesh and sweep, as the desktop draws it', () => {
+    // The still-at-rest rule removed the mesh, and the mesh crossed by the sweep is the thing that
+    // makes the portrait read as an employee rather than a screenshot of one.
+    expect(panel).not.toContain('minimised=')
+    expect(panel).not.toContain('stillAtRest')
+  })
+
+  it('touching the portrait scans him and does not open a conversation', () => {
+    // A portrait that fills a phone screen is far too easy to open by accident, and an accidental
+    // call is a real one. The mic is the only way in on a phone.
+    expect(panel).toContain('isMobile === true ? face.current?.scan() : toggle()')
+  })
+
+  it('decides that at click time, not at render', () => {
+    // useIsMobile returns null until it has measured; a first render must not decide it.
+    expect(panel).toContain('onClick={() => (isMobile === true')
+  })
+
+  it('scan is presentation only — it starts and ends nothing', () => {
+    const fn = canvas.slice(canvas.indexOf('scan() {'), canvas.indexOf('endSession() {'))
+    expect(fn).toContain('scanAtRef.current = performance.now()')
+    expect(fn).not.toMatch(/setState|listen|speak|endSession/)
+  })
+
+  it('a tap starts the sweep from the top rather than joining one halfway down', () => {
+    expect(canvas).toContain('const prog = ((now - scanAtRef.current) % period) / period')
+  })
 
   it('the collapsed path runs the SAME sweep the full engine runs', () => {
     // It used to draw one slow band every 5.2s — about 1.8s of movement in every 5, which reads as a
