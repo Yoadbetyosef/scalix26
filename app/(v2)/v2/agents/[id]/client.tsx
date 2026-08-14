@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, Sparkles, AudioLines, FileText, Clock, CalendarCheck } from 'lucide-react'
+import { Building2, Sparkles, AudioLines, FileText, Clock, CalendarCheck, Phone, Mail } from 'lucide-react'
 import { useAgentEditor } from '@/components/ai-employees/use-agent-editor'
 import type { Props } from '@/components/ai-employees/ai-employee-edit-client'
 import { WeeklyHoursGrid } from '@/components/ai-employees/hours-controls'
-import { GlassInput, GlassSelect, StatusPill } from '../../controls'
+import { GlassInput, GlassSelect, GlassChoice, StatusPill, NeedsConnection } from '../../controls'
+import { FacebookGlyph, InstagramGlyph } from '../../brand-glyphs'
 import { usePressState } from '../../use-press'
 
 // THE AGENT SCREEN — what makes this agent that agent.
@@ -35,7 +36,11 @@ const LANGUAGES = [
 
 export function AgentClient(props: Props) {
   usePressState()
-  const { form, setForm, isDirty, businessHours, updateBusinessHours, appointmentHours, updateAppointmentHours } = useAgentEditor(props)
+  const {
+    form, setForm, isDirty, businessHours, updateBusinessHours, appointmentHours, updateAppointmentHours,
+    phoneChannel, fbChannel, igChannel,
+  } = useAgentEditor(props)
+  const mailbox = props.emailAccounts?.find((a) => a.is_primary) ?? props.emailAccounts?.[0]
   const { employee } = props
   // Typed against the hook's own form shape, so a field name that does not exist fails to compile
   // rather than silently writing a key nobody reads.
@@ -131,6 +136,101 @@ export function AgentClient(props: Props) {
                 <span className="v2-glab">The hours Rudi may actually book into — narrower than opening hours, usually.</span></div>
               <div className="v2-hours">
                 <WeeklyHoursGrid hours={appointmentHours} onUpdate={updateAppointmentHours} />
+              </div>
+            </div>
+          </section>
+
+          {/* WHAT THIS AGENT ANSWERS ON — the binding, never the connection.
+              Buying or releasing a number, connecting a Page and connecting a mailbox all belong to
+              /v2/settings/connections: with two agents those are shared. What differs per agent is
+              WHICH of them this one uses, and what happens before a call reaches it. */}
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+            <p className="v2-ghead"><i />Phone<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip"><Phone /></span>
+                <span className="v2-glab">
+                  {phoneChannel?.twilio_number
+                    ? `Answering on ${phoneChannel.twilio_number}`
+                    : 'No line is connected to this agent yet'}
+                </span>
+                <span className="v2-gtrail">
+                  <StatusPill state={phoneChannel ? 'live' : 'off'}>{phoneChannel ? 'Connected' : 'Not connected'}</StatusPill>
+                </span>
+              </div>
+              {!phoneChannel && <NeedsConnection what="A phone line" />}
+              <div data-disabled={!phoneChannel || undefined}>
+                <GlassInput
+                  label="Forward unanswered calls to"
+                  value={form.forward_to_phone}
+                  onChange={(v) => setForm((f) => ({ ...f, forward_to_phone: v }))}
+                  placeholder="+1 555 000 0000"
+                  hint="Rings here first. Rudi picks up if nobody does."
+                  disabled={!phoneChannel}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+            <p className="v2-ghead"><i />Social<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip"><FacebookGlyph /></span>
+                <span className="v2-glab">{fbChannel ? `Page ${fbChannel.meta_page_id}` : 'No Facebook Page is bound to this agent'}</span>
+                <span className="v2-gtrail">
+                  <StatusPill state={fbChannel ? 'live' : 'off'}>{fbChannel ? 'Connected' : 'Not connected'}</StatusPill>
+                </span>
+              </div>
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip"><InstagramGlyph /></span>
+                <span className="v2-glab">{igChannel ? `Account ${igChannel.meta_page_id}` : 'No Instagram account is bound to this agent'}</span>
+                <span className="v2-gtrail">
+                  <StatusPill state={igChannel ? 'live' : 'off'}>{igChannel ? 'Connected' : 'Not connected'}</StatusPill>
+                </span>
+              </div>
+              {!fbChannel && !igChannel && <NeedsConnection what="Facebook or Instagram" />}
+            </div>
+          </section>
+
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+            <p className="v2-ghead"><i />Email<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-gchip"><Mail /></span>
+                <span className="v2-glab">{mailbox?.email_address || 'No mailbox is bound to this agent'}</span>
+                <span className="v2-gtrail">
+                  <StatusPill state={mailbox ? (mailbox.status === 'connected' ? 'live' : 'pending') : 'off'}>
+                    {mailbox ? (mailbox.status === 'connected' ? 'Connected' : 'Pending') : 'Not connected'}
+                  </StatusPill>
+                </span>
+              </div>
+              {!mailbox && <NeedsConnection what="A mailbox" />}
+              <div data-disabled={!mailbox || undefined}>
+                {/* Three visible options rather than a select: a reply policy is a decision, and a
+                    select would hide two thirds of it behind a tap. */}
+                <GlassChoice
+                  label="How Rudi replies"
+                  value={!form.email_auto_reply ? 'off' : form.email_handoff_after_first_reply ? 'first' : 'always'}
+                  onChange={(v) => setForm((f) => ({
+                    ...f,
+                    email_auto_reply: v !== 'off',
+                    email_handoff_after_first_reply: v === 'first',
+                  }))}
+                  disabled={!mailbox}
+                  options={[
+                    { value: 'always', label: 'Every email', hint: 'Rudi answers and keeps answering.' },
+                    { value: 'first', label: 'First reply only', hint: 'Then it hands the thread to you.' },
+                    { value: 'off', label: 'Never', hint: 'Email arrives and waits for you.' },
+                  ]}
+                />
+                <GlassInput
+                  label="Reply from"
+                  value={form.reply_from_email}
+                  onChange={(v) => setForm((f) => ({ ...f, reply_from_email: v }))}
+                  placeholder="hello@yourbusiness.com"
+                  disabled={!mailbox}
+                />
               </div>
             </div>
           </section>

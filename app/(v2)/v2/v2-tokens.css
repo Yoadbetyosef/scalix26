@@ -1557,3 +1557,7 @@
   .v2 .v2-hours [class*="flex"] { flex-wrap: wrap; }
   .v2 .v2-hours select { flex: 1 1 44%; min-width: 0; }
 }
+
+/* A binding row carries a state pill on the right, so its label must yield rather than push it off. */
+.v2 .v2-grow[data-static] .v2-gtrail { flex: none; }
+.v2 .v2-grow[data-static] .v2-glab { overflow-wrap: anywhere; }
