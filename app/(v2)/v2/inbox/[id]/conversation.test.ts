@@ -88,14 +88,34 @@ describe('WHAT HAPPENED is a card, not an invention', () => {
   })
 })
 
-describe('never show a composer that cannot send', () => {
-  it('the swap is gated on being able to send', () => {
-    expect(takeover).toContain('if (!canSend) return')
-    expect(takeover).toContain('disabled={!canSend}')
+describe('the composer can send, and says truthfully whether it did', () => {
+  it('takes over FIRST — /send refuses without it', () => {
+    const to = takeover.indexOf('/takeover')
+    const sd = takeover.indexOf('/send')
+    expect(to).toBeGreaterThan(-1)
+    expect(to).toBeLessThan(sd)
   })
 
-  it('and the preview cannot', () => {
-    expect(body).toContain('canSend={false}')
+  it('never reports success on ok: true alone', () => {
+    // Five paths return ok:true with delivered:false — a paused partner, no phone on file, a mailbox
+    // needing reconnect, an unsupported channel, a provider that threw. Reading the status code is
+    // the Send-to-Production bug: a success message over a send that reached nobody.
+    expect(takeover).toContain('j.delivered')
+    expect(takeover).toContain("? { ok: true, message: 'Sent.' }")
+  })
+
+  it('shows the route’s own note when it did not reach them', () => {
+    expect(takeover).toContain("{ ok: false, message: j.note || 'Saved to the thread, but not delivered.' }")
+  })
+
+  it('does not clear the failure when the next attempt starts, silently', () => {
+    // setOutcome(null) happens at the start of an attempt — deliberate — but the failure stays on
+    // screen until then rather than fading like a toast.
+    expect(takeover).toContain('setOutcome(null)')
+  })
+
+  it('refreshes so the thread shows what was actually recorded', () => {
+    expect((takeover.match(/router\.refresh\(\)/g) ?? []).length).toBe(2)   // after takeover, after send
   })
 
   it('focuses the field once it exists, not before', () => {
@@ -103,7 +123,12 @@ describe('never show a composer that cannot send', () => {
   })
 
   it('says what taking over costs, in the employee’s own name', () => {
-    expect(takeover).toContain('{agentName} stops answering this thread.')
+    expect(takeover).toContain('${agentName} stops answering this thread.')
+  })
+
+  it('opens straight into the composer on a thread already taken over', () => {
+    expect(takeover).toContain('useState(takenOver)')
+    expect(body).toContain('takenOver={conv.human_takeover === true}')
   })
 })
 

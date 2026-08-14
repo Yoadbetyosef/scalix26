@@ -1,49 +1,113 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-// TAKE OVER, THEN REPLY — one block that becomes the other.
+// TAKE OVER, THEN REPLY — the first thing in /v2 that writes.
 //
-// ── NEVER SHOW A COMPOSER THAT CANNOT SEND ──────────────────────────────────────────────────────────
+// ── THE ORDER IS NOT A PREFERENCE ───────────────────────────────────────────────────────────────────
 //
-// The swap is the design: tapping "Take over and reply" replaces the button and its line with a field
-// and focuses it, because taking over and then hunting for where to type is two steps for one
-// intention. But a composer that cannot deliver is a promise the screen does not keep, so the swap is
-// gated on `canSend` — and in the /v2 preview, where every action is disabled, the button stays a
-// button. The interaction is here in full; what it waits on is a real sender, not more design.
+// /api/conversations/[id]/send refuses with 400 unless `human_takeover` is already true. So the
+// button posts the takeover, waits for it, and only then becomes a composer. The same two endpoints
+// in the same order the v1 screen uses; nothing here is a new path, and neither route changed.
+//
+// ── ok: true DOES NOT MEAN DELIVERED ────────────────────────────────────────────────────────────────
+//
+// The send route answers `{ ok, delivered, note }`, and there are FIVE ways to get `ok: true` with
+// `delivered: false` — a paused partner, no phone on file, a mailbox needing reconnect, an
+// unsupported channel, a provider that threw. Each returns the real reason in `note`.
+//
+// A screen that read the status code would tell the owner their message went out when it did not.
+// That is the Send-to-Production bug exactly. So `delivered` decides what this says, the message
+// stays in the thread either way — the route always records it — and `note` is shown verbatim,
+// because it is already written in the owner's words.
 
-export function TakeOver({
-  agentName,
-  canSend,
-  disabledReason,
-}: {
+interface Props {
+  conversationId: string
   agentName: string
-  /** False in the preview: the button renders, disabled, and never swaps. */
-  canSend: boolean
-  disabledReason?: string
-}) {
-  const [live, setLive] = useState(false)
+  /** Already handed over: the composer is the resting state, not the button. */
+  takenOver: boolean
+}
+
+export function TakeOver({ conversationId, agentName, takenOver }: Props) {
+  const router = useRouter()
+  const [live, setLive] = useState(takenOver)
+  const [busy, setBusy] = useState(false)
+  const [text, setText] = useState('')
+  /** What the last attempt actually did. Null while nothing has been claimed about it. */
+  const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null)
   const input = useRef<HTMLInputElement>(null)
+
+  async function takeOver() {
+    setBusy(true)
+    setOutcome(null)
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/takeover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setOutcome({ ok: false, message: j.error || 'Could not take this conversation over.' })
+        return
+      }
+      setLive(true)
+      // The rest of the screen reads `human_takeover`, so it has to re-read.
+      router.refresh()
+      // The field does not exist until this render commits.
+      requestAnimationFrame(() => input.current?.focus())
+    } catch {
+      setOutcome({ ok: false, message: 'Could not take this conversation over — check your connection.' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function send() {
+    const content = text.trim()
+    if (!content || busy) return
+    setBusy(true)
+    setOutcome(null)
+    try {
+      const res = await fetch(`/api/conversations/${conversationId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      const j = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setOutcome({ ok: false, message: j.error || 'That did not send.' })
+        return
+      }
+
+      // THE HALF THAT MATTERS. 200 only means the route ran.
+      setText('')
+      setOutcome(
+        j.delivered
+          ? { ok: true, message: 'Sent.' }
+          // It IS in the thread — the route always records it — and it did not reach them. The
+          // reason is already a sentence, so it is shown as one.
+          : { ok: false, message: j.note || 'Saved to the thread, but not delivered.' },
+      )
+      router.refresh()
+    } catch {
+      setOutcome({ ok: false, message: 'That did not send — check your connection.' })
+    } finally {
+      setBusy(false)
+    }
+  }
 
   if (!live) {
     return (
       <div className="v2-cmp">
-        <button
-          type="button"
-          className="v2-takeover"
-          data-touch
-          disabled={!canSend}
-          title={canSend ? undefined : disabledReason}
-          onClick={() => {
-            if (!canSend) return
-            setLive(true)
-            // Focused on the next frame: the field does not exist until this render commits.
-            requestAnimationFrame(() => input.current?.focus())
-          }}
-        >
-          Take over and reply
+        <button type="button" className="v2-takeover" data-touch disabled={busy} onClick={takeOver}>
+          {busy ? 'Taking over…' : 'Take over and reply'}
         </button>
-        <p className="v2-tosub">{agentName} stops answering this thread.</p>
+        <p className="v2-tosub" data-bad={outcome && !outcome.ok ? true : undefined}>
+          {outcome ? outcome.message : `${agentName} stops answering this thread.`}
+        </p>
       </div>
     )
   }
@@ -51,9 +115,26 @@ export function TakeOver({
   return (
     <div className="v2-cmp" data-live>
       <div className="v2-live">
-        <input ref={input} placeholder={`Reply to this conversation…`} aria-label="Your reply" />
-        <button type="button" className="v2-snd" aria-label="Send">↑</button>
+        <input
+          ref={input}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send() } }}
+          placeholder="Reply to this conversation…"
+          aria-label="Your reply"
+          disabled={busy}
+        />
+        <button
+          type="button"
+          className="v2-snd"
+          onClick={() => void send()}
+          disabled={busy || !text.trim()}
+          aria-label="Send"
+        >↑</button>
       </div>
+      {outcome && (
+        <p className="v2-tosub" data-bad={outcome.ok ? undefined : true}>{outcome.message}</p>
+      )}
     </div>
   )
 }

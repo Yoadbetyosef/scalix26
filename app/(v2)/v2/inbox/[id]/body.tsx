@@ -1,6 +1,6 @@
 import { readConversation } from '@/lib/inbox/conversation-read'
 import { personaOf, nameOf } from '@/lib/persona'
-import { relativeTime, PREVIEW } from '../../list-page'
+import { relativeTime } from '../../list-page'
 import { channelKey, CHANNEL_LABEL } from '../../channels'
 import { ChannelGlyph } from '../glyphs'
 import { ConversationThread, type Line } from './thread'
@@ -161,8 +161,13 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
       {/* ONE instance, and one `live` state with it. On a phone it is the pinned block at the
           bottom; above 1100px `.v2-conv` becomes a grid and this same node sits in the header row
           beside the employee's name. Rendering it twice would be two controls with two states, and
-          the one that is hidden is the one that would fall out of step. */}
-      <TakeOver agentName={agentName} canSend={false} disabledReason={PREVIEW} />
+          the one that is hidden is the one that would fall out of step.
+
+          THE ONE THING IN /v2 THAT WRITES. Everything else on every v2 screen is rendered disabled
+          with title="v2 preview"; this is not, because a take-over control that cannot take over is
+          the whole screen's promise unkept. It writes through the two endpoints the v1 screen
+          already uses, in the same order, and neither of them changed. */}
+      <TakeOver conversationId={conv.id} agentName={agentName} takenOver={conv.human_takeover === true} />
     </div>
   )
 }

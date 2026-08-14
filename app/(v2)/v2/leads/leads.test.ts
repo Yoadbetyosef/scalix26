@@ -200,15 +200,33 @@ describe('the thread is its own shape, and the shared ones stayed shared', () =>
     expect(code('lib/inbox/conversation-read.ts')).not.toMatch(/notFound|redirect/)
   })
 
-  it('the v2 conversation screen adds no query and stays read-only', () => {
-    // The screen left DetailPage — it is a header, a strip, a thread and a pinned action now — so the
-    // read-only promise is expressed differently. It is the same promise: one existing read, and the
-    // only thing that would write is handed `canSend={false}` and the preview's own reason.
+  it('the v2 conversation screen adds no query — and is the ONE screen that writes', () => {
+    // ── THE EXCEPTION, NAMED ────────────────────────────────────────────────────────────────────
+    //
+    // Every other action in /v2 renders disabled with title="v2 preview", and that rule has not
+    // decayed: this is a decision, taken deliberately, for one control on one screen.
+    //
+    // WHICH: app/(v2)/v2/inbox/[id]/takeover.tsx — "Take over and reply", and the composer it
+    // becomes.
+    // WHY: a take-over control that cannot take over is the screen's own promise unkept, and it was
+    // the last gap between the preview and the product. It writes through the two endpoints the v1
+    // screen already uses — /takeover then /send, in that order because /send refuses without it —
+    // and neither route changed.
+    //
+    // The read is still the existing one, and no new query was added.
     const src = code('app/(v2)/v2/inbox/[id]/body.tsx')
     expect(src).toContain('readConversation')
     expect(src).not.toMatch(/\.from\('/)
-    expect(src).toContain('canSend={false}')
-    expect(src).toContain('disabledReason={PREVIEW}')
+    expect(src).toContain('<TakeOver')
+
+    // And nothing else on the screen writes: the ONLY fetches in this screen's own files are those
+    // two endpoints.
+    const takeover = code('app/(v2)/v2/inbox/[id]/takeover.tsx')
+    const urls = [...takeover.matchAll(/fetch\(`([^`]+)`/g)].map((m) => m[1])
+    expect(urls).toEqual([
+      '/api/conversations/${conversationId}/takeover',
+      '/api/conversations/${conversationId}/send',
+    ])
   })
 
   it('every v2 list row now leads to a v2 screen', () => {

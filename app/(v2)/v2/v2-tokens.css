@@ -2280,3 +2280,11 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-conv > .v2-cmp .v2-tosub { display: none; }
   .v2 .v2-conv > .v2-cmp .v2-live input { min-width: 280px; }
 }
+
+/* The line under the control carries the outcome of the last attempt as well as the standing
+   explanation. A failure is not a toast that disappears: the message is in the thread and did not
+   reach anybody, and that is worth leaving on screen until the next attempt. */
+.v2 .v2-tosub[data-bad] { color: #7a1020; }
+.v2 .v2-cmp[data-live] .v2-tosub { margin-top: 8px; }
+.v2 .v2-snd:disabled { opacity: 0.4; cursor: default; }
+.v2 .v2-live input:disabled { opacity: 0.6; }
