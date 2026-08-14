@@ -210,6 +210,28 @@ latent version of this bug.
 of Vercel, and the sandbox was verified in a browser speaking the agent's configured voice — the
 symptom §7 existed for.
 
+## 16. Miles Stage 3 is deliberately inert — nothing calls `hold()` yet
+
+The classifier and the draft state exist; the interception does not. **No inbound path calls
+`lib/miles/drafts.ts`**, so no message is held today and Miles changes nothing for anyone.
+
+That is the sequencing, not an oversight. A held draft with no inbox group to see it and no
+notification to carry it is a customer message that silently goes unanswered — strictly worse than
+replying as Rudi always did. Interception lands with the surfaces that let a person act on it:
+
+- **Stage 4** — the three inbox groups, so a held draft is visible with the three actions inline.
+- **Stage 5** — SMS/email carrying the full draft text to the token page, so it reaches the owner
+  when they are not in the app.
+
+When it is wired, the call site needs all four of: the drafted reply, the inbound text, `grounded`
+(from whether the reply actually used knowledge base / catalog / hours facts) and
+`bookingWithinAvailability` (from the booking tools knowing the slot exists — never from the text
+looking like a booking). `grounded` has **no default** on purpose: a caller that has not worked it out
+must not inherit a convenient `true`.
+
+Also unwired: `ai_employees.autonomy_rules` is read by the classifier but nothing writes it. Writing
+it is Stage 6's job, because the rule moves by TELLING Miles — there is no settings form, by design.
+
 ## 14. The partner BYO ElevenLabs field collects a credential nothing consumes
 
 `KEY_PROVIDERS` (`lib/partner/integrations.ts:9`) accepts, encrypts, masks, verifies against
