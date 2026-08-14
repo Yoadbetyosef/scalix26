@@ -28,5 +28,7 @@ export default async function V2Messages() {
   const agentName = miles ? nameOf(miles) : agent ? nameOf(agent) : PERSONAS.miles.name
 
   const data = await readMilesInbox(tenantId, agentName)
-  return <MessagesClient data={data} />
+  // The panel is Miles's. Without him there is no portrait to show and no employee to talk to, so the
+  // screen is the three groups and nothing else.
+  return <MessagesClient data={data} milesId={miles?.id ?? null} />
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { usePressState } from '../use-press'
 import { channelKey } from '../channels'
 import { ChannelGlyph } from './glyphs'
+import { MilesPanel } from './panel'
 import type { MilesInbox, WaitingRow } from '@/lib/miles/inbox-read'
 import { heldSince } from '@/lib/miles/autonomy'
 
@@ -20,11 +21,16 @@ import { heldSince } from '@/lib/miles/autonomy'
 
 interface Props {
   data: MilesInbox
+  /**
+   * Miles's own agent row, when the tenant has hired him. Absent = no panel: a portrait and an ON DUTY
+   * pill for an employee who does not exist would be the screen inventing a colleague.
+   */
+  milesId?: string | null
 }
 
 type Busy = { id: string; what: 'send' | 'mine' } | null
 
-export function MessagesClient({ data }: Props) {
+export function MessagesClient({ data, milesId }: Props) {
   usePressState()
   const router = useRouter()
   const { waiting, needs, handled, agentName } = data
@@ -73,6 +79,16 @@ export function MessagesClient({ data }: Props) {
         </button>
         <h2>Messages</h2>
       </header>
+
+      {milesId && (
+        <MilesPanel
+          agentId={milesId}
+          agentName={agentName}
+          sent={handled.length}
+          waiting={waiting.length}
+          needs={needs.length}
+        />
+      )}
 
       <div className="v2-pbody" data-scroll>
         {nothing ? (

@@ -31,10 +31,21 @@ describe('Miles’s tokens', () => {
     })
   })
 
-  it('has no portrait yet, and says so rather than pointing at a file that does not exist', () => {
-    expect(PERSONAS.miles.still).toBeNull()
-    expect(PERSONAS.miles.video).toBeNull()
-    expect(portraitOf(PERSONAS.miles)).toBe('/avatars/arcas.png')
+  it('paints from the supplied assets', () => {
+    expect(PERSONAS.miles.still).toBe('/v2/miles-still.webp')
+    expect(PERSONAS.miles.video).toBe('/v2/miles-speaking.mp4')
+    expect(PERSONAS.miles.nodes).toBe('/v2/miles-nodes.json')
+    expect(portraitOf(PERSONAS.miles)).toBe('/v2/miles-still.webp')
+  })
+
+  it('stands on the acid its own photograph was shot against, not on the accent', () => {
+    // A stage that is merely close to the photograph's background shows a seam at the image edge.
+    expect(PERSONAS.miles.ground).toBe('#d5fb48')
+    expect(PERSONAS.miles.ground).not.toBe(PERSONAS.miles.accent)
+  })
+
+  it('falls back to the avatar for an employee with no portrait', () => {
+    expect(portraitOf({ ...PERSONAS.miles, still: null })).toBe('/avatars/arcas.png')
   })
 })
 

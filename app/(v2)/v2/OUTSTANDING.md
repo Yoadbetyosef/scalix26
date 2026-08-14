@@ -232,6 +232,31 @@ must not inherit a convenient `true`.
 Also unwired: `ai_employees.autonomy_rules` is read by the classifier but nothing writes it. Writing
 it is Stage 6's job, because the rule moves by TELLING Miles — there is no settings form, by design.
 
+## 17. Miles Stage 6 — what is built, and what is not
+
+**Built:** the panel at the top of /v2/messages — the same canvas engine with `persona="miles"`, the
+portrait/loop/mesh he was supplied, the ON DUTY pill, the one true line, and the mic with the ripple
+the brief specifies (cyan hearing, acid talking). `useTestAi` takes an agent id now, so the panel talks
+to Miles rather than to whoever answers the phone; it is still ONE state machine, projected onto the
+canvas handle rather than reimplemented.
+
+**The panel only renders when the tenant has hired Miles.** No Miles, no portrait and no ON DUTY pill
+— a screen inventing a colleague is worse than a screen without one. `POST /api/agents/miles` hires
+him, and the existing plan gate means Pro or better.
+
+**Not built, and deliberately:**
+
+- **The desktop third column.** The reference draws `206px | 1fr | 400px` with the panel in a permanent
+  side column. This ships the panel at the TOP on both widths, which is the mobile reference exactly
+  and a compromise on desktop. The third column is a layout change to the whole screen, not a panel
+  change, and it should be done as its own pass.
+- **Typing to Miles from the panel.** The brief calls typing the fallback; the mic is wired, the
+  composer is not. `useTestAi` already exposes the chat half, so it is a control, not a mechanism.
+
+**Unverified in a browser.** Types, tests and build are green and the assets are served (200,
+`video/mp4`, `image/webp`), but nobody has watched the portrait paint, heard him speak, or seen the
+panel grow while he talks. That needs a Pro tenant with Miles hired.
+
 ## 14. The partner BYO ElevenLabs field collects a credential nothing consumes
 
 `KEY_PROVIDERS` (`lib/partner/integrations.ts:9`) accepts, encrypts, masks, verifies against

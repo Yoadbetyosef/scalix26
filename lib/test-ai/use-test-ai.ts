@@ -28,7 +28,15 @@ export interface Message {
 
 export type Mode = 'chat' | 'voice'
 
-export function useTestAi() {
+/**
+ * @param agentId which employee to talk to. Absent = the tenant's default agent, which is what the
+ *   sandbox has always done. Supplied, both the reply and the voice come from THAT employee — this is
+ *   how Miles's panel talks to Miles rather than to whoever answers the phone.
+ *
+ * Deliberately an argument on the ONE state machine rather than a second hook: the turn-taking, the
+ * recognition lifecycle and the audio teardown are hard-won and must not exist twice.
+ */
+export function useTestAi(agentId?: string) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -57,7 +65,7 @@ export function useTestAi() {
       const res = await fetch('/api/ai/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, conversationId }),
+        body: JSON.stringify({ message: text, conversationId, agentId }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Error'); return }
@@ -83,7 +91,7 @@ export function useTestAi() {
       const res = await fetch('/api/ai/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: clean }),
+        body: JSON.stringify({ text: clean, agentId }),
       })
       if (!res.ok) throw new Error('TTS failed')
       const blob = await res.blob()

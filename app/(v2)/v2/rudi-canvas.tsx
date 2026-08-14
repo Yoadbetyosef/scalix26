@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { mark } from './timing'
-import { PERSONAS, portraitOf, hexToRgb } from '@/lib/persona'
+import { PERSONAS, portraitOf, hexToRgb, type PersonaKey } from '@/lib/persona'
 
 // Rudi's face. A reproduction of the reference's canvas engine.
 //
@@ -60,6 +60,8 @@ export interface RudiHandle {
 }
 
 interface Props {
+  /** Which employee this canvas paints. Remount (via `key`) to change it — every asset differs. */
+  persona?: PersonaKey
   handleRef?: RefObject<RudiHandle | null>
   onStateChange?: (s: RudiState) => void
   /** Collapsed (idle > 60s): still frame, slow band, no network, no video. */
@@ -74,42 +76,58 @@ interface Node { x: number; y: number }
 //
 // The portrait, the loop, the mesh, the stage and the ramp were five literals here, which is fine for
 // one employee and is how you end up with a second canvas for the second one. They live in
-// lib/persona now, and this module reads the record. The engine takes the persona as an ARGUMENT when
-// Miles gets his panel; until then it paints the one it always painted, from the same data.
-const PERSONA = PERSONAS.rudi
-
+// lib/persona, and the persona is an argument: one engine, either employee.
+//
+// Resolved ONCE, at mount. The render loop's effect has [] deps on purpose (see OUTSTANDING §1 — a
+// second "effect running" is a genuine remount, and that is a diagnostic worth keeping), so switching
+// persona on a live canvas would not re-initialise it. Callers give the element a `key` of the
+// persona instead, which remounts it — honest, because every asset it holds is different.
 const IW = 680
 const IH = 907
-const STILL = portraitOf(PERSONA)
-/** The stage ground. Matches --v2-stage in v2-tokens.css; the canvas cannot read a custom property,
- *  so the token and the persona's `ground` must move together. */
-const STAGE_BG = PERSONA.ground
-// Rudi carries all three assets. A persona that does not — Miles, until his portrait lands — cannot
-// be painted by this canvas yet, and giving that case a silent empty string here would hide it. The
-// per-persona guard belongs with the panel that first renders a second employee.
-const VIDEO = PERSONA.video!
-const NODES = PERSONA.nodes!
 
-// The reference's three-stop ramp: cyan → violet → pink. Same three hues as before, now read from the
-// persona rather than transcribed into RGB by hand.
-const STOPS: [number, [number, number, number]][] = PERSONA.ramp!.map(
-  (hex, i, all) => [i / (all.length - 1), hexToRgb(hex)],
-)
-function hue(t: number): [number, number, number] {
+interface Paint {
+  still: string
+  /** Null when this employee has no speaking loop yet. A missing video costs a texture, never a frame. */
+  video: string | null
+  /** Null when there is no mesh: the network simply is not drawn. */
+  nodes: string | null
+  /** The stage the portrait sits on. Rudi's is near-black; Miles's is the acid his own photograph
+   *  was shot against, measured from the file rather than guessed, so there is no seam at its edge. */
+  bg: string
+  stops: [number, [number, number, number]][]
+}
+
+function paintFor(key: PersonaKey): Paint {
+  const p = PERSONAS[key]
+  const ramp = p.ramp ?? PERSONAS.rudi.ramp!
+  return {
+    still: portraitOf(p),
+    video: p.video,
+    nodes: p.nodes,
+    bg: p.ground,
+    stops: ramp.map((hex, i, all) => [i / (all.length - 1), hexToRgb(hex)]),
+  }
+}
+
+function hue(stops: Paint['stops'], t: number): [number, number, number] {
   let i = 0
-  while (i < STOPS.length - 2 && t > STOPS[i + 1][0]) i++
-  const f = (t - STOPS[i][0]) / (STOPS[i + 1][0] - STOPS[i][0])
-  const a = STOPS[i][1]
-  const b = STOPS[i + 1][1]
+  while (i < stops.length - 2 && t > stops[i + 1][0]) i++
+  const f = (t - stops[i][0]) / (stops[i + 1][0] - stops[i][0])
+  const a = stops[i][1]
+  const b = stops[i + 1][1]
   return [
     (a[0] + (b[0] - a[0]) * f) | 0,
     (a[1] + (b[1] - a[1]) * f) | 0,
     (a[2] + (b[2] - a[2]) * f) | 0,
   ]
 }
+
 const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick }: Props) {
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick, persona = 'rudi' }: Props) {
+  // Read once. See paintFor: a persona change means a remount, keyed by the caller.
+  const paint = useRef(paintFor(persona)).current
+  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS } = paint
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setStateRaw] = useState<RudiState>('idle')
@@ -308,7 +326,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
           const bp = (now % 5200) / 5200
           if (bp < 0.34) {
             const by = (bp / 0.34) * CH
-            const hc = hue(bp / 0.34)
+            const hc = hue(STOPS, bp / 0.34)
             const g = ctx!.createLinearGradient(0, by - 30, 0, by + 6)
             g.addColorStop(0, rgba(hc, 0))
             g.addColorStop(1, rgba(hc, 0.22))
@@ -332,7 +350,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       const period = open ? 1300 : 3600
       const prog = (now % period) / period
       const band = prog * CH
-      const hc = hue(prog)
+      const hc = hue(STOPS, prog)
 
       // Ambient bloom behind the portrait.
       const g = ctx!.createRadialGradient(CW / 2, CH * 0.4, 20, CW / 2, CH * 0.4, CH * 0.6)
@@ -467,7 +485,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       ctx!.globalCompositeOperation = 'lighter'
       ctx!.lineWidth = 0.8
       for (let hb = 0; hb < 3; hb++) {
-        ctx!.strokeStyle = rgba(hue(hb / 2), Number((0.5 * scanA).toFixed(3)))
+        ctx!.strokeStyle = rgba(hue(STOPS, hb / 2), Number((0.5 * scanA).toFixed(3)))
         ctx!.beginPath()
         for (let e = 0; e < edges.length; e += 2) {
           const A = pts[edges[e]], B = pts[edges[e + 1]]
@@ -484,7 +502,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         if (dd > 96) continue
         const al = Math.pow(1 - dd / 96, 2) * 0.95 * scanA * (0.55 + 0.45 * Math.sin((x + y) * 0.05 + now / 210))
         if (al < 0.04) continue
-        ctx!.fillStyle = rgba(hue(Math.min(1, y / CH)), Number(al.toFixed(3)))
+        ctx!.fillStyle = rgba(hue(STOPS, Math.min(1, y / CH)), Number(al.toFixed(3)))
         ctx!.fillRect(x - 1.2, y - 1.2, 2.4, 2.4)
       }
       ctx!.globalCompositeOperation = 'source-over'
@@ -667,8 +685,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     })
 
     // The mesh is an ENHANCEMENT and is fetched after the still is on its way. A failure costs the
-    // node overlay and nothing else — the portrait and the sweep are unaffected.
-    fetch(NODES)
+    // node overlay and nothing else — the portrait and the sweep are unaffected. An employee with no
+    // mesh at all simply has no network drawn, which is the same code path as a fetch that fails.
+    if (NODES) fetch(NODES)
       .then((r) => r.json())
       .then((d: { points: [number, number][] }) => {
         if (disposed) return
@@ -711,7 +730,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         // which is one of the few ways a muted element still trips the autoplay policy. Set on the
         // node itself, where the policy actually reads it.
         ref={(el) => { videoRef.current = el; if (el) el.muted = true }}
-        src={VIDEO}
+        // Absent for an employee with no speaking loop yet: the crossfade then has nothing to fade
+        // to and she speaks over the still, which the render loop already tolerates.
+        src={VIDEO ?? undefined}
         width={IW}
         height={IH}
         muted

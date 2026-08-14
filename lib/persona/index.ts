@@ -73,24 +73,29 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     ramp: ['#22D3EE', '#8B5CF6', '#FF2E93'],
   },
   // The second employee: inbound messages — Instagram, Messenger, SMS, email. Rudi keeps the phone.
-  //
-  // `still`, `video` and `nodes` are null on purpose. The portrait and the speaking loop are being
-  // supplied (WebP 680x907, MP4 612x816, matching Rudi's framing); until they land Miles renders on
-  // his avatar, which the canvas already tolerates. A placeholder path pointing at a file that does
-  // not exist would be a broken image rather than an absent one.
   miles: {
     key: 'miles',
     name: 'Miles',
     owns: 'inbound messages',
     voice: 'aura-2-arcas-en',
     avatar: '/avatars/arcas.png',
-    still: null,
-    video: null,
-    nodes: null,
-    ground: '#0d0d10',
+    still: '/v2/miles-still.webp',      // 680x907, same framing as Rudi's
+    video: '/v2/miles-speaking.mp4',    // 612x816, same as Rudi's
+    // 900 points, generated from the portrait by weighting each pixel by its distance from the
+    // photograph's own background — so the mesh sits on him and never on the ground behind him.
+    nodes: '/v2/miles-nodes.json',
+    // MEASURED FROM THE FILE, not taken from the brief. The portrait was shot against acid, and the
+    // stage has to be that exact acid or there is a visible seam where the image ends. #D5FB48 is
+    // what the corners of the photograph actually are; #D9F224 below is his ACCENT, which is a
+    // different job — it marks where he is, and it never has to match a photograph.
+    ground: '#d5fb48',
     accent: '#D9F224',
     ink: '#41490A',
     wash: '#F2FBB8',
+    // Rudi's ramp ends on pink. Miles's ends on his own acid, and starts on the cyan his mic ripples
+    // while listening — the two colours the brief already gives him. The mesh is drawn over a dark
+    // subject, so both read; over the acid ground it would not, which is why the mesh follows him.
+    ramp: ['#22D3EE', '#8B5CF6', '#D9F224'],
   },
 }
 

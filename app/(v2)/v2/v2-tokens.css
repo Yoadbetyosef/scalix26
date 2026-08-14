@@ -1741,3 +1741,85 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-mrow[data-alarm] { background: rgba(255, 92, 108, 0.07); }
 .v2 .v2-mrow[data-alarm]:hover { background: rgba(255, 92, 108, 0.12); }
 .v2 .v2-mtag[data-tone="alarm"] { background: rgba(255, 92, 108, 0.16); color: #7a1020; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   MILES — THE PANEL
+   Values from docs/miles/miles-inbox.html and miles-approvals.html: the 250px hero, the veil, the
+   ON DUTY pill and its live dot, the summary line, and the 54px mic with its rings and bars. */
+
+.v2 .v2-mpanel {
+  position: relative; flex: none; height: 250px; overflow: hidden;
+  background: var(--v2-miles);   /* his ground shows for the instant before the portrait paints */
+  transition: height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* The panel grows while he is talking, and settles when he stops. */
+.v2 .v2-mpanel[data-live] { height: 340px; }
+.v2 .v2-mface { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* The veil: the portrait keeps its top, the words keep their contrast at the bottom. */
+.v2 .v2-mveil {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 64%; z-index: 5; pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 10, 8, 0), rgba(10, 10, 8, 0.55) 45%, rgba(10, 10, 8, 0.95));
+}
+
+.v2 .v2-mtop {
+  position: absolute; top: 0; left: 0; right: 0; padding: 14px 16px; z-index: 9;
+  display: flex; justify-content: space-between; align-items: center; pointer-events: none;
+}
+/* Ink, not white: his ground is acid, and white on acid is unreadable. */
+.v2 .v2-mname {
+  font-family: var(--v2-mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.14em; color: #1a1a08;
+}
+.v2 .v2-mduty {
+  display: flex; align-items: center; gap: 6px; font-family: var(--v2-mono); font-size: 9.5px;
+  letter-spacing: 0.14em; padding: 4px 10px; border-radius: 5px;
+  background: rgba(12, 12, 10, 0.74); color: var(--v2-miles);
+}
+/* Green is transient state only, and "on duty" is exactly that: he is live, right now. */
+.v2 .v2-mduty i {
+  width: 5px; height: 5px; border-radius: 5px; background: var(--v2-live); display: block;
+  box-shadow: 0 0 0 3px rgba(184, 255, 41, 0.22);
+}
+
+.v2 .v2-mfoot { position: absolute; left: 16px; right: 80px; bottom: 16px; z-index: 9; pointer-events: none; }
+.v2 .v2-msum { font-size: 14.5px; line-height: 1.4; color: rgba(255, 255, 255, 0.92); }
+.v2 .v2-msum b { color: var(--v2-miles); font-weight: 500; }
+
+.v2 .v2-mmic {
+  position: absolute; right: 16px; bottom: 16px; z-index: 10; width: 54px; height: 54px;
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.16); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(12, 12, 10, 0.72); backdrop-filter: blur(14px);
+  transition: transform 0.16s, border-color 0.3s, background 0.3s;
+}
+.v2 .v2-mmic:active { transform: scale(0.94); }
+.v2 .v2-mmic svg { width: 25px; height: 25px; }
+.v2 .v2-mmic .rng { stroke: rgba(255, 255, 255, 0.3); stroke-width: 1.25; fill: none; }
+.v2 .v2-mmic .bar { stroke: rgba(255, 255, 255, 0.8); stroke-width: 2; stroke-linecap: round; }
+
+/* THE TWO STATE COLOURS THE BRIEF GIVES THE MIC. Cyan while he is hearing you, acid while he is
+   talking — and the rings are what ripple, so the bars stay legible throughout. */
+.v2 .v2-mmic[data-hearing] { border-color: rgba(34, 211, 238, 0.5); }
+.v2 .v2-mmic[data-hearing] .rng { stroke: var(--v2-cyan); animation: v2-ripple 1.5s ease-out infinite; }
+.v2 .v2-mmic[data-talking] { border-color: rgba(217, 242, 36, 0.55); }
+.v2 .v2-mmic[data-talking] .rng { stroke: var(--v2-miles); animation: v2-ripple 0.9s ease-out infinite; }
+.v2 .v2-mmic[data-hearing] .bar { stroke: var(--v2-cyan); }
+.v2 .v2-mmic[data-talking] .bar { stroke: var(--v2-miles); }
+
+@keyframes v2-ripple {
+  0%   { opacity: 0.35; transform: scale(0.9); }
+  55%  { opacity: 1; }
+  100% { opacity: 0.35; transform: scale(1.06); }
+}
+.v2 .v2-mmic svg circle { transform-origin: 12px 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v2 .v2-mpanel { transition: none; }
+  .v2 .v2-mmic .rng { animation: none; }
+}
+
+/* Desktop gives the panel more room, as the reference's side column does. */
+@media (min-width: 1100px) {
+  .v2 .v2-mpanel { height: 320px; }
+  .v2 .v2-mpanel[data-live] { height: 420px; }
+}

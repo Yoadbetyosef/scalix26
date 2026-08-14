@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const limited = await enforce('ai_voice', `user:${user.id}`)
   if (limited) return limited
 
-  const { text, voice } = await req.json()
+  const { text, voice, agentId } = await req.json()
   if (!text?.trim()) return NextResponse.json({ error: 'Text required' }, { status: 400 })
 
   // An explicit voice wins (nothing sends one today); otherwise the ACTIVE business's default agent —
@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
   if (!chosen) {
     const activeTenantId = await getActiveTenantId()
     if (activeTenantId) {
-      const agent = await primaryAgent<{ voice: string | null }>(createAdminClient(), activeTenantId, 'voice')
+      const db = createAdminClient()
+      // A named employee speaks in ITS voice — the sandbox can be pointed at Miles rather than at
+      // whoever answers the phone. Scoped to the active tenant, so an id from the client cannot
+      // reach another business's agent.
+      const agent = typeof agentId === 'string' && agentId
+        ? (await db.from('ai_employees').select('voice').eq('id', agentId).eq('tenant_id', activeTenantId).maybeSingle()).data
+        : await primaryAgent<{ voice: string | null }>(db, activeTenantId, 'voice')
       chosen = agent?.voice ?? null
     }
   }

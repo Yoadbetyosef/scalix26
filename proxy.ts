@@ -18,6 +18,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|gltf|bin|mp3|wav|woff|woff2|ttf|ico)$).*)',
+    // mp4/webm sit beside mp3/wav, which were already here: a media file has no session to update, and
+    // running the auth middleware on a video means a redirect for a logged-out visitor and a wasted
+    // round trip for everyone else. Found by fetching the hero's own assets — .webp returned 200 and
+    // .mp4 returned 307, from the same directory.
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|gltf|bin|mp3|mp4|webm|wav|woff|woff2|ttf|ico)$).*)',
   ],
 }
