@@ -1581,3 +1581,10 @@
 .v2 .v2-danger:hover { filter: brightness(0.94); }
 /* Deliberately no scale on press. Every other control springs; this one does not, because a
    destructive button should not feel playful under a finger. */
+
+/* Sign Out is an action, not a destination — it keeps the red and takes no chevron, because a chevron
+   would promise somewhere to go. It is live now, so it also takes the press state every other live
+   row has. */
+.v2 .v2-grow[data-out] .v2-gchev, .v2 .v2-nav[data-out] .v2-gchev { display: none; }
+.v2 .v2-grow[data-out] .v2-gchip { background: rgba(255, 92, 108, 0.1); }
+.v2 .v2-grow[data-out] .v2-gchip svg, .v2 .v2-nav[data-out] .v2-gchip svg { stroke: var(--v2-red); }

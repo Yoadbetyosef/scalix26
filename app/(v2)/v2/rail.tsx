@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useSignOut } from './sign-out'
 import { useState, type ReactNode } from 'react'
 import {
   TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
@@ -26,7 +27,7 @@ const GROUP_HUE: Record<string, string> = { g1: 'var(--v2-t1)', g2: 'var(--v2-t3
 
 // `count` is a ReactNode, not a number: each one is its own <Suspense> boundary supplied by the
 // shell, so the labels render immediately and the figures pop in as the data streams.
-interface NavItem { label: string; count?: ReactNode; out?: boolean; href?: string }
+interface NavItem { label: string; count?: ReactNode; out?: boolean; href?: string; action?: 'signout' }
 interface Group { id: string; label: string; items: NavItem[] }
 
 interface Props {
@@ -45,7 +46,7 @@ const Chevron = () => (
   <svg viewBox="0 0 24 24" aria-hidden><path d="M9 6l6 6-6 6" /></svg>
 )
 
-function Nav({ item, on, shortcut }: { item: NavItem; on?: boolean; shortcut?: number }) {
+function Nav({ item, on, shortcut, signOut }: { item: NavItem; on?: boolean; shortcut?: number; signOut: () => void }) {
   // Only a row with a built destination navigates. The rest stay buttons that do nothing, which is
   // what they were — a link to a page that does not exist is a worse lie than an inert row.
   // Only a row with a built destination navigates. The rest stay buttons that do nothing, which is
@@ -66,12 +67,15 @@ function Nav({ item, on, shortcut }: { item: NavItem; on?: boolean; shortcut?: n
     </>
   )
   const attrs = { className: 'v2-nav v2-grow', 'data-touch': true, 'data-on': on || undefined, 'data-out': item.out || undefined }
+  // An action row is a live button, not a link and not an inert one.
+  if (item.action === 'signout') return <button type="button" {...attrs} onClick={signOut}>{inner}</button>
   return item.href
     ? <Link href={item.href} {...attrs}>{inner}</Link>
     : <button type="button" {...attrs}>{inner}</button>
 }
 
 export function Rail({ businessName, primary, groups, activeIndex = null }: Props) {
+  const signOut = useSignOut()
   const [open, setOpen] = useState<Record<string, boolean>>({ [groups[0]?.id ?? '']: true })
 
   return (
@@ -83,7 +87,7 @@ export function Rail({ businessName, primary, groups, activeIndex = null }: Prop
 
       <div className="v2-stagger" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
         {primary.map((item, i) => (
-          <Nav key={item.label} item={item} on={i === (activeIndex ?? 0)} shortcut={i + 1} />
+          <Nav key={item.label} item={item} on={i === (activeIndex ?? 0)} shortcut={i + 1} signOut={signOut} />
         ))}
       </div>
 
@@ -104,7 +108,7 @@ export function Rail({ businessName, primary, groups, activeIndex = null }: Prop
             <Chevron />
           </button>
           <div className="v2-sub" data-open={open[g.id] || undefined}>
-            {g.items.map((item) => <Nav key={item.label} item={item} />)}
+            {g.items.map((item) => <Nav key={item.label} item={item} signOut={signOut} />)}
           </div>
         </div>
       ))}

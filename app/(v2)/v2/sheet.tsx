@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useSignOut } from './sign-out'
 import {
   TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
   Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut, ChevronRight,
@@ -38,12 +39,13 @@ interface Props {
   monthStats: { label: string; value: string }[]
   /** The agent is answering right now. Existing data — HomeData.aiOn. */
   live?: boolean
-  groups: { id: string; label: string; items: { label: string; href?: string; out?: boolean }[] }[]
+  groups: { id: string; label: string; items: { label: string; href?: string; out?: boolean; action?: 'signout' }[] }[]
 }
 
 type Pane = 'now' | 'work' | 'week'
 
 export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live }: Props) {
+  const signOut = useSignOut()
   const [open, setOpen] = useState(false)
 
   const [pane, setPane] = useState<Pane>('now')
@@ -149,6 +151,8 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live 
                         </>
                       )
                       const props = { className: 'v2-grow', 'data-touch': true, 'data-out': d.out || undefined }
+                      // An action row is live; only a missing DESTINATION is inert.
+                      if (d.action === 'signout') return <button key={d.label} type="button" {...props} onClick={signOut}>{inner}</button>
                       return d.href
                         ? <Link key={d.label} href={d.href} {...props}>{inner}</Link>
                         // Deliberately locked, not broken: no chevron, a muted chip, and it says why.
