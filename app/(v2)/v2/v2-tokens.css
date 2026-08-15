@@ -2273,34 +2273,64 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-cside .v2-csum { margin-bottom: 0; }
   .v2 .v2-cside .v2-cabout { margin-top: 0; }
 
-  /* THE ACTION MOVES INTO THE HEADER ROW — the same node, placed. `.v2-conv` becomes a two-column
-     grid whose first row is the header and the action; the strip and the scroller span both. The
-     alternative was a second <TakeOver> in the header, which is two controls with two `live` states,
-     and the hidden one is the one that falls out of step. */
+  /* ── THE COMPOSER SLOT (option A) ─────────────────────────────────────────────────────────────
+     The bottom of the thread column is where a reply always lives, so that slot exists whether or
+     not it can be used yet: locked it holds a sentence and the take-over button, live it holds the
+     input. One place, two states, the same mechanic the phone already has — and the SAME component,
+     because a desktop copy is a second `live` state to keep in step.
+
+     It sits OUTSIDE the scroller, so it holds while the thread moves under it. */
   .v2 .v2-conv {
     display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto 1fr;
-    grid-template-areas: "head act" "strip strip" "scroll scroll";
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr auto;
+    grid-template-areas: "head" "strip" "scroll" "slot";
   }
   .v2 .v2-conv > .v2-chd { grid-area: head; }
   .v2 .v2-conv > .v2-cstrip { grid-area: strip; }
   .v2 .v2-conv > .v2-cscr { grid-area: scroll; min-height: 0; }
+
   .v2 .v2-conv > .v2-cmp {
-    grid-area: act; align-self: center; justify-self: end;
-    padding: 0 20px 0 0; background: none; border: 0;
+    grid-area: slot; flex: none;
+    border-top: 1px solid var(--v2-line); background: var(--v2-paper);
+    padding: 14px 28px;
   }
-  .v2 .v2-conv > .v2-cmp .v2-takeover { width: auto; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; }
-  /* The line under the button is a phone's affordance. In a header row, beside the employee's own
-     name, the control is already read in context. */
+  /* ALIGNED WITH THE THREAD, not centred in the window. The scroller's inner grid is
+     720 + 34 + 320 inside a centred 1100px container, so the same container with a 720px block at
+     its start puts this slot exactly under the messages rather than under the whole layout. */
+  .v2 .v2-slotin {
+    display: flex; align-items: center; gap: 14px;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .v2 .v2-conv > .v2-cmp .v2-live { max-width: 1100px; margin: 0 auto; }
+  .v2 .v2-slotin > .v2-slotmsg { display: block; flex: 1; max-width: 720px; font-size: 13.5px; color: var(--v2-ink-42); }
+  .v2 .v2-slotmsg b { color: var(--v2-ink); font-weight: 500; }
+  .v2 .v2-slotmsg[data-bad] { color: #7a1020; }
+  .v2 .v2-conv > .v2-cmp .v2-takeover {
+    width: auto; flex: none; padding: 12px 20px; border-radius: 13px; font-size: 14px;
+  }
+  .v2 .v2-conv > .v2-cmp .v2-takeover:active { transform: scale(0.96); }
+  /* The line beneath is the phone's affordance; here the sentence is beside the control. */
   .v2 .v2-conv > .v2-cmp .v2-tosub { display: none; }
   .v2 .v2-conv > .v2-cmp .v2-live input { min-width: 280px; }
+
+  /* Resolve and Close: secondary, and they look it. */
+  .v2 .v2-chd-act { display: flex; gap: 8px; flex: none; }
+  .v2 .v2-gh {
+    padding: 9px 14px; border-radius: 11px; border: 1px solid var(--v2-line);
+    background: var(--v2-paper); font-size: 13px; font-family: inherit; color: var(--v2-ink); cursor: pointer;
+  }
+  .v2 .v2-gh:disabled { opacity: 0.5; cursor: default; }
 }
 
 /* The line under the control carries the outcome of the last attempt as well as the standing
    explanation. A failure is not a toast that disappears: the message is in the thread and did not
    reach anybody, and that is worth leaving on screen until the next attempt. */
 .v2 .v2-tosub[data-bad] { color: #7a1020; }
+/* The row is the wide layout's shape. On a phone the button is full width with its line beneath. */
+.v2 .v2-slotin { display: contents; }
+.v2 .v2-slotmsg { display: none; }
+.v2 .v2-chd-act { display: none; }
 .v2 .v2-cmp[data-live] .v2-tosub { margin-top: 8px; }
 .v2 .v2-snd:disabled { opacity: 0.4; cursor: default; }
 .v2 .v2-live input:disabled { opacity: 0.6; }

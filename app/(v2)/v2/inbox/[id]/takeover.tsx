@@ -102,9 +102,23 @@ export function TakeOver({ conversationId, agentName, takenOver }: Props) {
   if (!live) {
     return (
       <div className="v2-cmp">
-        <button type="button" className="v2-takeover" data-touch disabled={busy} onClick={takeOver}>
-          {busy ? 'Taking over…' : 'Take over and reply'}
-        </button>
+        <div className="v2-slotin">
+          {/* THE SAME SENTENCE, IN TWO LENGTHS. A phone has the button across the full width with a
+              line beneath it; a desktop has a row, so it has room to say what taking over costs
+              before the reader reaches the control. Both are in the DOM and CSS shows one — the
+              alternative is a second component, and then two places to change the wording.
+
+              "they'll", not "she'll": this control belongs to whichever employee is on the thread,
+              and the reference was written for one of them. */}
+          <p className="v2-slotmsg" data-bad={outcome && !outcome.ok ? true : undefined}>
+            {outcome
+              ? outcome.message
+              : <><b>{agentName} is handling this thread.</b> Take over and they&apos;ll stop replying.</>}
+          </p>
+          <button type="button" className="v2-takeover" data-touch disabled={busy} onClick={takeOver}>
+            {busy ? 'Taking over…' : 'Take over and reply'}
+          </button>
+        </div>
         <p className="v2-tosub" data-bad={outcome && !outcome.ok ? true : undefined}>
           {outcome ? outcome.message : `${agentName} stops answering this thread.`}
         </p>
@@ -112,6 +126,8 @@ export function TakeOver({ conversationId, agentName, takenOver }: Props) {
     )
   }
 
+  // LIVE — the same slot, the same height, the field where the button was. The swap is in place:
+  // nothing above it moves, which is the point of the slot existing whether or not it can be used.
   return (
     <div className="v2-cmp" data-live>
       <div className="v2-live">

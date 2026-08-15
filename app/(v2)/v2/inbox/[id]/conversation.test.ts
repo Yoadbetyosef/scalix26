@@ -148,12 +148,42 @@ describe('desktop', () => {
     expect(body).toContain('{whatHappened}')
   })
 
-  it('moves the action into the header rather than rendering a second one', () => {
-    // Two <TakeOver>s would be two `live` states, and the hidden one is the one that falls out of
-    // step. The header placement is a grid area on the single node.
+  it('take over is a slot at the foot of the thread, not a header action', () => {
+    // It came OUT of the header: it is the primary thing on this screen, and a copy of it beside the
+    // secondary actions would compete with itself. Still ONE <TakeOver> — two would be two `live`
+    // states, and the hidden one is the one that falls out of step.
     expect((body.match(/<TakeOver /g) ?? []).length).toBe(1)
-    expect(wide).toMatch(/grid-template-areas: "head act" "strip strip" "scroll scroll"/)
-    expect(wide).toMatch(/\.v2-conv > \.v2-cmp \{\s*grid-area: act/)
+    expect(wide).toMatch(/grid-template-areas: "head" "strip" "scroll" "slot"/)
+    expect(wide).toMatch(/\.v2-conv > \.v2-cmp \{[\s\S]{0,80}grid-area: slot/)
+  })
+
+  it('the slot sits outside the scroller, so it holds while the thread moves', () => {
+    // Its own grid row, a sibling of the scroller rather than a child of it.
+    expect(wide).toMatch(/\.v2-conv > \.v2-cscr \{ grid-area: scroll/)
+    // A sibling of the scroller, after it — not a child of it, which is what would scroll away.
+    expect(body.indexOf('<TakeOver')).toBeGreaterThan(body.indexOf('v2-cscr'))
+    expect(body.indexOf('<TakeOver')).toBeGreaterThan(body.indexOf('v2-cinner'))
+  })
+
+  it('and lines up with the thread rather than with the window', () => {
+    // The scroller's inner grid is 720 + 34 + 320 inside a centred 1100px container; the slot uses
+    // the same container so it lands under the messages, not under the whole layout.
+    expect(wide).toMatch(/\.v2-slotin \{[\s\S]{0,120}max-width: 1100px; margin: 0 auto/)
+    expect(wide).toMatch(/\.v2-slotmsg \{ display: block; flex: 1; max-width: 720px/)
+  })
+
+  it('the secondary actions stay in the header, and say they are not wired', () => {
+    expect(body).toContain('className="v2-chd-act"')
+    expect(body).toMatch(/<button type="button" className="v2-gh" disabled title=\{PREVIEW\}>Resolve<\/button>/)
+    expect(body).toMatch(/<button type="button" className="v2-gh" disabled title=\{PREVIEW\}>Close<\/button>/)
+  })
+
+  it('one component for both widths, not a desktop copy', () => {
+    // Both sentences live in the one component and CSS shows one; a second component would be two
+    // places to change the wording and two `live` states to keep in step.
+    expect(takeover).toContain('className="v2-slotmsg"')
+    expect(takeover).toContain('className="v2-tosub"')
+    expect(css).toContain('.v2 .v2-slotmsg { display: none; }')
   })
 
   it('the sidebar blocks are the same nodes the phone stacks', () => {

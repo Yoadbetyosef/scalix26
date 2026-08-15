@@ -1,6 +1,6 @@
 import { readConversation } from '@/lib/inbox/conversation-read'
 import { personaOf, nameOf } from '@/lib/persona'
-import { relativeTime } from '../../list-page'
+import { relativeTime, PREVIEW } from '../../list-page'
 import { channelKey, CHANNEL_LABEL } from '../../channels'
 import { ChannelGlyph } from '../glyphs'
 import { ConversationThread, type Line } from './thread'
@@ -124,6 +124,16 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
           <span className="v2-cagent" style={{ background: persona.wash, color: persona.washInk }}>
             {agentName}
           </span>
+
+          {/* SECONDARY ACTIONS, and only secondary ones. Take over is the primary thing on this
+              screen and it lives in the slot at the foot of the thread, where a reply always lives;
+              a copy of it up here would compete with itself. These two change the conversation's
+              STATUS — real actions on the v1 screen (conversation-actions.tsx), not yet wired here,
+              so they render disabled with the preview's own reason like every other v2 action. */}
+          <div className="v2-chd-act">
+            <button type="button" className="v2-gh" disabled title={PREVIEW}>Resolve</button>
+            <button type="button" className="v2-gh" disabled title={PREVIEW}>Close</button>
+          </div>
         </div>
       </header>
 

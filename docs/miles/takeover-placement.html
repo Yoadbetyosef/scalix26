@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Take over — placement options</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--acid:#D9F224;--magenta:#FF2E93;--violet:#8B5CF6;--cyan:#22D3EE;
+ --ink:#111114;--mut:#8A8A90;--faint:#B4B4BA;--line:rgba(0,0,0,.06);--paper:#F6F6F7;
+ --rudi-wash:#FFEDF6;--rudi-ink:#B0126A;--c-sms:#22D3EE;--c-sms-ink:#0E9BB5}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:20px 14px 60px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;max-width:600px}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.11em;
+ padding:9px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);cursor:pointer;min-height:36px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.stage{display:none}.stage[data-on]{display:block}
+.cap{font-size:12.5px;color:rgba(255,255,255,.46);text-align:center;max-width:640px;line-height:1.7;margin-top:14px}
+.cap b{color:rgba(255,255,255,.85);font-weight:500}
+.dk{width:min(1080px,95vw);height:660px;border-radius:16px;overflow:hidden;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+
+.hd{flex:none;background:#fff;border-bottom:1px solid var(--line);padding:13px 22px}
+.hr{display:flex;align-items:center;gap:12px}
+.bk{font-size:20px;color:var(--faint)}
+.chip{width:38px;height:38px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;
+ background:rgba(34,211,238,.1);color:var(--c-sms-ink)}
+.chip svg{width:18px;height:18px}
+.hw{flex:1;min-width:0}
+.hn{font-size:17px;font-weight:500;color:var(--ink)}
+.hm{font-size:10.5px;letter-spacing:.13em;font-family:'JetBrains Mono',monospace;margin-top:3px;
+ display:flex;gap:7px;color:var(--faint)}
+.hm .c{color:var(--c-sms-ink);font-weight:500}
+.pill{font-size:9px;letter-spacing:.14em;padding:4px 9px;border-radius:5px;
+ font-family:'JetBrains Mono',monospace;background:var(--rudi-wash);color:var(--rudi-ink)}
+.gh{padding:9px 14px;border-radius:11px;border:1px solid var(--line);background:#fff;font-size:13px;
+ font-family:inherit;color:var(--ink);cursor:pointer}
+.gh-p{background:var(--ink);color:#fff;border-color:transparent;display:flex;align-items:center;gap:7px}
+.gh svg{width:14px;height:14px}
+
+.body{flex:1;display:grid;grid-template-columns:1fr 320px;overflow:hidden}
+.main{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--line)}
+.scr{flex:1;overflow-y:auto;padding:20px 24px}
+.inner{max-width:720px;margin:0 auto}
+.tl{font-size:9.5px;letter-spacing:.18em;color:var(--faint);font-family:'JetBrains Mono',monospace;margin-bottom:14px}
+.day{text-align:center;font-size:9.5px;letter-spacing:.16em;color:var(--faint);
+ font-family:'JetBrains Mono',monospace;margin-bottom:13px}
+.th{display:flex;flex-direction:column;gap:11px}
+.b{max-width:78%;padding:11px 14px;font-size:14.5px;line-height:1.45}
+.who{font-size:9px;letter-spacing:.14em;font-family:'JetBrains Mono',monospace;margin-bottom:5px}
+.st{font-size:9.5px;font-family:'JetBrains Mono',monospace;margin-top:5px;opacity:.4}
+.them{align-self:flex-start;background:#fff;border-radius:17px 17px 17px 5px;box-shadow:0 1px 2px rgba(0,0,0,.06);color:var(--ink)}
+.them .who{color:var(--faint)}
+.ai{align-self:flex-end;background:var(--rudi-wash);border-radius:17px 17px 5px 17px;color:var(--ink)}
+.ai .who{color:var(--rudi-ink);text-align:right}
+.ai .st{text-align:right}
+.side{background:#fff;overflow-y:auto;padding:18px 16px}
+.sl{font-size:9.5px;letter-spacing:.18em;color:var(--faint);font-family:'JetBrains Mono',monospace;margin:20px 0 10px}
+.sl:first-child{margin-top:0}
+.f{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)}
+.f:last-child{border:none}
+.fk{font-size:12.5px;color:var(--mut)}
+.fv{font-size:13.5px;color:var(--ink);font-weight:500}
+
+/* A — locked composer slot */
+.slot{flex:none;border-top:1px solid var(--line);background:#fff;padding:14px 24px}
+.slotin{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:14px}
+.slotmsg{flex:1;font-size:13.5px;color:var(--mut)}
+.slotmsg b{color:var(--ink);font-weight:500}
+.btn{padding:12px 20px;border-radius:13px;border:none;background:var(--ink);color:#fff;
+ font-size:14px;font-family:inherit;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;
+ transition:transform .14s}
+.btn:active{transform:scale(.96)}
+.btn svg{width:15px;height:15px}
+
+/* B — end of thread card */
+.endc{margin-top:22px;background:#fff;border-radius:16px;padding:16px;
+ box-shadow:0 1px 2px rgba(0,0,0,.05);display:flex;align-items:center;gap:14px}
+.endt{flex:1}
+.endh{font-size:14.5px;color:var(--ink);font-weight:500}
+.ends{font-size:12.5px;color:var(--mut);margin-top:3px}
+.dashed{margin-top:20px;border:1px dashed rgba(0,0,0,.14);border-radius:16px;padding:18px;
+ display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.5)}
+
+/* C — sidebar */
+.sact{background:var(--ink);border-radius:15px;padding:15px;color:#fff}
+.sacth{font-size:14px;font-weight:500}
+.sacts{font-size:12.5px;color:rgba(255,255,255,.6);margin-top:4px;line-height:1.45}
+.sactb{width:100%;margin-top:12px;padding:11px;border-radius:11px;border:none;background:#fff;color:var(--ink);
+ font-size:13.5px;font-family:inherit;font-weight:500;cursor:pointer}
+</style></head><body>
+
+<svg style="display:none">
+ <symbol id="sms" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z"/></symbol>
+ <symbol id="hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+</svg>
+
+<div class="tabs">
+ <button data-t="A" data-on>A · COMPOSER SLOT</button>
+ <button data-t="B">B · END OF THREAD</button>
+ <button data-t="C">C · SIDEBAR ACTION</button>
+</div>
+
+<!-- A -->
+<div class="stage" id="s-A" data-on>
+<div class="dk">
+ <div class="hd"><div class="hr"><span class="bk">‹</span>
+  <div class="chip"><svg><use href="#sms"/></svg></div>
+  <div class="hw"><div class="hn">Yes. It's your aunt.</div>
+   <div class="hm"><span class="c">SMS</span><span>·</span><span>8 AUG</span></div></div>
+  <span class="pill">RUDI</span>
+  <button class="gh">Resolve</button><button class="gh">Close</button></div></div>
+ <div class="body">
+  <div class="main">
+   <div class="scr"><div class="inner">
+    <div class="tl">CONVERSATION</div>
+    <div class="day">2026-08-08</div>
+    <div class="th">
+     <div class="b ai"><div class="who">RUDI</div>Thanks for calling Smith Hvac. We've got your details and someone will be in touch shortly. Reply here if you need anything in the meantime.<div class="st">02:11</div></div>
+     <div class="b them"><div class="who">CALLER</div>Yes please<div class="st">02:14</div></div>
+    </div>
+   </div></div>
+   <div class="slot"><div class="slotin">
+    <div class="slotmsg"><b>Rudi is handling this thread.</b> Take over and she'll stop replying.</div>
+    <button class="btn"><svg><use href="#hand"/></svg>Take over and reply</button>
+   </div></div>
+  </div>
+  <div class="side">
+   <div class="sl">CONTACT</div>
+   <div class="f"><span class="fk">Phone</span><span class="fv">+1 917 495 4300</span></div>
+   <div class="f"><span class="fk">Email</span><span class="fv" style="color:var(--faint)">—</span></div>
+   <div class="f"><span class="fk">First seen</span><span class="fv">8 Aug 2026</span></div>
+   <div class="sl">THIS CONVERSATION</div>
+   <div class="f"><span class="fk">Channel</span><span class="fv">SMS</span></div>
+   <div class="f"><span class="fk">Status</span><span class="fv">Open</span></div>
+   <div class="f"><span class="fk">Answered by</span><span class="fv">Rudi</span></div>
+   <div class="f"><span class="fk">Last message</span><span class="fv">6d ago</span></div>
+  </div>
+ </div>
+</div>
+<p class="cap"><b>A · Composer slot.</b> The bottom of the thread column is where a reply always lives — so that slot exists whether or not you can use it, and shows the take-over button instead of an input until you can. One place, two states, and the same shape as mobile. Taking over swaps the button for the field in place; nothing moves.</p>
+</div>
+
+<!-- B -->
+<div class="stage" id="s-B">
+<div class="dk">
+ <div class="hd"><div class="hr"><span class="bk">‹</span>
+  <div class="chip"><svg><use href="#sms"/></svg></div>
+  <div class="hw"><div class="hn">Yes. It's your aunt.</div>
+   <div class="hm"><span class="c">SMS</span><span>·</span><span>8 AUG</span></div></div>
+  <span class="pill">RUDI</span>
+  <button class="gh">Resolve</button><button class="gh">Close</button></div></div>
+ <div class="body">
+  <div class="main">
+   <div class="scr"><div class="inner">
+    <div class="tl">CONVERSATION</div>
+    <div class="day">2026-08-08</div>
+    <div class="th">
+     <div class="b ai"><div class="who">RUDI</div>Thanks for calling Smith Hvac. We've got your details and someone will be in touch shortly. Reply here if you need anything in the meantime.<div class="st">02:11</div></div>
+     <div class="b them"><div class="who">CALLER</div>Yes please<div class="st">02:14</div></div>
+    </div>
+    <div class="dashed">
+     <div class="endt"><div class="endh">Rudi has this one</div>
+      <div class="ends">She'll keep answering unless you step in.</div></div>
+     <button class="btn"><svg><use href="#hand"/></svg>Take over</button>
+    </div>
+   </div></div>
+  </div>
+  <div class="side">
+   <div class="sl">CONTACT</div>
+   <div class="f"><span class="fk">Phone</span><span class="fv">+1 917 495 4300</span></div>
+   <div class="f"><span class="fk">Email</span><span class="fv" style="color:var(--faint)">—</span></div>
+   <div class="f"><span class="fk">First seen</span><span class="fv">8 Aug 2026</span></div>
+   <div class="sl">THIS CONVERSATION</div>
+   <div class="f"><span class="fk">Channel</span><span class="fv">SMS</span></div>
+   <div class="f"><span class="fk">Status</span><span class="fv">Open</span></div>
+   <div class="f"><span class="fk">Answered by</span><span class="fv">Rudi</span></div>
+   <div class="f"><span class="fk">Last message</span><span class="fv">6d ago</span></div>
+  </div>
+ </div>
+</div>
+<p class="cap"><b>B · End of thread.</b> The control sits after the last message, in the flow, as the next thing that would happen. Reads naturally and needs no fixed furniture — but it scrolls away on a long thread, and on a call transcript with forty lines you'd hunt for it.</p>
+</div>
+
+<!-- C -->
+<div class="stage" id="s-C">
+<div class="dk">
+ <div class="hd"><div class="hr"><span class="bk">‹</span>
+  <div class="chip"><svg><use href="#sms"/></svg></div>
+  <div class="hw"><div class="hn">Yes. It's your aunt.</div>
+   <div class="hm"><span class="c">SMS</span><span>·</span><span>8 AUG</span></div></div>
+  <span class="pill">RUDI</span>
+  <button class="gh">Resolve</button><button class="gh">Close</button></div></div>
+ <div class="body">
+  <div class="main">
+   <div class="scr"><div class="inner">
+    <div class="tl">CONVERSATION</div>
+    <div class="day">2026-08-08</div>
+    <div class="th">
+     <div class="b ai"><div class="who">RUDI</div>Thanks for calling Smith Hvac. We've got your details and someone will be in touch shortly. Reply here if you need anything in the meantime.<div class="st">02:11</div></div>
+     <div class="b them"><div class="who">CALLER</div>Yes please<div class="st">02:14</div></div>
+    </div>
+   </div></div>
+  </div>
+  <div class="side">
+   <div class="sact">
+    <div class="sacth">Rudi is handling this</div>
+    <div class="sacts">She'll keep answering this thread until you step in.</div>
+    <button class="sactb">Take over and reply</button>
+   </div>
+   <div class="sl">CONTACT</div>
+   <div class="f"><span class="fk">Phone</span><span class="fv">+1 917 495 4300</span></div>
+   <div class="f"><span class="fk">Email</span><span class="fv" style="color:var(--faint)">—</span></div>
+   <div class="f"><span class="fk">First seen</span><span class="fv">8 Aug 2026</span></div>
+   <div class="sl">THIS CONVERSATION</div>
+   <div class="f"><span class="fk">Channel</span><span class="fv">SMS</span></div>
+   <div class="f"><span class="fk">Status</span><span class="fv">Open</span></div>
+   <div class="f"><span class="fk">Answered by</span><span class="fv">Rudi</span></div>
+  </div>
+ </div>
+</div>
+<p class="cap"><b>C · Sidebar action.</b> The sidebar already says who's answering, so the control to change that sits with it. Always visible, never in the thread's way — but the reply field then has to appear somewhere else once you take over, which means the screen rearranges at the moment you act.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+</script></body></html>
