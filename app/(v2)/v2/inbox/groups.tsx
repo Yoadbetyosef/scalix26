@@ -307,7 +307,10 @@ export function InboxGroups({ data, milesId, facts }: Props) {
                         </span>
                         <span className="v2-mmeta">
                           <time>{heldSince(row.at)}</time>
-                          <span className="v2-mnew">new</span>
+                          {/* SOMEBODY NEW — their first ever conversation, from lib/inbox/first.ts.
+                              This chip used to be on every row in this group unconditionally, which
+                              made it decoration; it is a fact now. */}
+                          {row.isFirst && <span className="v2-mnew">new</span>}
                         </span>
                       </button>
                     </div>
@@ -340,6 +343,10 @@ export function InboxGroups({ data, milesId, facts }: Props) {
                         </span>
                         <span className="v2-mmeta">
                           <time>{heldSince(row.at)}</time>
+                          {/* It matters most here: this is the difference between "a customer was
+                              looked after" and "a NEW customer was looked after", which is the whole
+                              question the leads screen was failing to answer. */}
+                          {row.isFirst && <span className="v2-mnew">new</span>}
                           <span className="v2-mtag" data-tone="sent">SENT</span>
                         </span>
                       </button>

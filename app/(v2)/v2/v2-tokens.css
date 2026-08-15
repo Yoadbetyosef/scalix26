@@ -2182,6 +2182,10 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 .v2 .v2-conv .v2-sec:hover:not(:disabled) { color: var(--v2-ink); }
 .v2 .v2-conv .v2-sec:disabled { opacity: 0.55; cursor: default; }
+/* The outcome of the one wired secondary action, in place of the control that produced it — the
+   sentence stays rather than fading, because "follow-ups stopped" is a thing the owner may want to
+   still be able to read a minute later. */
+.v2 .v2-conv .v2-sec[data-static] { cursor: default; color: var(--v2-ink); }
 
 /* ── The contact strip. A MOBILE pattern; it stops at 1100px. ─────────────────────────────────── */
 .v2 .v2-conv .v2-cstrip { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 0 16px; }

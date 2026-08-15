@@ -5,6 +5,8 @@ import { channelKey, CHANNEL_LABEL } from '../../channels'
 import { ChannelGlyph } from '../glyphs'
 import { ConversationThread, type Line } from './thread'
 import { TakeOver } from './takeover'
+import { StopFollowUps } from './follow-ups'
+import { sourceLabel } from '@/lib/leads/source'
 
 // ONE CONVERSATION — docs/miles/conversation-FINAL.html, both widths, values taken directly.
 //
@@ -34,7 +36,7 @@ const day = (iso: string) => {
 export async function ConversationBody({ tenantId, id }: { tenantId: string; id: string }) {
   const read = await readConversation(tenantId, id)
   if (!read) return null
-  const { conv, messages } = read
+  const { conv, messages, origin } = read
 
   const contact = conv.contact
   const who = str(contact?.name) || str(contact?.phone) || str(contact?.email) || 'Someone'
@@ -75,6 +77,11 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
   // merging them into one grid asks the reader to sort them.
   const about: { k: string; v: string | null }[] = [
     { k: 'Channel', v: channelWord },
+    // WHERE THEY CAME FROM, beside how they are talking to you — the neighbouring question, and the
+    // one fact the leads screen carried that lived nowhere else. From their EARLIEST lead: a
+    // returning customer opens a new one every call, so the newest says "phone call" about somebody
+    // who first found you through a web form.
+    { k: 'Came from', v: sourceLabel(origin.source) },
     { k: 'Status', v: str(conv.status) },
     { k: 'Answered by', v: conv.human_takeover ? 'You' : agentName },
     { k: 'Last message', v: last ? relativeTime(last.at) : null },
@@ -120,10 +127,16 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
           </span>
 
           {/* Secondary, and only secondary. Take over is the primary thing on this screen and lives
-              in the slot at the foot of the thread. These two change the conversation's STATUS —
-              real actions on the v1 screen, not yet wired here, so they say so. */}
+              in the slot at the foot of the thread. Resolve and Close change the conversation's
+              STATUS — real actions on the v1 screen, not yet wired here, so they say so. */}
           <button type="button" className="v2-sec" disabled title={PREVIEW}>Resolve</button>
           <button type="button" className="v2-sec" disabled title={PREVIEW}>Close</button>
+          {/* And one that IS wired: the brake on the follow-up sequence, which used to be "Dismiss"
+              on a list beside a name and a phone number. Here the owner has just read what was said.
+              Absent entirely when nothing is running — a control that stops nothing is noise. */}
+          {origin.activeFollowUps > 0 && (
+            <StopFollowUps conversationId={conv.id} count={origin.activeFollowUps} />
+          )}
         </div>
       </header>
 

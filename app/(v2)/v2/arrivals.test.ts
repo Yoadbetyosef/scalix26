@@ -60,11 +60,12 @@ describe('every figure comes from the inbox’s own grouping', () => {
     expect(arrivals).not.toMatch(/from\('leads'\)/)
   })
 
-  it('"new" is a first conversation, not a lead row', () => {
+  it('"new" is a first conversation, not a lead row — and the inbox marks it with the same function', () => {
     // Twelve leads on the live table are four people. An owner means a person they have not dealt
-    // with before.
-    expect(arrivals).toContain(".lt('created_at', since)")
-    expect(arrivals).toContain('firstTimers')
+    // with before. The count here and the chip on the row cannot disagree, because there is one
+    // derivation: lib/inbox/first.ts.
+    expect(arrivals).toContain("import { firstConversationIds } from './first'")
+    expect(read('../../../lib/miles/inbox-read.ts')).toContain("import { firstConversationIds } from '@/lib/inbox/first'")
   })
 
   it('the day is the business’s, not the server’s', () => {
@@ -102,5 +103,71 @@ describe('nothing on the home screen reports handled work as outstanding', () =>
   it('and the spoken brief says the same thing as the screen', () => {
     expect(data).toContain('waitingOnYou: waiting')
     expect(brief).toContain('`Waiting on you: ${b.waitingOnYou}`')
+  })
+})
+
+describe('what the leads screen carried, on the thread it was about', () => {
+  const first = read('../../../lib/inbox/first.ts')
+  const convRead = read('../../../lib/inbox/conversation-read.ts')
+  const body = strip(read('./inbox/[id]/body.tsx'))
+  const groups = strip(read('./inbox/groups.tsx'))
+  const route = read('../../api/conversations/[id]/stop-followups/route.ts')
+
+  it('the "new" chip is a fact, not decoration', () => {
+    // It was on every NEEDS row unconditionally, which made it mean nothing. Now it is on either
+    // group, and only when it is true.
+    expect(groups).toContain('{row.isFirst && <span className="v2-mnew">new</span>}')
+    expect(groups).not.toMatch(/\n\s*<span className="v2-mnew">new<\/span>/)
+  })
+
+  it('a lookup failure says nobody is new rather than everybody', () => {
+    // Fail-closed: wrong in the direction nobody notices, not wrong on every row.
+    expect(first).toContain('if (error || !data) return new Set()')
+  })
+
+  it('a conversation with no contact is never called new', () => {
+    expect(first).toContain('convs.filter((c) => !!c.contact_id)')
+  })
+
+  it('source sits beside Channel, taken from the EARLIEST lead', () => {
+    expect(body).toContain("{ k: 'Came from', v: sourceLabel(origin.source) }")
+    expect(body.indexOf("k: 'Channel'")).toBeLessThan(body.indexOf("k: 'Came from'"))
+    // A returning customer opens a new lead every call; the newest would say 'phone call' about
+    // somebody who first arrived through a web form.
+    expect(convRead).toContain("order('created_at', { ascending: true })")
+    expect(convRead).toContain('rows[0].source')
+  })
+
+  it('an unknown source reads as itself rather than as a guess', () => {
+    expect(read('../../../lib/leads/source.ts')).toContain('SOURCE_LABEL[s as LeadSource] ?? s')
+  })
+
+  it('Stop follow-ups is absent when nothing is running', () => {
+    expect(body).toContain('{origin.activeFollowUps > 0 && (')
+    expect(body).toContain('<StopFollowUps conversationId={conv.id} count={origin.activeFollowUps} />')
+  })
+
+  it('and it stops the sequence as well as marking the leads', () => {
+    // Dismissing a lead is the brake on an outbound SMS sequence, not a filing state. Doing only the
+    // second would leave the texts going until the cron next looked.
+    expect(route).toContain('stopDripsForPhone(admin, ctx.tenantId, phone')
+    expect(route).toContain("update({ status: 'dismissed' })")
+    expect(route.indexOf('stopDripsForPhone')).toBeLessThan(route.indexOf("update({ status: 'dismissed' })"))
+  })
+
+  it('it tries every number the person is known by', () => {
+    // The campaign was created with whichever number reached intake — the lead's or the contact's.
+    expect(route).toContain('[...new Set([contact.phone, ...rows.map((l) => l.phone)].filter(Boolean))]')
+  })
+
+  it('the screen shows the route’s own sentence, never a claim of its own', () => {
+    const ui = read('./inbox/[id]/follow-ups.tsx')
+    expect(ui).toContain('j.note || ')
+    expect(ui).toContain('router.refresh()')
+  })
+
+  it('it is operator-safe, like every other write on this screen', () => {
+    expect(route).toContain('requireActiveBusinessContext()')
+    expect(route).toContain("conv.tenant_id !== ctx.tenantId")
   })
 })

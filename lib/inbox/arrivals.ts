@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { readMilesInbox } from '@/lib/miles/inbox-read'
+import { firstConversationIds } from './first'
 
 // WHO ARRIVED, AND WAS THEY LOOKED AFTER.
 //
@@ -17,7 +18,8 @@ import { readMilesInbox } from '@/lib/miles/inbox-read'
 //
 // A lead row is one arrival event: twelve of them on the live table are four people. What an owner
 // means by "someone new" is a person they have not dealt with before, so it is the contact's FIRST
-// conversation — two bounded queries, no scan of the whole table.
+// conversation — lib/inbox/first.ts, the SAME function that marks the row in the inbox. The count
+// here and the mark there cannot disagree, because there is only one of them.
 //
 // The day is the BUSINESS's day, not UTC. "3 new people today" flipping at 8pm local because the
 // server counts in London is the same species of small lie this module exists to remove.
@@ -57,24 +59,11 @@ export async function loadArrivals(tenantId: string, timezone: string | null | u
   const todays = ((recentRes.data ?? []) as { id: string; contact_id: string | null; created_at: string }[])
     .filter((c) => !!c.contact_id && dayIn(tz, c.created_at) === today)
 
-  const contactIds = [...new Set(todays.map((c) => c.contact_id as string))]
-  let firstTimers = new Set(contactIds)
-  if (contactIds.length) {
-    // Anyone with a conversation from BEFORE today has been dealt with before, so is not new.
-    const { data: prior } = await db
-      .from('conversations')
-      .select('contact_id')
-      .eq('tenant_id', tenantId)
-      .in('contact_id', contactIds)
-      .lt('created_at', since)
-    const seen = new Set((prior ?? []).map((p) => (p as { contact_id: string | null }).contact_id))
-    // The 48-hour window is a superset, so a conversation inside it but on an EARLIER local day also
-    // disqualifies. Checked here rather than with a third query.
-    for (const c of (recentRes.data ?? []) as { contact_id: string | null; created_at: string }[]) {
-      if (c.contact_id && dayIn(tz, c.created_at) !== today) seen.add(c.contact_id)
-    }
-    firstTimers = new Set(contactIds.filter((id) => !seen.has(id)))
-  }
+  // WHO IS NEW — the same derivation the inbox row uses, not a second one. lib/inbox/first.ts.
+  const firsts = await firstConversationIds(db, tenantId, todays)
+  const newContacts = new Set(
+    todays.filter((c) => firsts.has(c.id)).map((c) => c.contact_id as string),
+  )
 
   // The inbox's own answer to "is this handled": a thread is outstanding if it is in either of the
   // two groups that need a person. Everything else the inbox calls handled.
@@ -87,8 +76,8 @@ export async function loadArrivals(tenantId: string, timezone: string | null | u
   )
 
   return {
-    newToday: firstTimers.size,
-    newHandled: [...firstTimers].filter((id) => !contactOutstanding.has(id)).length,
+    newToday: newContacts.size,
+    newHandled: [...newContacts].filter((id) => !contactOutstanding.has(id)).length,
     drafts: inbox.waiting.length,
     unanswered: inbox.needs.length,
   }

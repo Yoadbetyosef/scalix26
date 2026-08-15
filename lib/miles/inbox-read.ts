@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { COMMITMENT_LABEL, type Commitment } from './autonomy'
 import { nameOf } from '@/lib/persona'
+import { firstConversationIds } from '@/lib/inbox/first'
 
 // THE THREE GROUPS — waiting on you, needs you, handled.
 //
@@ -58,6 +59,9 @@ export interface NeedsRow {
   at: string
   /** What they said. Not a summary of it — theirs. */
   said: string
+  /** This person's FIRST ever conversation. The one fact `leads` could never give: a lead row is an
+   *  arrival, so a customer's fifth call opens a fifth lead that looks exactly like their first. */
+  isFirst?: boolean
 }
 
 export interface HandledRow {
@@ -74,6 +78,9 @@ export interface HandledRow {
   byAgentId: string | null
   /** A call rather than a message. The row says so, because "handled" means something different. */
   spoken?: boolean
+  /** Somebody new — see NeedsRow.isFirst. Worth more on this group than on any other: it is the
+   *  difference between "a customer got looked after" and "a NEW customer got looked after". */
+  isFirst?: boolean
 }
 
 export interface MilesInbox {
@@ -87,6 +94,8 @@ export interface MilesInbox {
 interface ConvRow {
   id: string
   channel: string | null
+  contact_id: string | null
+  created_at: string
   updated_at: string | null
   human_takeover: boolean | null
   ai_employee_id: string | null
@@ -125,7 +134,7 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
   const [convRes, draftRes] = await Promise.all([
     db
       .from('conversations')
-      .select('id, channel, updated_at, human_takeover, ai_employee_id, contact:contacts(name, phone, email)')
+      .select('id, channel, contact_id, created_at, updated_at, human_takeover, ai_employee_id, contact:contacts(name, phone, email)')
       .eq('tenant_id', tenantId)
       .order('updated_at', { ascending: false })
       .limit(40),
@@ -195,6 +204,9 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
   const lastAiByConv = new Map<string, MsgRow>()
   for (const m of allMessages) if (m.role === 'assistant' || m.role === 'agent') lastAiByConv.set(m.conversation_id, m)
 
+  // One derivation, shared with the home screen's count — lib/inbox/first.ts.
+  const firsts = await firstConversationIds(db, tenantId, convs)
+
   const needs: NeedsRow[] = []
   const handled: HandledRow[] = []
 
@@ -223,6 +235,7 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
         by: nameOfAgent(c.ai_employee_id),
         byAgentId: c.ai_employee_id,
         spoken: true,
+        isFirst: firsts.has(c.id),
       })
       continue
     }
@@ -234,6 +247,7 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
         channel: c.channel,
         at: last.timestamp,
         said: last.content,
+        isFirst: firsts.has(c.id),
       })
     } else if (last.role === 'assistant' || last.role === 'agent') {
       // Only the AI's own replies belong under "handled". A message a PERSON sent after taking the
@@ -247,6 +261,7 @@ export async function readMilesInbox(tenantId: string, agentName: string): Promi
         sent: last.content,
         by: nameOfAgent(c.ai_employee_id),
         byAgentId: c.ai_employee_id,
+        isFirst: firsts.has(c.id),
       })
     }
   }

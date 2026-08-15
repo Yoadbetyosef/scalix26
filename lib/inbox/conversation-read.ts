@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { normalizePhone } from '@/lib/contacts/store'
 import { getBusinessTimezone } from '@/lib/timezone'
 
 // One conversation, its messages and the tenant's timezone — moved here VERBATIM from
@@ -15,10 +16,21 @@ import { getBusinessTimezone } from '@/lib/timezone'
 // are routing decisions and belong to the page. Every filter, every column, the join and the ordering
 // are byte-identical.
 
+/** What the leads screen carried, moved onto the thread it was always about. */
+export interface Origin {
+  /** How this person first reached the business: 'voice_call', 'web_form', … Raw, labelled by the UI. */
+  source: string | null
+  /** Follow-up sequences still running for them. A control that stops nothing must not be offered. */
+  activeFollowUps: number
+  /** The lead rows this person has open, so stopping them needs no second lookup. */
+  openLeadIds: string[]
+}
+
 export interface ConversationRead {
   tz: string
   conv: ConversationRow
   messages: MessageRow[]
+  origin: Origin
 }
 
 // ── THE COLUMNS, ONCE ────────────────────────────────────────────────────────────────────────────
@@ -101,5 +113,55 @@ export async function readConversation(tenantId: string, id: string): Promise<Co
     tz,
     conv: conv as unknown as ConversationRow,
     messages: (messages ?? []) as unknown as MessageRow[],
+    origin: await readOrigin(service, tenant.id, (conv as unknown as ConversationRow).contact?.id ?? null),
+  }
+}
+
+/**
+ * WHERE THEY CAME FROM, AND WHETHER ANYTHING IS STILL CHASING THEM.
+ *
+ * Both from `leads`, which is staying exactly as it is — fifteen consumers read that table and none
+ * of them read the screen that is going. What moves is the two facts onto the thread they describe.
+ *
+ * The EARLIEST lead is the source: a returning customer opens a new lead every time they call, so the
+ * newest one says "phone call" about somebody who first found you through a web form a year ago.
+ */
+async function readOrigin(
+  db: ReturnType<typeof createAdminClient>,
+  tenantId: string,
+  contactId: string | null,
+): Promise<Origin> {
+  const empty: Origin = { source: null, activeFollowUps: 0, openLeadIds: [] }
+  if (!contactId) return empty
+  try {
+    const { data: leads } = await db
+      .from('leads')
+      .select('id, source, status, phone, created_at')
+      .eq('tenant_id', tenantId)
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: true })
+    const rows = (leads ?? []) as { id: string; source: string | null; status: string; phone: string | null }[]
+    if (!rows.length) return empty
+
+    const open = rows.filter((l) => l.status === 'new' || l.status === 'contacted' || l.status === 'called_back')
+    const phones = [...new Set(rows.map((l) => normalizePhone(l.phone)).filter(Boolean))]
+
+    let activeFollowUps = 0
+    if (phones.length) {
+      const { data: drips } = await db
+        .from('drip_campaigns')
+        .select('contact_phone')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'active')
+      // Normalised, for the same reason the brake is: contact_phone holds whatever reached intake.
+      activeFollowUps = ((drips ?? []) as { contact_phone: string | null }[])
+        .filter((d) => phones.includes(normalizePhone(d.contact_phone))).length
+    }
+
+    return { source: rows[0].source, activeFollowUps, openLeadIds: open.map((l) => l.id) }
+  } catch (err) {
+    // The thread renders without it. An origin lookup is not worth a blank conversation.
+    console.error('[conversation-read] origin failed:', err instanceof Error ? err.message : err)
+    return empty
   }
 }
