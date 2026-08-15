@@ -1,43 +1,10 @@
 'use client'
 
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 
-// THE SHEET, ONCE.
-//
-// Three surfaces need it now — edit a contact, add one, import a file — and the pattern was written
-// for the first of them. A second copy would drift on the parts nobody thinks about until they are
-// missing: Escape, the veil being a real button, the focus landing somewhere, reduced motion.
-//
-// Extracted from contacts/[id]/edit.tsx unchanged. Same markup, same classes, same behaviour.
-
-export function Sheet({
-  title, wide, busy, onClose, children,
-}: {
-  title: string
-  /** The importer needs room for a column grid; the two forms do not. */
-  wide?: boolean
-  /** While true, the sheet refuses to close — a half-finished write is not a thing to dismiss. */
-  busy?: boolean
-  onClose: () => void
-  children: ReactNode
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [busy, onClose])
-
-  return (
-    <div className="v2-esheet" role="dialog" aria-modal="true" aria-label={title}>
-      {/* A button, not a div: closing by clicking away is an action, and one a keyboard can reach. */}
-      <button type="button" className="v2-eveil" aria-label="Cancel" onClick={onClose} disabled={busy} />
-      <div className="v2-epanel" data-wide={wide || undefined}>
-        <p className="v2-etitle">{title}</p>
-        {children}
-      </div>
-    </div>
-  )
-}
+// The shell moved to ../form-sheet.tsx when the agenda started opening it too — four surfaces, one
+// sheet. Re-exported so every existing import is unchanged.
+export { Sheet } from '../form-sheet'
 
 // ── The six fields a person may set ─────────────────────────────────────────────────────────────
 //

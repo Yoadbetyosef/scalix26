@@ -10,10 +10,16 @@ const route = read('../../app/api/contacts/[id]/route.ts')
 const create = read('../../app/api/contacts/route.ts')
 const aiName = read('./ai-name.ts')
 const sheet = read('../../app/(v2)/v2/contacts/[id]/edit.tsx')
-const shell = read('../../app/(v2)/v2/contacts/sheet.tsx')
+// The SHELL moved to the /v2 root once four surfaces opened it. The contact-specific parts —
+// the six fields, the duplicate sentence — stayed where they belong.
+const shell = read('../../app/(v2)/v2/form-sheet.tsx')
+const contactForm = read('../../app/(v2)/v2/contacts/sheet.tsx')
 const voice = strip(read('../../app/api/conversations/voice/route.ts'))
 const book = strip(read('../../app/api/appointments/book/route.ts'))
 const stl = strip(read('../leads/speed-to-lead.ts'))
+// The booking path's contact handling moved into the shared appointment core when the owner's route
+// arrived — one insert, two policies. The rule is the same; the file is not.
+const apptCore = strip(read('../appointments/create.ts'))
 
 describe('a name is a name, at every door', () => {
   it('rejects the two the live table holds that it always claimed to reject', () => {
@@ -40,15 +46,17 @@ describe('a name is a name, at every door', () => {
   it('all three automated writers go through the one helper', () => {
     // The filter used to be at ONE of three call sites, which is why two names it rejects are in the
     // table. A rule applied at one of three places is a coincidence, not a rule.
-    for (const src of [voice, book, stl]) {
+    for (const src of [voice, apptCore, stl]) {
       expect(src).toContain('writeCapturedName')
       expect(src).not.toMatch(/update\(\{ name \}\)/)
     }
+    // And the route it left keeps none of it.
+    expect(book).not.toContain('writeCapturedName')
   })
 
   it('and the INSERT doors apply the same test', () => {
     // An update guard cannot help a path that creates the row. Two of the four got in that way.
-    expect(book).toContain('looksLikeCapturedName(name) ? name : null')
+    expect(apptCore).toContain('looksLikeCapturedName(input.name) ? input.name : null')
     expect(stl).toContain('looksLikeCapturedName(name) ? name : null')
   })
 
@@ -133,7 +141,7 @@ describe('the sheet', () => {
   it('names who a duplicate belongs to rather than saying "duplicate"', () => {
     // In the shared shell, because create and edit answer with the SAME contract and the sentence a
     // person reads must not depend on which of the two they were using.
-    expect(shell).toContain("const who = d.name || d.phone || d.email || 'someone already in your contacts'")
+    expect(contactForm).toContain("const who = d.name || d.phone || d.email || 'someone already in your contacts'")
     expect(sheet).toContain("duplicateMessage(j, 'That did not save.')")
   })
 

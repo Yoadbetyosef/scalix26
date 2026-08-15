@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { markLeadsBooked, OPEN_FOR_BOOKING } from './booked'
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
-const bookRoute = read('../../app/api/appointments/book/route.ts')
+// markLeadsBooked moved with the insert into the shared core — see lib/appointments/create.ts.
+const bookRoute = read('../appointments/create.ts')
 const table = read('../../components/dashboard/leads-table.tsx')
 const patchRoute = read('../../app/api/leads/[id]/route.ts')
 
@@ -68,8 +69,8 @@ describe('an appointment books the lead', () => {
 
 describe('nothing is left for a human to remember', () => {
   it('the booking route derives it, after the appointment is written', () => {
-    expect(bookRoute).toContain('await markLeadsBooked(supabase, tenant.id, contactId, phone)')
-    expect(bookRoute.indexOf("from('appointments').insert(")).toBeLessThan(bookRoute.indexOf('markLeadsBooked(supabase'))
+    expect(bookRoute).toContain('await markLeadsBooked(supabase, tenant.id, contactId, input.phone)')
+    expect(bookRoute.indexOf("from('appointments').insert(")).toBeLessThan(bookRoute.lastIndexOf('markLeadsBooked(supabase'))
   })
 
   it('the button is gone', () => {

@@ -245,3 +245,46 @@ export async function readAgenda(tenantId: string): Promise<Agenda> {
     missingCount,
   }
 }
+
+
+// ── WHAT THE OWNER'S FORM OFFERS ────────────────────────────────────────────────────────────────
+//
+// The business's own slot grid plus what is already taken, so the New sheet can show that day's free
+// times as one-tap chips. OFFERED, never enforced — see /api/appointments, where the owner policy
+// deliberately does not hold the grid against them.
+
+export interface SlotGrid {
+  byDow: Record<number, string[]>
+  booked: Record<string, string[]>
+}
+
+/** Bounded to the window somebody would actually book into from a form. */
+export const GRID_DAYS = 90
+
+export async function readSlotGrid(tenantId: string): Promise<SlotGrid> {
+  const db = createAdminClient()
+  const { data: t } = await db.from('tenants').select('timezone').eq('id', tenantId).maybeSingle()
+  const tz = await getBusinessTimezone(tenantId, t?.timezone ?? null)
+  const now = nowInTimezone(tz)
+  const until = new Date(`${now.dateIso}T12:00:00Z`)
+  until.setUTCDate(until.getUTCDate() + GRID_DAYS)
+
+  const [slots, booked] = await Promise.all([
+    db.from('appointment_slots').select('day_of_week, slot_time').eq('tenant_id', tenantId).eq('is_active', true),
+    db.from('appointments').select('slot_date, slot_time')
+      .eq('tenant_id', tenantId).gte('slot_date', now.dateIso).lte('slot_date', until.toISOString().slice(0, 10))
+      .neq('status', 'cancelled'),
+  ])
+
+  const byDow: Record<number, string[]> = {}
+  for (const r of (slots.data ?? []) as { day_of_week: number; slot_time: string }[]) {
+    (byDow[r.day_of_week] ??= []).push(String(r.slot_time))
+  }
+  for (const k of Object.keys(byDow)) byDow[Number(k)].sort()
+
+  const taken: Record<string, string[]> = {}
+  for (const r of (booked.data ?? []) as { slot_date: string; slot_time: string }[]) {
+    (taken[r.slot_date] ??= []).push(String(r.slot_time))
+  }
+  return { byDow, booked: taken }
+}

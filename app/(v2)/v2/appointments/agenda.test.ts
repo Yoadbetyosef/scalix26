@@ -138,8 +138,11 @@ describe('move ships partial and honest', () => {
     expect(ref).toContain("They'll be told")
   })
 
-  it('New says why it is disabled instead of being absent', () => {
-    expect(page).toContain('disabled title={PREVIEW}')
+  it('New is LIVE — a disabled create on an empty screen can never fill it', () => {
+    // It shipped disabled with a reason, which was right while there was no owner-side route. There
+    // is one now (/api/appointments), so the reason is gone and so is the disabled state.
+    expect(page).toContain('<NewAppointment grid={grid} defaultMinutes=')
+    expect(page).not.toContain('PREVIEW')
   })
 })
 
@@ -215,8 +218,9 @@ describe('the past has somewhere to live', () => {
   it('is bounded, and loaded by the same read', () => {
     expect(lib).toContain('export const EARLIER_DAYS = 30')
     expect(lib).toContain(".gte('slot_date', fromIso)")
-    // One query, not two.
-    expect((lib.match(/from\('appointments'\)/g) ?? []).length).toBe(1)
+    // ONE query for the agenda — earlier and upcoming come from the same read, not two.
+    const readFn = lib.slice(lib.indexOf('export async function readAgenda'), lib.indexOf('export async function readSlotGrid'))
+    expect((readFn.match(/from\('appointments'\)/g) ?? []).length).toBe(1)
   })
 
   it('the empty state only shows when there is nothing in EITHER direction', () => {

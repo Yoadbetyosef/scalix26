@@ -1,6 +1,8 @@
-import { readAgenda } from '@/lib/appointments/agenda'
+import { readAgenda, readSlotGrid } from '@/lib/appointments/agenda'
+import { createAdminClient } from '@/lib/supabase/server'
+import { NewAppointment } from './new'
 import { PERSONAS } from '@/lib/persona'
-import { listPageContext, PREVIEW } from '../list-page'
+import { listPageContext } from '../list-page'
 import { agendaLine } from './line'
 import { AgendaView } from './agenda'
 
@@ -17,7 +19,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function V2Appointments() {
   const { tenantId } = await listPageContext('scheduling')
-  const agenda = await readAgenda(tenantId)
+  const [agenda, grid, { data: tenant }] = await Promise.all([
+    readAgenda(tenantId),
+    // What the form OFFERS. The owner is not held to it — see /api/appointments.
+    readSlotGrid(tenantId),
+    createAdminClient().from('tenants').select('default_appointment_minutes').eq('id', tenantId).maybeSingle(),
+  ])
 
   const laterCount = agenda.days.reduce((n, d, i) => n + (i === 0 && d.label.startsWith('TODAY') ? 0 : d.count), 0)
   const line = agendaLine({ todayCount: agenda.todayCount, laterCount, missingCount: agenda.missingCount })
@@ -39,15 +46,9 @@ export default async function V2Appointments() {
         </a>
         <h2>Appointments</h2>
         <div className="v2-hacts">
-          {/* The shape of what is coming. There is no owner-side create — /api/appointments/book is
-              public and keyed by a lead token, meant for the AI — so this says so rather than being
-              absent. OUTSTANDING §26. */}
-          <button type="button" className="v2-hact" data-tone="primary" disabled title={PREVIEW}>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            New
-          </button>
+          {/* Live. A disabled create on an empty screen means there is no way to ever put anything
+              there — and the empty state is exactly when somebody wants it. */}
+          <NewAppointment grid={grid} defaultMinutes={Number(tenant?.default_appointment_minutes) || 60} />
         </div>
       </header>
 

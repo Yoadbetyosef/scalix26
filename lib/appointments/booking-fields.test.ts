@@ -4,6 +4,7 @@ import { BOOKING_FIELDS, BOOKING_REQUIRED, buildBookingStatus } from '@/lib/anth
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const route = read('../../app/api/appointments/book/route.ts')
+const core = read('./create.ts')
 const textTool = read('../anthropic/booking-tools.ts')
 const voiceTool = read('../../voice-server/server.js')
 
@@ -83,12 +84,13 @@ describe('both tools send the same four fields', () => {
 
 describe('the route takes them, and none of them can fail a booking', () => {
   it('writes all four', () => {
-    expect(route).toContain('meeting_kind: meetingKind, address, join_url: joinUrl, duration_minutes: durationMinutes,')
+    // The insert moved into the shared core when the owner route arrived — one insert, two policies.
+    expect(core).toContain('meeting_kind: kind, address: input.address, join_url: input.joinUrl, duration_minutes: input.durationMinutes,')
   })
 
   it('an unrecognised kind falls back rather than 400ing', () => {
     expect(route).toContain("MEETING_KINDS.includes(kindIn) ? kindIn : 'on_site'")
-    expect(route).toContain("const MEETING_KINDS = ['on_site', 'zoom', 'google_meet', 'phone']")
+    expect(core).toContain("export const MEETING_KINDS = ['on_site', 'zoom', 'google_meet', 'phone']")
   })
 
   it('a join_url that is not a link is dropped, not stored', () => {

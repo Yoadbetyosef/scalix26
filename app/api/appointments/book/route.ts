@@ -1,194 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendSMS } from '@/lib/twilio/client'
-import { sendEmail, emailTemplates } from '@/lib/email/send'
-import { assertPartnerActive } from '@/lib/billing/gate'
-import { parseDate, parseTime, dayOfWeek, formatTime12, MIN_LEAD_TIME_MINUTES, nowInTimezone, slotMinutes } from '@/lib/appointments'
-import { getBusinessTimezone } from '@/lib/timezone'
-import { getCalendarAccess } from '@/lib/calendar/store'
-import { createCalendarEvent } from '@/lib/calendar/google'
-import { createMicrosoftCalendarEvent } from '@/lib/calendar/microsoft'
-import { markLeadsBooked } from '@/lib/leads/booked'
-import { writeCapturedName, looksLikeCapturedName } from '@/lib/contacts/ai-name'
+import { createAppointment, AI_POLICY, MEETING_KINDS } from '@/lib/appointments/create'
+import { notifyBooking } from '@/lib/appointments/notify'
 
-/** The four the column allows. Kept here as well as in the tool schema so a hand-rolled POST cannot
- *  write a fifth — the CHECK constraint would reject it and lose the booking. */
-const MEETING_KINDS = ['on_site', 'zoom', 'google_meet', 'phone']
-
-function friendlyDate(dateIso: string): string {
-  return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString('en-US', {
-    timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric',
-  })
-}
-
-// POST { lead_token, date, time, customer_name?, customer_phone, customer_email?, service_type?, channel? }
+// THE AI'S BOOKING ENDPOINT. Public, keyed by the tenant's secret lead token — voice-server and the
+// text pipeline both post here, and neither has a session.
+//
+// Everything that makes an appointment now lives in lib/appointments/create.ts, shared with the
+// owner's session route. What stays here is what is TRUE OF THIS DOOR: the token resolves the tenant,
+// the AI is held to the slot grid and the lead-time buffer, and both parties are told.
+//
+// POST { lead_token, date, time, customer_name?, customer_phone, customer_email?, service_type?,
+//        channel?, meeting_kind?, address?, join_url?, duration_minutes?, suppress_customer_sms? }
 export async function POST(req: NextRequest) {
   const data = (await req.json().catch(() => ({}))) as Record<string, unknown>
   const leadToken = typeof data.lead_token === 'string' ? data.lead_token : ''
-  const name = typeof data.customer_name === 'string' && data.customer_name.trim() ? data.customer_name.trim() : null
   const phone = typeof data.customer_phone === 'string' ? data.customer_phone.trim() : ''
-  const email = typeof data.customer_email === 'string' && data.customer_email.trim() ? data.customer_email.trim() : null
-  const service = typeof data.service_type === 'string' && data.service_type.trim() ? data.service_type.trim() : null
   const channel = typeof data.channel === 'string' && data.channel.trim() ? data.channel.trim() : 'voice'
-  // Optional: skip the customer confirmation SMS when the booking channel already
-  // confirms in-channel via SMS (avoids texting the same number twice). Default
-  // false → unchanged for voice / IG / FB.
+  // Skip the customer confirmation when the booking channel already confirms in-channel via SMS,
+  // so the same number is not texted twice. Default false → unchanged for voice / IG / FB.
   const suppressCustomerSms = data.suppress_customer_sms === true
-  const timeDb = parseTime(typeof data.time === 'string' ? data.time : '')
 
-  // ── WHERE IT HAPPENS ──────────────────────────────────────────────────────────────────────────
-  //
-  // All four are OPTIONAL and none can fail a booking. A model that cannot fill one must still be
-  // able to book: a lost appointment is worse than a missing address, and the agenda shows the gap
-  // in amber with the fix attached rather than hiding it.
-  //
-  // An unrecognised kind becomes on_site rather than a 400 — the value is a model's word, and the
-  // truthful default is also the one every appointment before this column had.
-  const kindIn = typeof data.meeting_kind === 'string' ? data.meeting_kind.trim().toLowerCase() : ''
-  const meetingKind = MEETING_KINDS.includes(kindIn) ? kindIn : 'on_site'
-  const address = typeof data.address === 'string' && data.address.trim() ? data.address.trim() : null
-  // Only a real link. The model is told never to invent one; this is the second line of that.
-  const joinRaw = typeof data.join_url === 'string' ? data.join_url.trim() : ''
-  const joinUrl = /^https?:\/\/\S+$/i.test(joinRaw) ? joinRaw : null
-  // A length only when one was agreed, inside sane bounds. Null means "nobody said", and the agenda
-  // falls back to the tenant's default rather than to a guess written into a row.
-  const durRaw = typeof data.duration_minutes === 'number' ? Math.round(data.duration_minutes) : null
-  const durationMinutes = durRaw && durRaw >= 5 && durRaw <= 480 ? durRaw : null
-
-  if (!leadToken || !phone) return NextResponse.json({ success: false, error: 'lead_token and customer_phone required' }, { status: 400 })
-  if (!timeDb) return NextResponse.json({ success: false, error: 'could not understand the time' })
+  if (!leadToken || !phone) {
+    return NextResponse.json({ success: false, error: 'lead_token and customer_phone required' }, { status: 400 })
+  }
 
   const supabase = await createServiceClient()
-  // NOTE: tenants has no owner_phone column — selecting it previously errored the
-  // whole query, so tenant came back null and EVERY booking failed with "invalid
-  // token" (0 appointments ever persisted). Owner contact = tenant.phone / email.
+  // NOTE: tenants has no owner_phone column — selecting it previously errored the whole query, so
+  // tenant came back null and EVERY booking failed with "invalid token" (0 appointments persisted).
   const { data: tenant } = await supabase
-    .from('tenants').select('id, business_name, phone, email, timezone').eq('lead_intake_token', leadToken).maybeSingle()
+    .from('tenants').select('id').eq('lead_intake_token', leadToken).maybeSingle()
   if (!tenant) return NextResponse.json({ success: false, error: 'invalid token' }, { status: 404 })
 
-  // Resolve the business timezone, then parse the date in it ("today"/"tomorrow").
-  const tz = await getBusinessTimezone(tenant.id, tenant.timezone)
-  const dateIso = parseDate(typeof data.date === 'string' ? data.date : '', tz)
-  if (!dateIso) return NextResponse.json({ success: false, error: 'could not understand the date' })
+  // All four are OPTIONAL and none can fail a booking — a model that cannot fill one must still be
+  // able to book. An unrecognised kind becomes on_site; a join_url that is not a link is dropped.
+  const kindIn = typeof data.meeting_kind === 'string' ? data.meeting_kind.trim().toLowerCase() : ''
+  const joinRaw = typeof data.join_url === 'string' ? data.join_url.trim() : ''
+  const durRaw = typeof data.duration_minutes === 'number' ? Math.round(data.duration_minutes) : null
 
-  // Booking guard (defense in depth): never book a slot in the past or within the
-  // minimum lead-time buffer, measured in the business timezone.
-  const now = nowInTimezone(tz)
-  if (dateIso < now.dateIso || (dateIso === now.dateIso && slotMinutes(timeDb) < now.minutes + MIN_LEAD_TIME_MINUTES)) {
-    return NextResponse.json({ success: false, error: 'that time has already passed — please pick a later time' })
+  const name = typeof data.customer_name === 'string' && data.customer_name.trim() ? data.customer_name.trim() : null
+  const result = await createAppointment({
+    tenantId: tenant.id,
+    date: typeof data.date === 'string' ? data.date : '',
+    time: typeof data.time === 'string' ? data.time : '',
+    name,
+    phone,
+    email: typeof data.customer_email === 'string' && data.customer_email.trim() ? data.customer_email.trim() : null,
+    service: typeof data.service_type === 'string' && data.service_type.trim() ? data.service_type.trim() : null,
+    meetingKind: MEETING_KINDS.includes(kindIn) ? kindIn : 'on_site',
+    address: typeof data.address === 'string' && data.address.trim() ? data.address.trim() : null,
+    joinUrl: /^https?:\/\/\S+$/i.test(joinRaw) ? joinRaw : null,
+    durationMinutes: durRaw && durRaw >= 5 && durRaw <= 480 ? durRaw : null,
+  }, { ...AI_POLICY, channel })
+
+  if (!result.ok) {
+    return NextResponse.json({ success: false, error: result.error }, result.status ? { status: result.status } : undefined)
   }
 
-  // The slot must exist for that weekday and not already be booked.
-  const { data: slot } = await supabase.from('appointment_slots').select('id')
-    .eq('tenant_id', tenant.id).eq('day_of_week', dayOfWeek(dateIso)).eq('slot_time', timeDb).eq('is_active', true).maybeSingle()
-  if (!slot) return NextResponse.json({ success: false, error: 'that time is not available' })
+  // The stranger gets a confirmation and the owner is told a thing happened while they were not
+  // looking. Both are right for THIS door; see lib/appointments/notify.ts for why the owner's own
+  // route answers differently.
+  await notifyBooking({
+    tenantId: tenant.id, dateIso: result.dateIso, timeDb: result.timeDb,
+    name, phone,
+    email: typeof data.customer_email === 'string' ? data.customer_email.trim() || null : null,
+    service: typeof data.service_type === 'string' ? data.service_type.trim() || null : null,
+    channel,
+    customer: !suppressCustomerSms,
+    owner: true,
+  })
 
-  const { data: existing } = await supabase.from('appointments').select('id')
-    .eq('tenant_id', tenant.id).eq('slot_date', dateIso).eq('slot_time', timeDb).neq('status', 'cancelled').maybeSingle()
-  if (existing) return NextResponse.json({ success: false, error: 'that time was just taken' })
-
-  // Find or create the contact.
-  let contactId: string | null = null
-  const { data: c } = await supabase.from('contacts').select('id').eq('tenant_id', tenant.id).eq('phone', phone).maybeSingle()
-  if (c) {
-    contactId = c.id
-    // The booking tool hands over whatever the AI heard. This had NO filter at all.
-    await writeCapturedName(supabase, contactId, name)
-  } else {
-    const { data: created } = await supabase.from('contacts').insert({ tenant_id: tenant.id, phone, name: looksLikeCapturedName(name) ? name : null, channel: 'voice' }).select('id').single()
-    contactId = created?.id ?? null
-  }
-
-  const { data: appt, error: apptErr } = await supabase.from('appointments').insert({
-    tenant_id: tenant.id, contact_id: contactId, slot_date: dateIso, slot_time: timeDb,
-    customer_name: name, customer_phone: phone, customer_email: email,
-    service_type: service, channel, status: 'confirmed',
-    meeting_kind: meetingKind, address, join_url: joinUrl, duration_minutes: durationMinutes,
-  }).select('id').single()
-  if (apptErr || !appt) {
-    // Race-safe: the partial unique index (tenant_id, slot_date, slot_time) raises
-    // 23505 if a near-simultaneous booking won the slot. Surface the same friendly
-    // message as the pre-check so the AI offers other times — never a hard error.
-    if (apptErr?.code === '23505') return NextResponse.json({ success: false, error: 'that time was just taken' })
-    return NextResponse.json({ success: false, error: apptErr?.message || 'failed to book' }, { status: 500 })
-  }
-
-  // BOOKED IS DERIVED HERE. The appointment is the system of record and it is already written; this
-  // only tells the funnel what just happened, and stops the follow-ups that were chasing this person.
-  // Never able to unbook them — markLeadsBooked swallows its own failures.
-  await markLeadsBooked(supabase, tenant.id, contactId, phone)
-
-  // Google Calendar (Phase 3a) — ADDITIVE + FAIL-SAFE. If the tenant has a calendar
-  // connected, mirror the booking as an event and store its id. The appointments
-  // row above is the system of record; ANY failure here only logs a warning and
-  // never affects the confirmed booking. If not connected, this is a no-op.
-  try {
-    const access = await getCalendarAccess(tenant.id)
-    if (access) {
-      const tz = tenant.timezone || 'America/New_York'
-      const [h, m] = timeDb.split(':').map(Number)
-      const endH = String((h + 1) % 24).padStart(2, '0')
-      const startDateTime = `${dateIso}T${timeDb}`
-      const endDateTime = `${dateIso}T${endH}:${String(m).padStart(2, '0')}:00`
-      const eventInput = {
-        summary: `${service || 'Appointment'} — ${name || 'Customer'}`,
-        description: `Booked by your AI via ${channel}.\nContact: ${phone}${email ? `\nEmail: ${email}` : ''}`,
-        start: { dateTime: startDateTime, timeZone: tz },
-        end: { dateTime: endDateTime, timeZone: tz },
-      }
-      // Dispatch by provider — Microsoft writes to the default calendar (no calendarId).
-      const ev = access.provider === 'microsoft'
-        ? await createMicrosoftCalendarEvent(access.accessToken, eventInput)
-        : await createCalendarEvent(access.accessToken, access.calendarId, eventInput)
-      if (ev?.id) await supabase.from('appointments').update({ google_event_id: ev.id }).eq('id', appt.id)
-    }
-  } catch (err) {
-    console.warn('[book] calendar sync failed (booking still confirmed):', err instanceof Error ? err.message : err)
-  }
-
-  // Notify everyone (best-effort; never fail the confirmed booking on a send error).
-  // WL prepaid billing gate — the appointment is ALWAYS persisted (data untouched); only the billable
-  // SMS/email confirmations are withheld when the owning partner is paused/depleted. Resolved once.
-  const notifyAllowed = (await assertPartnerActive({ tenantId: tenant.id })).ok
-  const { data: ch } = await supabase.from('channels').select('twilio_number')
-    .eq('tenant_id', tenant.id).eq('type', 'sms').not('twilio_number', 'is', null).limit(1).maybeSingle()
-  const fromNumber = ch?.twilio_number || undefined
-  const business = tenant.business_name || 'us'
-  const when = `${friendlyDate(dateIso)} at ${formatTime12(timeDb)}`
-
-  // Owner contact resolved per-tenant (never hardcoded): tenant.phone, falling back
-  // to the agent's forward number. Owner email = the tenant's account email.
-  let ownerPhone = tenant.phone
-  if (!ownerPhone) {
-    const { data: ag } = await supabase.from('ai_employees').select('forward_to_phone')
-      .eq('tenant_id', tenant.id).not('forward_to_phone', 'is', null).limit(1).maybeSingle()
-    ownerPhone = ag?.forward_to_phone || null
-  }
-  const ownerEmail = tenant.email || null
-
-  // 1) Customer → SMS confirmation, to the contact's number we already have.
-  //    Skipped when the channel already confirms in-channel via SMS (suppress flag).
-  if (!suppressCustomerSms && notifyAllowed) {
-    try {
-      await sendSMS(phone, `✅ Confirmed! Your appointment is on ${when}. See you then! - ${business}`, fromNumber)
-    } catch (err) {
-      console.error('[book] customer SMS failed:', err instanceof Error ? err.message : err)
-    }
-  }
-  // 2) Owner → SMS + email that the AI booked an appointment.
-  const ownerSms = `📅 New appointment: ${name || 'Customer'} on ${when} for ${service || 'service'}. Phone: ${phone}`
-  if (ownerPhone && notifyAllowed) {
-    try { await sendSMS(ownerPhone, ownerSms, fromNumber) }
-    catch (err) { console.error('[book] owner SMS failed:', err instanceof Error ? err.message : err) }
-  }
-  if (ownerEmail && notifyAllowed) {
-    try {
-      const tmpl = emailTemplates.appointmentBooked({ business, customer: name || 'Customer', when, phone, service: service || 'Service', email, channel })
-      await sendEmail(ownerEmail, tmpl.subject, tmpl.html)
-    } catch (err) {
-      console.error('[book] owner email failed:', err instanceof Error ? err.message : err)
-    }
-  }
-
-  return NextResponse.json({ success: true, appointment_id: appt.id })
+  return NextResponse.json({ success: true, appointment_id: result.appointmentId })
 }

@@ -527,7 +527,12 @@ normalised digits rather than an exact string (§24), or they will keep minting 
 
 ---
 
-## §26 — there is no owner-side "New appointment"
+## §26 — there is no owner-side "New appointment" — FIXED
+
+`POST /api/appointments`, session-scoped, beside `/book` rather than inside it, sharing the insert
+through lib/appointments/create.ts. One insert, two policies. The original entry follows.
+
+### The original entry
 
 The agenda header renders **New** disabled with a reason, deliberately, so the shape of the screen is
 visible. It is not wired because there is nothing to wire it to.
@@ -591,3 +596,24 @@ sends nothing.
 partner billing gate and the fail-safe shape; a cancellation notice is the same call with different
 words. The sentence goes back on the option the day it exists — the words and the behaviour ship
 together or not at all.
+
+
+---
+
+## §29 — a walk-in with no phone number cannot be stored
+
+`appointments.customer_phone` is **NOT NULL**. The owner's create form therefore requires a phone
+number, and so does the route's schema — not a design decision, a column constraint that the form is
+honestly reflecting rather than working around.
+
+It is a real gap. An owner booking a walk-in, a neighbour, or somebody whose number they will get on
+the day has nothing to type, and the appointment cannot exist.
+
+**Fix shape:** make the column nullable and require *one of* name or phone at the route, the way
+`createContact` already requires one of name/email/phone. The knock-on is small but real and must be
+checked before the migration, not after — the review cron, the confirmation SMS and
+`markLeadsBooked` all read `customer_phone`, and each needs to behave when it is absent rather than
+send to an empty string.
+
+Not this commit: it is a schema change with three readers behind it, and the form is usable without
+it for every appointment that has a number — which today is all three in the database.

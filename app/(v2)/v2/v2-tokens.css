@@ -2753,3 +2753,64 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-ag-panel { width: 420px; border-radius: 20px; }
   .v2 .v2-ag-grab { display: none; }
 }
+
+/* ── NEW APPOINTMENT — the owner's form, inside the shared sheet ─────────────────────────────────
+   Only what the contact form does not already provide: the picker, the two-up date/time, the offered
+   slot chips, the kind selector, and a checkbox that says what it will send. */
+
+.v2 .v2-ap-picked {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  border: 1px solid var(--v2-line); border-radius: 11px; background: var(--v2-quiet);
+  padding: 10px 12px; font-size: 14.5px; font-family: inherit; color: var(--v2-ink); cursor: pointer;
+}
+.v2 .v2-ap-picked i { font-style: normal; font-size: 12px; color: var(--v2-ink-42); }
+
+.v2 .v2-ap-hits {
+  border: 1px solid var(--v2-line); border-radius: 11px; overflow: hidden;
+  margin: -6px 0 12px; background: var(--v2-paper);
+}
+.v2 .v2-ap-hits button {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 9px 12px;
+  border: 0; border-top: 1px solid var(--v2-line); background: none; cursor: pointer;
+  font-family: inherit; text-align: left;
+}
+.v2 .v2-ap-hits button:first-child { border-top: 0; }
+.v2 .v2-ap-hits button:hover { background: var(--v2-hover); }
+.v2 .v2-ap-hits b { font-size: 13.5px; font-weight: 500; color: var(--v2-ink); }
+.v2 .v2-ap-hits span { font-size: 12px; color: var(--v2-ink-42); }
+
+.v2 .v2-ap-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* The day's free times, offered. Any time typed above is still accepted — the grid is what the
+   business offers strangers, not a rule about what the owner may do. */
+.v2 .v2-ap-slots { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 12px; }
+.v2 .v2-ap-slots button {
+  padding: 6px 11px; border-radius: 999px; border: 1px solid var(--v2-line);
+  background: var(--v2-paper); font-size: 12.5px; font-family: inherit; color: var(--v2-ink-70);
+  cursor: pointer;
+}
+.v2 .v2-ap-slots button:hover { color: var(--v2-ink); border-color: rgba(0, 0, 0, 0.14); }
+.v2 .v2-ap-slots button[data-on] { background: var(--v2-ink); border-color: transparent; color: #fff; }
+.v2 .v2-ap-slots .v2-ehint { margin: 0; }
+
+.v2 .v2-ap-kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.v2 .v2-ap-kinds button {
+  padding: 9px 4px; border-radius: 10px; border: 1px solid var(--v2-line);
+  background: var(--v2-paper); font-size: 12px; font-family: inherit; color: var(--v2-ink-70);
+  cursor: pointer;
+}
+.v2 .v2-ap-kinds button[data-on] { background: var(--v2-ink); border-color: transparent; color: #fff; }
+
+/* The one thing this form can send. Off, and saying exactly what would go out — an owner is often
+   recording something already agreed, and an unexpected confirmation cannot be taken back. */
+.v2 .v2-ap-check {
+  display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 2px;
+  padding: 11px 12px; border-radius: 12px; background: var(--v2-quiet); cursor: pointer;
+}
+.v2 .v2-ap-check input { width: 17px; height: 17px; flex: none; margin-top: 1px; accent-color: var(--v2-ink); }
+.v2 .v2-ap-check span { font-size: 13.5px; color: var(--v2-ink); }
+.v2 .v2-ap-check i { display: block; font-style: normal; font-size: 11.5px; color: var(--v2-ink-42); margin-top: 3px; }
+
+@media (max-width: 719.98px) {
+  .v2 .v2-ap-kinds { grid-template-columns: repeat(2, 1fr); }
+}
