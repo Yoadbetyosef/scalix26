@@ -93,6 +93,14 @@ describe('the screen', () => {
 })
 
 describe('WHAT HAPPENED is a card, not an invention', () => {
+  it('takes its heading with it when there is nothing to say', () => {
+    // An empty heading is worse than no heading: it says a thing exists and then fails to show it,
+    // which reads as a broken screen rather than an empty one. The label is INSIDE the condition.
+    const block = body.slice(body.indexOf('{str(conv.summary) && ('), body.indexOf("factGroup('CONTACT'"))
+    expect(block).toContain('WHAT HAPPENED')
+    expect(block.indexOf('WHAT HAPPENED')).toBeGreaterThan(block.indexOf('{str(conv.summary) && ('))
+  })
+
   it('renders only when something written exists', () => {
     expect(body).toContain('{str(conv.summary) && (')
   })
@@ -220,5 +228,45 @@ describe('desktop', () => {
     expect(wide).toContain('@media (min-width: 1100px)')
     const inside = wide.slice(wide.indexOf('@media (min-width: 1100px) {'))
     expect((inside.match(/\{/g) ?? []).length).toBe((inside.match(/\}/g) ?? []).length)
+  })
+})
+
+describe('nothing after the wide block cancels it', () => {
+  // A MEDIA QUERY ADDS NO SPECIFICITY. Three rules left behind by an earlier rewrite sat AFTER
+  // `@media (min-width: 1100px)` at the same (0,2,0) and won by position: `.v2-slotin` went to
+  // `display: contents`, `.v2-slotmsg` to `display: none`, and a desktop rendered the phone's
+  // stacked slot. Nothing was wrong inside the query — something after it was cancelling it.
+  const queryStart = css.indexOf('@media (min-width: 1100px)', css.indexOf('THE CONVERSATION, WIDE'))
+  const queryEnd = css.indexOf('\n}', queryStart)
+  const inside = css.slice(queryStart, queryEnd)
+  const after = css.slice(queryEnd)
+
+  /** Every selector a block declares rules for, normalised. Whole selectors, not the first class in
+   *  them: the fault was an IDENTICAL selector repeated later, and a more specific one that happens
+   *  to mention the same class is not the same thing. */
+  const selectorsIn = (block: string) =>
+    new Set(
+      [...block.matchAll(/(^|\n)\s*(\.v2 [^{}\n]+?)\s*\{/g)]
+        .map((m) => m[2].replace(/\s+/g, ' ').trim()),
+    )
+
+  it('re-declares none of the selectors the wide block sets', () => {
+    const set = selectorsIn(inside)
+    const later = selectorsIn(after)
+    const clashes = [...set].filter((c) => later.has(c))
+    expect(clashes).toEqual([])
+  })
+
+  it('and the slot keeps its own box at every width', () => {
+    // `display: contents` on the slot's inner element removes the box that carries grid-column,
+    // the 64px height and the row layout all at once.
+    expect(css).not.toContain('.v2-slotin { display: contents; }')
+  })
+
+  it('no rule survives for a class no component renders', () => {
+    // `.v2-chd-act` outlived the markup it was written for by two commits. Comments may name it —
+    // the one above this block explains what it broke — but no RULE may.
+    const code = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
+    expect(code).not.toContain('v2-chd-act')
   })
 })
