@@ -8,7 +8,9 @@ import { getModuleFlags } from '@/lib/admin/module-flags'
 // Extracted after the second copy rather than the fifth — the gate is the part that must not drift,
 // because a page that forgets it shows a tenant a module they do not have.
 
-export const PREVIEW = 'v2 preview'
+// Re-exported so every existing server-side caller is unchanged. The declaration moved to
+// ./preview.ts, which a client component can import — see the note there.
+export { PREVIEW } from './preview'
 
 export async function listPageContext(required?: string): Promise<{ tenantId: string; modules: string[] }> {
   const supabase = await createClient()

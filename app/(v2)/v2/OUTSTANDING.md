@@ -524,3 +524,52 @@ into this branch**. Do not write a second one. When that branch lands, the 409 f
 
 **The deeper fix, when merge is available:** the AI/webhook insert paths should find-or-create on
 normalised digits rather than an exact string (§24), or they will keep minting these.
+
+---
+
+## §26 — there is no owner-side "New appointment"
+
+The agenda header renders **New** disabled with a reason, deliberately, so the shape of the screen is
+visible. It is not wired because there is nothing to wire it to.
+
+`/api/appointments/book` is **public** and keyed by `lead_intake_token` — it is the AI's endpoint,
+reachable without a session by design (it is in PUBLIC_ROUTES). An owner-side create cannot reuse it:
+it would mean either handing the browser a lead token, or a second route.
+
+**Fix shape:** a session-scoped `POST /api/appointments` taking `requireActiveBusinessContext()`,
+sharing the slot validation, the 23505 double-booking guard, the calendar mirror and the
+notifications with the existing route rather than restating them — most of that route's body is
+already the shared part, and only the tenant resolution differs.
+
+Its own feature, not a reskin. Named here so the disabled button is understood as pending rather than
+forgotten.
+
+---
+
+## §27 — past and cancelled appointments no longer have a screen
+
+The agenda is today FORWARD, which is what an agenda is and what the reference draws — two day
+groups, both in the future. The list this replaced had **Past** and **Cancelled** filters, so this is
+a real loss, recorded rather than glossed.
+
+Nothing is deleted and nothing is unreachable by other means: the rows are untouched, `/dashboard`'s
+appointments tab still lists them, and Impact still counts them.
+
+**Fix shape:** most likely NOT a filter chip on the agenda — an agenda that can be pointed backwards
+stops being an agenda. More likely earlier days under their own heading below the upcoming ones,
+using the same group form, loaded on demand. Worth deciding when somebody actually needs to look
+something up, rather than guessing now.
+
+---
+
+## §28 — nothing tells a customer their appointment was cancelled
+
+The move sheet's Cancel is wired: it PATCHes `status: 'cancelled'` and the slot frees up. The
+reference's option says "They'll be told, and the slot frees up" — **the screen deliberately does not
+say that half**, because nothing notifies the customer. Booking sends an SMS and an email; cancelling
+sends nothing.
+
+**Fix shape:** the confirmation path in `/api/appointments/book` already has the templates, the
+partner billing gate and the fail-safe shape; a cancellation notice is the same call with different
+words. The sentence goes back on the option the day it exists — the words and the behaviour ship
+together or not at all.

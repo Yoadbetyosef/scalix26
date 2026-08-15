@@ -1,0 +1,206 @@
+import { createAdminClient } from '@/lib/supabase/server'
+import { getBusinessTimezone } from '@/lib/timezone'
+import { nowInTimezone, formatTime12, slotMinutes } from '@/lib/appointments'
+import { primaryAgent, agentByPersona } from '@/lib/agents/primary'
+import { nameOf } from '@/lib/persona'
+
+// THE AGENDA — docs/miles/appointments-agenda-v2.html, grouped by day.
+//
+// ── WHAT IS SHOWN ───────────────────────────────────────────────────────────────────────────────
+//
+// Today forward, cancelled excluded. That is what an agenda IS, and it is what the reference draws:
+// two day groups, both in the future. Past appointments are history and have no home on this screen —
+// recorded in OUTSTANDING §27, because the list this replaced had Past and Cancelled filters and that
+// is a real loss, not an omission.
+//
+// ── THE KIND IS READ, NEVER INFERRED ────────────────────────────────────────────────────────────
+//
+// `meeting_kind` comes off the column. Nothing here looks at `service_type` — one live row is called
+// "Google Meet" and is a completed job somebody drove to, which is exactly why matching free text is
+// forbidden. A row whose kind has never been set reads `on_site`, the column default, and that is
+// true of every appointment booked before the column existed.
+//
+// ── MISSING SOMETHING ───────────────────────────────────────────────────────────────────────────
+//
+// An on-site job with no address, or a video call with no link, is a real state and the screen's
+// whole reason for being: amber spine, the gap named, and the fix promoted to the first action. It is
+// not an error and the database deliberately permits it — see the migration.
+
+export type MeetingKind = 'on_site' | 'zoom' | 'google_meet' | 'phone'
+export type Missing = 'address' | 'link' | null
+
+export interface AgendaRow {
+  id: string
+  /** "9:00" — the phone's rail. */
+  time: string
+  /** "AM" — appended on a wide screen, where there is room for it. */
+  meridiem: string
+  /** "1H" phone · "1 HR" desktop. Both rendered; CSS shows one. */
+  durationShort: string
+  durationLong: string
+  who: string
+  service: string | null
+  kind: MeetingKind
+  /** The line under the service: an address, a link, or a number. */
+  where: string | null
+  joinUrl: string | null
+  phone: string | null
+  missing: Missing
+  /** Which employee took the booking — from the CHANNEL it arrived on, which is how routing works. */
+  by: string
+  byPersona: 'rudi' | 'miles' | 'you'
+  /** Now is inside this appointment's own window. */
+  isNow: boolean
+}
+
+export interface AgendaDay {
+  key: string
+  /** "TODAY · FRI 15 AUG" */
+  label: string
+  count: number
+  rows: AgendaRow[]
+}
+
+export interface Agenda {
+  days: AgendaDay[]
+  todayCount: number
+  missingCount: number
+}
+
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+/** "FRI 15 AUG" from a plain date column, read as a date and never through a timezone it does not have. */
+function dayStamp(dateIso: string): string {
+  const d = new Date(`${dateIso}T12:00:00Z`)
+  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+/** 60 → 1H / 1 HR · 45 → 45M / 45 MIN. */
+function durationLabels(minutes: number): { short: string; long: string } {
+  if (minutes % 60 === 0) {
+    const h = minutes / 60
+    return { short: `${h}H`, long: `${h} HR` }
+  }
+  return { short: `${minutes}M`, long: `${minutes} MIN` }
+}
+
+interface Row {
+  id: string
+  slot_date: string
+  slot_time: string
+  customer_name: string | null
+  customer_phone: string | null
+  service_type: string | null
+  status: string
+  channel: string | null
+  meeting_kind: string | null
+  join_url: string | null
+  address: string | null
+  duration_minutes: number | null
+}
+
+const KINDS: MeetingKind[] = ['on_site', 'zoom', 'google_meet', 'phone']
+const kindOf = (v: string | null): MeetingKind => (KINDS.includes(v as MeetingKind) ? (v as MeetingKind) : 'on_site')
+
+/** The line under the service, and whether the thing that line needs is absent. */
+function placeOf(kind: MeetingKind, r: Row): { where: string | null; missing: Missing } {
+  if (kind === 'phone') return { where: r.customer_phone ? `Phone call · ${r.customer_phone}` : null, missing: null }
+  if (kind === 'zoom' || kind === 'google_meet') {
+    const label = kind === 'zoom' ? 'Zoom' : 'Google Meet'
+    return r.join_url
+      ? { where: `${label} · ${r.join_url.replace(/^https?:\/\//, '')}`, missing: null }
+      : { where: null, missing: 'link' }
+  }
+  return r.address ? { where: r.address, missing: null } : { where: null, missing: 'address' }
+}
+
+export async function readAgenda(tenantId: string): Promise<Agenda> {
+  const db = createAdminClient()
+  const { data: tenant } = await db
+    .from('tenants').select('timezone, default_appointment_minutes').eq('id', tenantId).maybeSingle()
+  const tz = await getBusinessTimezone(tenantId, tenant?.timezone ?? null)
+  const now = nowInTimezone(tz)
+  // Nothing more specific was agreed, so the rail falls back to this rather than to a guess.
+  const fallback = Number(tenant?.default_appointment_minutes) || 60
+
+  const [{ data }, phoneAgent, textAgent] = await Promise.all([
+    db
+      .from('appointments')
+      .select('id, slot_date, slot_time, customer_name, customer_phone, service_type, status, channel, meeting_kind, join_url, address, duration_minutes')
+      .eq('tenant_id', tenantId)
+      .gte('slot_date', now.dateIso)
+      .neq('status', 'cancelled')
+      .order('slot_date', { ascending: true })
+      .order('slot_time', { ascending: true }),
+    primaryAgent<{ name: string | null; persona: string | null }>(db, tenantId, 'name, persona'),
+    agentByPersona<{ name: string | null; persona: string | null }>(db, tenantId, 'miles', 'name, persona'),
+  ])
+
+  const rows = (data ?? []) as unknown as Row[]
+  const days = new Map<string, AgendaDay>()
+  let missingCount = 0
+
+  for (const r of rows) {
+    const kind = kindOf(r.meeting_kind)
+    const { where, missing } = placeOf(kind, r)
+    if (missing) missingCount++
+
+    const minutes = r.duration_minutes && r.duration_minutes > 0 ? r.duration_minutes : fallback
+    const { short, long } = durationLabels(minutes)
+    const start = slotMinutes(r.slot_time)
+    const twelve = formatTime12(String(r.slot_time))          // "9:00 AM"
+    const [clock, meridiem] = twelve.split(' ')
+
+    // WHO TOOK IT, from the channel it arrived on — which is how inbound routing actually works: the
+    // phone employee answers calls, the messages employee answers everything typed. Not a guess about
+    // the row; a statement about the door it came through. A booking made BY the owner would read
+    // YOU, and nothing can produce one yet — there is no owner-side create (OUTSTANDING §26).
+    const typed = r.channel === 'sms' || r.channel === 'instagram' || r.channel === 'facebook' || r.channel === 'email'
+    const agent = typed ? (textAgent ?? phoneAgent) : phoneAgent
+    const persona = ((agent as { persona?: string | null } | null)?.persona === 'miles' ? 'miles' : 'rudi') as 'rudi' | 'miles'
+
+    const day = days.get(r.slot_date) ?? {
+      key: r.slot_date,
+      label: r.slot_date === now.dateIso
+        ? `TODAY · ${dayStamp(r.slot_date)}`
+        : `${dayStamp(r.slot_date)}`,
+      count: 0,
+      rows: [],
+    }
+    day.rows.push({
+      id: r.id,
+      time: clock ?? twelve,
+      meridiem: meridiem ?? '',
+      durationShort: short,
+      durationLong: long,
+      who: r.customer_name?.trim() || r.customer_phone?.trim() || 'Someone',
+      service: r.service_type?.trim() || null,
+      kind,
+      where,
+      joinUrl: r.join_url,
+      phone: r.customer_phone,
+      missing,
+      by: agent ? nameOf(agent) : 'Your AI',
+      byPersona: persona,
+      // Inside its own window, measured in the business timezone the slot was booked in.
+      isNow: r.slot_date === now.dateIso && now.minutes >= start && now.minutes < start + minutes,
+    })
+    day.count = day.rows.length
+    days.set(r.slot_date, day)
+  }
+
+  // TOMORROW earns its own word; every other day is just its stamp.
+  const tomorrow = new Date(`${now.dateIso}T12:00:00Z`)
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+  const tomorrowIso = tomorrow.toISOString().slice(0, 10)
+  const out = [...days.values()].map((d) =>
+    d.key === tomorrowIso ? { ...d, label: `TOMORROW · ${dayStamp(d.key)}` } : d,
+  )
+
+  return {
+    days: out,
+    todayCount: days.get(now.dateIso)?.count ?? 0,
+    missingCount,
+  }
+}

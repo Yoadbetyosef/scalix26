@@ -1,25 +1,37 @@
 import type { RudiSegment } from '../rudi-line'
 
-export interface AppointmentsLineInput {
-  today: number
-  later: number
-  /** The next job on the books, whether it is today or after. */
-  next: { primary: string; trailing?: string | null } | null
+// The opening line, in the caption's own segment form so the accent renders as an element.
+//
+// Same rule as every other opening line in /v2: every clause is a figure that exists, a zero clause
+// is omitted rather than padded, and the accent is the CONCLUSION — the one thing worth acting on.
+// The reference's own line is "4 booked today. One is missing an address."
+
+export interface AgendaLineInput {
+  todayCount: number
+  laterCount: number
+  missingCount: number
 }
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
 
-// The accent names the next job rather than counting them: a count says there is work, a name says
-// which. When the book is empty it says so instead of finding something.
-export function appointmentsLine({ today, later, next }: AppointmentsLineInput): RudiSegment[] {
-  const segments: RudiSegment[] = []
-  if (today > 0) segments.push({ text: `${today} on the books today. ` })
-  else if (later > 0) segments.push({ text: `Nothing today. ${later} ${plural(later, 'job', 'jobs')} coming up. ` })
+export function agendaLine({ todayCount, laterCount, missingCount }: AgendaLineInput): RudiSegment[] {
+  const segs: RudiSegment[] = []
 
-  if (!next) {
-    segments.push({ text: today + later === 0 ? 'Nothing booked.' : 'Nothing else needs you.', accent: true })
-    return segments
+  if (todayCount > 0) segs.push({ text: `${todayCount} booked today. ` })
+  else if (laterCount > 0) segs.push({ text: `Nothing today. ${laterCount} coming up. ` })
+
+  if (missingCount > 0) {
+    // The accent, because it is the only thing on this screen that needs a person.
+    segs.push({
+      text: missingCount === 1
+        ? 'One is missing something.'
+        : `${missingCount} are missing something.`,
+      accent: true,
+    })
+    return segs
   }
-  segments.push({ text: `Next is ${next.primary}${next.trailing ? `, ${next.trailing}` : ''}.`, accent: true })
-  return segments
+
+  if (todayCount === 0 && laterCount === 0) return [{ text: 'Nothing booked yet.', accent: true }]
+  segs.push({ text: `${plural(todayCount + laterCount, 'It is', 'They are')} all set.`, accent: true })
+  return segs
 }
