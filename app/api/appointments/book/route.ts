@@ -9,6 +9,7 @@ import { getCalendarAccess } from '@/lib/calendar/store'
 import { createCalendarEvent } from '@/lib/calendar/google'
 import { createMicrosoftCalendarEvent } from '@/lib/calendar/microsoft'
 import { markLeadsBooked } from '@/lib/leads/booked'
+import { writeCapturedName, looksLikeCapturedName } from '@/lib/contacts/ai-name'
 
 function friendlyDate(dateIso: string): string {
   return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString('en-US', {
@@ -68,9 +69,10 @@ export async function POST(req: NextRequest) {
   const { data: c } = await supabase.from('contacts').select('id').eq('tenant_id', tenant.id).eq('phone', phone).maybeSingle()
   if (c) {
     contactId = c.id
-    if (name) await supabase.from('contacts').update({ name }).eq('id', contactId).is('name', null)
+    // The booking tool hands over whatever the AI heard. This had NO filter at all.
+    await writeCapturedName(supabase, contactId, name)
   } else {
-    const { data: created } = await supabase.from('contacts').insert({ tenant_id: tenant.id, phone, name, channel: 'voice' }).select('id').single()
+    const { data: created } = await supabase.from('contacts').insert({ tenant_id: tenant.id, phone, name: looksLikeCapturedName(name) ? name : null, channel: 'voice' }).select('id').single()
     contactId = created?.id ?? null
   }
 

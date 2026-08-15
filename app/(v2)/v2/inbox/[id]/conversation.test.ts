@@ -316,7 +316,23 @@ describe('the conversation owns its own rules and nothing else’s', () => {
   // prose that explains this fault (which quotes the rule that caused it, braces and all) gets read
   // as CSS. The test would then fail on its own comment.
   const marker = css.indexOf('THE CONVERSATION — docs/miles/conversation-FINAL')
-  const section = css.slice(css.lastIndexOf('/*', marker))
+  const start = css.lastIndexOf('/*', marker)
+  // BOUNDED AT THE NEXT SECTION BANNER, not at end-of-file. Slicing to the end only worked while the
+  // conversation happened to be the last section, and the first section appended after it failed this
+  // rule for rules that are not the conversation's — which is the test being wrong, not the CSS.
+  // The conversation owns TWO banners — the phone block and "THE CONVERSATION, WIDE" — so the bound
+  // is the next banner that is NOT one of its own. Stopping at the first banner silently excluded the
+  // whole wide block, and the guard passed while the rule it exists to catch was sitting inside it.
+  const nextBanner = (() => {
+    let at = marker
+    for (;;) {
+      at = css.indexOf('\n/* ═', at + 1)
+      if (at < 0) return css.length
+      const title = css.slice(at, at + 400).split('\n')[2] ?? ''
+      if (!title.trim().startsWith('THE CONVERSATION')) return at
+    }
+  })()
+  const section = css.slice(start, nextBanner)
 
   it('declares something — otherwise the rest of this block proves nothing', () => {
     expect(selectorsOf(section).length).toBeGreaterThan(60)

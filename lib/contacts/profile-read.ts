@@ -18,6 +18,10 @@ export interface ContactRecord {
   id: string
   name: string | null; email: string | null; phone: string | null; address: string | null
   channel: string | null; language: string | null; notes: string | null
+  /** Declared because the edit sheet writes it. The index signature below would have accepted
+   *  `contact.currency` silently and returned undefined forever — the class of bug named in
+   *  lib/inbox/conversation-read.ts. tsc caught it here only because it is NOT declared. */
+  currency: string | null
   total_conversations: number | null; last_interaction: string | null
   created_at: string; updated_at: string | null
   [key: string]: unknown

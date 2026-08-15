@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import Link from 'next/link'
 import type { RudiSegment } from './rudi-line'
 
@@ -19,8 +19,16 @@ import type { RudiSegment } from './rudi-line'
 export interface DetailAction {
   label: string
   tone?: 'primary' | 'quiet'
-  /** Present = rendered disabled with this as the title. Every v2 action is, for now. */
+  /** Present = rendered disabled with this as the title. Most v2 actions still are. */
   disabledReason?: string
+  /**
+   * A client component rendered INSTEAD of the plain button.
+   *
+   * A FIELD, not a branch — the rule at the top of this file. This page is a server component, so it
+   * cannot take an onClick; an action that actually does something has to arrive already built. The
+   * caller styles its own control with .v2-ract so the row still reads as one set.
+   */
+  node?: ReactNode
 }
 
 export interface DetailChip {
@@ -95,16 +103,20 @@ export function DetailPage({ eyebrow, title, chips, line, actions, sections, bac
         {actions && actions.length > 0 && (
           <div className="v2-dacts">
             {actions.map((a) => (
-              <button
-                key={a.label}
-                type="button"
-                className="v2-ract"
-                data-tone={a.tone ?? 'quiet'}
-                disabled={!!a.disabledReason}
-                title={a.disabledReason}
-              >
-                {a.label}
-              </button>
+              a.node
+                ? <Fragment key={a.label}>{a.node}</Fragment>
+                : (
+                  <button
+                    key={a.label}
+                    type="button"
+                    className="v2-ract"
+                    data-tone={a.tone ?? 'quiet'}
+                    disabled={!!a.disabledReason}
+                    title={a.disabledReason}
+                  >
+                    {a.label}
+                  </button>
+                )
             ))}
           </div>
         )}

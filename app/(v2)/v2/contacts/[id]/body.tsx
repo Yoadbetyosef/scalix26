@@ -3,6 +3,7 @@ import { DetailPage, type DetailFact, type DetailRow } from '../../detail'
 import { relativeTime, PREVIEW } from '../../list-page'
 import { channelKey, CHANNEL_LABEL } from '../../channels'
 import { contactProfileLine } from './line'
+import { EditContact } from './edit'
 
 // One contact, reskinned. readContactProfile is the /contacts/[id] page's own read, extracted
 // verbatim — same queries, same columns, same ordering. No new query. READ-ONLY.
@@ -61,7 +62,20 @@ export async function ContactBody({ tenantId, id }: { tenantId: string; id: stri
       actions={[
         ...(str(contact.phone) ? [{ label: 'Call', tone: 'primary' as const, disabledReason: PREVIEW }] : []),
         ...(str(contact.email) ? [{ label: 'Email', disabledReason: PREVIEW }] : []),
-        { label: 'Edit', disabledReason: PREVIEW },
+        // The one action on this screen that does something. `node` rather than a handler, because
+        // DetailPage is a server component and cannot take an onClick — see DetailAction.
+        {
+          label: 'Edit',
+          node: (
+            <EditContact
+              id={id}
+              initial={{
+                name: contact.name ?? '', phone: contact.phone ?? '', email: contact.email ?? '',
+                address: contact.address ?? '', currency: contact.currency ?? '', notes: contact.notes ?? '',
+              }}
+            />
+          ),
+        },
       ]}
       sections={[
         { title: 'Details', facts },

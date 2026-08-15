@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { createContact } from '@/lib/contacts/store'
+import { contactFieldsSchema } from '@/lib/contacts/schema'
 
-const schema = z.object({
-  name: z.string().max(300).nullable().optional(),
-  // Blank is allowed (the form may only have a name); a non-empty value must still look like an address.
-  email: z.union([z.string().email().max(320), z.literal('')]).nullable().optional(),
-  phone: z.string().max(50).nullable().optional(),
-  address: z.string().max(1000).nullable().optional(),
-  currency: z.string().max(8).nullable().optional(),
-  notes: z.string().max(5000).nullable().optional(),
-})
+// The same six fields the edit route writes, from one schema so the two cannot drift.
+const schema = contactFieldsSchema
 
 export async function POST(req: NextRequest) {
   const c = await requireActiveBusinessContext()
