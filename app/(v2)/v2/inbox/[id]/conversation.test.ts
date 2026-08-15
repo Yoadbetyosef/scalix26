@@ -72,7 +72,7 @@ describe('the screen', () => {
     expect(body).toContain('className="v2-cstrip"')
     expect(body).toContain("{f.v ?? '—'}")
     expect(conv).toMatch(/\.v2-civ\[data-empty\] \{ color: var\(--v2-ink-24\)/)
-    expect(wide).toContain('.v2 .v2-cstrip { display: none; }')
+    expect(wide).toContain('.v2 .v2-conv .v2-cstrip { display: none; }')
   })
 
   it('the channel word wears the channel’s own hue, from the one table', () => {
@@ -202,8 +202,8 @@ describe('desktop', () => {
     expect(body).toMatch(/className="v2-sec" disabled title=\{PREVIEW\}>Resolve</)
     expect(body).toMatch(/className="v2-sec" disabled title=\{PREVIEW\}>Close</)
     // A phone header has no room for them, and they are not the primary thing anywhere.
-    expect(css).toMatch(/\.v2-sec \{\s*display: none/)
-    expect(wide).toContain('.v2 .v2-sec { display: block; }')
+    expect(css).toMatch(/\.v2-conv \.v2-sec \{\s*display: none/)
+    expect(wide).toContain('.v2 .v2-conv .v2-sec { display: block; }')
   })
 
   it('one component for both widths, not a desktop copy', () => {
@@ -211,7 +211,7 @@ describe('desktop', () => {
     // places to change the wording and two `live` states to keep in step.
     expect(takeover).toContain('className="v2-slotmsg"')
     expect(takeover).toContain('className="v2-tosub"')
-    expect(css).toContain('.v2 .v2-slotmsg { display: none; }')
+    expect(css).toContain('.v2 .v2-conv .v2-slotmsg { display: none; }')
   })
 
   it('the sidebar blocks are the same nodes the phone stacks', () => {
@@ -268,5 +268,81 @@ describe('nothing after the wide block cancels it', () => {
     // the one above this block explains what it broke — but no RULE may.
     const code = css.replace(/\/\*[\s\S]*?\*\//g, ' ')
     expect(code).not.toContain('v2-chd-act')
+  })
+})
+
+// ── THIS SECTION'S RULES MAY NOT REACH ANOTHER SCREEN ────────────────────────────────────────────
+//
+// `.v2-side` is this screen's sidebar. It is ALSO the home screen's right column — the third cell of
+// .v2-app's `rail | 1fr | side` shell grid, in home-client.tsx and loading.tsx, and there first. One
+// rule in the wide block, written `.v2 .v2-side { grid-column: 2 }` and scoped to nothing, moved that
+// column out of its own 312px cell and into the CENTRE one, which is the transparent cell Rudi's
+// portrait shows through. Above 1100px the home screen's cards and figures rendered on top of her
+// face, scrolling over her, offset left because column three was now empty — and, `.v2-side` also
+// carrying `pointer-events: auto`, swallowing every click meant for the Talk button beneath.
+//
+// Nothing on the home screen had changed. A rule written for this screen reached it.
+//
+// These class names are short and generic — .v2-f, .v2-sl, .v2-cs, .v2-hn — so the fix is the scope
+// rather than the rename: `.v2 .v2-conv .v2-x` cannot match anything outside this screen, whatever
+// anybody calls a class later. This asserts the scope on EVERY rule, not on the one that broke.
+
+/** Every selector a block declares rules for, whole and comma-split. A brace scan rather than a
+ *  regex: the section nests a media query, and declarations must not be mistaken for headers. */
+const selectorsOf = (block: string): string[] => {
+  const code = block.replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const out: string[] = []
+  let buf = ''
+  for (const ch of code) {
+    if (ch === '{') {
+      const head = buf.replace(/\s+/g, ' ').trim()
+      if (head && !head.startsWith('@')) out.push(...head.split(',').map((s) => s.trim()).filter(Boolean))
+      buf = ''
+    } else if (ch === '}') {
+      buf = ''
+    } else {
+      buf += ch
+    }
+  }
+  return out
+}
+
+describe('the conversation owns its own rules and nothing else’s', () => {
+  // From the section's COMMENT OPENER, not from its title. The title sits inside the banner comment,
+  // so slicing at it leaves an unterminated `/*` — the stripper then cannot match the block, and the
+  // prose that explains this fault (which quotes the rule that caused it, braces and all) gets read
+  // as CSS. The test would then fail on its own comment.
+  const marker = css.indexOf('THE CONVERSATION — docs/miles/conversation-FINAL')
+  const section = css.slice(css.lastIndexOf('/*', marker))
+
+  it('declares something — otherwise the rest of this block proves nothing', () => {
+    expect(selectorsOf(section).length).toBeGreaterThan(60)
+  })
+
+  it('scopes every rule under .v2-conv, so none of them can reach another screen', () => {
+    const unscoped = selectorsOf(section).filter(
+      (s) => s !== '.v2 .v2-conv' && !s.startsWith('.v2 .v2-conv '),
+    )
+    expect(unscoped).toEqual([])
+  })
+
+  it('leaves the home screen its right column', () => {
+    const home = read('../../home-client.tsx')
+    const loading = read('../../loading.tsx')
+    // Both render the same class this screen's sidebar uses. That is the collision, and it is
+    // allowed to exist — what is not allowed is a rule here that MATCHES it.
+    expect(home).toContain('className="v2-side"')
+    expect(loading).toContain('className="v2-side"')
+
+    const reaching = selectorsOf(section).filter(
+      (s) => /(^|\s)\.v2-side\b/.test(s) && !s.startsWith('.v2 .v2-conv '),
+    )
+    expect(reaching).toEqual([])
+  })
+
+  it('and the home shell still places that column third', () => {
+    // The other half of the same fact: the rule stopped reaching it, and the cell it belongs in is
+    // still there to hold it.
+    expect(css).toContain('grid-template-columns: var(--v2-rail-w) 1fr var(--v2-side-w);')
   })
 })
