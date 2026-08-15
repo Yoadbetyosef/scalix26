@@ -256,7 +256,7 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
           <Cursor label={rudiCursor(state, minimised)} active={!typing && amy.mode === 'idle'} />
           <Palette
             commands={[
-              ...['Leads', 'Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
+              ...['Inbox', 'Appointments', 'Contacts'].map((label, n) => ({ label, hint: String(n + 1) })),
               ...visibleGroups(modules).flatMap((g) => g.items.map((x) => ({ label: x.label, hint: g.label }))),
             ]}
             open={palette.open}
@@ -270,9 +270,8 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
             // being ten destinations short and carrying one that was not a destination.
             primary={allowed(PRIMARY, modules).map((d) => ({
               ...d,
-              count: d.label === 'Leads' ? count((x) => x.railCounts.leads)
-                : d.label === 'Inbox' ? count((x) => x.railCounts.inbox)
-                  : d.label === 'Appointments' ? count((x) => x.railCounts.appointments) : undefined,
+              count: d.label === 'Inbox' ? count((x) => x.railCounts.inbox)
+                : d.label === 'Appointments' ? count((x) => x.railCounts.appointments) : undefined,
             }))}
             groups={visibleGroups(modules).map((g) => (g.id !== 'g1' ? g : {
               ...g,

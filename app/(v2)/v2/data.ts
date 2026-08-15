@@ -29,7 +29,7 @@ export interface HomeData {
   line: RudiSegment[]
   /** The exact briefing /dashboard hands AskAmy. Same helper, same inputs, no extra query. */
   briefing: AmyBriefing
-  railCounts: { leads: number | null; inbox: number | null; appointments: number | null }
+  railCounts: { inbox: number | null; appointments: number | null }
   aiOn: boolean
   rightNow: NowItem[]
   needsYou: NeedsItem[]
@@ -133,10 +133,6 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
       waitingOnYou: waiting,
     },
     railCounts: {
-      // No leads badge. It showed activeLeads, which counts answered arrivals as unanswered; the row
-      // itself goes with the screen. A badge is a claim that something needs you, and this one was
-      // not true.
-      leads: null,
       // WAS `totalConversations` — which, despite the name, counts INSTAGRAM AND FACEBOOK
       // conversations in the last seven days and nothing else. It computed to 0 on a tenant with 77
       // conversations, so the inbox badge was hidden entirely. A nav badge answers "how many need
@@ -154,7 +150,6 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
     // Week pane where figures belong and stopped pretending to be somewhere you could go.
     tiles: allowed(PRIMARY, modules).map((d) => {
       const n = {
-        Leads: { value: null, sub: `${dash.stats.leads} total` },
         Inbox: { value: waiting || null, sub: waiting ? 'waiting on you' : 'nothing waiting' },
         Appointments: { value: todaysJobs.length || null, sub: 'today' },
         Contacts: { value: null, sub: 'address book' },

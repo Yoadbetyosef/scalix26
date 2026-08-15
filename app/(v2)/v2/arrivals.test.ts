@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { rudiLine } from './rudi-line'
 import { waitingCount } from '@/lib/inbox/arrivals'
 
@@ -90,7 +90,10 @@ describe('nothing on the home screen reports handled work as outstanding', () =>
   })
 
   it('the leads badge is gone rather than showing a number that was not true', () => {
-    expect(data).toMatch(/leads: null,/)
+    // A badge is a claim that something needs you, and activeLeads was not that. It is not repointed
+    // at another figure — the row it sat on has been removed too.
+    expect(data).not.toMatch(/leads:/)
+    expect(strip(read('./data.ts'))).not.toContain('activeLeads')
   })
 
   it('the inbox badge counts the inbox', () => {
@@ -169,5 +172,32 @@ describe('what the leads screen carried, on the thread it was about', () => {
   it('it is operator-safe, like every other write on this screen', () => {
     expect(route).toContain('requireActiveBusinessContext()')
     expect(route).toContain("conv.tenant_id !== ctx.tenantId")
+  })
+})
+
+describe('the leads screen is gone, and the table is not', () => {
+  it('no route, no nav row, no badge', () => {
+    expect(existsSync(new URL('./leads/page.tsx', import.meta.url))).toBe(false)
+    const nav = strip(read('./nav.ts'))
+    expect(nav).not.toContain("'/v2/leads'")
+    expect(nav).not.toMatch(/label: 'Leads'/)
+    expect(data).not.toContain('railCounts.leads')
+    expect(strip(read('./home-client.tsx'))).not.toContain("d.label === 'Leads'")
+  })
+
+  it('the table itself is untouched — fifteen consumers read it', () => {
+    // The screen was the only thing removed. Intake, Speed-to-Lead, the drip anchor, Impact's
+    // response clock, the Brain, Amy and the rest all read `leads` and none of them read the screen.
+    for (const f of ['../../../lib/leads/speed-to-lead.ts', '../../../lib/dashboard/impact.ts', '../../../lib/amy/sources/leads.ts']) {
+      expect(read(f)).toMatch(/from\('leads'\)/)
+    }
+    expect(existsSync(new URL('../../../lib/leads/speed-to-lead.ts', import.meta.url))).toBe(true)
+  })
+
+  it('and what it carried is still reachable', () => {
+    const body = strip(read('./inbox/[id]/body.tsx'))
+    expect(body).toContain("k: 'Came from'")
+    expect(body).toContain('StopFollowUps')
+    expect(strip(read('./inbox/groups.tsx'))).toContain('row.isFirst')
   })
 })

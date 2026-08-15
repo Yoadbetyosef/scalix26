@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { markLeadsBooked, OPEN_FOR_BOOKING } from './booked'
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const bookRoute = read('../../app/api/appointments/book/route.ts')
 const table = read('../../components/dashboard/leads-table.tsx')
 const patchRoute = read('../../app/api/leads/[id]/route.ts')
-const v2Leads = read('../../app/(v2)/v2/leads/page.tsx')
 
 function fakeDb(leads: { id: string; phone: string | null; contact_id: string | null }[]) {
   const calls = { table: [] as string[], selectFilters: {} as Record<string, unknown>, updated: null as unknown, updatedIds: [] as string[] }
@@ -73,10 +72,11 @@ describe('nothing is left for a human to remember', () => {
     expect(bookRoute.indexOf("from('appointments').insert(")).toBeLessThan(bookRoute.indexOf('markLeadsBooked(supabase'))
   })
 
-  it('the button is gone from both screens', () => {
+  it('the button is gone', () => {
     expect(table).not.toContain("updateStatus(e, lead.id, 'booked')")
     expect(table).not.toMatch(/>\s*Mark as Booked/)
-    expect(v2Leads).not.toContain("label: 'Mark as Booked'")
+    // The /v2 screen that carried the other copy has since been removed entirely — see nav.ts.
+    expect(existsSync(new URL('../../app/(v2)/v2/leads/page.tsx', import.meta.url))).toBe(false)
   })
 
   it('Dismiss and Restore stay — those are judgements, not facts', () => {

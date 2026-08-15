@@ -401,3 +401,37 @@ second one at all. Not folded into the brake because that commit is about ending
 answered, and this is about not starting a duplicate one. Deciding WHICH — supersede or skip — needs
 a view on whether a returning customer should restart the follow-up clock, and that is a product
 question rather than a defect.
+
+---
+
+## §22 — /v2/leads is gone; here is what it was and where each half went
+
+Recorded because "why is there no leads screen" is a question somebody will ask, and the answer is
+not "we forgot".
+
+It listed one row per ARRIVAL: on the live table, twelve rows for four people, eleven of them
+dismissed, one visible under "All". It answered *who arrived and from where*, which is not the
+question an owner opens the product asking — and it could not answer *was anybody looked after*,
+because its two live states were `new` and `contacted` and both mean "we sent something". `new` was
+never even occupied: Speed-to-Lead moves a lead to `contacted` within seconds of creating it.
+
+Every lead already manufactures an inbox thread, so the inbox is a strict superset in coverage and
+answers the handled question properly, per thread, with the text quoted.
+
+| what it carried | where it is now |
+|---|---|
+| `source` | conversation sidebar, "Came from", beside Channel |
+| whether this person is NEW | the `new` chip on the inbox row — first conversation for that contact |
+| Dismiss | "Stop follow-ups" on the conversation, named for what it does |
+| Mark as Booked | deleted; derived from a confirmed appointment |
+| `responded_at` | unchanged, in the table, feeding Impact |
+| the counts | the home screen, from the inbox's own grouping |
+
+**The `leads` TABLE is untouched and must stay that way.** Fifteen consumers read it — intake,
+Speed-to-Lead, the drip anchor, Impact's response clock, the Brain, the learning harvest, the
+playbook, the opportunity detector, customer recognition, Amy, Command Center, Partner OS — and none
+of them ever read the screen. Removing the screen cost none of them anything.
+
+**v1 still has its Leads tab** at /dashboard?tab=leads, and that is deliberate: it is where Dismiss
+and Restore still live for anyone not on /v2. When v1 goes, Restore needs a home — it is the only
+control of the four with nowhere else to be.

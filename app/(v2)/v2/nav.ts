@@ -33,9 +33,19 @@ export interface Group {
   items: Dest[]
 }
 
-/** The four primary destinations. These are the ones that carry a count. */
+/** The primary destinations. These are the ones that carry a count.
+ *
+ *  LEADS IS NOT ONE OF THEM ANY MORE. That screen listed one row per ARRIVAL — twelve rows for four
+ *  people on the live table, eleven of them dismissed, one visible under "All" — and it answered
+ *  "who arrived and from where", which is not the question an owner opens the product asking. It
+ *  could not say whether anybody had been looked after: its two live states were `new` and
+ *  `contacted`, and both mean "we sent something".
+ *
+ *  Every lead already manufactures an inbox thread, so the inbox is a strict superset in coverage
+ *  and answers the handled question properly, per thread, with the text quoted. What the screen
+ *  uniquely carried moved onto the thread: `source` into the sidebar, "new" onto the row, and
+ *  Dismiss into "Stop follow-ups". The leads TABLE is untouched — fifteen consumers read it. */
 export const PRIMARY: Dest[] = [
-  { label: 'Leads', href: '/v2/leads', module: 'pipeline' },
   // One inbox, three groups, every channel — and Miles's panel at the top of it. There was briefly a
   // second row here for a separate Messages screen; two inboxes is one more than a person has.
   { label: 'Inbox', href: '/v2/inbox', module: 'inbox' },
