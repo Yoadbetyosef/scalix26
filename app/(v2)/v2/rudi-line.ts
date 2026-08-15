@@ -15,10 +15,12 @@
 export interface RudiLineInput {
   /** Appointments whose slot_date is today. */
   jobsToday: number
-  /** Leads in status new/contacted — the ones nobody has answered. */
-  unansweredLeads: number
-  /** Conversations where a human was asked for. */
-  humanRequested: number
+  /** People whose first ever conversation was today — someone genuinely new. */
+  newToday: number
+  /** How many of those the employees dealt with, nothing outstanding. */
+  newHandled: number
+  /** Threads needing a person right now: held drafts plus unanswered customers. */
+  waiting: number
 }
 
 export type RudiSegment = { text: string; accent?: boolean }
@@ -33,30 +35,36 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
  * you" when both queues are empty, otherwise the count of things that do.
  */
 export function rudiLine(input: RudiLineInput): RudiSegment[] {
-  const { jobsToday, unansweredLeads, humanRequested } = input
-  const waiting = unansweredLeads + humanRequested
+  const { jobsToday, newToday, newHandled, waiting } = input
   const segments: RudiSegment[] = []
 
   if (jobsToday > 0) {
     segments.push({ text: `${jobsToday} ${plural(jobsToday, 'job', 'jobs')} on the books today. ` })
   }
 
+  // WHO ARRIVED — said before what is waiting, because it is the good half and it is the half the
+  // owner never used to be told. "3 new people today" is a fact about the business; the old opening
+  // clause was a fact about a status column, and a wrong one.
+  if (newToday > 0) {
+    const who = `${newToday} new ${plural(newToday, 'person', 'people')} today`
+    if (newHandled === newToday) {
+      segments.push({ text: `${who} — all handled. ` })
+    } else if (newHandled > 0) {
+      segments.push({ text: `${who}, ${newHandled} handled. ` })
+    } else {
+      segments.push({ text: `${who}. ` })
+    }
+  }
+
   if (waiting === 0) {
-    // Both queues empty. This is the reference's own resting state.
-    if (jobsToday === 0) segments.push({ text: 'Quiet so far today. ' })
+    // Nothing outstanding. The reference's own resting state.
+    if (jobsToday === 0 && newToday === 0) segments.push({ text: 'Quiet so far today. ' })
     segments.push({ text: 'Nothing needs you right now.', accent: true })
     return segments
   }
 
-  // Something is waiting. Name the parts that are non-zero, then bold the total as the conclusion.
-  const parts: string[] = []
-  if (unansweredLeads > 0) {
-    parts.push(`${unansweredLeads} ${plural(unansweredLeads, 'lead has', 'leads have')} not been answered`)
-  }
-  if (humanRequested > 0) {
-    parts.push(`${humanRequested} ${plural(humanRequested, 'caller asked', 'callers asked')} for a person`)
-  }
-  segments.push({ text: `${parts.join(' and ')}. ` })
+  // Something IS outstanding. Never phrased as "not answered" unless it genuinely has not been:
+  // `waiting` is the inbox's own two groups, so a thread an employee dealt with is never in it.
   segments.push({
     text: waiting === 1 ? 'One thing needs you.' : `${waiting} things need you.`,
     accent: true,

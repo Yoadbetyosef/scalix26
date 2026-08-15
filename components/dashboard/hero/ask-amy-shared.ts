@@ -12,6 +12,8 @@ export interface AmyBriefing {
   channelLine?: string
   attention: { label: string; href: string }[]
   leadsAwaiting: number
+  /** /v2 only: threads the inbox itself says need a person. Supersedes the line below when set. */
+  waitingOnYou?: number
   callsAnswered: number
   textsHandled: number
   appointmentsToday: number
@@ -35,7 +37,10 @@ function facts(b: AmyBriefing): string {
     `Appointments booked today: ${b.appointmentsToday}`,
     `Potential customers I recovered: ${b.recovered}`,
     b.coverage !== null ? `Business coverage: ${b.coverage}%` : `Business coverage: not enough data yet`,
-    `Leads awaiting follow-up: ${b.leadsAwaiting}`,
+    // `leadsAwaiting` is activeLeads — new+contacted — and Speed-to-Lead sets `contacted` the moment
+    // it answers, so it reports handled arrivals as awaiting. /v2 passes the inbox's own count
+    // instead; the dashboard has not been changed and keeps the old line.
+    typeof b.waitingOnYou === 'number' ? `Waiting on you: ${b.waitingOnYou}` : `Leads awaiting follow-up: ${b.leadsAwaiting}`,
     b.attention.length ? `Needs attention: ${b.attention.map((a) => a.label).join('; ')}` : `Nothing needs attention right now`,
   ].join('. ')
 }

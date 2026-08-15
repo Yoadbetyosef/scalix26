@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getDashboardData } from '@/lib/dashboard/overview'
 import { getImpactData } from '@/lib/dashboard/impact'
+import { loadArrivals, waitingCount } from '@/lib/inbox/arrivals'
 import { buildHeroInputs } from '@/lib/dashboard/briefing'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 import { rudiLine, type RudiSegment } from './rudi-line'
@@ -54,6 +55,14 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
     getDashboardData(tenantId),
     getImpactData(tenantId),
   ])
+  // Read after the two above because it needs the business timezone, which comes from the employee
+  // rows they already loaded. Everything the home screen says about arrivals comes from here — see
+  // lib/inbox/arrivals.ts for why it is the inbox's own grouping and not a second opinion.
+  const arrivals = await loadArrivals(
+    tenantId,
+    (dash.aiEmployees[0] as { timezone?: string | null } | undefined)?.timezone ?? null,
+  )
+  const waiting = waitingCount(arrivals)
 
   // Compared as date strings because slot_date is a plain date column, not a timestamp — converting
   // it through a Date would introduce a timezone the column does not have.
@@ -67,21 +76,34 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
     detail: [a.slot_time, a.service_type].filter(Boolean).join(' · ') || 'Booked',
   }))
 
-  const unansweredLeads = dash.stats.activeLeads
-  const humanRequested = impact.humanTakeoverCount
-
+  // ── ATTENTION NEEDED IS THE INBOX'S OWN TWO GROUPS ────────────────────────────────────────────
+  //
+  // It used to be two items, and both were wrong in the same direction — reporting handled work as
+  // outstanding:
+  //
+  //   "N leads need an answer"      activeLeads counts new+contacted, and Speed-to-Lead sets
+  //                                 `contacted` at the moment it ANSWERS. Every arrival the AI dealt
+  //                                 with in seconds appeared here as unanswered.
+  //   "N callers asked for a person" impact.humanTakeoverCount is every takeover THIS MONTH,
+  //                                 including the ones long since dealt with — a month-long tally on
+  //                                 a list headed "needs you now". It also double-counted: a
+  //                                 taken-over thread whose customer spoke last is already in
+  //                                 `needs` below.
+  //
+  // Now: the two groups the inbox itself puts in front of a person, which is the only definition of
+  // outstanding this product has. If a row is here, opening the inbox shows the same row.
   const needsYou: NeedsItem[] = []
-  if (unansweredLeads > 0) {
+  if (arrivals.drafts > 0) {
     needsYou.push({
-      title: `${unansweredLeads} ${unansweredLeads === 1 ? 'lead needs' : 'leads need'} an answer`,
-      detail: 'New or contacted, not yet booked or dismissed.',
-      action: 'Open leads',
+      title: `${arrivals.drafts} ${arrivals.drafts === 1 ? 'draft is' : 'drafts are'} waiting on you`,
+      detail: 'Written and held for your decision before sending.',
+      action: 'Open inbox',
     })
   }
-  if (humanRequested > 0) {
+  if (arrivals.unanswered > 0) {
     needsYou.push({
-      title: `${humanRequested} ${humanRequested === 1 ? 'caller' : 'callers'} asked for a person`,
-      detail: 'Rudi handed these over rather than answering.',
+      title: `${arrivals.unanswered} ${arrivals.unanswered === 1 ? 'person is' : 'people are'} waiting for a reply`,
+      detail: 'They wrote last and nothing has answered yet.',
       action: 'Open inbox',
     })
   }
@@ -101,13 +123,25 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
   if (dash.stats.totalCalls > 0) monthStats.push({ label: 'Calls answered', value: String(dash.stats.totalCalls) })
 
   return {
-    line: rudiLine({ jobsToday: todaysJobs.length, unansweredLeads, humanRequested }),
+    line: rudiLine({ jobsToday: todaysJobs.length, newToday: arrivals.newToday, newHandled: arrivals.newHandled, waiting }),
     // Built from the data already loaded above — buildHeroInputs adds no query. This is what makes
     // the Talk button possible: the briefing was previously trapped inside the dashboard page.
-    briefing: buildHeroInputs(dash.aiEmployees, impact, dash.appointments_list, dash.leads_list, dash.stats).briefing,
+    // `waitingOnYou` overrides the brief's "Leads awaiting follow-up" line, which read activeLeads —
+    // the same wrong figure, spoken aloud when the owner asks how things are.
+    briefing: {
+      ...buildHeroInputs(dash.aiEmployees, impact, dash.appointments_list, dash.leads_list, dash.stats).briefing,
+      waitingOnYou: waiting,
+    },
     railCounts: {
-      leads: dash.stats.activeLeads || null,
-      inbox: dash.stats.totalConversations || null,
+      // No leads badge. It showed activeLeads, which counts answered arrivals as unanswered; the row
+      // itself goes with the screen. A badge is a claim that something needs you, and this one was
+      // not true.
+      leads: null,
+      // WAS `totalConversations` — which, despite the name, counts INSTAGRAM AND FACEBOOK
+      // conversations in the last seven days and nothing else. It computed to 0 on a tenant with 77
+      // conversations, so the inbox badge was hidden entirely. A nav badge answers "how many need
+      // you", so it is now the inbox's own two groups.
+      inbox: waiting || null,
       appointments: todaysJobs.length || null,
     },
     aiOn: dash.aiEmployees.some((e) => (e as { is_active?: boolean }).is_active !== false),
@@ -120,8 +154,8 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
     // Week pane where figures belong and stopped pretending to be somewhere you could go.
     tiles: allowed(PRIMARY, modules).map((d) => {
       const n = {
-        Leads: { value: dash.stats.activeLeads || null, sub: `${dash.stats.leads} total` },
-        Inbox: { value: dash.stats.totalConversations || null, sub: 'last 7 days' },
+        Leads: { value: null, sub: `${dash.stats.leads} total` },
+        Inbox: { value: waiting || null, sub: waiting ? 'waiting on you' : 'nothing waiting' },
         Appointments: { value: todaysJobs.length || null, sub: 'today' },
         Contacts: { value: null, sub: 'address book' },
       }[d.label] ?? { value: null, sub: '' }
