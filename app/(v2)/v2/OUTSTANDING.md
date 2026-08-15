@@ -338,3 +338,27 @@ make Stripe replay the payment event.
 
 **Do not fold this into a Miles stage.** It is a paid-conversion path and deserves its own commit and
 its own verification.
+
+---
+
+## §19 — a text thread recapped while it was still open never gets rewritten
+
+The recap is written once, at completion, and `recap_at` is the claim that keeps it once. The
+backfill had to cover conversations that predate the feature, and 28 of them are text threads still
+marked `open` — a genuinely live SMS or Instagram thread. Those were given a recap of where they
+stood and had `recap_at` deliberately left null, so `writeRecap` can claim them again when they are
+finally resolved, and the account gets rewritten with the ending in it.
+
+That is right for the backfilled rows. It is NOT a general refresh: a conversation resolved once,
+then reopened and continued, keeps the first recap forever. The claim sees `recap_at` set and stops.
+
+**Fix shape:** clear `recap_at` when a conversation is reopened (`status: 'open'` on the status
+route), so the next resolve writes a current one. One line, and it costs a second recap only on
+threads that actually came back to life. Not done here because reopening is not wired in /v2 yet —
+Resolve and Close are still `disabled` — so there is no way to reach the case from the new screen,
+and doing it blind would be a rule nobody has watched run.
+
+**Also:** nothing recaps a text thread that is simply abandoned. It stays open, so it never completes,
+so the section stays empty on a conversation that is over in every sense but the column. A sweep
+("no message in 30 days → resolved") would close that, and it is a product decision about when a
+thread is finished, not a defect in the writer.

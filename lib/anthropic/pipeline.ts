@@ -381,9 +381,9 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
     }),
   ]).catch(console.error)
 
-  if (!isVoice) {
-    generateConversationSummary(conversationId!, input.tenantId).catch(console.error)
-  }
+  // NO SUMMARY HERE. It used to fire on every inbound turn and skip voice entirely — a twenty-message
+  // thread paid twenty times and a call never got one at all. The recap is written ONCE, when the
+  // conversation completes: lib/conversations/recap.ts, called from the voice route and from Resolve.
 
   return {
     response: aiResponse,
@@ -462,34 +462,3 @@ async function runTextToolTurn(
   }
 }
 
-async function generateConversationSummary(conversationId: string, tenantId: string) {
-  const supabase = await createServiceClient()
-
-  const { data: messages } = await supabase
-    .from('messages')
-    .select('role, content')
-    .eq('conversation_id', conversationId)
-    .order('timestamp', { ascending: true })
-    .limit(30)
-
-  if (!messages || messages.length < 2) return
-
-  const transcript = messages.map((m: { role: string; content: string }) => `${m.role}: ${m.content}`).join('\n')
-
-  const summary = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 200,
-    messages: [{
-      role: 'user',
-      content: `Summarize this customer conversation in 2-3 sentences. Include: what the customer needed, what the AI did, and the outcome.\n\n${transcript}`,
-    }],
-  })
-
-  trackLlm(tenantId, MODEL, summary.usage, { resourceId: summary.id }) // COGS + WL billing
-  const summaryText = summary.content[0].type === 'text' ? summary.content[0].text : ''
-
-  await supabase
-    .from('conversations')
-    .update({ summary: summaryText })
-    .eq('id', conversationId)
-}

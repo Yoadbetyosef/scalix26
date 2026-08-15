@@ -27,7 +27,7 @@ export const transcriptSource: ContextSource = {
 
     let q = ctx.db
       .from('conversations')
-      .select('id, channel, status, summary, updated_at, contact:contacts(name, phone)')
+      .select('id, channel, status, summary, recap, updated_at, contact:contacts(name, phone)')
       .eq('tenant_id', ctx.tenantId)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -46,8 +46,9 @@ export const transcriptSource: ContextSource = {
       .eq('conversation_id', conv.id).order('timestamp', { ascending: true }).limit(60)
 
     if (!msgs?.length) {
-      return conv.summary
-        ? `Most recent conversation — ${who} via ${conv.channel} (${date}). No message-level transcript stored, but the summary is: ${conv.summary}`
+      const written = conv.recap || conv.summary
+      return written
+        ? `Most recent conversation — ${who} via ${conv.channel} (${date}). No message-level transcript stored, but the summary is: ${written}`
         : `Most recent conversation — ${who} via ${conv.channel} (${date}). No transcript stored yet for this one.`
     }
     const lines = msgs.map((m) => `${m.role === 'user' ? who : 'AI'}: ${(m.content || '').slice(0, 300)}`)

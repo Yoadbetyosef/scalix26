@@ -39,6 +39,9 @@ export interface InteractionUnit {
   human_takeover: boolean
   sentiment: string | null
   summary: string | null
+  /** The written account, once the conversation has completed. Preferred over `summary`, which on
+   *  email is the subject line. */
+  recap: string | null
   created_at: string
   messages: { role: string; content: string; timestamp: string }[]
 }

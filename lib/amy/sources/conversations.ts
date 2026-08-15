@@ -42,7 +42,7 @@ export const conversationsSource: ContextSource = {
 
     let q = ctx.db
       .from('conversations')
-      .select('channel, status, summary, updated_at, duration_seconds, contact:contacts(name, phone)')
+      .select('channel, status, summary, recap, updated_at, duration_seconds, contact:contacts(name, phone)')
       .eq('tenant_id', ctx.tenantId)
       .order('updated_at', { ascending: false })
       .limit(limit)
@@ -54,7 +54,7 @@ export const conversationsSource: ContextSource = {
       const contact = c.contact as unknown as { name?: string; phone?: string } | null
       const who = contact?.name || contact?.phone || 'Unknown'
       const dur = c.duration_seconds ? ` (${Math.round(c.duration_seconds / 60)}m call)` : ''
-      return `- [${c.channel}/${c.status}] ${who}${dur} ${fmtDate(c.updated_at)}: ${c.summary || '(no summary yet)'}`
+      return `- [${c.channel}/${c.status}] ${who}${dur} ${fmtDate(c.updated_at)}: ${c.recap || c.summary || '(no summary yet)'}`
     })
     return `Recent conversations${channel ? ` on ${channel}` : ''}:\n${lines.join('\n')}`
   },

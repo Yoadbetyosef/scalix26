@@ -48,10 +48,10 @@ function ruleSignals(harvest: Harvest, tenantId: string, agentId: string | null)
 
   for (const u of harvest.units) {
     if (u.human_takeover) {
-      out.push(mkSignal(tenantId, agentId, 'escalation_moment', u, { reason: 'human_takeover' }, u.summary || 'Owner took over the conversation', 0.9))
+      out.push(mkSignal(tenantId, agentId, 'escalation_moment', u, { reason: 'human_takeover' }, u.recap || u.summary || 'Owner took over the conversation', 0.9))
     }
     if (u.sentiment === 'negative') {
-      out.push(mkSignal(tenantId, agentId, 'complaint', u, { sentiment: 'negative' }, u.summary || 'Negative-sentiment conversation', 0.7))
+      out.push(mkSignal(tenantId, agentId, 'complaint', u, { sentiment: 'negative' }, u.recap || u.summary || 'Negative-sentiment conversation', 0.7))
     }
 
     const msgs = u.messages

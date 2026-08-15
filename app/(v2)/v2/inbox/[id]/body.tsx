@@ -144,13 +144,15 @@ export async function ConversationBody({ tenantId, id }: { tenantId: string; id:
           {/* SOURCE ORDER IS THE PHONE'S ORDER. The grid places this second; a phone reads it first,
               which is why it is written first. */}
           <aside className="v2-side">
-            {/* WHAT HAPPENED — the card, not the recap. A written summary is a new read and possibly
-                a model call, and assembling one from the last message would be the screen asserting
-                something nobody wrote. Absent when nothing is written. */}
-            {str(conv.summary) && (
+            {/* WHAT HAPPENED — `recap` and only `recap`, written once when the conversation
+                completes (lib/conversations/recap.ts). NOT `summary`: on email that column holds the
+                subject line, so reading it here would put "Re: quote for Tuesday" under a heading
+                promising an account of what happened. Heading inside the condition — an empty
+                section reads as a broken screen rather than an empty one. */}
+            {str(conv.recap) && (
               <section className="v2-sgrp">
                 <p className="v2-sl">WHAT HAPPENED</p>
-                <p className="v2-sum">{str(conv.summary)}</p>
+                <p className="v2-sum">{str(conv.recap)}</p>
               </section>
             )}
             {factGroup('CONTACT', person)}

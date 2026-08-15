@@ -35,7 +35,7 @@ export interface ConversationRead {
 // So: the columns are named, the types are EXACT — no index signature to absorb a typo — and a test
 // asserts every declared field appears in the select list it is read from. A name that is not a
 // column now fails at the query, loudly, instead of being quietly undefined for a year.
-export const CONV_COLS = 'id, channel, status, summary, duration_seconds, human_takeover, sentiment, created_at, updated_at, ai_employee_id'
+export const CONV_COLS = 'id, channel, status, summary, recap, duration_seconds, human_takeover, sentiment, created_at, updated_at, ai_employee_id'
 export const CONTACT_COLS = 'id, name, phone, email, address'
 export const AGENT_COLS = 'name, persona'
 export const MESSAGE_COLS = 'id, conversation_id, role, content, timestamp, channel, delivery_status, error_code'
@@ -44,7 +44,11 @@ export interface ConversationRow {
   id: string
   channel: string
   status: string
+  /** On EMAIL this is the subject line, written by the inbound webhook and read back by /send as the
+   *  outbound Subject header. It is not a recap and must not be shown as one. */
   summary: string | null
+  /** The written account of what happened, or null until the conversation completes. */
+  recap: string | null
   duration_seconds: number | null
   human_takeover: boolean | null
   sentiment: string | null

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
+import { recapAfterResponse } from '@/lib/conversations/recap'
 
 // Set a conversation's status (open/resolved/closed) for the ACTIVE business. Operator-safe: tenant
 // comes ONLY from the validated active-workspace context; the conversation must belong to it.
@@ -19,5 +20,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { error } = await admin.from('conversations').update({ status }).eq('id', id).eq('tenant_id', ctx.tenantId)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // The other completion point. Not on 'open' — reopening a thread is the opposite of finishing it,
+  // and writeRecap only claims a row that has none, so resolve → reopen → resolve still costs once.
+  if (status === 'resolved' || status === 'closed') recapAfterResponse(id, ctx.tenantId)
+
   return NextResponse.json({ ok: true })
 }

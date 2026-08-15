@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { primaryAgent } from '@/lib/agents/primary'
 import { looksLikeName } from '@/lib/utils'
+import { recapAfterResponse } from '@/lib/conversations/recap'
 
 type TranscriptItem = { role?: string; content?: string }
 
@@ -96,6 +97,10 @@ export async function POST(req: NextRequest) {
     timestamp: new Date(now - (turns.length - i) * 1000).toISOString(),
   }))
   await supabase.from('messages').insert(rows)
+
+  // The call is over — this row is inserted `resolved` — so this is where the recap gets written.
+  // After the response: the voice server is waiting on this, and a recap must never hold it up.
+  recapAfterResponse(conv.id, tenantId)
 
   return NextResponse.json({ ok: true, conversation_id: conv.id, messages: rows.length })
 }

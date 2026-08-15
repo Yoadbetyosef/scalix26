@@ -21,7 +21,7 @@ export async function harvestTenant(
 
   let convQ = admin
     .from('conversations')
-    .select('id, channel, human_takeover, sentiment, summary, created_at, updated_at')
+    .select('id, channel, human_takeover, sentiment, summary, recap, created_at, updated_at')
     .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false })
     .limit(limit)
@@ -57,6 +57,7 @@ export async function harvestTenant(
     human_takeover: !!c.human_takeover,
     sentiment: c.sentiment ?? null,
     summary: c.summary ?? null,
+    recap: c.recap ?? null,
     created_at: c.created_at,
     messages: byConv.get(c.id) || [],
   }))

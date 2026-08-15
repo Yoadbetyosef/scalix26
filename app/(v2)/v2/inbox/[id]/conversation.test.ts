@@ -96,13 +96,16 @@ describe('WHAT HAPPENED is a card, not an invention', () => {
   it('takes its heading with it when there is nothing to say', () => {
     // An empty heading is worse than no heading: it says a thing exists and then fails to show it,
     // which reads as a broken screen rather than an empty one. The label is INSIDE the condition.
-    const block = body.slice(body.indexOf('{str(conv.summary) && ('), body.indexOf("factGroup('CONTACT'"))
+    const block = body.slice(body.indexOf('{str(conv.recap) && ('), body.indexOf("factGroup('CONTACT'"))
     expect(block).toContain('WHAT HAPPENED')
-    expect(block.indexOf('WHAT HAPPENED')).toBeGreaterThan(block.indexOf('{str(conv.summary) && ('))
+    expect(block.indexOf('WHAT HAPPENED')).toBeGreaterThan(block.indexOf('{str(conv.recap) && ('))
   })
 
-  it('renders only when something written exists', () => {
-    expect(body).toContain('{str(conv.summary) && (')
+  it('renders only when something written exists — and `recap` is the only thing written', () => {
+    // NOT `summary`: on email that column is the subject line, so reading it here would put
+    // "Re: quote for Tuesday" under a heading promising an account of what happened.
+    expect(body).toContain('{str(conv.recap) && (')
+    expect(body).not.toContain('{str(conv.summary) && (')
   })
 
   it('never assembles a recap from the messages', () => {
