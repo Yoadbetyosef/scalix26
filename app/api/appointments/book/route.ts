@@ -8,6 +8,7 @@ import { getBusinessTimezone } from '@/lib/timezone'
 import { getCalendarAccess } from '@/lib/calendar/store'
 import { createCalendarEvent } from '@/lib/calendar/google'
 import { createMicrosoftCalendarEvent } from '@/lib/calendar/microsoft'
+import { markLeadsBooked } from '@/lib/leads/booked'
 
 function friendlyDate(dateIso: string): string {
   return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString('en-US', {
@@ -85,6 +86,11 @@ export async function POST(req: NextRequest) {
     if (apptErr?.code === '23505') return NextResponse.json({ success: false, error: 'that time was just taken' })
     return NextResponse.json({ success: false, error: apptErr?.message || 'failed to book' }, { status: 500 })
   }
+
+  // BOOKED IS DERIVED HERE. The appointment is the system of record and it is already written; this
+  // only tells the funnel what just happened, and stops the follow-ups that were chasing this person.
+  // Never able to unbook them — markLeadsBooked swallows its own failures.
+  await markLeadsBooked(supabase, tenant.id, contactId, phone)
 
   // Google Calendar (Phase 3a) — ADDITIVE + FAIL-SAFE. If the tenant has a calendar
   // connected, mirror the booking as an event and store its id. The appointments

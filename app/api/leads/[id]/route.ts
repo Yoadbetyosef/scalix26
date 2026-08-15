@@ -11,7 +11,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const body = await req.json().catch(() => ({}))
   const status = typeof body.status === 'string' ? body.status : null
-  if (!status || !['new', 'contacted', 'qualified', 'booked', 'dismissed', 'lost'].includes(status)) {
+  // THE SAME FIVE THE COLUMN ALLOWS. The list here used to accept 'qualified' and 'lost', which the
+  // leads_status_check constraint forbids — both would pass this guard and fail at the database with
+  // a constraint error dressed as a 400 — and to reject 'called_back', which the constraint allows.
+  // A guard that disagrees with the column is not a guard.
+  if (!status || !['new', 'contacted', 'booked', 'called_back', 'dismissed'].includes(status)) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
   }
 
@@ -24,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Stop any active drip for this lead when it's booked/dismissed/lost. The lead is already validated to
   // the active tenant, so lead_id is a sufficient (and schema-safe) scope. Best-effort.
-  if (['booked', 'dismissed', 'lost'].includes(status)) {
+  if (['booked', 'dismissed'].includes(status)) {
     await admin.from('drip_campaigns').update({ status: 'stopped' }).eq('lead_id', id).eq('status', 'active').then(undefined, () => {})
   }
   return NextResponse.json({ ok: true })

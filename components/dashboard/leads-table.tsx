@@ -148,15 +148,10 @@ export function LeadsTable({ leads, links }: { leads: Lead[]; links: Record<stri
                       <Phone className="w-3.5 h-3.5" /> Call Now
                     </a>
                   )}
-                  {lead.status !== 'booked' && !isDismissed && (
-                    <button
-                      onClick={(e) => updateStatus(e, lead.id, 'booked')}
-                      disabled={updating === lead.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-medium bg-white border border-hairline-strong text-ink shadow-e1 hover:bg-sunken hover:shadow-e2 transition-all disabled:opacity-50"
-                    >
-                      <Check className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} /> {updating === lead.id ? '…' : 'Mark as Booked'}
-                    </button>
-                  )}
+                  {/* "Mark as Booked" was here. Booked is DERIVED now — /api/appointments/book sets it when an
+                      appointment is confirmed for that contact. A state nothing computes is a state
+                      nobody maintains: twelve leads on the live table, zero booked, beside real
+                      appointments. See lib/leads/booked.ts. */}
                   {!isDismissed && (
                     <button
                       onClick={(e) => updateStatus(e, lead.id, 'dismissed')}

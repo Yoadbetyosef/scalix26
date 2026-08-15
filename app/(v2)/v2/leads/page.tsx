@@ -89,10 +89,10 @@ export default async function V2Leads() {
       // New and contacted are the two that have not been answered — the same pair stats.activeLeads counts.
       needsYou: l.status === 'new' || l.status === 'contacted',
       // The same actions the card offers today, under the same conditions — Call for a lead with a
-      // phone, Mark as Booked until it is booked, Dismiss until it is, Restore once it has been.
+      // phone, Dismiss until it is, Restore once it has been. "Mark as Booked" is gone from both:
+      // booked is derived from a confirmed appointment now (lib/leads/booked.ts).
       actions: [
         ...(l.phone ? [{ label: 'Call', tone: 'primary' as const, disabledReason: PREVIEW }] : []),
-        ...(l.status !== 'booked' && !dismissed ? [{ label: 'Mark as Booked', disabledReason: PREVIEW }] : []),
         ...(!dismissed ? [{ label: 'Dismiss', disabledReason: PREVIEW }] : []),
         ...(dismissed ? [{ label: 'Restore', disabledReason: PREVIEW }] : []),
       ],

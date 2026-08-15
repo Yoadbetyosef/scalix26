@@ -78,7 +78,9 @@ describe('leads reproduces what the current view does', () => {
     expect(page).toMatch(/const PREVIEW = 'v2 preview'/)
     // Every action literal carries the reason. None may be actionable.
     const actions = page.match(/\{ label: '[^']+'[^}]*\}/g) ?? []
-    expect(actions.length).toBeGreaterThan(3)
+    // Three, not four: "Mark as Booked" is gone from both screens. Booked is derived from a confirmed
+    // appointment now (lib/leads/booked.ts) — a state nothing computes is a state nobody maintains.
+    expect(actions.map((a) => a.match(/label: '([^']+)'/)![1]).sort()).toEqual(['Call', 'Dismiss', 'Restore'])
     for (const a of actions) expect(a).toContain('disabledReason: PREVIEW')
     expect(code('app/(v2)/v2/list.tsx')).toMatch(/disabled=\{!!a\.disabledReason\}/)
   })
