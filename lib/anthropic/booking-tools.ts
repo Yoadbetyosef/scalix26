@@ -20,7 +20,7 @@ export const BOOKING_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'book_appointment',
-    description: 'Book the appointment. Call this ONLY after the customer has explicitly confirmed the date and time and provided their name and phone number. Do not call it speculatively.',
+    description: 'Book the appointment. Call this ONLY after the customer has explicitly confirmed the date and time and provided their name and phone number. Do not call it speculatively. For a job you travel to, ask for the street address BEFORE booking — but if the customer will not or cannot give one, BOOK ANYWAY with address left out and say you will confirm it later. Never ask a third time, and never refuse to book over a missing address.',
     input_schema: {
       type: 'object',
       properties: {
@@ -29,7 +29,16 @@ export const BOOKING_TOOLS: Anthropic.Tool[] = [
         customer_name: { type: 'string' },
         customer_phone: { type: 'string' },
         service_type: { type: 'string' },
+        // WHERE IT HAPPENS. An enum rather than free text, so the model cannot invent "in person" or
+        // "Teams" — a fifth value would fail the column's CHECK and lose the booking.
+        meeting_kind: { type: 'string', enum: ['on_site', 'zoom', 'google_meet', 'phone'], description: 'Where the appointment happens, from what the customer AGREED to. Never from what the service is called: a job named "Google Meet" that the customer expects you at their home is on_site. Default on_site when it was not discussed.' },
+        address: { type: 'string', description: 'Street address for an on_site job, if the customer gave one. Leave it out rather than guessing.' },
+        join_url: { type: 'string', description: 'The meeting link, ONLY if the customer gave you one. Never invent, guess or construct a link.' },
+        duration_minutes: { type: 'number', description: 'Length in minutes, ONLY if a length was explicitly agreed. Leave it out otherwise.' },
       },
+      // STILL just date and time. Every new field is optional on purpose: a required field the model
+      // cannot fill means it does not call the tool at all, and a lost booking is worse than a gap
+      // the agenda already shows in amber.
       required: ['date', 'time'],
     },
   },

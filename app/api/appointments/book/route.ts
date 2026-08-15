@@ -11,6 +11,10 @@ import { createMicrosoftCalendarEvent } from '@/lib/calendar/microsoft'
 import { markLeadsBooked } from '@/lib/leads/booked'
 import { writeCapturedName, looksLikeCapturedName } from '@/lib/contacts/ai-name'
 
+/** The four the column allows. Kept here as well as in the tool schema so a hand-rolled POST cannot
+ *  write a fifth — the CHECK constraint would reject it and lose the booking. */
+const MEETING_KINDS = ['on_site', 'zoom', 'google_meet', 'phone']
+
 function friendlyDate(dateIso: string): string {
   return new Date(`${dateIso}T12:00:00Z`).toLocaleDateString('en-US', {
     timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric',
@@ -31,6 +35,25 @@ export async function POST(req: NextRequest) {
   // false → unchanged for voice / IG / FB.
   const suppressCustomerSms = data.suppress_customer_sms === true
   const timeDb = parseTime(typeof data.time === 'string' ? data.time : '')
+
+  // ── WHERE IT HAPPENS ──────────────────────────────────────────────────────────────────────────
+  //
+  // All four are OPTIONAL and none can fail a booking. A model that cannot fill one must still be
+  // able to book: a lost appointment is worse than a missing address, and the agenda shows the gap
+  // in amber with the fix attached rather than hiding it.
+  //
+  // An unrecognised kind becomes on_site rather than a 400 — the value is a model's word, and the
+  // truthful default is also the one every appointment before this column had.
+  const kindIn = typeof data.meeting_kind === 'string' ? data.meeting_kind.trim().toLowerCase() : ''
+  const meetingKind = MEETING_KINDS.includes(kindIn) ? kindIn : 'on_site'
+  const address = typeof data.address === 'string' && data.address.trim() ? data.address.trim() : null
+  // Only a real link. The model is told never to invent one; this is the second line of that.
+  const joinRaw = typeof data.join_url === 'string' ? data.join_url.trim() : ''
+  const joinUrl = /^https?:\/\/\S+$/i.test(joinRaw) ? joinRaw : null
+  // A length only when one was agreed, inside sane bounds. Null means "nobody said", and the agenda
+  // falls back to the tenant's default rather than to a guess written into a row.
+  const durRaw = typeof data.duration_minutes === 'number' ? Math.round(data.duration_minutes) : null
+  const durationMinutes = durRaw && durRaw >= 5 && durRaw <= 480 ? durRaw : null
 
   if (!leadToken || !phone) return NextResponse.json({ success: false, error: 'lead_token and customer_phone required' }, { status: 400 })
   if (!timeDb) return NextResponse.json({ success: false, error: 'could not understand the time' })
@@ -80,6 +103,7 @@ export async function POST(req: NextRequest) {
     tenant_id: tenant.id, contact_id: contactId, slot_date: dateIso, slot_time: timeDb,
     customer_name: name, customer_phone: phone, customer_email: email,
     service_type: service, channel, status: 'confirmed',
+    meeting_kind: meetingKind, address, join_url: joinUrl, duration_minutes: durationMinutes,
   }).select('id').single()
   if (apptErr || !appt) {
     // Race-safe: the partial unique index (tenant_id, slot_date, slot_time) raises

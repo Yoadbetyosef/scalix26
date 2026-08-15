@@ -80,7 +80,7 @@ wss.on('connection', (twilioWs) => {
       },
       {
         name: 'book_appointment',
-        description: 'Book an appointment for the customer',
+        description: 'Book the appointment. Call this ONLY after the customer has explicitly confirmed the date and time and provided their name and phone number. Do not call it speculatively. For a job you travel to, ask for the street address BEFORE booking — but if the customer will not or cannot give one, BOOK ANYWAY with address left out and say you will confirm it later. Never ask a third time, and never refuse to book over a missing address.',
         parameters: {
           type: 'object',
           properties: {
@@ -90,6 +90,13 @@ wss.on('connection', (twilioWs) => {
             customer_phone: { type: 'string' },
             customer_email: { type: 'string', description: 'Only if the caller volunteers an email' },
             service_type: { type: 'string' },
+            // The SAME four the text pipeline sends — lib/anthropic/booking-tools.ts. Both tools post
+            // to /api/appointments/book and this one spreads ...args, so adding them here is enough.
+            // NOTE: this file is a SEPARATE deployment. Changing it does nothing until it is deployed.
+            meeting_kind: { type: 'string', enum: ['on_site', 'zoom', 'google_meet', 'phone'], description: 'Where the appointment happens, from what the customer AGREED to. Never from what the service is called: a job named "Google Meet" that the customer expects you at their home is on_site. Default on_site when it was not discussed.' },
+            address: { type: 'string', description: 'Street address for an on_site job, if the customer gave one. Leave it out rather than guessing.' },
+            join_url: { type: 'string', description: 'The meeting link, ONLY if the customer gave you one. Never invent, guess or construct a link.' },
+            duration_minutes: { type: 'number', description: 'Length in minutes, ONLY if a length was explicitly agreed. Leave it out otherwise.' },
           },
           required: ['date', 'time', 'customer_name', 'customer_phone'],
         },
