@@ -1415,11 +1415,10 @@
 
 /* The marker under the hero figure. Same highlighter as the sheet's tiles, scaled to the figure it
    sits behind — it is one pen, not two. */
-.v2 .v2-fignum-wrap { position: relative; display: inline-block; }
-.v2 .v2-marker[data-hero] { left: -8px; right: -8px; bottom: 6px; height: 26px; border-radius: 3px; }
-@media (max-width: 719.98px) {
-  .v2 .v2-marker[data-hero] { left: -5px; right: -5px; bottom: 4px; height: 18px; }
-}
+/* The hero figure carries NO marker. `.v2-marker[data-hero]` and the inline-block wrapper that
+   positioned it were here; both are gone, and .v2-marker keeps only the tile geometry it was drawn
+   for. At 12px behind a 32px numeral it is a mark; scaled to 26px behind a 132px one it is a smear
+   across the number rather than a highlight on it. */
 
 /* ── THE RAIL, IN THE SHEET'S LANGUAGE ───────────────────────────────────────────────────────────
    Reusing .v2-grow and .v2-gchip rather than growing a desktop twin: the press state, the chip and

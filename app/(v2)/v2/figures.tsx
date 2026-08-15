@@ -42,7 +42,6 @@ export interface FiguresBoardProps {
     note?: string | null
     /** Draws the highlighter behind the figure. Same rule as the sheet's tiles: never when the figure
      *  is zero or unavailable, because the green marks something real or it marks nothing. */
-    marked?: boolean
   }
   figures: Figure[]
   shares?: { title: string; rows: Share[]; empty: string }
@@ -72,11 +71,12 @@ export function FiguresBoard({ title, eyebrow, line, hero, figures, shares, back
         {hero && (
           <section className="v2-hero-fig">
             <p className="v2-figlab">{hero.label}</p>
-            {/* THE one gradient on this screen. Everything else is ink. */}
-            <span className="v2-fignum-wrap">
-              {hero.marked && hero.value && <em className="v2-marker" data-hero aria-hidden />}
-              <p className="v2-figbig">{hero.value ?? '—'}</p>
-            </span>
+            {/* THE one gradient on this screen. Everything else is ink.
+                NO MARKER HERE. The highlighter works on the sheet's tile numerals, where it is a
+                small block behind a 32px figure. Under a 132px display number the same block is
+                26px tall and the width of the hero — it stops reading as a mark ON the figure and
+                becomes a smear ACROSS it. Kept where it works; removed where it does not. */}
+            <p className="v2-figbig">{hero.value ?? '—'}</p>
             {hero.note && <p className="v2-fignote">{hero.note}</p>}
           </section>
         )}
