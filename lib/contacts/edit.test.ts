@@ -10,6 +10,7 @@ const route = read('../../app/api/contacts/[id]/route.ts')
 const create = read('../../app/api/contacts/route.ts')
 const aiName = read('./ai-name.ts')
 const sheet = read('../../app/(v2)/v2/contacts/[id]/edit.tsx')
+const shell = read('../../app/(v2)/v2/contacts/sheet.tsx')
 const voice = strip(read('../../app/api/conversations/voice/route.ts'))
 const book = strip(read('../../app/api/appointments/book/route.ts'))
 const stl = strip(read('../leads/speed-to-lead.ts'))
@@ -130,16 +131,23 @@ describe('the sheet', () => {
   })
 
   it('names who a duplicate belongs to rather than saying "duplicate"', () => {
-    expect(sheet).toContain('j.duplicateOf ? (j.duplicateOf.name || j.duplicateOf.phone || j.duplicateOf.email) : null')
+    // In the shared shell, because create and edit answer with the SAME contract and the sentence a
+    // person reads must not depend on which of the two they were using.
+    expect(shell).toContain("const who = d.name || d.phone || d.email || 'someone already in your contacts'")
+    expect(sheet).toContain("duplicateMessage(j, 'That did not save.')")
   })
 
   it('says the one thing about this form nobody could guess', () => {
     expect(sheet).toContain('including a field you empty')
   })
 
-  it('closes on Escape and on the veil', () => {
-    expect(sheet).toContain("e.key === 'Escape'")
-    expect(sheet).toContain('className="v2-eveil"')
+  it('closes on Escape and on the veil — once, for all three sheets', () => {
+    // Three surfaces open one now. A second copy would drift on exactly the parts nobody thinks
+    // about until they are missing.
+    expect(shell).toContain("e.key === 'Escape'")
+    expect(shell).toContain('className="v2-eveil"')
+    expect(sheet).toContain('<Sheet title="Edit contact"')
+    expect(sheet).not.toContain('v2-eveil')
   })
 
   it('reaches DetailPage as a NODE, not a handler', () => {

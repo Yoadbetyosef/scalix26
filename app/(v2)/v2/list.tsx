@@ -73,6 +73,13 @@ export interface ListPageProps {
   detail?: ReactNode
   /** Which row is selected, so the list can mark it. */
   selectedId?: string | null
+  /**
+   * Controls in the header, opposite the title.
+   *
+   * A ReactNode rather than a shape with handlers, for the same reason DetailAction has `node`: the
+   * pages that render this are server components and cannot pass an onClick. A field, not a branch.
+   */
+  headerActions?: ReactNode
 }
 
 const Chevron = () => (
@@ -97,7 +104,7 @@ function useWide(): boolean {
   return wide
 }
 
-export function ListPage({ title, line, filters, initialFilter, rows, empty, backHref, detail, selectedId }: ListPageProps) {
+export function ListPage({ title, line, filters, initialFilter, rows, empty, backHref, detail, selectedId, headerActions }: ListPageProps) {
   const router = useRouter()
   const wide = useWide()
   const twoPane = wide && detail !== undefined
@@ -122,6 +129,7 @@ export function ListPage({ title, line, filters, initialFilter, rows, empty, bac
           </button>
         )}
         <h2>{title}</h2>
+        {headerActions && <div className="v2-hacts">{headerActions}</div>}
       </header>
 
       <div className="v2-pbody" data-scroll>

@@ -753,6 +753,23 @@
   padding: 30px 44px 16px; border-bottom: 1px solid var(--v2-line);
 }
 .v2 .v2-phd h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.028em; color: var(--v2-ink); }
+/* Opposite the title. `margin-left: auto` rather than a spacer, so a header with no actions is
+   unchanged and one with two does not need the h2 to know about them. */
+.v2 .v2-hacts { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.v2 .v2-hact {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  font-size: 13px; font-weight: 500; font-family: inherit;
+  border: 1px solid var(--v2-line); background: var(--v2-paper); color: var(--v2-ink-70);
+  transition: background 0.16s, color 0.16s;
+}
+.v2 .v2-hact:hover { color: var(--v2-ink); background: var(--v2-hover); }
+/* The filled one, the same treatment the conversation's primary wears: ink, not an accent. An accent
+   here would compete with the channel hues in the list below it. */
+.v2 .v2-hact[data-tone="primary"] { background: var(--v2-ink); border-color: var(--v2-ink); color: #fff; }
+.v2 .v2-hact[data-tone="primary"]:hover { background: #000; }
+.v2 .v2-hact:active { transform: scale(0.97); }
+.v2 .v2-hact svg { flex: none; }
 .v2 .v2-bk {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 10px; color: var(--v2-ink-55);
@@ -2444,4 +2461,81 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 @media (min-width: 720px) {
   .v2 .v2-esheet { align-items: center; }
   .v2 .v2-epanel { border-radius: 18px; padding: 24px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   IMPORTING A FILE — the same sheet, with room for a column grid.
+
+   A reskin of the v1 importer's SURFACE. Every rule that decides anything is untouched and elsewhere:
+   parsing and header-matching in lib/contacts/csv.ts, classification on the server. */
+
+.v2 .v2-epanel[data-wide] { width: min(720px, 100%); }
+
+/* The drop target. A dashed box is the one place in /v2 that borrows a convention wholesale, because
+   inventing a new visual language for "a file goes here" helps nobody. */
+.v2 .v2-idrop {
+  width: 100%; margin: 4px 0 12px; padding: 34px 16px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  border: 1.5px dashed var(--v2-line-strong); border-radius: 14px; background: var(--v2-quiet);
+  font-family: inherit; transition: border-color 0.16s, background 0.16s;
+}
+.v2 .v2-idrop:hover { border-color: var(--v2-violet); background: var(--v2-paper); }
+.v2 .v2-idrop b { font-size: 14.5px; font-weight: 500; color: var(--v2-ink); }
+.v2 .v2-idrop span { font-size: 12px; color: var(--v2-ink-42); }
+.v2 .v2-ifile { display: none; }
+
+/* The column grid. Scrolls in BOTH directions inside its own box — a spreadsheet is wide by nature
+   and the page body must never scroll sideways to accommodate one. */
+.v2 .v2-igrid {
+  margin: 12px 0; max-height: 260px; overflow: auto;
+  border: 1px solid var(--v2-line); border-radius: 12px; background: var(--v2-paper);
+}
+.v2 .v2-igrid table { min-width: 100%; border-collapse: collapse; font-size: 12px; }
+.v2 .v2-igrid thead { position: sticky; top: 0; background: var(--v2-quiet); z-index: 1; }
+.v2 .v2-igrid th {
+  border-bottom: 1px solid var(--v2-line); padding: 8px; text-align: left; vertical-align: top;
+  min-width: 132px;
+}
+.v2 .v2-igrid th span {
+  display: block; margin-bottom: 5px; font-weight: 500; color: var(--v2-ink-70);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;
+}
+.v2 .v2-igrid select {
+  width: 100%; border: 1px solid var(--v2-line); border-radius: 8px; background: var(--v2-paper);
+  padding: 5px 7px; font-size: 12px; font-family: inherit; color: var(--v2-ink);
+}
+.v2 .v2-igrid td {
+  border-top: 1px solid var(--v2-line); padding: 6px 8px; color: var(--v2-ink-70);
+  max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A column that is NOT being imported is greyed, not hidden: seeing what you are leaving behind is
+   half of checking the mapping. */
+.v2 .v2-igrid td[data-off] { color: var(--v2-ink-24); }
+
+/* THE THREE OUTCOMES. Equal weight, because a preview that shows only what it will add is a progress
+   bar — the other two are the reason there are two passes at all. */
+.v2 .v2-icounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 4px; }
+.v2 .v2-icounts div { padding: 10px 12px; border-radius: 12px; }
+.v2 .v2-icounts b { display: block; font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.v2 .v2-icounts span { font-size: 11.5px; }
+.v2 .v2-icounts div[data-tone="add"] { background: var(--v2-miles-wash); }
+.v2 .v2-icounts div[data-tone="add"] b, .v2 .v2-icounts div[data-tone="add"] span { color: var(--v2-miles-ink); }
+.v2 .v2-icounts div[data-tone="dupe"] { background: var(--v2-hold-wash); }
+.v2 .v2-icounts div[data-tone="dupe"] b, .v2 .v2-icounts div[data-tone="dupe"] span { color: var(--v2-hold-ink); }
+.v2 .v2-icounts div[data-tone="skip"] { background: var(--v2-quiet); }
+.v2 .v2-icounts div[data-tone="skip"] b { color: var(--v2-ink); }
+.v2 .v2-icounts div[data-tone="skip"] span { color: var(--v2-ink-42); }
+
+.v2 .v2-idone { font-size: 15px; color: var(--v2-ink); margin: 6px 0 2px; }
+.v2 .v2-idone b { font-weight: 600; }
+
+/* The lead line under a sheet title carries more weight than the footnotes that share its class. */
+.v2 .v2-ehint[data-lead] { font-size: 13px; color: var(--v2-ink-70); margin: -6px 0 4px; }
+.v2 .v2-emsg a { color: inherit; text-decoration: underline; }
+
+@media (max-width: 719.98px) {
+  /* Two full-width controls in a header that already holds a title is three things fighting for one
+     row. The words go; the glyph and the plus carry it. */
+  .v2 .v2-hact { padding: 8px 11px; font-size: 12.5px; }
+  .v2 .v2-icounts { grid-template-columns: 1fr; }
 }

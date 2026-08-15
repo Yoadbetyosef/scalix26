@@ -7,6 +7,7 @@ import { ListPage, type ListFilter, type ListRow } from '../list'
 import { channelKey } from '../channels'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { contactsLine } from './line'
+import { NewContact, ImportContacts } from './actions'
 
 // Contacts, reskinned. listContactsPage() is the contacts page's own read, extracted verbatim to
 // lib/ so both screens see the same window onto the address book — same slice, same ordering, same
@@ -60,6 +61,10 @@ export default async function V2Contacts({ searchParams }: { searchParams: Promi
     <ListPage
       selectedId={open ?? null}
       detail={detail}
+      // Opposite the title. Import is secondary, New contact is the filled primary — the same order of
+      // emphasis the conversation header gives its own actions. A RESKIN: both call the routes v1
+      // already calls, unchanged.
+      headerActions={<><ImportContacts /><NewContact /></>}
       title="Contacts"
       line={contactsLine({
         total,

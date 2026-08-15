@@ -60,6 +60,23 @@ export function parseContactsFile(text: string): ParsedFile {
   }
 }
 
+/**
+ * Point one column at a field, and take that field away from whichever column had it.
+ *
+ * A field can only come from ONE column. This rule lived inside the v1 import component; it is here
+ * because there are two importers now, and a rule copied into both is a rule that will drift. Moved
+ * verbatim — same three lines, same behaviour — not rewritten.
+ */
+export function reassignMapping(
+  mapping: Array<ContactField | null>,
+  col: number,
+  field: ContactField | null,
+): Array<ContactField | null> {
+  const next = mapping.map((f, i) => (field && f === field && i !== col ? null : f))
+  next[col] = field
+  return next
+}
+
 // Apply the (possibly hand-corrected) mapping to produce the rows sent to the server.
 export function toImportRows(rows: string[][], mapping: Array<ContactField | null>): ImportRow[] {
   return rows.map((cells) => {

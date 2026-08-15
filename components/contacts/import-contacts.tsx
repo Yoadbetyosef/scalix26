@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { CONTACT_FIELDS, parseContactsFile, toImportRows, type ContactField, type ParsedFile } from '@/lib/contacts/csv'
+import { CONTACT_FIELDS, parseContactsFile, reassignMapping, toImportRows, type ContactField, type ParsedFile } from '@/lib/contacts/csv'
 import type { ImportPreview } from '@/lib/contacts/store'
 
 // Bulk import in three steps: choose a file → confirm the columns → see exactly what will happen, then
@@ -56,9 +56,9 @@ export function ImportContacts({ trigger }: { trigger: ReactNode }) {
 
   const changeMapping = (col: number, field: ContactField | null) => {
     if (!parsed) return
-    // A field can only come from one column — assigning it elsewhere clears the previous holder.
-    const next = mapping.map((f, i) => (field && f === field && i !== col ? null : f))
-    next[col] = field
+    // A field can only come from one column. The rule moved to lib/contacts/csv.ts unchanged, because
+    // /v2 has an importer too and a copy in each would drift.
+    const next = reassignMapping(mapping, col, field)
     setMapping(next)
     runPreview(parsed, next)
   }
