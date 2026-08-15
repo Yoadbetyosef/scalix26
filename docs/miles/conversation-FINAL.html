@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Conversation — resolved</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+ --magenta:#FF2E93;--violet:#8B5CF6;--cyan:#22D3EE;--acid:#D9F224;
+ --ink:#111114;--ink-70:#4A4A52;--ink-42:#8A8A90;--ink-24:#B4B4BA;
+ --line:rgba(0,0,0,.07);--paper:#F6F6F7;--card:#fff;
+ --rudi-wash:#FFEDF6;--rudi-ink:#B0126A;
+ --miles-wash:#F4FAD5;--miles-ink:#5E6D0C;
+ --chan:#8B5CF6;--chan-wash:rgba(139,92,246,.10);--chan-ink:#7C4DE0;
+ --col:720px;--side:320px;--gap:36px;
+ --ease:cubic-bezier(.32,.72,0,1)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:20px 14px 60px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.tabs{display:flex;gap:6px;justify-content:center}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.11em;
+ padding:9px 15px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);cursor:pointer;min-height:36px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.stage{display:none}.stage[data-on]{display:block}
+.note{font-size:12.5px;color:rgba(255,255,255,.42);text-align:center;max-width:660px;line-height:1.7;margin-top:14px}
+.note b{color:rgba(255,255,255,.82);font-weight:500}
+
+.dk{width:min(1240px,96vw);height:min(780px,86vh);border-radius:16px;overflow:hidden;
+ background:var(--paper);box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.ph{width:min(390px,94vw);height:min(800px,86vh);border-radius:34px;overflow:hidden;
+ background:var(--paper);box-shadow:0 24px 70px rgba(0,0,0,.6);display:flex;flex-direction:column;position:relative}
+
+/* ---------- header ---------- */
+.hd{flex:none;background:var(--card);border-bottom:1px solid var(--line)}
+.hin{display:flex;align-items:center;gap:13px;padding:14px 0}
+.dk .hin{width:min(1076px,100%);margin:0 auto;padding-left:28px;padding-right:28px}
+.ph .hin{padding:13px 16px}
+.bk{font-size:20px;color:var(--ink-24);line-height:1;cursor:pointer;flex:none}
+.chip{width:38px;height:38px;border-radius:12px;flex:none;display:flex;align-items:center;
+ justify-content:center;background:var(--chan-wash);color:var(--chan)}
+.chip svg{width:18px;height:18px}
+.hw{flex:1;min-width:0}
+.hn{font-size:17px;font-weight:500;color:var(--ink);letter-spacing:-.01em;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hm{font-size:10.5px;letter-spacing:.13em;font-family:'JetBrains Mono',monospace;margin-top:3px;
+ display:flex;gap:7px;color:var(--ink-24)}
+.hm .c{color:var(--chan-ink);font-weight:500}
+.agent{font-size:9px;letter-spacing:.14em;padding:4px 9px;border-radius:5px;flex:none;
+ font-family:'JetBrains Mono',monospace;background:var(--rudi-wash);color:var(--rudi-ink)}
+.sec{padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:var(--card);
+ font-size:12.5px;font-family:inherit;color:var(--ink-42);cursor:pointer;flex:none}
+.sec:hover{color:var(--ink)}
+
+/* ---------- desktop grid ---------- */
+.dbody{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.dscr{flex:1;overflow-y:auto}
+.wrap{width:min(1076px,100%);margin:0 auto;padding:0 28px;
+ display:grid;grid-template-columns:var(--col) var(--side);gap:var(--gap)}
+.dscr .wrap{padding-top:22px;padding-bottom:26px}
+
+/* ---------- thread ---------- */
+.tl{font-size:9.5px;letter-spacing:.18em;color:var(--ink-24);font-family:'JetBrains Mono',monospace;
+ margin-bottom:16px}
+.th{display:flex;flex-direction:column;gap:10px}
+.day{align-self:center;font-size:9.5px;letter-spacing:.16em;color:var(--ink-24);
+ font-family:'JetBrains Mono',monospace;margin:2px 0 8px}
+.b{max-width:78%;padding:11px 15px;font-size:14.5px;line-height:1.48;position:relative}
+.who{font-size:9px;letter-spacing:.14em;font-family:'JetBrains Mono',monospace;
+ margin-bottom:6px;line-height:1}
+.st{font-size:9.5px;font-family:'JetBrains Mono',monospace;margin-top:6px;opacity:.42;line-height:1}
+.them{align-self:flex-start;background:var(--card);color:var(--ink);
+ border-radius:18px 18px 18px 6px;box-shadow:0 1px 2px rgba(0,0,0,.055)}
+.them .who{color:var(--ink-24)}
+.ai{align-self:flex-end;background:var(--rudi-wash);color:var(--ink);border-radius:18px 18px 6px 18px}
+.ai .who{color:var(--rudi-ink);text-align:right}
+.ai .st{text-align:right}
+.you{align-self:flex-end;background:var(--ink);color:#fff;border-radius:18px 18px 6px 18px}
+.you .who{color:rgba(255,255,255,.5);text-align:right}
+.you .st{text-align:right}
+.run{margin-top:-4px}
+.b.run .who{display:none}
+
+/* ---------- sidebar ---------- */
+.sl{font-size:9.5px;letter-spacing:.18em;color:var(--ink-24);font-family:'JetBrains Mono',monospace;
+ margin:0 0 10px}
+.sgrp{margin-bottom:26px}
+.sgrp:last-child{margin:0}
+.f{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;
+ border-bottom:1px solid var(--line)}
+.f:last-child{border:none;padding-bottom:0}
+.fk{font-size:12.5px;color:var(--ink-42);flex:none}
+.fv{font-size:13.5px;color:var(--ink);font-weight:500;text-align:right;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv.em{color:var(--ink-24);font-weight:400}
+.sum{background:var(--card);border-radius:14px;padding:13px;box-shadow:0 1px 2px rgba(0,0,0,.04);
+ font-size:13.5px;line-height:1.55;color:var(--ink-70)}
+
+/* ---------- the slot ---------- */
+.slot{flex:none;background:var(--card);border-top:1px solid var(--line)}
+.slot .wrap{padding-top:0;padding-bottom:0}
+.slotin{grid-column:1;height:64px;display:flex;align-items:center;gap:16px}
+.smsg{flex:1;font-size:13px;color:var(--ink-42);line-height:1.4}
+.smsg b{color:var(--ink);font-weight:500}
+.btn{padding:11px 18px;border-radius:12px;border:none;background:var(--ink);color:#fff;flex:none;
+ font-size:13.5px;font-family:inherit;font-weight:500;cursor:pointer;display:flex;align-items:center;
+ gap:8px;transition:transform .14s var(--ease),background .2s}
+.btn:hover{background:#000}
+.btn:active{transform:scale(.96)}
+.btn svg{width:15px;height:15px}
+.live{display:none;flex:1;gap:10px;align-items:center}
+.slot[data-live] .live{display:flex}
+.slot[data-live] .smsg,.slot[data-live] .btn{display:none}
+.live input{flex:1;height:42px;border-radius:999px;border:1px solid var(--line);background:var(--paper);
+ padding:0 16px;font-size:14.5px;font-family:inherit;outline:none;color:var(--ink)}
+.live input:focus{border-color:var(--violet)}
+.snd{width:42px;height:42px;border-radius:999px;border:none;flex:none;cursor:pointer;
+ background:var(--ink);color:#fff;font-size:17px}
+
+/* ---------- mobile ---------- */
+.cstrip{flex:none;background:var(--card);border-bottom:1px solid var(--line);padding:0 16px}
+.cs{display:flex;overflow-x:auto;scrollbar-width:none}
+.cs::-webkit-scrollbar{display:none}
+.ci{flex:none;padding:11px 15px 11px 0;margin-right:15px;border-right:1px solid var(--line)}
+.ci:last-child{border:none;margin:0;padding-right:0}
+.cik{font-size:8.5px;letter-spacing:.16em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.civ{font-size:13px;color:var(--ink);margin-top:3px;font-weight:500;white-space:nowrap}
+.civ.em{color:var(--ink-24);font-weight:400}
+.mscr{flex:1;overflow-y:auto;padding:16px 16px 20px}
+.mslot{flex:none;background:var(--card);border-top:1px solid var(--line);
+ padding:12px 16px calc(16px + env(safe-area-inset-bottom))}
+.mtake{width:100%;padding:14px;border-radius:14px;border:none;background:var(--ink);color:#fff;
+ font-size:14.5px;font-family:inherit;font-weight:500;cursor:pointer;display:flex;
+ align-items:center;justify-content:center;gap:9px;transition:transform .15s var(--ease)}
+.mtake:active{transform:scale(.97)}
+.mtake svg{width:16px;height:16px}
+.msub{font-size:11.5px;color:var(--ink-24);text-align:center;margin-top:9px}
+.mslot[data-live] .mtake,.mslot[data-live] .msub{display:none}
+.mslot[data-live] .live{display:flex}
+</style></head><body>
+
+<svg style="display:none">
+ <symbol id="voice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.9v2.6a1.6 1.6 0 0 1-1.8 1.6 16.3 16.3 0 0 1-7.1-2.5 16 16 0 0 1-5-5A16.3 16.3 0 0 1 4.6 6.5 1.6 1.6 0 0 1 6.2 4.7h2.6a1.6 1.6 0 0 1 1.6 1.4c.1.9.3 1.7.6 2.5a1.6 1.6 0 0 1-.4 1.7l-1.1 1.1a13 13 0 0 0 5 5l1.1-1.1a1.6 1.6 0 0 1 1.7-.4c.8.3 1.6.5 2.5.6a1.6 1.6 0 0 1 1.4 1.6z"/></symbol>
+ <symbol id="hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+</svg>
+
+<div class="tabs">
+ <button data-t="d" data-on>DESKTOP</button>
+ <button data-t="m">MOBILE</button>
+</div>
+
+<!-- ================= DESKTOP ================= -->
+<div class="stage" id="s-d" data-on>
+<div class="dk">
+ <div class="hd"><div class="hin">
+  <span class="bk">‹</span>
+  <div class="chip"><svg><use href="#voice"/></svg></div>
+  <div class="hw"><div class="hn">Yes. It's your aunt.</div>
+   <div class="hm"><span class="c">CALL</span><span>·</span><span>8 AUG 2026</span></div></div>
+  <span class="agent">RUDI</span>
+  <button class="sec">Resolve</button>
+  <button class="sec">Close</button>
+ </div></div>
+
+ <div class="dbody">
+  <div class="dscr"><div class="wrap">
+   <div>
+    <div class="tl">CONVERSATION</div>
+    <div class="th">
+     <div class="day">2026-08-08</div>
+     <div class="b ai"><div class="who">RUDI</div>Hi! Thank you for contacting us. How can I help you today?<div class="st">02:13</div></div>
+     <div class="b them"><div class="who">CALLER</div>Hello.<div class="st">02:13</div></div>
+     <div class="b them run">I'm looking for a princess cut diamond ring.<div class="st">02:13</div></div>
+     <div class="b ai"><div class="who">RUDI</div>Let me look up what we have in princess cut diamond rings for you.<div class="st">02:13</div></div>
+     <div class="b them"><div class="who">CALLER</div>Great!<div class="st">02:14</div></div>
+     <div class="b ai"><div class="who">RUDI</div>We have three in stock between $2,400 and $4,900. Would you like me to book a viewing?<div class="st">02:14</div></div>
+     <div class="b you"><div class="who">YOU</div>I'll call her back myself in the morning.<div class="st">09:02</div></div>
+    </div>
+   </div>
+
+   <div>
+    <div class="sgrp">
+     <div class="sl">WHAT HAPPENED</div>
+     <div class="sum">She called asking about princess cut diamond rings. Rudi found three in stock and offered a viewing. You said you'd call back yourself.</div>
+    </div>
+    <div class="sgrp">
+     <div class="sl">CONTACT</div>
+     <div class="f"><span class="fk">Phone</span><span class="fv">+1 917 495 4300</span></div>
+     <div class="f"><span class="fk">Email</span><span class="fv em">—</span></div>
+     <div class="f"><span class="fk">First seen</span><span class="fv">8 Aug 2026</span></div>
+     <div class="f"><span class="fk">Messages</span><span class="fv">7</span></div>
+    </div>
+    <div class="sgrp">
+     <div class="sl">THIS CONVERSATION</div>
+     <div class="f"><span class="fk">Channel</span><span class="fv">Voice</span></div>
+     <div class="f"><span class="fk">Status</span><span class="fv">Resolved</span></div>
+     <div class="f"><span class="fk">Answered by</span><span class="fv">Rudi</span></div>
+     <div class="f"><span class="fk">Last message</span><span class="fv">6d ago</span></div>
+    </div>
+   </div>
+  </div></div>
+
+  <div class="slot" id="dslot"><div class="wrap"><div class="slotin">
+   <div class="smsg"><b>Rudi is handling this thread.</b> Take over and they'll stop replying.</div>
+   <button class="btn" onclick="go('dslot')"><svg><use href="#hand"/></svg>Take over and reply</button>
+   <div class="live"><input placeholder="Reply as Smith HVAC…"><button class="snd">↑</button></div>
+  </div></div></div>
+ </div>
+</div>
+<p class="note"><b>Desktop.</b> The slot sits inside the same 1076px container as the thread and takes only the first grid column, so it ends where the messages end rather than running under the sidebar. One 64px row — status line left, button right. Bubbles cap at 78% and consecutive messages from the same author drop their label, so the thread reads as a conversation rather than two columns. The top contact strip is gone above 1100px; the sidebar already carries it.</p>
+</div>
+
+<!-- ================= MOBILE ================= -->
+<div class="stage" id="s-m">
+<div class="ph">
+ <div class="hd"><div class="hin">
+  <span class="bk">‹</span>
+  <div class="chip"><svg><use href="#voice"/></svg></div>
+  <div class="hw"><div class="hn">Yes. It's your aunt.</div>
+   <div class="hm"><span class="c">CALL</span><span>·</span><span>8 AUG</span></div></div>
+  <span class="agent">RUDI</span>
+ </div></div>
+
+ <div class="cstrip"><div class="cs">
+  <div class="ci"><div class="cik">PHONE</div><div class="civ">+1 917 495 4300</div></div>
+  <div class="ci"><div class="cik">EMAIL</div><div class="civ em">—</div></div>
+  <div class="ci"><div class="cik">STATUS</div><div class="civ">Resolved</div></div>
+  <div class="ci"><div class="cik">MESSAGES</div><div class="civ">7</div></div>
+  <div class="ci"><div class="cik">FIRST SEEN</div><div class="civ">8 Aug 2026</div></div>
+ </div></div>
+
+ <div class="mscr">
+  <div class="sgrp">
+   <div class="sl">WHAT HAPPENED</div>
+   <div class="sum">She called asking about princess cut diamond rings. Rudi found three in stock and offered a viewing. You said you'd call back yourself.</div>
+  </div>
+  <div class="tl">CONVERSATION</div>
+  <div class="th">
+   <div class="day">2026-08-08</div>
+   <div class="b ai"><div class="who">RUDI</div>Hi! Thank you for contacting us. How can I help you today?<div class="st">02:13</div></div>
+   <div class="b them"><div class="who">CALLER</div>Hello.<div class="st">02:13</div></div>
+   <div class="b them run">I'm looking for a princess cut diamond ring.<div class="st">02:13</div></div>
+   <div class="b ai"><div class="who">RUDI</div>Let me look up what we have in princess cut diamond rings for you.<div class="st">02:13</div></div>
+   <div class="b them"><div class="who">CALLER</div>Great!<div class="st">02:14</div></div>
+   <div class="b ai"><div class="who">RUDI</div>We have three in stock between $2,400 and $4,900. Would you like me to book a viewing?<div class="st">02:14</div></div>
+   <div class="b you"><div class="who">YOU</div>I'll call her back myself in the morning.<div class="st">09:02</div></div>
+  </div>
+ </div>
+
+ <div class="mslot" id="mslot">
+  <button class="mtake" onclick="go('mslot')"><svg><use href="#hand"/></svg>Take over and reply</button>
+  <div class="msub">Rudi stops answering this thread.</div>
+  <div class="live"><input placeholder="Reply as Smith HVAC…"><button class="snd">↑</button></div>
+ </div>
+</div>
+<p class="note"><b>Mobile.</b> Same slot, stacked instead of a row because 390px can't hold both. The contact strip stays here — it's the only place those facts fit without a section of their own.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+function go(id){const s=document.getElementById(id);s.dataset.live='';
+ setTimeout(()=>s.querySelector('input').focus(),60)}
+</script></body></html>

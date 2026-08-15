@@ -2125,202 +2125,202 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════
-   THE CONVERSATION — docs/miles/conversation-colours.html (C1) and agent-tint-options.html (V2).
-   Values taken directly. Mobile first; the desktop arrangement is its own block below.
+   THE CONVERSATION — docs/miles/conversation-FINAL.html. Both widths, values taken directly.
 
-   C1's premise: the AGENT's bubble carries the tint and everybody else takes a fixed treatment. The
-   customer is white on the left, the owner is solid ink on the right, and the employee is right with
-   their OWN wash — so a thread both employees have touched says who said what before a word is read. */
+   ONE CONTAINER, 1076px, used by three things: the header row, the scroller's grid, and the slot.
+   The thread column is 720, the sidebar 320, the gap 36 — and because the slot sits in the SAME grid
+   at `grid-column: 1`, it ends where the messages end instead of running under the sidebar. That was
+   the fault: a slot centred in the window is not aligned to anything on the page.
 
-.v2 .v2-conv { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--v2-quiet); }
+   The mobile layout is the same DOM with the grid switched off. The sidebar column is written first
+   in source precisely so a phone reads WHAT HAPPENED before the thread. */
+
+.v2 .v2-conv {
+  position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--v2-quiet);
+}
 
 /* ── Header ───────────────────────────────────────────────────────────────────────────────────── */
-.v2 .v2-chd { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 13px 15px; }
-.v2 .v2-chr { display: flex; align-items: center; gap: 11px; }
-.v2 .v2-cwho-h { flex: 1; min-width: 0; }
-.v2 .v2-chn { font-size: 17px; font-weight: 500; color: var(--v2-ink); }
-.v2 .v2-chmeta {
+.v2 .v2-chd { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); }
+.v2 .v2-hin { display: flex; align-items: center; gap: 13px; padding: 13px 16px; }
+.v2 .v2-hw { flex: 1; min-width: 0; }
+.v2 .v2-hn {
+  font-size: 17px; font-weight: 500; color: var(--v2-ink); letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v2 .v2-hm {
   display: flex; gap: 7px; margin-top: 3px;
-  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.13em; color: var(--v2-ink-42);
+  font-family: var(--v2-mono); font-size: 10.5px; letter-spacing: 0.13em; color: var(--v2-ink-24);
 }
-/* The channel word is TEXT on white, so it takes --chan-ink rather than the mark's own hue: at full
-   strength cyan and amber are unreadable here. Same table, the column meant for this. */
-.v2 .v2-chmeta span[data-channel] { color: var(--chan-ink, var(--v2-ink-42)); }
-.v2 .v2-cagent {
+.v2 .v2-hm .v2-c { color: var(--chan-ink, var(--v2-ink-42)); font-weight: 500; }
+.v2 .v2-agent {
   flex: none; font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em;
-  padding: 4px 9px; border-radius: 6px; text-transform: uppercase;
+  padding: 4px 9px; border-radius: 5px;
 }
+/* Secondary actions. Desktop only — a phone header has no room, and they are not the primary thing. */
+.v2 .v2-sec {
+  display: none; flex: none; padding: 8px 13px; border-radius: 10px;
+  border: 1px solid var(--v2-line); background: var(--v2-paper);
+  font-size: 12.5px; font-family: inherit; color: var(--v2-ink-42); cursor: pointer;
+}
+.v2 .v2-sec:hover:not(:disabled) { color: var(--v2-ink); }
+.v2 .v2-sec:disabled { opacity: 0.55; cursor: default; }
 
-/* ── Contact strip ────────────────────────────────────────────────────────────────────────────── */
-.v2 .v2-cstrip { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 0 15px; }
+/* ── The contact strip. A MOBILE pattern; it stops at 1100px. ─────────────────────────────────── */
+.v2 .v2-cstrip { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 0 16px; }
 .v2 .v2-cs { display: flex; overflow-x: auto; scrollbar-width: none; }
 .v2 .v2-cs::-webkit-scrollbar { display: none; }
-.v2 .v2-ci { flex: none; padding: 11px 16px 11px 0; margin-right: 16px; border-right: 1px solid var(--v2-line); }
-.v2 .v2-ci:last-child { border-right: 0; margin-right: 0; }
-.v2 .v2-cik { font-family: var(--v2-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-42); }
+.v2 .v2-ci { flex: none; padding: 11px 15px 11px 0; margin-right: 15px; border-right: 1px solid var(--v2-line); }
+.v2 .v2-ci:last-child { border-right: 0; margin-right: 0; padding-right: 0; }
+.v2 .v2-cik { font-family: var(--v2-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-24); }
 .v2 .v2-civ { font-size: 13px; font-weight: 500; color: var(--v2-ink); margin-top: 3px; white-space: nowrap; }
-/* An absent fact is an em dash in the muted weight — present, and visibly empty. */
-.v2 .v2-civ[data-empty] { color: var(--v2-ink-42); font-weight: 400; }
+.v2 .v2-civ[data-empty] { color: var(--v2-ink-24); font-weight: 400; }
 
-/* ── The scroller ─────────────────────────────────────────────────────────────────────────────── */
-.v2 .v2-cscr { flex: 1; overflow-y: auto; padding: 15px 15px 20px; }
-.v2 .v2-ctlab {
-  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; color: var(--v2-ink-42);
-  margin: 0 2px 12px;
+/* ── The scroller and its container ───────────────────────────────────────────────────────────── */
+.v2 .v2-cscr { flex: 1; overflow-y: auto; padding: 16px 16px 20px; }
+.v2 .v2-tl {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; color: var(--v2-ink-24);
+  margin-bottom: 16px;
 }
-
-/* WHAT HAPPENED. The card, not the recap — see body.tsx. */
-.v2 .v2-csum {
-  background: var(--v2-paper); border-radius: 16px; padding: 13px; margin-bottom: 18px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.v2 .v2-csumh {
-  display: flex; align-items: center; gap: 7px;
-  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; color: var(--v2-ink-42);
-}
-.v2 .v2-csumh i { width: 4px; height: 4px; border-radius: 4px; flex: none; }
-.v2 .v2-csumt { font-size: 14px; line-height: 1.5; color: var(--v2-ink); margin-top: 8px; }
 
 /* ── The thread ───────────────────────────────────────────────────────────────────────────────── */
-.v2 .v2-cthread { display: flex; flex-direction: column; gap: 12px; }
+.v2 .v2-cthread { display: flex; flex-direction: column; gap: 10px; }
 .v2 .v2-cwrap { display: flex; flex-direction: column; }
 .v2 .v2-cday {
   align-self: center; font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.16em;
-  color: var(--v2-ink-42); margin: 2px 0 6px;
+  color: var(--v2-ink-24); margin: 2px 0 8px;
 }
-.v2 .v2-cb { max-width: 80%; padding: 11px 14px; font-size: 14.5px; line-height: 1.45; }
-.v2 .v2-cwho { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em; margin-bottom: 5px; }
-.v2 .v2-cstamp { font-family: var(--v2-mono); font-size: 9.5px; margin-top: 5px; opacity: 0.42; }
+.v2 .v2-cb { max-width: 78%; padding: 11px 15px; font-size: 14.5px; line-height: 1.48; position: relative; }
+.v2 .v2-cwho { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em; margin-bottom: 6px; line-height: 1; }
+.v2 .v2-cstamp { font-family: var(--v2-mono); font-size: 9.5px; margin-top: 6px; opacity: 0.42; line-height: 1; }
 
-/* THEM — white, left, the corner tucked into the left edge. */
 .v2 .v2-cb[data-by="customer"] {
   align-self: flex-start; background: var(--v2-paper); color: var(--v2-ink);
-  border-radius: 17px 17px 17px 5px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  border-radius: 18px 18px 18px 6px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.055);
 }
-.v2 .v2-cb[data-by="customer"] .v2-cwho { color: var(--v2-ink-42); }
+.v2 .v2-cb[data-by="customer"] .v2-cwho { color: var(--v2-ink-24); }
 
-/* THE EMPLOYEE — right, filled with their OWN wash. The two custom properties come from the persona
-   record; nothing here knows which employee it is drawing. */
 .v2 .v2-cb[data-by="agent"] {
-  align-self: flex-end; background: var(--wash); color: var(--v2-ink); border-radius: 17px 17px 5px 17px;
+  align-self: flex-end; background: var(--wash); color: var(--v2-ink); border-radius: 18px 18px 6px 18px;
 }
-.v2 .v2-cb[data-by="agent"] .v2-cwho { color: var(--wash-ink); }
+.v2 .v2-cb[data-by="agent"] .v2-cwho { color: var(--wash-ink); text-align: right; }
+.v2 .v2-cb[data-by="agent"] .v2-cstamp { text-align: right; }
 
-/* YOU — right, solid ink. The owner's own words are the one thing on the screen with full weight. */
 .v2 .v2-cb[data-by="you"] {
-  align-self: flex-end; background: var(--v2-ink); color: #fff; border-radius: 17px 17px 5px 17px;
+  align-self: flex-end; background: var(--v2-ink); color: #fff; border-radius: 18px 18px 6px 18px;
 }
-.v2 .v2-cb[data-by="you"] .v2-cwho { color: rgba(255, 255, 255, 0.5); }
+.v2 .v2-cb[data-by="you"] .v2-cwho { color: rgba(255, 255, 255, 0.5); text-align: right; }
+.v2 .v2-cb[data-by="you"] .v2-cstamp { text-align: right; }
 
-/* Both right-hand authors align their label and stamp to the right. */
-.v2 .v2-cb[data-by="agent"] .v2-cwho, .v2 .v2-cb[data-by="agent"] .v2-cstamp,
-.v2 .v2-cb[data-by="you"] .v2-cwho, .v2 .v2-cb[data-by="you"] .v2-cstamp { text-align: right; }
+/* A RUN: the same author again, same day. The label is not rendered and the gap closes, so two
+   bubbles read as one turn rather than as two records. */
+.v2 .v2-cb[data-run] { margin-top: -4px; }
 
 .v2 .v2-cb[data-failed] { outline: 1px solid rgba(255, 92, 108, 0.5); }
 
-/* THIS CONVERSATION, under the thread on a phone. */
-.v2 .v2-cabout { margin-top: 26px; }
-.v2 .v2-cfacts { display: grid; gap: 1px; background: var(--v2-line); border-radius: 14px; overflow: hidden; }
-.v2 .v2-cfacts > div { display: flex; justify-content: space-between; gap: 14px; background: var(--v2-paper); padding: 11px 13px; }
-.v2 .v2-cfacts dt { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em; color: var(--v2-ink-42); }
-.v2 .v2-cfacts dd { font-size: 13.5px; color: var(--v2-ink); text-align: right; }
-.v2 .v2-cfacts dd[data-empty] { color: var(--v2-ink-42); }
+/* ── The sidebar's blocks. On a phone only WHAT HAPPENED shows; the strip carries the rest. ────── */
+.v2 .v2-sl {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.18em; color: var(--v2-ink-24);
+  margin: 0 0 10px;
+}
+.v2 .v2-sgrp { margin-bottom: 26px; }
+.v2 .v2-sgrp:last-child { margin-bottom: 0; }
+.v2 .v2-sgrp[data-wide] { display: none; }
+.v2 .v2-f {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--v2-line);
+}
+.v2 .v2-f:last-child { border-bottom: 0; padding-bottom: 0; }
+.v2 .v2-fk { font-size: 12.5px; color: var(--v2-ink-42); flex: none; }
+.v2 .v2-fv {
+  font-size: 13.5px; font-weight: 500; color: var(--v2-ink); text-align: right;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.v2 .v2-fv[data-empty] { color: var(--v2-ink-24); font-weight: 400; }
+.v2 .v2-sum {
+  background: var(--v2-paper); border-radius: 14px; padding: 13px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-size: 13.5px; line-height: 1.55; color: var(--v2-ink-70);
+}
 
-/* ── Take over, pinned ────────────────────────────────────────────────────────────────────────── */
+/* ── The slot ─────────────────────────────────────────────────────────────────────────────────── */
 .v2 .v2-cmp {
   flex: none; background: var(--v2-paper); border-top: 1px solid var(--v2-line);
-  padding: 11px 14px calc(14px + env(safe-area-inset-bottom));
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
 }
+/* A phone cannot hold a sentence and a button on one 64px row, so it stacks — and that is the ONLY
+   difference between the two. The button first, its line beneath. */
+.v2 .v2-slotin { display: flex; flex-direction: column; }
+.v2 .v2-slotmsg { display: none; }
 .v2 .v2-takeover {
-  width: 100%; padding: 14px; border-radius: 15px; border: none; cursor: pointer;
+  width: 100%; padding: 14px; border-radius: 14px; border: none; cursor: pointer;
   background: var(--v2-ink); color: #fff; font-size: 14.5px; font-weight: 500; font-family: inherit;
-  display: flex; align-items: center; justify-content: center; gap: 9px; transition: transform 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  transition: transform 0.15s var(--v2-ease), background 0.2s;
 }
+.v2 .v2-takeover:hover:not(:disabled) { background: #000; }
 .v2 .v2-takeover:active, .v2 .v2-takeover[data-pressed] { transform: scale(0.97); }
 .v2 .v2-takeover:disabled { opacity: 0.5; cursor: default; transform: none; }
-.v2 .v2-tosub { font-size: 11.5px; color: var(--v2-ink-42); text-align: center; margin-top: 9px; }
-.v2 .v2-live { display: flex; gap: 9px; align-items: center; }
+.v2 .v2-tosub { font-size: 11.5px; color: var(--v2-ink-24); text-align: center; margin-top: 9px; }
+/* The live half is present at every width and revealed by the slot's own state — the switch is an
+   attribute on one element, not a different tree. */
+.v2 .v2-live { display: none; flex: 1; gap: 10px; align-items: center; }
+.v2 .v2-cmp[data-live] .v2-live { display: flex; }
+.v2 .v2-cmp[data-live] .v2-slotmsg,
+.v2 .v2-cmp[data-live] .v2-takeover,
+.v2 .v2-cmp:not([data-live]) .v2-tosub[data-bad] ~ * { }
+.v2 .v2-cmp[data-live] .v2-takeover { display: none; }
 .v2 .v2-live input {
-  flex: 1; height: 44px; border-radius: 999px; border: 1px solid var(--v2-line); background: var(--v2-quiet);
+  flex: 1; height: 42px; border-radius: 999px; border: 1px solid var(--v2-line); background: var(--v2-quiet);
   padding: 0 16px; font-size: 14.5px; font-family: inherit; outline: none; color: var(--v2-ink);
 }
+.v2 .v2-live input:focus { border-color: var(--v2-violet); }
 .v2 .v2-snd {
-  width: 44px; height: 44px; border-radius: 999px; border: none; flex: none; cursor: pointer;
+  width: 42px; height: 42px; border-radius: 999px; border: none; flex: none; cursor: pointer;
   background: var(--v2-ink); color: #fff; font-size: 17px;
 }
 
-/* ── THE CONVERSATION ON A WIDE SCREEN ───────────────────────────────────────────────────────────
-   The thread stops running the monitor: a 720px column, with the facts beside it rather than beneath
-   it. Three headings in the sidebar, not one grid — WHAT HAPPENED, CONTACT, THIS CONVERSATION — for
-   the reason the two lists exist at all: the person and the conversation are different kinds of fact,
-   and a single grid asks the reader to sort them.
-
-   NOTHING IS RENDERED TWICE. The action and the three blocks each exist once in the DOM; this query
-   moves them. Two copies of a control are two things to keep in step, and the disabled state is
-   exactly the sort of thing that would fall out of step. */
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   THE CONVERSATION, WIDE. Everything above is the phone; this is the same DOM, arranged. */
 
 @media (min-width: 1100px) {
-  .v2 .v2-cscr { padding: 24px 28px 40px; }
-  .v2 .v2-cinner {
-    display: grid; grid-template-columns: minmax(0, 720px) 320px; gap: 34px;
-    align-items: start; margin: 0 auto; max-width: 1100px;
-  }
-  /* The thread column: the label and the thread, in that order, down the left. */
-  .v2 .v2-cinner > .v2-ctlab { grid-column: 1; }
-  .v2 .v2-cthread { grid-column: 1; }
-  /* The sidebar: the same three blocks, moved. */
-  .v2 .v2-cside { grid-column: 2; grid-row: 1 / span 3; display: flex; flex-direction: column; gap: 22px; }
-  .v2 .v2-cside .v2-csum { margin-bottom: 0; }
-  .v2 .v2-cside .v2-cabout { margin-top: 0; }
-
-  /* ── THE COMPOSER SLOT (option A) ─────────────────────────────────────────────────────────────
-     The bottom of the thread column is where a reply always lives, so that slot exists whether or
-     not it can be used yet: locked it holds a sentence and the take-over button, live it holds the
-     input. One place, two states, the same mechanic the phone already has — and the SAME component,
-     because a desktop copy is a second `live` state to keep in step.
-
-     It sits OUTSIDE the scroller, so it holds while the thread moves under it. */
   .v2 .v2-conv {
-    display: grid;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr auto;
-    grid-template-areas: "head" "strip" "scroll" "slot";
+    --col: 720px; --side: 320px; --cgap: 36px; --cwrap: 1076px;
   }
-  .v2 .v2-conv > .v2-chd { grid-area: head; }
-  .v2 .v2-conv > .v2-cstrip { grid-area: strip; }
-  .v2 .v2-conv > .v2-cscr { grid-area: scroll; min-height: 0; }
+  .v2 .v2-hin { width: min(var(--cwrap), 100%); margin: 0 auto; padding: 14px 28px; }
+  .v2 .v2-sec { display: block; }
 
-  .v2 .v2-conv > .v2-cmp {
-    grid-area: slot; flex: none;
-    border-top: 1px solid var(--v2-line); background: var(--v2-paper);
-    padding: 14px 28px;
+  /* The strip is a phone pattern. The sidebar already carries every fact on it, and a screen that
+     says everything twice trusts neither copy. */
+  .v2 .v2-cstrip { display: none; }
+
+  .v2 .v2-cscr { padding: 0; }
+  .v2 .v2-wrap {
+    width: min(var(--cwrap), 100%); margin: 0 auto; padding: 0 28px;
+    display: grid; grid-template-columns: var(--col) var(--side); gap: var(--cgap);
   }
-  /* ALIGNED WITH THE THREAD, not centred in the window. The scroller's inner grid is
-     720 + 34 + 320 inside a centred 1100px container, so the same container with a 720px block at
-     its start puts this slot exactly under the messages rather than under the whole layout. */
+  .v2 .v2-cscr > .v2-wrap { padding-top: 22px; padding-bottom: 26px; }
+  /* Written first so a phone reads it first; placed second here. */
+  .v2 .v2-side { grid-column: 2; grid-row: 1; }
+  .v2 .v2-tcol { grid-column: 1; grid-row: 1; }
+  .v2 .v2-sgrp[data-wide] { display: block; }
+
+  /* THE SLOT, IN THE SAME CONTAINER AND THE THREAD'S COLUMN ONLY. One 64px row: status line left,
+     button right. It ends where the messages end. */
+  .v2 .v2-cmp { padding: 0; }
+  .v2 .v2-cmp > .v2-wrap { padding-top: 0; padding-bottom: 0; }
   .v2 .v2-slotin {
-    display: flex; align-items: center; gap: 14px;
-    max-width: 1100px; margin: 0 auto;
+    grid-column: 1; grid-row: 1;
+    height: 64px; flex-direction: row; align-items: center; gap: 16px;
   }
-  .v2 .v2-conv > .v2-cmp .v2-live { max-width: 1100px; margin: 0 auto; }
-  .v2 .v2-slotin > .v2-slotmsg { display: block; flex: 1; max-width: 720px; font-size: 13.5px; color: var(--v2-ink-42); }
+  .v2 .v2-slotmsg { display: block; flex: 1; font-size: 13px; line-height: 1.4; color: var(--v2-ink-42); }
+  .v2 .v2-cmp[data-live] .v2-slotmsg { display: none; }
   .v2 .v2-slotmsg b { color: var(--v2-ink); font-weight: 500; }
   .v2 .v2-slotmsg[data-bad] { color: #7a1020; }
-  .v2 .v2-conv > .v2-cmp .v2-takeover {
-    width: auto; flex: none; padding: 12px 20px; border-radius: 13px; font-size: 14px;
+  .v2 .v2-takeover {
+    width: auto; flex: none; padding: 11px 18px; border-radius: 12px; font-size: 13.5px;
   }
-  .v2 .v2-conv > .v2-cmp .v2-takeover:active { transform: scale(0.96); }
+  .v2 .v2-takeover:active { transform: scale(0.96); }
   /* The line beneath is the phone's affordance; here the sentence is beside the control. */
-  .v2 .v2-conv > .v2-cmp .v2-tosub { display: none; }
-  .v2 .v2-conv > .v2-cmp .v2-live input { min-width: 280px; }
-
-  /* Resolve and Close: secondary, and they look it. */
-  .v2 .v2-chd-act { display: flex; gap: 8px; flex: none; }
-  .v2 .v2-gh {
-    padding: 9px 14px; border-radius: 11px; border: 1px solid var(--v2-line);
-    background: var(--v2-paper); font-size: 13px; font-family: inherit; color: var(--v2-ink); cursor: pointer;
-  }
-  .v2 .v2-gh:disabled { opacity: 0.5; cursor: default; }
+  .v2 .v2-cmp .v2-tosub { display: none; }
 }
 
 /* The line under the control carries the outcome of the last attempt as well as the standing

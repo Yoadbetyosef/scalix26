@@ -48,7 +48,13 @@ export function ConversationThread({ lines, who, emptyLabel }: { lines: Line[]; 
   return (
     <div className="v2-cthread">
       {lines.map((l, i) => {
-        const newDay = i === 0 || dayOf(l.at) !== dayOf(lines[i - 1].at)
+        const prev = i > 0 ? lines[i - 1] : null
+        const newDay = !prev || dayOf(l.at) !== dayOf(prev.at)
+        // A RUN: the same author speaking again, on the same day. It drops its label and closes the
+        // gap, so two bubbles read as one turn. Repeating the name above every bubble is what makes
+        // a thread read as a list of records rather than as a conversation — and a day divider ends
+        // a run, because a reply the next morning is not the same breath.
+        const run = !!prev && !newDay && prev.by === l.by
         // The employee's own colours, from the persona map. `you` and the customer take the two fixed
         // treatments; only the agent's bubble varies, and it varies with WHO the agent is.
         const p = l.by === 'agent' ? personaOf({ persona: l.persona }) : null
@@ -59,10 +65,11 @@ export function ConversationThread({ lines, who, emptyLabel }: { lines: Line[]; 
             <div
               className="v2-cb"
               data-by={l.by}
+              data-run={run || undefined}
               data-failed={l.failed || undefined}
               style={p ? ({ '--wash': p.wash, '--wash-ink': p.washInk } as React.CSSProperties) : undefined}
             >
-              <p className="v2-cwho">{label}</p>
+              {!run && <p className="v2-cwho">{label}</p>}
               <p className="v2-ctext">{l.body}</p>
               <p className="v2-cstamp">{timeOf(l.at)}{l.failed ? ' · not delivered' : ''}</p>
             </div>

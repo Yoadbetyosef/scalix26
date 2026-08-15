@@ -99,58 +99,57 @@ export function TakeOver({ conversationId, agentName, takenOver }: Props) {
     }
   }
 
-  if (!live) {
-    return (
-      <div className="v2-cmp">
+  // ONE STRUCTURE, TWO STATES. The reference switches on `data-live` rather than swapping trees, and
+  // that is what makes the swap happen IN PLACE: the slot is the same 64px row before and after, so
+  // nothing above it moves at the moment you act. Rendering two different trees would reflow.
+  return (
+    <div className="v2-cmp" data-live={live || undefined}>
+      <div className="v2-wrap">
         <div className="v2-slotin">
-          {/* THE SAME SENTENCE, IN TWO LENGTHS. A phone has the button across the full width with a
-              line beneath it; a desktop has a row, so it has room to say what taking over costs
-              before the reader reaches the control. Both are in the DOM and CSS shows one — the
-              alternative is a second component, and then two places to change the wording.
+          {/* THE SAME SENTENCE, IN TWO LENGTHS. A desktop row has space to say what taking over
+              costs before the reader reaches the control; 390px does not, so a phone puts the short
+              line under the button. Both are in the DOM and CSS shows one — a second component would
+              be two places to change the wording and two `live` states to keep in step.
 
-              "they'll", not "she'll": this control belongs to whichever employee is on the thread,
-              and the reference was written for one of them. */}
+              "they'll", not the reference's "she'll": the control belongs to whichever employee is
+              on the thread, and the reference was written for one of them. */}
           <p className="v2-slotmsg" data-bad={outcome && !outcome.ok ? true : undefined}>
             {outcome
               ? outcome.message
               : <><b>{agentName} is handling this thread.</b> Take over and they&apos;ll stop replying.</>}
           </p>
+
           <button type="button" className="v2-takeover" data-touch disabled={busy} onClick={takeOver}>
             {busy ? 'Taking over…' : 'Take over and reply'}
           </button>
-        </div>
-        <p className="v2-tosub" data-bad={outcome && !outcome.ok ? true : undefined}>
-          {outcome ? outcome.message : `${agentName} stops answering this thread.`}
-        </p>
-      </div>
-    )
-  }
 
-  // LIVE — the same slot, the same height, the field where the button was. The swap is in place:
-  // nothing above it moves, which is the point of the slot existing whether or not it can be used.
-  return (
-    <div className="v2-cmp" data-live>
-      <div className="v2-live">
-        <input
-          ref={input}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send() } }}
-          placeholder="Reply to this conversation…"
-          aria-label="Your reply"
-          disabled={busy}
-        />
-        <button
-          type="button"
-          className="v2-snd"
-          onClick={() => void send()}
-          disabled={busy || !text.trim()}
-          aria-label="Send"
-        >↑</button>
+          <div className="v2-live">
+            <input
+              ref={input}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send() } }}
+              placeholder="Reply to this conversation…"
+              aria-label="Your reply"
+              disabled={busy}
+            />
+            <button
+              type="button"
+              className="v2-snd"
+              onClick={() => void send()}
+              disabled={busy || !text.trim()}
+              aria-label="Send"
+            >↑</button>
+          </div>
+        </div>
       </div>
-      {outcome && (
-        <p className="v2-tosub" data-bad={outcome.ok ? undefined : true}>{outcome.message}</p>
-      )}
+
+      {/* The phone's line: the standing explanation, or the outcome of the last attempt. A failure
+          stays until the next attempt rather than fading — a message that did not arrive is not a
+          transient event. */}
+      <p className="v2-tosub" data-bad={outcome && !outcome.ok ? true : undefined}>
+        {outcome ? outcome.message : `${agentName} stops answering this thread.`}
+      </p>
     </div>
   )
 }

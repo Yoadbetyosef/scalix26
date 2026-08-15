@@ -8,7 +8,9 @@ const body = strip(read('./body.tsx'))
 const thread = strip(read('./thread.tsx'))
 const takeover = strip(read('./takeover.tsx'))
 const css = read('../../v2-tokens.css')
-const conv = css.slice(css.indexOf('THE CONVERSATION —'))
+const conv = css.slice(css.indexOf('THE CONVERSATION — docs/miles/conversation-FINAL'))
+// The wide arrangement is the same DOM, and its block starts where the phone's ends.
+const wide = css.slice(css.indexOf('THE CONVERSATION, WIDE'))
 
 describe('three authors, not two', () => {
   it('the thread knows which of the two right-hand voices spoke', () => {
@@ -18,18 +20,27 @@ describe('three authors, not two', () => {
     expect(body).toContain("by: m.role === 'user' ? 'customer' : m.role === 'agent' ? 'you' : 'agent'")
   })
 
-  it('takes C1’s values for each of the three', () => {
-    expect(conv).toMatch(/\[data-by="customer"\][^}]*border-radius: 17px 17px 17px 5px/)
-    expect(conv).toMatch(/\[data-by="customer"\][^}]*box-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.06\)/)
-    expect(conv).toMatch(/\[data-by="agent"\][^}]*background: var\(--wash\)[^}]*border-radius: 17px 17px 5px 17px/)
+  it('takes the final file’s values for each of the three', () => {
+    expect(conv).toMatch(/\.v2-cb \{ max-width: 78%; padding: 11px 15px; font-size: 14\.5px; line-height: 1\.48/)
+    expect(conv).toMatch(/\[data-by="customer"\][^}]*border-radius: 18px 18px 18px 6px/)
+    expect(conv).toMatch(/\[data-by="customer"\][^}]*box-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.055\)/)
+    expect(conv).toMatch(/\[data-by="agent"\][^}]*background: var\(--wash\)[^}]*border-radius: 18px 18px 6px 18px/)
     expect(conv).toMatch(/\[data-by="you"\][^}]*background: var\(--v2-ink\); color: #fff/)
     expect(conv).toMatch(/\[data-by="you"\] \.v2-cwho \{ color: rgba\(255, 255, 255, 0\.5\)/)
   })
 
+  it('a run of one author drops its label and closes the gap', () => {
+    // Two bubbles, one label — which is what makes it read as a conversation rather than a list.
+    expect(thread).toContain('const run = !!prev && !newDay && prev.by === l.by')
+    expect(thread).toContain('{!run && <p className="v2-cwho">{label}</p>}')
+    expect(conv).toMatch(/\.v2-cb\[data-run\] \{ margin-top: -4px; \}/)
+  })
+
   it('labels and stamps at the reference’s sizes, right-aligned for both right-hand authors', () => {
-    expect(conv).toMatch(/\.v2-cwho \{[^}]*font-size: 9px; letter-spacing: 0\.14em/)
-    expect(conv).toMatch(/\.v2-cstamp \{[^}]*font-size: 9\.5px[^}]*opacity: 0\.42/)
-    expect(conv).toMatch(/data-by="agent"\] \.v2-cwho,[\s\S]{0,140}text-align: right/)
+    expect(conv).toMatch(/\.v2-cwho \{[^}]*font-size: 9px; letter-spacing: 0\.14em[^}]*margin-bottom: 6px/)
+    expect(conv).toMatch(/\.v2-cstamp \{[^}]*font-size: 9\.5px[^}]*margin-top: 6px; opacity: 0\.42/)
+    expect(conv).toMatch(/\[data-by="agent"\] \.v2-cwho \{ color: var\(--wash-ink\); text-align: right/)
+    expect(conv).toMatch(/\[data-by="you"\] \.v2-cwho \{ color: rgba\(255, 255, 255, 0\.5\); text-align: right/)
   })
 
   it('the employee’s bubble wears THAT employee’s wash, and the file does not know which', () => {
@@ -55,16 +66,19 @@ describe('the wash is per persona and hand-picked', () => {
 })
 
 describe('the screen', () => {
-  it('puts the contact strip under the header, and an absent fact is an em dash', () => {
+  it('the strip is a phone pattern and stops at 1100px', () => {
+    // Above it the sidebar carries every fact on the strip, and a screen that says everything twice
+    // trusts neither copy.
     expect(body).toContain('className="v2-cstrip"')
     expect(body).toContain("{f.v ?? '—'}")
-    expect(conv).toMatch(/\.v2-civ\[data-empty\] \{ color: var\(--v2-ink-42\)/)
+    expect(conv).toMatch(/\.v2-civ\[data-empty\] \{ color: var\(--v2-ink-24\)/)
+    expect(wide).toContain('.v2 .v2-cstrip { display: none; }')
   })
 
   it('the channel word wears the channel’s own hue, from the one table', () => {
     // As TEXT on white it takes --chan-ink: cyan and amber at full strength are unreadable there.
-    expect(body).toContain('<span data-channel={ch ?? undefined}>')
-    expect(conv).toContain('color: var(--chan-ink, var(--v2-ink-42))')
+    expect(body).toContain('<span className="v2-c" data-channel={ch ?? undefined}>')
+    expect(conv).toContain('.v2-hm .v2-c { color: var(--chan-ink, var(--v2-ink-42)); font-weight: 500; }')
   })
 
   it('the agent pill wears the agent’s wash', () => {
@@ -73,19 +87,19 @@ describe('the screen', () => {
 
   it('separates what is true of the person from what is true of the conversation', () => {
     expect(body).toContain('THIS CONVERSATION')
-    expect(body).toMatch(/const facts:/)
+    expect(body).toMatch(/const person:/)
     expect(body).toMatch(/const about:/)
   })
 })
 
 describe('WHAT HAPPENED is a card, not an invention', () => {
   it('renders only when something written exists', () => {
-    expect(body).toContain('const whatHappened = str(conv.summary) ? (')
+    expect(body).toContain('{str(conv.summary) && (')
   })
 
   it('never assembles a recap from the messages', () => {
-    const sum = body.slice(body.indexOf('v2-csum'), body.indexOf('v2-ctlab'))
-    expect(sum).not.toMatch(/lines\[|last\.|slice\(|join\(/)
+    const sum = body.slice(body.indexOf('WHAT HAPPENED'), body.indexOf("factGroup('CONTACT'"))
+    expect(sum).not.toMatch(/lines\[|last\.|join\(/)
   })
 })
 
@@ -134,48 +148,54 @@ describe('the composer can send, and says truthfully whether it did', () => {
 })
 
 describe('desktop', () => {
-  const wide = css.slice(css.indexOf('THE CONVERSATION ON A WIDE SCREEN'))
 
-  it('caps the thread at 720px and puts the sidebar at 320px', () => {
-    expect(wide).toMatch(/grid-template-columns: minmax\(0, 720px\) 320px/)
+  it('one 1076px container, a 720 column and a 320 sidebar', () => {
+    expect(wide).toMatch(/--col: 720px; --side: 320px; --cgap: 36px; --cwrap: 1076px/)
+    expect(wide).toMatch(/grid-template-columns: var\(--col\) var\(--side\); gap: var\(--cgap\)/)
+    // The header row uses the same container, so nothing on the screen is aligned to the window.
+    expect(wide).toMatch(/\.v2-hin \{ width: min\(var\(--cwrap\), 100%\)/)
   })
 
   it('carries three headings, not one grid', () => {
     // The person and the conversation are different kinds of fact; a single grid asks the reader to
     // sort them.
-    expect(body).toContain("factList('CONTACT', facts)")
-    expect(body).toContain("factList('THIS CONVERSATION', about)")
-    expect(body).toContain('{whatHappened}')
+    expect(body).toContain("factGroup('CONTACT', person)")
+    expect(body).toContain("factGroup('THIS CONVERSATION', about)")
+    expect(body).toContain('WHAT HAPPENED')
   })
 
   it('take over is a slot at the foot of the thread, not a header action', () => {
-    // It came OUT of the header: it is the primary thing on this screen, and a copy of it beside the
-    // secondary actions would compete with itself. Still ONE <TakeOver> — two would be two `live`
-    // states, and the hidden one is the one that falls out of step.
+    // It is the primary thing on this screen; a copy beside the secondary actions would compete with
+    // itself. Still ONE <TakeOver> — two would be two `live` states, and the hidden one falls out of
+    // step.
     expect((body.match(/<TakeOver /g) ?? []).length).toBe(1)
-    expect(wide).toMatch(/grid-template-areas: "head" "strip" "scroll" "slot"/)
-    expect(wide).toMatch(/\.v2-conv > \.v2-cmp \{[\s\S]{0,80}grid-area: slot/)
+    expect(body.indexOf('<TakeOver')).toBeGreaterThan(body.indexOf('v2-cscr'))
+  })
+
+  it('the slot is one 64px row, in the thread’s column only', () => {
+    // grid-column 1, so it ends where the messages end rather than running under the sidebar. That
+    // was the fault: a slot centred in the window is not aligned to anything on the page.
+    expect(wide).toMatch(/\.v2-slotin \{\s*grid-column: 1; grid-row: 1;\s*height: 64px/)
+    expect(takeover).toContain('<div className="v2-wrap">')
   })
 
   it('the slot sits outside the scroller, so it holds while the thread moves', () => {
-    // Its own grid row, a sibling of the scroller rather than a child of it.
-    expect(wide).toMatch(/\.v2-conv > \.v2-cscr \{ grid-area: scroll/)
-    // A sibling of the scroller, after it — not a child of it, which is what would scroll away.
-    expect(body.indexOf('<TakeOver')).toBeGreaterThan(body.indexOf('v2-cscr'))
-    expect(body.indexOf('<TakeOver')).toBeGreaterThan(body.indexOf('v2-cinner'))
+    // A sibling of the scroller, after it — a child would scroll away.
+    expect(body.indexOf('<TakeOver')).toBeGreaterThan(body.indexOf('v2-wrap'))
+    expect(css).toMatch(/\.v2-cmp \{\s*flex: none/)
   })
 
-  it('and lines up with the thread rather than with the window', () => {
-    // The scroller's inner grid is 720 + 34 + 320 inside a centred 1100px container; the slot uses
-    // the same container so it lands under the messages, not under the whole layout.
-    expect(wide).toMatch(/\.v2-slotin \{[\s\S]{0,120}max-width: 1100px; margin: 0 auto/)
-    expect(wide).toMatch(/\.v2-slotmsg \{ display: block; flex: 1; max-width: 720px/)
+  it('the status line is quiet — only the name is in ink', () => {
+    expect(wide).toMatch(/\.v2-slotmsg \{ display: block; flex: 1; font-size: 13px; line-height: 1\.4; color: var\(--v2-ink-42\)/)
+    expect(wide).toMatch(/\.v2-slotmsg b \{ color: var\(--v2-ink\); font-weight: 500/)
   })
 
   it('the secondary actions stay in the header, and say they are not wired', () => {
-    expect(body).toContain('className="v2-chd-act"')
-    expect(body).toMatch(/<button type="button" className="v2-gh" disabled title=\{PREVIEW\}>Resolve<\/button>/)
-    expect(body).toMatch(/<button type="button" className="v2-gh" disabled title=\{PREVIEW\}>Close<\/button>/)
+    expect(body).toMatch(/className="v2-sec" disabled title=\{PREVIEW\}>Resolve</)
+    expect(body).toMatch(/className="v2-sec" disabled title=\{PREVIEW\}>Close</)
+    // A phone header has no room for them, and they are not the primary thing anywhere.
+    expect(css).toMatch(/\.v2-sec \{\s*display: none/)
+    expect(wide).toContain('.v2 .v2-sec { display: block; }')
   })
 
   it('one component for both widths, not a desktop copy', () => {
@@ -187,9 +207,13 @@ describe('desktop', () => {
   })
 
   it('the sidebar blocks are the same nodes the phone stacks', () => {
-    // One render, placed by CSS. Two copies of a list are two lists to keep in step.
-    expect((body.match(/factList\(/g) ?? []).length).toBe(2)   // two calls; the definition is `factList = (`
-    expect(body).toContain('className="v2-cside"')
+    // One render, placed by the grid. Written FIRST so a phone reads WHAT HAPPENED before the
+    // thread; placed second so a desktop puts it beside one.
+    expect((body.match(/factGroup\(/g) ?? []).length).toBe(2)
+    expect(body).toContain('className="v2-side"')
+    expect(body.indexOf('v2-side')).toBeLessThan(body.indexOf('v2-tcol'))
+    expect(wide).toMatch(/\.v2-side \{ grid-column: 2; grid-row: 1; \}/)
+    expect(wide).toMatch(/\.v2-tcol \{ grid-column: 1; grid-row: 1; \}/)
   })
 
   it('is entirely inside a min-width query — the phone layout is untouched', () => {
