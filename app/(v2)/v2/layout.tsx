@@ -1,4 +1,9 @@
 import type { ReactNode } from 'react'
+import { headers } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { getActiveTenantId } from '@/lib/workspace'
+import { v2Allowed, mainDomainUrl } from '@/lib/v2/access'
 import './v2-tokens.css'
 
 // The v2 preview tree.
@@ -23,12 +28,49 @@ import './v2-tokens.css'
 // selectors inside this subtree on specificity. What it does not guarantee is that globals' base and
 // reset rules are absent — they apply.
 
+// ── THE GATE ────────────────────────────────────────────────────────────────────────────────────
+//
+// The v2.* hostname was never a gate. proxy.ts REWRITES that host onto /v2 — the path resolves just
+// the same on the main domain, so any signed-in user could type /v2/inbox and reach a tree that now
+// sends messages to customers, stops follow-up sequences and marks leads booked.
+//
+// Here rather than in the middleware, for the reason the middleware itself gives about /admin: the
+// check needs the ACTIVE TENANT, which means cookies plus two Supabase reads, and the edge cannot do
+// that. app/admin/layout.tsx is the same four lines for the same reason.
+//
+// Here rather than in each page, because there are fifteen of them and listPageContext does not
+// cover all fifteen — app/(v2)/v2/page.tsx does its own session work. One layout covers every page,
+// its loading and error boundaries, and every page added after this one.
+//
+// TWO THINGS THIS DOES NOT DO, both deliberate:
+//
+//   1. A layout does not re-run on client-side navigation WITHIN /v2. Entering the tree from
+//      anywhere outside it renders this, so there is no way in that skips it — but access revoked
+//      mid-session survives until a reload. With an allowlist that only changes on deploy (which
+//      restarts everything) that is not reachable in practice.
+//   2. A layout does not cover route handlers. The two /v2-ONLY endpoints carry the same check
+//      themselves; /send and /takeover deliberately do not, because v1 uses them.
+//
+// See lib/v2/access.ts for why the identity is the tenant, and for the sentence about this being an
+// exposure boundary rather than an authorization one.
+
 export const metadata = {
   title: 'Rudi — preview',
   robots: { index: false, follow: false },
 }
 
-export default function V2Layout({ children }: { children: ReactNode }) {
+export default async function V2Layout({ children }: { children: ReactNode }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  // Not signed in is the middleware's job and it has already run; this is only about WHO.
+  if (user) {
+    const tenantId = await getActiveTenantId()
+    if (!v2Allowed(tenantId, user.email)) {
+      const h = await headers()
+      redirect(mainDomainUrl(h.get('x-forwarded-host') || h.get('host'), '/dashboard'))
+    }
+  }
+
   return (
     <div className="v2">
       {children}

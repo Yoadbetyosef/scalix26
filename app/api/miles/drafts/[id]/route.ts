@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { applyDecision } from '@/lib/miles/decide'
+import { v2Allowed } from '@/lib/v2/access'
 
 // THE THREE ACTIONS, from inside the app. The same three arrive by link at /api/m/[token].
 //
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const tenantId = await getActiveTenantId()
   if (!tenantId) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+
+  // /v2-ONLY, so it carries /v2's gate. A layout does not cover a route handler, and the inbox that
+  // calls this is the only caller from inside the app — the SAME three decisions also arrive by link
+  // at /api/m/[token], which is public by design and gated by the token instead.
+  if (!v2Allowed(tenantId, user.email)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { action, body } = await req.json().catch(() => ({ action: null, body: null }))
   if (action !== 'send' && action !== 'handle') {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { stopDripsForPhone } from '@/lib/leads/drip'
+import { v2Allowed } from '@/lib/v2/access'
 
 // STOP FOLLOWING UP WITH THIS PERSON — the decision, named for what it does.
 //
@@ -19,6 +20,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const ctx = await requireActiveBusinessContext()
   if (!ctx) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // /v2-ONLY, so it carries /v2's gate — a layout does not cover a route handler. /send and
+  // /takeover deliberately do NOT have this: v1's inbox calls both, and gating them would break it.
+  //
+  // The email is read here rather than added to ActiveBusinessContext: that type is the single source
+  // of truth for tenant authorization across every write in the app, and widening it for one caller's
+  // convenience is not a trade worth making.
+  const { data: { user } } = await (await createClient()).auth.getUser()
+  if (!v2Allowed(ctx.tenantId, user?.email)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
   const { data: conv } = await admin

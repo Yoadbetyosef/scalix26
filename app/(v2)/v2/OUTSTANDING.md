@@ -435,3 +435,43 @@ of them ever read the screen. Removing the screen cost none of them anything.
 **v1 still has its Leads tab** at /dashboard?tab=leads, and that is deliberate: it is where Dismiss
 and Restore still live for anyone not on /v2. When v1 goes, Restore needs a home — it is the only
 control of the four with nowhere else to be.
+
+---
+
+## §23 — the /v2 gate is an EXPOSURE boundary, not an authorization one
+
+Read this before touching lib/v2/access.ts, because the fix for the other thing is much bigger and
+somebody will otherwise find the file and build it.
+
+**There was never a leak.** Every /v2 write was tenant-scoped before the gate existed and still is:
+takeover, send and stop-followups go through `requireActiveBusinessContext()`, and the drafts route
+through `getActiveTenantId()`. A signed-in user who typed `/v2/inbox` on the main domain could not
+reach another business's data — the v2.* hostname is a REWRITE in proxy.ts, not a gate, so the path
+always resolved, and the tenant scoping was doing its job the whole time.
+
+**What they could do is use unfinished software on their OWN customers.** /v2 stopped being read-only
+when the composer was wired: it now sends messages, stops follow-up sequences and marks leads booked.
+That is what the gate is for. If it ever fails, the incident is "somebody saw an unfinished screen
+and possibly texted their own customer from it" — not a breach, and not a reason to re-architect
+tenant isolation, which is already correct.
+
+**Identity is the TENANT** (`V2_TENANT_IDS`, empty by default = admins only), because the blast radius
+of a /v2 write is one tenant's customer list, so the unit of the gate matches the unit of the risk.
+It also composes with the operator plane for free: `getActiveTenantId()` returns the ACTIVE workspace,
+so a partner switched into a client tenant is judged by that client's tenant rather than carrying /v2
+into every workspace they operate.
+
+**Two things the gate does not do, both deliberate:**
+
+1. **A layout does not re-run on client-side navigation within /v2.** Entering the tree from anywhere
+   outside renders it, so there is no way in that skips it — but access revoked mid-session survives
+   until a reload. With an allowlist that only changes on deploy (which restarts everything) this is
+   not reachable in practice. If the allowlist ever becomes a database row that changes at runtime,
+   this stops being true and the check has to move.
+2. **A layout does not cover route handlers.** The two /v2-ONLY endpoints carry the check themselves
+   (`/api/miles/drafts/[id]`, `/api/conversations/[id]/stop-followups`). `/send` and `/takeover`
+   deliberately do NOT: v1's inbox calls both, and gating them would break v1. This mirrors what the
+   middleware already says about /admin — the layout gates the tree, and each API route gates itself.
+
+**Not in the middleware**, for the reason the middleware itself gives about /admin: the check needs
+the active tenant, which means cookies plus two Supabase reads, and the edge cannot do that.
