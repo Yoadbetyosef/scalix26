@@ -8,10 +8,17 @@ import { nameOf } from '@/lib/persona'
 //
 // ── WHAT IS SHOWN ───────────────────────────────────────────────────────────────────────────────
 //
-// Today forward, cancelled excluded. That is what an agenda IS, and it is what the reference draws:
-// two day groups, both in the future. Past appointments are history and have no home on this screen —
-// recorded in OUTSTANDING §27, because the list this replaced had Past and Cancelled filters and that
-// is a real loss, not an omission.
+// Today forward is the agenda, and it is what the reference draws. But the list this replaced had
+// Past and Cancelled filters, and dropping them made two real things unreachable (OUTSTANDING §27).
+//
+// So: EARLIER runs the other way, under its own day groups, newest first, below the upcoming ones.
+// Not a filter chip — an agenda you can point backwards stops being an agenda, and a chip that
+// replaces the whole screen hides today to show last week. Days continue downward in the direction
+// time does, which is the one arrangement that needs no explaining.
+//
+// It is bounded and it is loaded with the same read: EARLIER_DAYS back, which on real data is a
+// handful of rows. Cancelled appointments appear ONLY there — a cancelled slot is not on your agenda,
+// but "did I cancel that?" is a real question and the answer had nowhere to be.
 //
 // ── THE KIND IS READ, NEVER INFERRED ────────────────────────────────────────────────────────────
 //
@@ -51,6 +58,10 @@ export interface AgendaRow {
   byPersona: 'rudi' | 'miles' | 'you'
   /** Now is inside this appointment's own window. */
   isNow: boolean
+  /** Struck through and muted. Only ever true below the fold — a cancellation is not on your agenda. */
+  cancelled: boolean
+  /** Already happened. The row keeps its shape and loses its actions. */
+  past: boolean
 }
 
 export interface AgendaDay {
@@ -62,10 +73,16 @@ export interface AgendaDay {
 }
 
 export interface Agenda {
+  /** Today forward. The agenda proper. */
   days: AgendaDay[]
+  /** Newest first, going back. Includes cancelled rows, which never appear above. */
+  earlier: AgendaDay[]
   todayCount: number
   missingCount: number
 }
+
+/** How far back "earlier" reaches. Far enough to answer "what did I do last week". */
+export const EARLIER_DAYS = 30
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -124,27 +141,37 @@ export async function readAgenda(tenantId: string): Promise<Agenda> {
   // Nothing more specific was agreed, so the rail falls back to this rather than to a guess.
   const fallback = Number(tenant?.default_appointment_minutes) || 60
 
+  // One window covering both directions, one read. The split happens below.
+  const from = new Date(`${now.dateIso}T12:00:00Z`)
+  from.setUTCDate(from.getUTCDate() - EARLIER_DAYS)
+  const fromIso = from.toISOString().slice(0, 10)
+
   const [{ data }, phoneAgent, textAgent] = await Promise.all([
     db
       .from('appointments')
       .select('id, slot_date, slot_time, customer_name, customer_phone, service_type, status, channel, meeting_kind, join_url, address, duration_minutes')
       .eq('tenant_id', tenantId)
-      .gte('slot_date', now.dateIso)
-      .neq('status', 'cancelled')
+      .gte('slot_date', fromIso)
       .order('slot_date', { ascending: true })
       .order('slot_time', { ascending: true }),
     primaryAgent<{ name: string | null; persona: string | null }>(db, tenantId, 'name, persona'),
     agentByPersona<{ name: string | null; persona: string | null }>(db, tenantId, 'miles', 'name, persona'),
   ])
 
-  const rows = (data ?? []) as unknown as Row[]
+  const all = (data ?? []) as unknown as Row[]
+  // A cancelled appointment is not on your agenda. It IS part of the record, so it survives below.
+  const rows = all.filter((r) => r.slot_date >= now.dateIso ? r.status !== 'cancelled' : true)
   const days = new Map<string, AgendaDay>()
+  const past = new Map<string, AgendaDay>()
   let missingCount = 0
 
   for (const r of rows) {
+    const isPast = r.slot_date < now.dateIso
     const kind = kindOf(r.meeting_kind)
     const { where, missing } = placeOf(kind, r)
-    if (missing) missingCount++
+    // Only what is still ahead can need something. A gap on a job that has already happened is
+    // history, and counting it would put a number in the opening line nobody can act on.
+    if (missing && !isPast) missingCount++
 
     const minutes = r.duration_minutes && r.duration_minutes > 0 ? r.duration_minutes : fallback
     const { short, long } = durationLabels(minutes)
@@ -160,7 +187,8 @@ export async function readAgenda(tenantId: string): Promise<Agenda> {
     const agent = typed ? (textAgent ?? phoneAgent) : phoneAgent
     const persona = ((agent as { persona?: string | null } | null)?.persona === 'miles' ? 'miles' : 'rudi') as 'rudi' | 'miles'
 
-    const day = days.get(r.slot_date) ?? {
+    const bucket = isPast ? past : days
+    const day = bucket.get(r.slot_date) ?? {
       key: r.slot_date,
       label: r.slot_date === now.dateIso
         ? `TODAY · ${dayStamp(r.slot_date)}`
@@ -185,9 +213,11 @@ export async function readAgenda(tenantId: string): Promise<Agenda> {
       byPersona: persona,
       // Inside its own window, measured in the business timezone the slot was booked in.
       isNow: r.slot_date === now.dateIso && now.minutes >= start && now.minutes < start + minutes,
+      cancelled: r.status === 'cancelled',
+      past: isPast,
     })
     day.count = day.rows.length
-    days.set(r.slot_date, day)
+    bucket.set(r.slot_date, day)
   }
 
   // TOMORROW earns its own word; every other day is just its stamp.
@@ -198,8 +228,19 @@ export async function readAgenda(tenantId: string): Promise<Agenda> {
     d.key === tomorrowIso ? { ...d, label: `TOMORROW · ${dayStamp(d.key)}` } : d,
   )
 
+  // YESTERDAY earns a word too, and the rest run backwards from it.
+  const yest = new Date(`${now.dateIso}T12:00:00Z`)
+  yest.setUTCDate(yest.getUTCDate() - 1)
+  const yesterdayIso = yest.toISOString().slice(0, 10)
+  const earlier = [...past.values()]
+    .sort((a, b) => (a.key < b.key ? 1 : -1))
+    .map((d) => (d.key === yesterdayIso ? { ...d, label: `YESTERDAY · ${dayStamp(d.key)}` } : d))
+    // Each day reads latest-first going back, the same direction the days themselves run.
+    .map((d) => ({ ...d, rows: [...d.rows].reverse() }))
+
   return {
     days: out,
+    earlier,
     todayCount: days.get(now.dateIso)?.count ?? 0,
     missingCount,
   }

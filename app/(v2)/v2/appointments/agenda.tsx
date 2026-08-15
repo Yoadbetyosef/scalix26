@@ -71,9 +71,7 @@ export function AgendaView({ agenda, tints }: Props) {
   const [moving, setMoving] = useState<AgendaRow | null>(null)
   const [dayOf, setDayOf] = useState<string>('')
 
-  return (
-    <>
-      {agenda.days.map((d) => (
+  const day = (d: (typeof agenda.days)[number]) => (
         <div key={d.key}>
           <p className="v2-ag-grp">
             <span className="v2-ag-gt">{d.label}</span>
@@ -85,7 +83,7 @@ export function AgendaView({ agenda, tints }: Props) {
             {d.rows.map((r, i) => (
               <div key={r.id}>
                 {i > 0 && <div className="v2-ag-sep" />}
-                <div className="v2-ag-row" data-k={r.kind} data-now={r.isNow || undefined}>
+                <div className="v2-ag-row" data-k={r.kind} data-now={r.isNow || undefined} data-past={r.past || undefined} data-cancelled={r.cancelled || undefined}>
                   <div className="v2-ag-time">
                     <p className="v2-ag-t1">{r.time}<i>{r.meridiem && ` ${r.meridiem}`}</i></p>
                     <p className="v2-ag-t2"><span data-short>{r.durationShort}</span><span data-long>{r.durationLong}</span></p>
@@ -102,6 +100,7 @@ export function AgendaView({ agenda, tints }: Props) {
                         style={tints[r.byPersona] ? { background: tints[r.byPersona].wash, color: tints[r.byPersona].ink } : undefined}
                       >{r.by.toUpperCase()}</span>
                       {r.isNow && <span className="v2-ag-now" data-wide>HAPPENING NOW</span>}
+                      {r.cancelled && <span className="v2-ag-cx">CANCELLED</span>}
                     </div>
 
                     <p className="v2-ag-svc">{r.service ?? ''}</p>
@@ -125,14 +124,36 @@ export function AgendaView({ agenda, tints }: Props) {
 
                   {/* A SIBLING of .v2-ag-mid, not a child — that is what lets the track sit at the
                       row's right edge on a wide screen. On a phone the row wraps and the track takes
-                      its own line, indented to clear the time rail and the spine. */}
-                  <Actions row={r} onMove={() => { setMoving(r); setDayOf(d.label) }} />
+                      its own line, indented to clear the time rail and the spine.
+
+                      A past appointment has no actions: there is nothing to move, and calling about a
+                      job you finished last week is a different intention that belongs on the contact,
+                      not here. The row keeps its shape and simply ends. */}
+                  {!r.past && <Actions row={r} onMove={() => { setMoving(r); setDayOf(d.label) }} />}
                 </div>
               </div>
             ))}
           </div>
         </div>
-      ))}
+      )
+
+  return (
+    <>
+      {agenda.days.map(day)}
+
+      {/* EARLIER — the same day groups, running the other way. Not a filter: a chip that replaces the
+          screen hides today to show last week, and an agenda you can point backwards stops being an
+          agenda. Days simply continue downward in the direction time does. */}
+      {agenda.earlier.length > 0 && (
+        <div className="v2-ag-earlier">
+          <p className="v2-ag-grp" data-earlier>
+            <span className="v2-ag-gt">EARLIER</span>
+            <span className="v2-ag-gn">{agenda.earlier.reduce((n, d) => n + d.count, 0)}</span>
+            <span className="v2-ag-gr" />
+          </p>
+          {agenda.earlier.map(day)}
+        </div>
+      )}
 
       {moving && <MoveSheet row={moving} day={dayOf} onClose={() => setMoving(null)} onDone={() => { setMoving(null); router.refresh() }} />}
     </>

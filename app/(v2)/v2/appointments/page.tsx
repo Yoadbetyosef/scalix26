@@ -53,13 +53,15 @@ export default async function V2Appointments() {
 
       <div className="v2-pbody" data-scroll>
         <div className="v2-ag-inner">
-          {agenda.days.length === 0 ? (
+          {agenda.days.length === 0 && agenda.earlier.length === 0 ? (
             <div className="v2-pempty">
               <p className="v2-pempty-t">Nothing booked</p>
               <p className="v2-pempty-b">Appointments booked from a call or a message land here.</p>
             </div>
           ) : (
             <>
+              {/* The line speaks about what is AHEAD. With nothing ahead it would be describing an
+                  empty agenda over a screenful of last week, so it says that instead. */}
               <p className="v2-ag-open">
                 {line.map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
               </p>

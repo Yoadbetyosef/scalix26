@@ -2707,6 +2707,24 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-ag-chev { color: var(--v2-ink-24); font-size: 17px; }
 .v2 .v2-ag-err { font-size: 12.5px; color: #7a1020; margin-top: 6px; }
 
+/* ── EARLIER ──────────────────────────────────────────────────────────────────────────────────────
+   Under the agenda, running the other way. Quieter throughout: it is a record, not a list of things
+   to do, and it must never compete with what is still ahead. */
+.v2 .v2-ag-earlier { margin-top: 34px; opacity: 0.72; }
+.v2 .v2-ag-earlier:hover { opacity: 1; }
+/* Its own heading gets the ink the day stamps under it do not, so the section reads as one thing. */
+.v2 .v2-ag-grp[data-earlier] .v2-ag-gt { color: var(--v2-ink-42); }
+/* A past row keeps the shape and loses the weight — same rail, same spine, no actions. */
+.v2 .v2-ag-row[data-past] .v2-ag-name { color: var(--v2-ink-70); }
+.v2 .v2-ag-row[data-past] .v2-ag-bar { opacity: 0.45; }
+/* A cancellation is struck through, which is the one treatment nobody has to be taught. */
+.v2 .v2-ag-row[data-cancelled] .v2-ag-name { text-decoration: line-through; color: var(--v2-ink-42); }
+.v2 .v2-ag-row[data-cancelled] .v2-ag-bar { background: var(--v2-ink-24); opacity: 1; }
+.v2 .v2-ag-cx {
+  font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.14em; flex: none;
+  padding: 3px 8px; border-radius: 5px; background: rgba(0, 0, 0, 0.05); color: var(--v2-ink-42);
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════
    THE AGENDA, WIDE. The same DOM: the actions move to the right edge, so one appointment is one line
    instead of two, and every row is 96px whether or not it has a note. */

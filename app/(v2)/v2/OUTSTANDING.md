@@ -546,7 +546,25 @@ forgotten.
 
 ---
 
-## §27 — past and cancelled appointments no longer have a screen
+## §27 — past and cancelled appointments no longer have a screen — FIXED
+
+Fixed in the same round it was recorded. EARLIER runs below the agenda under its own day groups,
+newest first, thirty days back, loaded by the SAME read — one query, split in memory. Cancelled rows
+appear there and only there.
+
+Not a filter chip, which was the other option and the wrong one: a chip that replaces the screen
+hides today to show last week, and an agenda you can point backwards stops being an agenda. Days
+simply continue downward in the direction time does.
+
+A past row keeps its shape and loses its actions — there is nothing to move, and calling about a job
+finished last week is a different intention that belongs on the contact. A gap on something that has
+already happened is not counted in the opening line either: a number nobody can act on.
+
+The original entry follows, for the reasoning.
+
+### The original entry
+
+## §27 (original) — past and cancelled appointments no longer have a screen
 
 The agenda is today FORWARD, which is what an agenda is and what the reference draws — two day
 groups, both in the future. The list this replaced had **Past** and **Cancelled** filters, so this is

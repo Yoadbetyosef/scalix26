@@ -171,3 +171,55 @@ describe('the client boundary', () => {
     expect(strip(read('../preview.ts'))).not.toMatch(/import/)
   })
 })
+
+describe('the past has somewhere to live', () => {
+  it('runs below the agenda under its own day groups, not behind a filter', () => {
+    // A chip that replaces the screen hides today to show last week, and an agenda you can point
+    // backwards stops being an agenda. Days continue downward in the direction time does.
+    expect(view).toContain('agenda.earlier.length > 0 && (')
+    expect(view).toContain('{agenda.earlier.map(day)}')
+    expect(view).toContain('<span className="v2-ag-gt">EARLIER</span>')
+    expect(page).not.toMatch(/filters=|ListFilter/)
+  })
+
+  it('one renderer for both directions, so they cannot drift', () => {
+    expect(view).toContain('const day = (d: (typeof agenda.days)[number]) => (')
+    expect(view).toContain('{agenda.days.map(day)}')
+  })
+
+  it('newest first going back, and yesterday gets a word', () => {
+    expect(lib).toContain('.sort((a, b) => (a.key < b.key ? 1 : -1))')
+    expect(lib).toContain('`YESTERDAY · ${dayStamp(d.key)}`')
+  })
+
+  it('cancelled rows appear ONLY there', () => {
+    // A cancelled slot is not on your agenda; "did I cancel that?" is still a real question.
+    expect(lib).toContain("const rows = all.filter((r) => r.slot_date >= now.dateIso ? r.status !== 'cancelled' : true)")
+  })
+
+  it('and are struck through, which nobody has to be taught', () => {
+    expect(block).toContain('.v2 .v2-ag-row[data-cancelled] .v2-ag-name { text-decoration: line-through;')
+  })
+
+  it('a past row keeps its shape and loses its actions', () => {
+    // Nothing to move, and calling about a job you finished last week is a different intention that
+    // belongs on the contact.
+    expect(view).toContain('{!r.past && <Actions row={r}')
+    expect(block).toContain('.v2 .v2-ag-row[data-past] .v2-ag-name { color: var(--v2-ink-70); }')
+  })
+
+  it('a gap on something that already happened is not counted as needing you', () => {
+    expect(lib).toContain('if (missing && !isPast) missingCount++')
+  })
+
+  it('is bounded, and loaded by the same read', () => {
+    expect(lib).toContain('export const EARLIER_DAYS = 30')
+    expect(lib).toContain(".gte('slot_date', fromIso)")
+    // One query, not two.
+    expect((lib.match(/from\('appointments'\)/g) ?? []).length).toBe(1)
+  })
+
+  it('the empty state only shows when there is nothing in EITHER direction', () => {
+    expect(page).toContain('agenda.days.length === 0 && agenda.earlier.length === 0 ?')
+  })
+})
