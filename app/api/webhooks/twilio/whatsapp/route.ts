@@ -6,6 +6,7 @@ import { sendSMS } from '@/lib/twilio/client'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, failEvent, fingerprint } from '@/lib/webhooks/idempotency'
 import { enforce, clientIp } from '@/lib/ratelimit'
+import { stopDripsForPhone } from '@/lib/leads/drip'
 
 const emptyTwiml = () => new NextResponse('<?xml version="1.0"?><Response></Response>', { headers: { 'Content-Type': 'text/xml' } })
 
@@ -37,6 +38,10 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!channel) return emptyTwiml()
+
+  // Answering ends the follow-up sequence — same brake, same helper, one line. The drip is an SMS
+  // sequence to a phone number, and this IS that number writing back.
+  await stopDripsForPhone(supabase, channel.tenant_id, fromNumber, `inbound whatsapp from ${fromNumber}`)
 
   // Idempotency: a Twilio retry must not produce a second AI reply.
   const claim = await claimEvent('twilio', params.MessageSid || fingerprint('whatsapp', From, To, Body), 'whatsapp', channel.tenant_id)

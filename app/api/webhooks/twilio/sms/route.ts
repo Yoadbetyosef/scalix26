@@ -6,6 +6,7 @@ import { sendSMS } from '@/lib/twilio/client'
 import { verifyTwilio, shouldReject } from '@/lib/webhooks/verify'
 import { claimEvent, completeEvent, failEvent, fingerprint } from '@/lib/webhooks/idempotency'
 import { enforce, clientIp } from '@/lib/ratelimit'
+import { stopDripsForPhone } from '@/lib/leads/drip'
 
 const emptyTwiml = () => new NextResponse('<?xml version="1.0"?><Response></Response>', { headers: { 'Content-Type': 'text/xml' } })
 
@@ -39,18 +40,21 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // STOP → opt the sender out of any active drip campaigns (don't run the AI).
+  // ── ANSWERING ENDS THE FOLLOW-UP SEQUENCE ─────────────────────────────────────────────────────
+  //
+  // Before the idempotency claim and before the pipeline, so it still fires when the AI errors or
+  // the reply fails to send: a customer who has written back must not be chased either way. It is a
+  // side effect, never a branch — the reply below happens exactly as it did.
+  //
+  // The same helper the STOP path uses. The old inline update matched `contact_phone` exactly, which
+  // never engaged for a campaign created from a web form ('(917) 495-4300'); the helper compares the
+  // last ten digits, and stops ALL of that number's campaigns rather than one.
+  await stopDripsForPhone(supabase, channel.tenant_id, From, `inbound sms from ${From}`)
+
+  // STOP → the sender is opted out AND the AI does not run. The drip is already stopped above.
   if ((Body || '').trim().toLowerCase() === 'stop') {
-    await supabase
-      .from('drip_campaigns')
-      .update({ status: 'stopped', updated_at: new Date().toISOString() })
-      .eq('tenant_id', channel.tenant_id)
-      .eq('contact_phone', From)
-      .eq('status', 'active')
-    console.log('[SMS] STOP — drip campaigns stopped for', From)
-    return new NextResponse('<?xml version="1.0"?><Response></Response>', {
-      headers: { 'Content-Type': 'text/xml' },
-    })
+    console.log('[SMS] STOP — no AI reply for', From)
+    return emptyTwiml()
   }
 
   // Idempotency: a Twilio retry of the SAME message must not produce a second AI reply / outbound SMS.

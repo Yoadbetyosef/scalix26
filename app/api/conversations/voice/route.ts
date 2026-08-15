@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { primaryAgent } from '@/lib/agents/primary'
 import { looksLikeName } from '@/lib/utils'
 import { recapAfterResponse } from '@/lib/conversations/recap'
+import { stopDripsForPhone } from '@/lib/leads/drip'
 
 type TranscriptItem = { role?: string; content?: string }
 
@@ -97,6 +98,12 @@ export async function POST(req: NextRequest) {
     timestamp: new Date(now - (turns.length - i) * 1000).toISOString(),
   }))
   await supabase.from('messages').insert(rows)
+
+  // A CALLER WHO TALKED HAS ANSWERED. A missed-call lead's whole sequence says "sorry we missed you,
+  // reply YES" — chasing that after they rang back and had a conversation is the same wrong as
+  // chasing a customer who texted. This route only runs on a non-empty transcript (see the guard
+  // above), so a ring-out or a wrong number that never spoke does not cancel anything.
+  await stopDripsForPhone(supabase, tenantId, phone, 'answered call')
 
   // The call is over — this row is inserted `resolved` — so this is where the recap gets written.
   // After the response: the voice server is waiting on this, and a recap must never hold it up.

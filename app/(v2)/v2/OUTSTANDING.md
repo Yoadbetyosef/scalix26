@@ -362,3 +362,42 @@ and doing it blind would be a rule nobody has watched run.
 so the section stays empty on a conversation that is over in every sense but the column. A sweep
 ("no message in 30 days → resolved") would close that, and it is a product decision about when a
 thread is finished, not a defect in the writer.
+
+---
+
+## §20 — a reply on Instagram, Messenger or email does not brake the drip
+
+`stopDripsForPhone` ends a follow-up sequence when the customer answers. It matches by PHONE, because
+`drip_campaigns` is keyed by `contact_phone` — so it covers SMS, WhatsApp and an answered call, which
+is where every campaign on the live table lives. It cannot cover the channels that have no phone: a
+customer who replies on Instagram, Messenger or by email keeps getting the SMS sequence.
+
+**The second step, so it is not rediscovered:** match by CONTACT, not by number.
+`drip_campaigns.lead_id → leads.contact_id` gives the person; every inbound path already resolves a
+contact, and `conversations.contact_id` carries it. A helper taking `(tenantId, contactId)` would
+cover every channel at once and make the phone match the fallback rather than the rule — worth doing
+when a social or email lead source actually exists, which today it does not: all 28 campaigns came
+from voice or a web form.
+
+Phone matching is not a stopgap that should be replaced; it is the right key for the rows that exist.
+The contact key is an ADDITION.
+
+---
+
+## §21 — one phone number has 21 drip campaigns
+
+Every lead starts its own campaign and nothing dedupes them. On the live table: 28 campaigns across
+**three** phone numbers — 21 on one, 6 on another, 1 on the third. Every call, every form submission,
+every missed call from the same person opens another three-message sequence.
+
+They have not overlapped yet only because the cron runs once daily and each sequence finishes before
+the next lead arrives. Two active at once means that person is texted twice per send.
+
+The brake blunts it — one reply stops ALL of a number's active campaigns, which is why the helper
+updates every match rather than the first — but it does not stop them being created.
+
+**Fix shape:** before inserting, stop any active campaign for the same contact, or don't create a
+second one at all. Not folded into the brake because that commit is about ending a sequence somebody
+answered, and this is about not starting a duplicate one. Deciding WHICH — supersede or skip — needs
+a view on whether a returning customer should restart the follow-up clock, and that is a product
+question rather than a defect.
