@@ -475,3 +475,52 @@ into every workspace they operate.
 
 **Not in the middleware**, for the reason the middleware itself gives about /admin: the check needs
 the active tenant, which means cookies plus two Supabase reads, and the edge cannot do that.
+
+---
+
+## §24 — normalized_phone / normalized_email: make them load-bearing, or drop them
+
+**Not this commit, and never written as ritual.** A column written by two paths and read by none is
+how these got to 0/20 on the live tenant and stayed there.
+
+Today: `createContact` and `commitImport` write both. **Nothing reads either.** `buildIndex`
+re-normalises `phone`/`email` at read time, so the columns are decoration — and every contact on the
+live tenant arrived through an AI or webhook insert that never sets them, which is why every one is
+null.
+
+The cost they were meant to remove is real: `loadExisting()` pulls **up to 10,000 contacts into
+memory** on every create, every import preview, and every import commit, to build a Map.
+
+**Either:**
+
+1. **Load-bearing** — backfill both from `phone`/`email`, keep every writer current (create, import,
+   the new edit route, and the AI/webhook inserts), switch `buildIndex` to read them, index them, and
+   add a **partial unique index per tenant**. The duplicate rule then belongs to the database instead
+   of to a race between two concurrent requests.
+2. **Drop both columns.** Read-time normalisation is correct and already works; two unread columns
+   that look like a mechanism are worse than none.
+
+Whichever, it is its own commit. The edit route deliberately does NOT write them — adding a third
+writer to a column nothing reads would just deepen the illusion.
+
+---
+
+## §25 — three contacts are one person, and merge is on another branch
+
+On the live tenant, `+19174954300`, `(917) 495-4300` and `9174954300` are three contact rows with the
+same ten digits. `createContact` and the import both refuse a duplicate on exactly this rule, so they
+cannot have come from there — every one arrived through an AI or webhook insert, and **none of those
+paths dedupes at all**. They find-or-create with `.eq('phone', phone)`, an exact string match, so a
+number stored in a different format is a different person to them.
+
+Correcting their NAMES is unblocked by the edit route. Consolidating the rows is not: retyping a
+phone on any of the three 409s against the other two, which is the correct refusal and leaves the
+owner with nowhere to go.
+
+**Merge already exists** — `mergeContacts` + the atomic, idempotent `core_merge_contacts` RPC, with
+a route at `app/api/core/contacts/[id]/merge` — on `scalix-core-platform-foundation`, **not merged
+into this branch**. Do not write a second one. When that branch lands, the 409 from
+`PATCH /api/contacts/[id]` is where merge gets offered, and no route needs to change.
+
+**The deeper fix, when merge is available:** the AI/webhook insert paths should find-or-create on
+normalised digits rather than an exact string (§24), or they will keep minting these.

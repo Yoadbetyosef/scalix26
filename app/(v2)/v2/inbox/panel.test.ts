@@ -340,8 +340,13 @@ describe('mobile — R1', () => {
     expect(r1).toMatch(/\.v2-mgl em \{[^}]*background: none !important/)
   })
 
-  it('"new" is a dot', () => {
-    expect(r1).toMatch(/\.v2-mnew \{\s*width: 7px; height: 7px;[^}]*background: var\(--v2-pink\)/)
+  it('"first time" keeps its words on a phone', () => {
+    // It WAS a bare 7px magenta dot here, which was defensible while the chip meant "unanswered" and
+    // the group heading already said so. It means "you have not heard from this person before" now,
+    // and nothing about a dot says that. The name gives up its width instead.
+    expect(r1).toMatch(/\.v2-mnew \{ font-size: 8\.5px; padding: 2px 5px; \}/)
+    expect(r1).not.toMatch(/\.v2-mnew \{[^}]*width: 7px/)
+    expect(r1).not.toMatch(/\.v2-mnew \{[^}]*font-size: 0/)
   })
 
   it('rows and cards take the refined values', () => {

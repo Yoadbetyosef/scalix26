@@ -116,11 +116,28 @@ describe('what the leads screen carried, on the thread it was about', () => {
   const groups = strip(read('./inbox/groups.tsx'))
   const route = read('../../api/conversations/[id]/stop-followups/route.ts')
 
-  it('the "new" chip is a fact, not decoration', () => {
+  it('the marker is a fact, not decoration — and it says which fact', () => {
     // It was on every NEEDS row unconditionally, which made it mean nothing. Now it is on either
-    // group, and only when it is true.
-    expect(groups).toContain('{row.isFirst && <span className="v2-mnew">new</span>}')
-    expect(groups).not.toMatch(/\n\s*<span className="v2-mnew">new<\/span>/)
+    // group, only when true, and it says "first time" rather than "new" — a word the product also
+    // uses for a new lead and for an unread message.
+    expect(groups).toContain('{row.isFirst && <i className="v2-mnew">first time</i>}')
+    expect(groups).not.toMatch(/className="v2-mnew">new</)
+    expect((groups.match(/v2-mnew/g) ?? []).length).toBe(2)   // needs + handled, nowhere else
+  })
+
+  it('it sits beside the name, not in the meta column with SENT', () => {
+    // Two badges in one column answering different questions: who this is, and what happened to the
+    // thread. The marker qualifies the person, so it belongs on the name line.
+    const meta = groups.slice(groups.indexOf('v2-mmeta'))
+    expect(meta.slice(0, 400)).not.toContain('v2-mnew')
+    expect(groups).toContain('<p><b>{row.who}</b>{row.isFirst && <i className="v2-mnew">first time</i>}</p>')
+  })
+
+  it('and it is not the colour that meant "unanswered"', () => {
+    const css = read('./v2-tokens.css')
+    const rule = css.slice(css.indexOf('.v2 .v2-mnew {'), css.indexOf('}', css.indexOf('.v2 .v2-mnew {')))
+    expect(rule).not.toContain('--v2-pink')
+    expect(rule).toContain('var(--v2-t4-ink)')
   })
 
   it('a lookup failure says nobody is new rather than everybody', () => {

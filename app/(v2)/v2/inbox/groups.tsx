@@ -204,7 +204,7 @@ export function InboxGroups({ data, milesId, facts }: Props) {
                         >
                           <ChannelGlyph channel={channelKey(row.channel)} />
                           <span className="v2-mmid">
-                            <p>{row.who}</p>
+                            <p><b>{row.who}</b></p>
                             {/* THE CLASSIFIER'S OWN WORDS, with the text that triggered them quoted.
                                 "Draft ready" would get approved without being read. */}
                             <span data-quote>{row.trigger}</span>
@@ -302,15 +302,14 @@ export function InboxGroups({ data, milesId, facts }: Props) {
                       <button type="button" className="v2-mrow" data-touch onClick={() => router.push(`/v2/inbox/${row.conversationId}`)}>
                         <ChannelGlyph channel={channelKey(row.channel)} />
                         <span className="v2-mmid">
-                          <p>{row.who}</p>
+                          {/* BESIDE THE NAME, because it qualifies WHO this is. It sat in the meta
+                              column under the time, where the only other thing is SENT — and those
+                              two answer different questions. */}
+                          <p><b>{row.who}</b>{row.isFirst && <i className="v2-mnew">first time</i>}</p>
                           <span data-quote>{row.said}</span>
                         </span>
                         <span className="v2-mmeta">
                           <time>{heldSince(row.at)}</time>
-                          {/* SOMEBODY NEW — their first ever conversation, from lib/inbox/first.ts.
-                              This chip used to be on every row in this group unconditionally, which
-                              made it decoration; it is a fact now. */}
-                          {row.isFirst && <span className="v2-mnew">new</span>}
                         </span>
                       </button>
                     </div>
@@ -334,7 +333,10 @@ export function InboxGroups({ data, milesId, facts }: Props) {
                       <button type="button" className="v2-mrow" data-touch onClick={() => router.push(`/v2/inbox/${row.conversationId}`)}>
                         <ChannelGlyph channel={channelKey(row.channel)} />
                         <span className="v2-mmid">
-                          <p>{row.who}</p>
+                          {/* Beside the name here too — and it matters most on this group, where it
+                              is the difference between a customer looked after and a NEW customer
+                              looked after. SENT stays in the meta column: it is about the thread. */}
+                          <p><b>{row.who}</b>{row.isFirst && <i className="v2-mnew">first time</i>}</p>
                           {/* THE EXACT TEXT THAT WENT OUT. A row saying "handled" without the words
                               sent in the owner's name is what would destroy trust in this. */}
                           {/* WHO answered, in their own name. With two employees an unattributed
@@ -343,10 +345,6 @@ export function InboxGroups({ data, milesId, facts }: Props) {
                         </span>
                         <span className="v2-mmeta">
                           <time>{heldSince(row.at)}</time>
-                          {/* It matters most here: this is the difference between "a customer was
-                              looked after" and "a NEW customer was looked after", which is the whole
-                              question the leads screen was failing to answer. */}
-                          {row.isFirst && <span className="v2-mnew">new</span>}
                           <span className="v2-mtag" data-tone="sent">SENT</span>
                         </span>
                       </button>

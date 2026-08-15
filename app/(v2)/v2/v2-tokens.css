@@ -1690,10 +1690,20 @@
 .v2 .v2-mav svg { width: 18px; height: 18px; }
 
 .v2 .v2-mmid { flex: 1; min-width: 0; }
-.v2 .v2-mmid p { font-size: 14.5px; color: var(--v2-ink); font-weight: 500; }
-.v2 .v2-mmid span {
+/* The name line is a ROW now: the name, and the marker that qualifies who they are. */
+.v2 .v2-mmid p { display: flex; align-items: center; gap: 7px; min-width: 0; }
+/* `> span`, not `span`. The name line has spans INSIDE it now, and a descendant selector was giving
+   them display:block, 12.5px and the quote's ellipsis — the sub-line's styling landing on a chip
+   sitting beside the name. Only the sub-line is a direct child. */
+.v2 .v2-mmid > span {
   display: block; font-size: 12.5px; color: var(--v2-ink-55); margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The NAME truncates and the marker survives: a long name shortened still identifies somebody, and
+   the fact that this is the first time you have heard from them does not survive being cut off. */
+.v2 .v2-mmid p b {
+  font-size: 14.5px; color: var(--v2-ink); font-weight: 500;
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* The quoted trigger, and the exact words that went out, both read as speech rather than metadata. */
 .v2 .v2-mmid span[data-quote] { color: var(--v2-ink-70); }
@@ -1705,9 +1715,20 @@
 }
 .v2 .v2-mtag[data-tone="hold"] { background: var(--v2-hold-wash); color: var(--v2-hold-ink); }
 .v2 .v2-mtag[data-tone="sent"] { background: var(--v2-miles-wash); color: var(--v2-miles-ink); }
+/* FIRST TIME — a fact about the PERSON, so it is not an alarm and it is not magenta.
+//
+   It was `new`, in the pink capsule, stacked above SENT in the meta column. Three things wrong with
+   that at once: magenta is the colour this screen used for "unanswered" until two days ago, so it
+   read as a warning about the thread; "new" is the same word the product uses for a new LEAD and for
+   an unread message, so it could be any of three things; and a row carried two badges in one column
+   answering different questions — who this is, and what happened to the thread.
+   Cyan at the darkened ink, because #22d3ee does not hold on white (same note as --v2-t4-ink above).
+   Same geometry as .v2-mtag so the two read as one family seen in two places, not two systems. */
 .v2 .v2-mnew {
-  font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
-  background: var(--v2-pink); color: #fff;
+  flex: none; font-style: normal;
+  font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 4px;
+  background: rgba(34, 211, 238, 0.13); color: var(--v2-t4-ink);
 }
 
 /* The draft, expanded in place. Aligned past the icon so it reads as belonging to that row. */
@@ -2095,12 +2116,11 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-mtag { font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.12em; padding: 3px 7px; border-radius: 5px; }
   .v2 .v2-msep { margin-left: 65px; background: var(--v2-line); height: 1px; }
 
-  /* "new" is a dot, not a pill. A word in a magenta capsule was shouting the same thing the row's
-     position in the NEEDS YOU group already says. */
-  .v2 .v2-mnew {
-    width: 7px; height: 7px; padding: 0; border-radius: 7px; background: var(--v2-pink);
-    font-size: 0; color: transparent; overflow: hidden;
-  }
+  /* The words stay on a phone. They were a bare 7px magenta dot here — which was defensible when the
+     chip meant "unanswered" and the group heading already said so, and is not now: nothing about a
+     dot beside a name says "you have not heard from this person before". The name gives up its width
+     instead. */
+  .v2 .v2-mnew { font-size: 8.5px; padding: 2px 5px; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════
