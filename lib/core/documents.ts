@@ -22,6 +22,13 @@ export async function createDocument(tenantId: string, type: DocType, input: Doc
 
 export interface LineInput extends LineAmounts { productId?: string | null; variantId?: string | null; componentId?: string | null; description?: string | null; customAttributes?: Record<string, unknown> }
 export async function addLine(tenantId: string, type: DocType, documentId: string, line: LineInput): Promise<{ ok: true } | { ok: false; error: string }> {
+  // AN ISSUED DOCUMENT IS FROZEN. Its total was a promise made to somebody on a date, and a total
+  // that can still move is not a promise. The database enforces this too (a trigger on
+  // sales_document_lines — see add_document_freeze.sql); this is here so the caller gets a shaped
+  // answer instead of a raised exception, and so the rule is visible where lines are written.
+  const { data: head } = await admin().from(TABLE[type]).select('status').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle()
+  if (!head) return { ok: false, error: 'not_found' }
+  if (head.status !== 'draft') return { ok: false, error: 'document_not_draft' }
   const { count } = await admin().from('sales_document_lines').select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId)
   const { error } = await admin().from('sales_document_lines').insert({
     tenant_id: tenantId, document_type: type, document_id: documentId, product_id: line.productId ?? null, variant_id: line.variantId ?? null, component_id: line.componentId ?? null,
@@ -72,7 +79,59 @@ export async function setDocumentCustomer(tenantId: string, type: DocType, docum
   return data ? { ok: true } : { ok: false, error: 'not_found' }
 }
 
+// ── ISSUING ─────────────────────────────────────────────────────────────────────────────────────
+//
+// Draft → issued, with a date, and the total frozen from that moment.
+//
+// THE NUMBER IS NOT ALLOCATED HERE. `createDocument` already takes it from numbering_counters when
+// the draft is made, atomically, and the four live invoices carry theirs. Re-allocating at issue would
+// renumber them and break every reference anyone already has. What issuing adds is the DATE and the
+// FREEZE — see OUTSTANDING §33 for the gap that allocating-at-creation produces, which is a real
+// accounting question and a separate decision.
+export type IssueResult =
+  | { ok: true; number: string; issuedAt: string; totalCents: number }
+  | { ok: false; error: 'not_found' | 'already_issued' | 'no_lines' | 'no_number' | string }
+
+export async function issueDocument(tenantId: string, type: DocType, documentId: string, actor: string): Promise<IssueResult> {
+  const { data: doc } = await admin().from(TABLE[type])
+    .select('id, number, status, total_cents, issued_at').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle()
+  if (!doc) return { ok: false, error: 'not_found' }
+  // Not an error worth failing a screen over — the caller asked for a state the document is already
+  // in, and the honest answer is the document.
+  if (doc.status !== 'draft') return { ok: false, error: 'already_issued' }
+  if (!doc.number) return { ok: false, error: 'no_number' }
+
+  // An invoice with no lines is not an invoice. A ZERO total is allowed — a fully discounted or
+  // goodwill document is a real thing, and refusing it would be this file having an opinion about
+  // somebody else's business.
+  const { count } = await admin().from('sales_document_lines')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId)
+  if (!count) return { ok: false, error: 'no_lines' }
+
+  const issuedAt = new Date().toISOString()
+  // Guarded on status again in the WHERE clause: two people pressing Issue at once must produce one
+  // issued document and one 'already_issued', not two rows of history claiming the same transition.
+  const { data: updated, error } = await admin().from(TABLE[type])
+    .update({ status: 'issued', issued_at: issuedAt, updated_at: issuedAt })
+    .eq('tenant_id', tenantId).eq('id', documentId).eq('status', 'draft')
+    .select('number, total_cents, issued_at').maybeSingle()
+  if (error) return { ok: false, error: error.message }
+  if (!updated) return { ok: false, error: 'already_issued' }
+
+  await admin().from('document_status_history').insert({
+    tenant_id: tenantId, document_type: type, document_id: documentId,
+    from_status: 'draft', to_status: 'issued', actor, note: null,
+  })
+  return { ok: true, number: updated.number as string, issuedAt: updated.issued_at as string, totalCents: Number(updated.total_cents ?? 0) }
+}
+
 export async function updateStatus(tenantId: string, type: DocType, documentId: string, toStatus: string, actor: string, note?: string): Promise<boolean> {
+  // ONE DOOR FOR ISSUING. This function moves a status and writes history; it does not stamp a date
+  // or check that there is anything to issue. Letting it write 'issued' would produce a document that
+  // says issued with no issued_at and possibly no lines — which is the exact state issueDocument
+  // exists to prevent.
+  if (toStatus === 'issued') return false
   const { data: doc } = await admin().from(TABLE[type]).select('status').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle()
   if (!doc) return false
   await admin().from(TABLE[type]).update({ status: toStatus, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', documentId)

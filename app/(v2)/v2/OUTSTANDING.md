@@ -723,3 +723,52 @@ reads back**, so an appointment moved in the external system and the row here di
 Do NOT build it as a module toggle. Entitlements and interoperability are different problems —
 turning `scheduling` off for a ServiceTitan tenant stops Rudi booking; it does not let Rudi book into
 ServiceTitan, and nothing in the module system is a step toward that.
+
+---
+
+## §33 — invoice numbers are allocated at CREATION, so the issued sequence has gaps
+
+`createDocument` takes the number from `numbering_counters` when the DRAFT is made, atomically. It is
+not allocated at issue. On the live tenant that has already produced a gap:
+
+    INV-0001  19 Jul 01:53
+    INV-0002  19 Jul 13:30
+    INV-0004  20 Jul 02:54     ← INV-0003 exists nowhere
+    INV-0005  20 Jul 05:42
+
+A draft was created and deleted, or a number was drawn and the insert failed. The counter does not
+give it back, which is correct for a counter and wrong for an audit trail: **in several jurisdictions
+an issued-invoice sequence must be gapless**, and "0003 was a draft I threw away" is an explanation an
+accountant should not have to accept.
+
+Issuing deliberately does NOT reallocate. The four live invoices carry the numbers they were created
+with, and renumbering them would break every reference anybody already holds.
+
+**The two real options, both real changes:**
+
+1. **Draft numbers become provisional** — a draft carries no number, or a `DRAFT-…` placeholder, and
+   `issueDocument` draws from the counter. Gapless issued sequence; every existing row needs deciding.
+2. **Keep it and record the gaps** — a deleted draft writes its number to a void log, so the sequence
+   is explainable rather than merely gapped.
+
+Not decided here because it is an accounting question with a jurisdiction in it, not a code
+preference. Whoever picks must also decide what happens to INV-0001, -0002, -0004, -0005.
+
+---
+
+## §34 — an issued document cannot be corrected, deliberately
+
+`add_document_freeze.sql` blocks INSERT, UPDATE and DELETE on the lines of any document that is not a
+draft, at the database. There is **no override, and that is a choice**: if an issued invoice is wrong,
+the answer is a credit note or a replacement document, not editing history. Building an escape now
+would make it the thing people reach for.
+
+What does not exist yet, and will be wanted the first time somebody issues the wrong figure:
+
+- **Void.** A status that says "this number was issued and is cancelled", so the number stays used and
+  the sequence stays explainable. One status and one history row.
+- **Credit note.** A negative document referencing the original. `payment_allocations` already carries
+  a `refund` kind and stores it signed, so the money half exists; the document half does not.
+
+Until one of them is built, the honest instruction to an owner is: issue carefully, because the only
+correction available is a new document and a conversation.
