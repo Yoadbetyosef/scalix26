@@ -8,8 +8,13 @@ const patchRoute = read('../../app/api/core/documents/[type]/[id]/route.ts')
 const freeze = read('../../supabase/migrations/add_document_freeze.sql')
 
 describe('issuing', () => {
-  it('stamps a date and moves the status together', () => {
-    expect(docs).toContain("update({ status: 'issued', issued_at: issuedAt, updated_at: issuedAt })")
+  it('stamps a date and moves the status together, in ONE write', () => {
+    // The literal moved into `stamp` when issuing also began snapshotting the due date and the
+    // payment details. What matters is unchanged and is what this asserts: status, date and the
+    // snapshot land in a single update, so a document can never be issued without its date.
+    expect(docs).toContain("const stamp: Record<string, unknown> = { status: 'issued', issued_at: issuedAt, updated_at: issuedAt }")
+    expect(docs).toContain('.update(stamp)')
+    expect(docs.indexOf('stamp.due_on')).toBeLessThan(docs.indexOf('.update(stamp)'))
   })
 
   it('does NOT reallocate the number', () => {
