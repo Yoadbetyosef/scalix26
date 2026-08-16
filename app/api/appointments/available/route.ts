@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { parseDate, dayOfWeek, formatTime12, MIN_LEAD_TIME_MINUTES, nowInTimezone, slotMinutes, addDaysIso } from '@/lib/appointments'
 import { getBusinessTimezone } from '@/lib/timezone'
+import { enabledModulesOf } from '@/lib/modules'
 
 // GET ?lead_token=…&date=… → { date, slots: ["9:00 AM", …] }
 // Tenant is resolved from the lead token (not a spoofable tenant_id). Slots are
@@ -17,8 +18,16 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createServiceClient()
-  const { data: tenant } = await supabase.from('tenants').select('id, timezone').eq('lead_intake_token', leadToken).maybeSingle()
+  const { data: tenant } = await supabase.from('tenants').select('id, timezone, enabled_modules').eq('lead_intake_token', leadToken).maybeSingle()
   if (!tenant) return NextResponse.json({ slots: [], error: 'invalid token' }, { status: 404 })
+
+  // THE ROUTE IS THE GATE, not the tool list. What the model is offered decides what it says; THIS
+  // decides what happens. A business that has not turned scheduling on has no availability to give,
+  // and until now this route would have answered anyway — to voice-server, to a curl, to anything
+  // holding the token. Same shape as /api/catalog/lookup's `inventory` check.
+  if (!enabledModulesOf(tenant).includes('scheduling')) {
+    return NextResponse.json({ slots: [], error: 'Booking is not enabled for this business.' })
+  }
 
   const tz = await getBusinessTimezone(tenant.id, tenant.timezone)
   const dateIso = parseDate(dateInput, tz) // "today"/"tomorrow" resolved in the business tz

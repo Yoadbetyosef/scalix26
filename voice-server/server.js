@@ -26,6 +26,11 @@ wss.on('connection', (twilioWs) => {
   let voiceId = process.env.DEFAULT_VOICE || 'aura-2-asteria-en';
   let ownerPhone = null;     // tenant business phone — lead-alert SMS recipient ONLY
   let transferNumber = null; // agent's configured transfer number — the ONLY live-transfer target
+  // What this tenant's modules allow. NULL means the app did not say — which means EVERYTHING, so an
+  // older app deployment that does not send the parameter behaves exactly as before. An empty STRING
+  // is different and means nothing is allowed: a tenant with all three modules off is a real state.
+  // See lib/voice/capabilities.ts, which owns both halves of that rule.
+  let capabilities = null;
   let fromNumber = null;
   let leadToken = null;    // tenant's secret intake token — to save the lead
   let callerNumber = null; // caller's real phone (From) — reliable fallback
@@ -127,8 +132,31 @@ wss.on('connection', (twilioWs) => {
         },
       },
     ];
+    // ── WHAT THIS TENANT MAY DO ───────────────────────────────────────────────────────────────
+    //
+    // The app decides and passes a list; this filters. Same arrangement as transfer_to_human below,
+    // which is included only when the agent has a transfer number — the model is never offered a
+    // function it cannot use, so it cannot promise one.
+    //
+    // The names here are CAPABILITIES, not module keys: this server knows its own functions and has
+    // no business learning the app's module vocabulary.
+    const allowed = capabilities === null || capabilities === undefined
+      ? null                                   // the app did not say → everything, unchanged
+      : new Set(capabilities.split(',').map((c) => c.trim()).filter(Boolean));
+    const NEEDS = {
+      check_availability: 'booking',
+      book_appointment: 'booking',
+      search_catalog: 'catalog',
+      send_payment_link: 'payments',
+    };
+    const gated = allowed === null
+      ? agentFunctions
+      : agentFunctions.filter((f) => !NEEDS[f.name] || allowed.has(NEEDS[f.name]));
+    console.log('[functions] capabilities', capabilities === null ? '(not sent — all)' : capabilities || '(none)',
+      '| offering', gated.map((f) => f.name).join(', ') || '(none)');
+
     if (transferNumber) {
-      agentFunctions.unshift({
+      gated.unshift({
         name: 'transfer_to_human',
         description: 'Transfer the call to a human ONLY when the caller explicitly asks to speak to a person. Do NOT use this after booking an appointment or for routine questions — finish those and let the call end normally.',
         parameters: {
@@ -164,7 +192,7 @@ wss.on('connection', (twilioWs) => {
           },
           prompt: systemPrompt,
           // Client-side functions (no endpoint) — we handle them here on the socket.
-          functions: agentFunctions,
+          functions: gated,
         },
         speak: { provider: { type: 'deepgram', model: voiceId } },
         greeting,
@@ -367,6 +395,7 @@ wss.on('connection', (twilioWs) => {
       if (p.leadToken) leadToken = p.leadToken;
       if (p.callerNumber) callerNumber = p.callerNumber;
       if (p.language) voiceLanguage = p.language;
+      if (p.capabilities !== undefined) capabilities = p.capabilities;
       console.log('[start]', streamSid);
       startReceived = true;
       sendSettings();

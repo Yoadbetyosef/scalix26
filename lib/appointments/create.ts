@@ -7,6 +7,7 @@ import { getCalendarAccess } from '@/lib/calendar/store'
 import { createCalendarEvent } from '@/lib/calendar/google'
 import { createMicrosoftCalendarEvent } from '@/lib/calendar/microsoft'
 import { markLeadsBooked } from '@/lib/leads/booked'
+import { enabledModulesOf } from '@/lib/modules'
 
 // ONE INSERT, TWO POLICIES.
 //
@@ -68,8 +69,18 @@ export async function createAppointment(input: CreateInput, policy: CreatePolicy
   const supabase = await createServiceClient()
 
   const { data: tenant } = await supabase
-    .from('tenants').select('id, business_name, phone, email, timezone').eq('id', input.tenantId).maybeSingle()
+    .from('tenants').select('id, business_name, phone, email, timezone, enabled_modules').eq('id', input.tenantId).maybeSingle()
   if (!tenant) return { ok: false, error: 'invalid tenant', status: 404 }
+
+  // THE REAL HOLE, CLOSED HERE RATHER THAN AT EITHER DOOR. Neither /book nor /api/appointments
+  // checked this, so a tenant with `scheduling` off got appointments written to their table by phone
+  // and nothing objected. It sits in the shared core because both doors write through it, and a
+  // check duplicated at two entrances is one that will eventually only be true at one of them.
+  //
+  // No extra query: the tenant row is already being read for the timezone.
+  if (!enabledModulesOf(tenant).includes('scheduling')) {
+    return { ok: false, error: 'Booking is not enabled for this business.', status: 403 }
+  }
 
   const timeDb = parseTime(input.time)
   if (!timeDb) return { ok: false, error: 'could not understand the time' }

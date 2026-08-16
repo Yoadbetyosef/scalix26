@@ -620,7 +620,20 @@ it for every appointment that has a number — which today is all three in the d
 
 ---
 
-## §30 — voice-server does not gate on modules, and booking has no backstop
+## §30 — voice-server does not gate on modules, and booking has no backstop — BUILT, ONE DEPLOY PENDING
+
+The app side and both route gates are **shipped**. `voice-server/server.js` is **written and committed
+but NOT DEPLOYED** — Railway auto-deploy is off, and it is the same manual deploy the landed-cost
+merge is waiting on. One deploy, not two.
+
+Until that deploy: the app sends the parameter, the running voice-server ignores a parameter it does
+not read, and **the route gates still refuse** — so a tenant with `scheduling` off can no longer have
+an appointment written, whatever the phone AI offers to do. The tool list is cosmetic until the
+deploy; the hole that wrote rows is closed now.
+
+The original entry follows.
+
+### The original entry
 
 The text pipeline omits a tool the tenant has not enabled: `inBooking` requires `scheduling`,
 `catalogEnabled` requires `inventory`, the financial tools require the skill AND Stripe. The tool never

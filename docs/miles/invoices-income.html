@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Invoices — issue, send, get paid</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--magenta:#FF2E93;--violet:#8B5CF6;--cyan:#22D3EE;--acid:#D9F224;
+ --awash:#F2FBB8;--aink:#41490A;
+ --hold:#F5A524;--holdw:#FEF3DC;--holdi:#6B4708;
+ --red:#FF3B5C;--redw:#FFE9ED;--redi:#A8102C;
+ --ink:#111114;--ink-70:#4A4A52;--ink-42:#8A8A90;--ink-24:#B4B4BA;
+ --line:rgba(0,0,0,.07);--paper:#F6F6F7;--card:#fff;--ease:cubic-bezier(.32,.72,0,1)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:20px 14px 60px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;max-width:640px}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.11em;
+ padding:9px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);cursor:pointer;min-height:36px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.stage{display:none}.stage[data-on]{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.cap{font-size:12.5px;color:rgba(255,255,255,.46);text-align:center;max-width:660px;line-height:1.7;margin-top:14px}
+.cap b{color:rgba(255,255,255,.85);font-weight:500}
+.lbl{font-size:9px;letter-spacing:.16em;color:rgba(255,255,255,.3);text-align:center;margin-top:7px}
+.ph{width:378px;height:790px;border-radius:32px;overflow:hidden;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;position:relative}
+.dk{width:min(920px,95vw);height:790px;border-radius:16px;overflow:hidden;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;position:relative}
+
+.hd{flex:none;background:var(--card);border-bottom:1px solid var(--line);padding:14px 18px;
+ display:flex;align-items:center;gap:12px}
+.dk .hd{padding:14px 26px}
+.bk{font-size:20px;color:var(--ink-24)}
+.hd h1{font-size:19px;font-weight:500;color:var(--ink);flex:1}
+.newb{padding:9px 14px;border-radius:11px;border:none;background:var(--ink);color:#fff;
+ font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:7px}
+.newb svg{width:14px;height:14px}
+.scr{flex:1;overflow-y:auto;padding:16px}
+.dk .scr{padding:20px 26px}
+.grp{display:flex;align-items:baseline;gap:10px;margin:20px 2px 10px}
+.grp:first-child{margin-top:0}
+.grp .t{font-size:10px;letter-spacing:.18em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.grp .n{font-size:10px;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.grp .r{flex:1;height:1px;background:var(--line);transform:translateY(-3px)}
+.card{background:var(--card);border-radius:18px;overflow:hidden;
+ box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 22px -12px rgba(0,0,0,.14)}
+.sep{height:1px;background:var(--line)}
+.tag{font-size:9px;letter-spacing:.12em;padding:3px 8px;border-radius:5px;font-family:'JetBrains Mono',monospace}
+.t-draft{background:rgba(0,0,0,.05);color:var(--ink-42)}
+.t-sent{background:rgba(139,92,246,.1);color:#6D3FD4}
+.t-part{background:var(--holdw);color:var(--holdi)}
+.t-paid{background:var(--awash);color:var(--aink)}
+.t-late{background:var(--redw);color:var(--redi)}
+
+/* ===== money band ===== */
+.band{display:flex;background:var(--card);border-bottom:1px solid var(--line);flex:none}
+.bd{flex:1;padding:15px 16px;border-right:1px solid var(--line)}
+.bd:last-child{border:none}
+.bdk{font-size:8.5px;letter-spacing:.16em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.bdv{font-size:22px;font-weight:500;color:var(--ink);margin-top:6px;letter-spacing:-.02em;
+ font-variant-numeric:tabular-nums}
+.bdv.hold{color:var(--holdi)}
+.bdv.red{color:var(--redi)}
+.bds{font-size:11px;color:var(--ink-24);margin-top:4px}
+
+/* ===== rows ===== */
+.row{display:flex;gap:13px;padding:15px 14px;align-items:center;cursor:pointer}
+.row:active{background:rgba(0,0,0,.025)}
+.bar{width:3px;border-radius:3px;align-self:stretch;flex:none;background:rgba(0,0,0,.1)}
+.row.sent .bar{background:var(--violet)}
+.row.part .bar{background:var(--hold)}
+.row.paid .bar{background:var(--acid)}
+.row.late .bar{background:var(--red)}
+.mid{flex:1;min-width:0}
+.nm{font-size:15px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font-size:12.5px;color:var(--ink-42);margin-top:4px}
+.amt{text-align:right;flex:none}
+.av{font-size:15.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ad{font-size:10.5px;color:var(--ink-24);font-family:'JetBrains Mono',monospace;margin-top:4px}
+.ad.due{color:var(--holdi)}
+.ad.over{color:var(--redi)}
+.prog{height:4px;border-radius:4px;background:rgba(0,0,0,.06);overflow:hidden;margin-top:8px}
+.prog i{display:block;height:100%;border-radius:4px;background:var(--hold)}
+
+/* ===== detail ===== */
+.dtop{background:var(--card);border-bottom:1px solid var(--line);padding:16px 18px;flex:none}
+.dk .dtop{padding:16px 26px}
+.dnum{font-size:11px;letter-spacing:.14em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.dwho{font-size:20px;font-weight:500;color:var(--ink);margin-top:6px}
+.dmeta{font-size:12.5px;color:var(--ink-42);margin-top:5px}
+.dnums{display:flex;margin-top:15px;padding-top:13px;border-top:1px solid var(--line)}
+.dn{flex:1;border-right:1px solid var(--line);padding-right:14px;margin-right:14px}
+.dn:last-child{border:none;padding:0;margin:0}
+.dnk{font-size:8.5px;letter-spacing:.16em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.dnv{font-size:18px;font-weight:500;color:var(--ink);margin-top:5px;font-variant-numeric:tabular-nums}
+.dnv.hold{color:var(--holdi)}
+
+.li{display:flex;gap:12px;padding:12px 14px;align-items:baseline}
+.lin{flex:1;font-size:14px;color:var(--ink)}
+.liq{font-size:11.5px;color:var(--ink-24);font-family:'JetBrains Mono',monospace;flex:none}
+.liv{font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums;flex:none;min-width:76px;text-align:right}
+.tot{display:flex;justify-content:space-between;padding:11px 14px;font-size:13.5px;color:var(--ink-42)}
+.tot.big{font-size:16px;color:var(--ink);font-weight:500;border-top:1px solid var(--line)}
+.tot span:last-child{font-variant-numeric:tabular-nums}
+
+.pay{background:var(--card);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:14px}
+.payh{font-size:9.5px;letter-spacing:.18em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.payt{font-size:14px;line-height:1.6;color:var(--ink-70);margin-top:9px;white-space:pre-line}
+
+.prow{display:flex;gap:12px;padding:12px 14px;align-items:center}
+.pic{width:32px;height:32px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;
+ background:var(--awash);color:var(--aink)}
+.pic svg{width:15px;height:15px}
+.pmid{flex:1;min-width:0}
+.pm{font-size:14px;color:var(--ink);font-weight:500}
+.pd{font-size:11.5px;color:var(--ink-42);margin-top:3px}
+.pv{font-size:14.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums;flex:none}
+
+.slot{flex:none;background:var(--card);border-top:1px solid var(--line);padding:13px 18px}
+.dk .slot{padding:13px 26px}
+.slotin{display:flex;align-items:center;gap:12px}
+.smsg{flex:1;font-size:13px;color:var(--ink-42);line-height:1.4}
+.smsg b{color:var(--ink);font-weight:500}
+.btn{padding:11px 17px;border-radius:12px;border:1px solid var(--line);background:var(--card);flex:none;
+ font-size:13.5px;font-family:inherit;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:8px;
+ transition:transform .14s var(--ease)}
+.btn:active{transform:scale(.96)}
+.btn svg{width:15px;height:15px}
+.btn.p{background:var(--ink);color:#fff;border-color:transparent;font-weight:500}
+.ph .slotin{flex-wrap:wrap}
+.ph .smsg{width:100%;order:3;text-align:center;font-size:12px}
+.ph .btn{flex:1;justify-content:center}
+
+/* ===== record sheet ===== */
+.veil{position:absolute;inset:0;background:rgba(10,10,12,.34);backdrop-filter:blur(3px);z-index:30;
+ opacity:0;pointer-events:none;transition:opacity .32s var(--ease)}
+.veil[data-on]{opacity:1;pointer-events:auto}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:31;background:var(--paper);
+ border-radius:24px 24px 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom));
+ transform:translateY(101%);transition:transform .4s var(--ease);box-shadow:0 -14px 44px rgba(0,0,0,.22)}
+.sheet[data-on]{transform:none}
+.dk .sheet{left:50%;width:440px;transform:translate(-50%,101%);border-radius:20px;bottom:26px;padding-bottom:18px}
+.dk .sheet[data-on]{transform:translate(-50%,0)}
+.grab{width:40px;height:4px;border-radius:4px;background:rgba(0,0,0,.13);margin:2px auto 14px}
+.sh{font-size:16px;font-weight:500;color:var(--ink)}
+.ss{font-size:13px;color:var(--ink-42);margin:4px 0 15px}
+.fl{font-size:9.5px;letter-spacing:.16em;color:var(--ink-24);font-family:'JetBrains Mono',monospace;
+ margin:14px 0 8px}
+.fl:first-of-type{margin-top:0}
+.fld{width:100%;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+ padding:0 14px;font-size:15px;font-family:inherit;color:var(--ink);outline:none}
+.fld:focus{border-color:var(--violet)}
+.methods{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.mth{padding:0 6px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--card);
+ font-size:12.5px;font-family:inherit;color:var(--ink-70);cursor:pointer;display:flex;
+ align-items:center;justify-content:center;gap:6px}
+.mth[data-on]{background:var(--ink);color:#fff;border-color:transparent;font-weight:500}
+.mth svg{width:13px;height:13px}
+.amtrow{display:flex;gap:8px;align-items:center}
+.amtrow .fld{flex:1}
+.full{padding:0 12px;height:46px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+ font-size:12.5px;font-family:inherit;color:var(--ink-42);cursor:pointer;white-space:nowrap;flex:none}
+.full:active{background:var(--paper)}
+.save{width:100%;height:48px;border-radius:13px;border:none;background:var(--ink);color:#fff;
+ font-size:14.5px;font-family:inherit;font-weight:500;cursor:pointer;margin-top:18px}
+.save:active{transform:scale(.98)}
+.leftover{font-size:12.5px;color:var(--holdi);background:var(--holdw);border-radius:9px;
+ padding:9px 11px;margin-top:11px;text-align:center}
+</style></head><body>
+
+<svg style="display:none">
+ <symbol id="plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+ <symbol id="send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+ <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></symbol>
+ <symbol id="bank" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18M5 10v8M19 10v8M9 10v8M15 10v8M2 21h20M12 3 3 8h18z"/></symbol>
+ <symbol id="cash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><circle cx="12" cy="12" r="2.5"/></symbol>
+ <symbol id="card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></symbol>
+ <symbol id="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2z"/></symbol>
+</svg>
+
+<div class="tabs">
+ <button data-t="L" data-on>1 · THE LIST</button>
+ <button data-t="I">2 · ONE INVOICE</button>
+ <button data-t="R">3 · RECORD A PAYMENT</button>
+</div>
+
+<!-- ============ LIST ============ -->
+<div class="stage" id="s-L" data-on>
+ <div><div class="ph">
+  <div class="hd"><span class="bk">‹</span><h1>Invoices</h1>
+   <button class="newb"><svg><use href="#plus"/></svg>New</button></div>
+  <div class="band">
+   <div class="bd"><div class="bdk">SENT</div><div class="bdv">$14,280</div><div class="bds">this month</div></div>
+   <div class="bd"><div class="bdk">RECEIVED</div><div class="bdv">$8,150</div><div class="bds">7 payments</div></div>
+   <div class="bd"><div class="bdk">OUTSTANDING</div><div class="bdv hold">$6,130</div><div class="bds">4 invoices</div></div>
+  </div>
+  <div class="scr">
+   <div class="grp"><span class="t">OVERDUE</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row late"><span class="bar"></span>
+     <div class="mid"><div class="nm">Dana Kessler</div>
+      <div class="sub">INV-0042 · AC system replacement</div></div>
+     <div class="amt"><div class="av">$3,400</div><div class="ad over mono">11 DAYS LATE</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">WAITING TO BE PAID</span><span class="n">3</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row part"><span class="bar"></span>
+     <div class="mid"><div class="nm">Marcus Tate</div>
+      <div class="sub">INV-0045 · Deposit received</div>
+      <div class="prog"><i style="width:40%"></i></div></div>
+     <div class="amt"><div class="av">$1,530</div><div class="ad mono">$1,020 OF $2,550</div></div></div>
+    <div class="sep"></div>
+    <div class="row sent"><span class="bar"></span>
+     <div class="mid"><div class="nm">Priya Shah</div>
+      <div class="sub">INV-0046 · Sent 3 days ago</div></div>
+     <div class="amt"><div class="av">$1,200</div><div class="ad due mono">DUE IN 11 DAYS</div></div></div>
+    <div class="sep"></div>
+    <div class="row sent"><span class="bar"></span>
+     <div class="mid"><div class="nm">Lena Ward</div>
+      <div class="sub">INV-0047 · Sent yesterday</div></div>
+     <div class="amt"><div class="av">$1,000</div><div class="ad due mono">DUE IN 13 DAYS</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">DRAFTS</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><span class="bar"></span>
+     <div class="mid"><div class="nm">Ravi Patel</div>
+      <div class="sub">Not sent · created 2 days ago</div></div>
+     <div class="amt"><div class="av">$780</div><div class="ad mono">DRAFT</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">PAID</span><span class="n">7</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row paid"><span class="bar"></span>
+     <div class="mid"><div class="nm">Sarah Mendez</div>
+      <div class="sub">INV-0041 · Zelle, 12 Aug</div></div>
+     <div class="amt"><div class="av">$2,150</div><div class="ad mono">PAID</div></div></div>
+    <div class="sep"></div>
+    <div class="row paid"><span class="bar"></span>
+     <div class="mid"><div class="nm">Tom Brady</div>
+      <div class="sub">INV-0040 · Bank transfer, 9 Aug</div></div>
+     <div class="amt"><div class="av">$1,890</div><div class="ad mono">PAID</div></div></div>
+   </div>
+   <div style="height:16px"></div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="hd"><span class="bk">‹</span><h1>Invoices</h1>
+   <button class="newb"><svg><use href="#plus"/></svg>New invoice</button></div>
+  <div class="band">
+   <div class="bd"><div class="bdk">SENT THIS MONTH</div><div class="bdv">$14,280</div><div class="bds">12 invoices</div></div>
+   <div class="bd"><div class="bdk">RECEIVED</div><div class="bdv">$8,150</div><div class="bds">7 payments recorded</div></div>
+   <div class="bd"><div class="bdk">OUTSTANDING</div><div class="bdv hold">$6,130</div><div class="bds">4 invoices waiting</div></div>
+   <div class="bd"><div class="bdk">OVERDUE</div><div class="bdv red">$3,400</div><div class="bds">1 invoice, 11 days</div></div>
+  </div>
+  <div class="scr">
+   <div class="grp"><span class="t">OVERDUE</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row late"><span class="bar"></span>
+     <div class="mid"><div class="nm">Dana Kessler</div>
+      <div class="sub">INV-0042 · AC system replacement · issued 20 Jul, due 3 Aug</div></div>
+     <span class="tag t-late">11 DAYS LATE</span>
+     <div class="amt" style="margin-left:20px"><div class="av">$3,400</div></div></div>
+   </div>
+   <div class="grp"><span class="t">WAITING TO BE PAID</span><span class="n">3</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row part"><span class="bar"></span>
+     <div class="mid"><div class="nm">Marcus Tate</div>
+      <div class="sub">INV-0045 · New system quote accepted · deposit received 11 Aug</div>
+      <div class="prog" style="max-width:300px"><i style="width:40%"></i></div></div>
+     <span class="tag t-part">$1,020 OF $2,550</span>
+     <div class="amt" style="margin-left:20px"><div class="av">$1,530</div><div class="ad mono">STILL DUE</div></div></div>
+    <div class="sep"></div>
+    <div class="row sent"><span class="bar"></span>
+     <div class="mid"><div class="nm">Priya Shah</div>
+      <div class="sub">INV-0046 · Annual service · sent 12 Aug by email</div></div>
+     <span class="tag t-sent">DUE IN 11 DAYS</span>
+     <div class="amt" style="margin-left:20px"><div class="av">$1,200</div></div></div>
+    <div class="sep"></div>
+    <div class="row sent"><span class="bar"></span>
+     <div class="mid"><div class="nm">Lena Ward</div>
+      <div class="sub">INV-0047 · Thermostat install · sent 14 Aug by SMS</div></div>
+     <span class="tag t-sent">DUE IN 13 DAYS</span>
+     <div class="amt" style="margin-left:20px"><div class="av">$1,000</div></div></div>
+   </div>
+   <div class="grp"><span class="t">DRAFTS</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="row"><span class="bar"></span>
+     <div class="mid"><div class="nm">Ravi Patel</div>
+      <div class="sub">Follow-up visit · created 13 Aug, never sent</div></div>
+     <span class="tag t-draft">DRAFT</span>
+     <div class="amt" style="margin-left:20px"><div class="av">$780</div></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>1 · The list.</b> Four groups in the order that costs you money: overdue, waiting, drafts nobody sent, then paid. The band at the top is the whole accountant question in three numbers — <b>sent, received, outstanding</b> — and it's the only place they ever need to agree. A partly-paid invoice shows a bar and both figures, because "$1,530 still due" is the useful number and "$2,550" is the one you'd otherwise remember wrong.</p>
+</div>
+
+<!-- ============ ONE INVOICE ============ -->
+<div class="stage" id="s-I">
+ <div><div class="ph">
+  <div class="dtop">
+   <div class="dnum mono">INV-0045</div>
+   <div class="dwho">Marcus Tate</div>
+   <div class="dmeta">Issued 11 Aug · due 25 Aug · sent by email</div>
+   <div class="dnums">
+    <div class="dn"><div class="dnk">TOTAL</div><div class="dnv">$2,550</div></div>
+    <div class="dn"><div class="dnk">RECEIVED</div><div class="dnv">$1,020</div></div>
+    <div class="dn"><div class="dnk">STILL DUE</div><div class="dnv hold">$1,530</div></div>
+   </div>
+  </div>
+  <div class="scr">
+   <div class="grp"><span class="t">WHAT'S ON IT</span><span class="r"></span></div>
+   <div class="card">
+    <div class="li"><span class="lin">New AC system — 3 ton</span><span class="liq mono">×1</span><span class="liv">$2,200</span></div>
+    <div class="sep"></div>
+    <div class="li"><span class="lin">Installation labour</span><span class="liq mono">×1</span><span class="liv">$150</span></div>
+    <div class="sep"></div>
+    <div class="li"><span class="lin">Thermostat</span><span class="liq mono">×1</span><span class="liv">$200</span></div>
+    <div class="sep"></div>
+    <div class="tot"><span>Subtotal</span><span>$2,550</span></div>
+    <div class="tot big"><span>Total</span><span>$2,550</span></div>
+   </div>
+
+   <div class="grp"><span class="t">PAYMENTS</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="prow"><span class="pic"><svg><use href="#bank"/></svg></span>
+     <div class="pmid"><div class="pm">Bank transfer</div><div class="pd">11 Aug · ref 8841 · deposit</div></div>
+     <span class="pv">$1,020</span></div>
+   </div>
+
+   <div style="height:14px"></div>
+   <div class="pay">
+    <div class="payh">HOW THEY PAY YOU</div>
+    <div class="payt">Zelle: pay@smithhvac.com
+Bank transfer: Chase ••4021, routing 021000021
+Cheque payable to Smith HVAC LLC</div>
+   </div>
+  </div>
+  <div class="slot"><div class="slotin">
+   <button class="btn p" onclick="op('m')"><svg><use href="#check"/></svg>Record a payment</button>
+   <button class="btn"><svg><use href="#send"/></svg>Resend</button>
+   <div class="smsg"><b>$1,530 still due.</b> Nothing goes out automatically.</div>
+  </div></div>
+  <div class="veil" id="v-m" onclick="cl('m')"></div>
+  <div class="sheet" id="sh-m">
+   <div class="grab"></div>
+   <div class="sh">Record a payment</div>
+   <div class="ss">Marcus Tate · INV-0045 · $1,530 still due</div>
+   <div class="fl">AMOUNT</div>
+   <div class="amtrow"><input class="fld" value="$1,530" id="amt-m"><button class="full">Full balance</button></div>
+   <div class="fl">HOW</div>
+   <div class="methods">
+    <button class="mth" data-on><svg><use href="#bank"/></svg>Transfer</button>
+    <button class="mth">Zelle</button>
+    <button class="mth"><svg><use href="#cash"/></svg>Cash</button>
+    <button class="mth">Cheque</button>
+    <button class="mth"><svg><use href="#card"/></svg>Card</button>
+    <button class="mth">Other</button>
+   </div>
+   <div class="fl">WHEN</div>
+   <input class="fld" value="15 Aug 2026">
+   <div class="fl">REFERENCE — OPTIONAL</div>
+   <input class="fld" placeholder="Cheque number, transfer ref…">
+   <button class="save" onclick="cl('m')">Record $1,530</button>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="dtop">
+   <div style="display:flex;align-items:flex-start;gap:20px">
+    <div style="flex:1">
+     <div class="dnum mono">INV-0045</div>
+     <div class="dwho">Marcus Tate</div>
+     <div class="dmeta">Issued 11 Aug 2026 · due 25 Aug · sent by email to marcus@…</div></div>
+    <span class="tag t-part" style="margin-top:4px">PART PAID</span>
+   </div>
+   <div class="dnums">
+    <div class="dn"><div class="dnk">TOTAL</div><div class="dnv">$2,550</div></div>
+    <div class="dn"><div class="dnk">RECEIVED</div><div class="dnv">$1,020</div></div>
+    <div class="dn"><div class="dnk">STILL DUE</div><div class="dnv hold">$1,530</div></div>
+    <div class="dn"><div class="dnk">DUE IN</div><div class="dnv">10 days</div></div>
+   </div>
+  </div>
+  <div class="scr">
+   <div style="display:grid;grid-template-columns:1fr 300px;gap:26px">
+    <div>
+     <div class="grp"><span class="t">WHAT'S ON IT</span><span class="r"></span></div>
+     <div class="card">
+      <div class="li"><span class="lin">New AC system — 3 ton, installed</span><span class="liq mono">×1</span><span class="liv">$2,200</span></div>
+      <div class="sep"></div>
+      <div class="li"><span class="lin">Installation labour</span><span class="liq mono">×1</span><span class="liv">$150</span></div>
+      <div class="sep"></div>
+      <div class="li"><span class="lin">Programmable thermostat</span><span class="liq mono">×1</span><span class="liv">$200</span></div>
+      <div class="sep"></div>
+      <div class="tot"><span>Subtotal</span><span>$2,550</span></div>
+      <div class="tot big"><span>Total</span><span>$2,550</span></div>
+     </div>
+     <div class="grp"><span class="t">PAYMENTS</span><span class="n">1</span><span class="r"></span></div>
+     <div class="card">
+      <div class="prow"><span class="pic"><svg><use href="#bank"/></svg></span>
+       <div class="pmid"><div class="pm">Bank transfer</div><div class="pd">11 Aug 2026 · ref 8841 · recorded by you · deposit</div></div>
+       <span class="pv">$1,020</span></div>
+     </div>
+    </div>
+    <div>
+     <div class="grp"><span class="t">HOW THEY PAY YOU</span><span class="r"></span></div>
+     <div class="pay" style="margin:0 0 18px">
+      <div class="payt" style="margin:0">Zelle: pay@smithhvac.com
+Bank transfer: Chase ••4021
+routing 021000021
+Cheque payable to Smith HVAC LLC</div></div>
+     <div class="grp"><span class="t">HISTORY</span><span class="r"></span></div>
+     <div class="card">
+      <div class="prow" style="padding:11px 13px"><div class="pmid"><div class="pm" style="font-size:13px">Payment recorded</div><div class="pd">11 Aug · $1,020</div></div></div>
+      <div class="sep"></div>
+      <div class="prow" style="padding:11px 13px"><div class="pmid"><div class="pm" style="font-size:13px">Sent by email</div><div class="pd">11 Aug · marcus@…</div></div></div>
+      <div class="sep"></div>
+      <div class="prow" style="padding:11px 13px"><div class="pmid"><div class="pm" style="font-size:13px">Issued</div><div class="pd">11 Aug · INV-0045</div></div></div>
+     </div>
+    </div>
+   </div>
+  </div>
+  <div class="slot"><div class="slotin">
+   <div class="smsg"><b>$1,530 still due.</b> Nothing chases them automatically — record it when the money lands.</div>
+   <button class="btn"><svg><use href="#doc"/></svg>View as customer</button>
+   <button class="btn"><svg><use href="#send"/></svg>Resend</button>
+   <button class="btn p" onclick="op('d')"><svg><use href="#check"/></svg>Record a payment</button>
+  </div></div>
+  <div class="veil" id="v-d" onclick="cl('d')"></div>
+  <div class="sheet" id="sh-d">
+   <div class="grab"></div>
+   <div class="sh">Record a payment</div>
+   <div class="ss">Marcus Tate · INV-0045 · $1,530 still due</div>
+   <div class="fl">AMOUNT</div>
+   <div class="amtrow"><input class="fld" value="$1,530"><button class="full">Full balance</button></div>
+   <div class="fl">HOW</div>
+   <div class="methods">
+    <button class="mth" data-on><svg><use href="#bank"/></svg>Transfer</button>
+    <button class="mth">Zelle</button>
+    <button class="mth"><svg><use href="#cash"/></svg>Cash</button>
+    <button class="mth">Cheque</button>
+    <button class="mth"><svg><use href="#card"/></svg>Card</button>
+    <button class="mth">Other</button>
+   </div>
+   <div class="fl">WHEN</div>
+   <input class="fld" value="15 Aug 2026">
+   <div class="fl">REFERENCE — OPTIONAL</div>
+   <input class="fld" placeholder="Cheque number, transfer ref…">
+   <button class="save" onclick="cl('d')">Record $1,530 — invoice becomes paid</button>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>2 · One invoice.</b> Three numbers at the top and only three: total, received, still due. <b>How they pay you</b> is free text the owner writes once — Zelle handle, bank details, cheque payee — and it prints on the customer's copy. No gateway, no integration. The history column is what an accountant asks for when a figure is queried a year later.</p>
+</div>
+
+<!-- ============ RECORD ============ -->
+<div class="stage" id="s-R">
+ <div><div class="ph">
+  <div class="dtop">
+   <div class="dnum mono">INV-0045</div>
+   <div class="dwho">Marcus Tate</div>
+   <div class="dmeta">Issued 11 Aug · due 25 Aug</div>
+   <div class="dnums">
+    <div class="dn"><div class="dnk">TOTAL</div><div class="dnv">$2,550</div></div>
+    <div class="dn"><div class="dnk">RECEIVED</div><div class="dnv">$1,020</div></div>
+    <div class="dn"><div class="dnk">STILL DUE</div><div class="dnv hold">$1,530</div></div>
+   </div>
+  </div>
+  <div class="scr" style="opacity:.4"></div>
+  <div class="veil" data-on></div>
+  <div class="sheet" data-on>
+   <div class="grab"></div>
+   <div class="sh">Record a payment</div>
+   <div class="ss">Marcus Tate · INV-0045 · $1,530 still due</div>
+   <div class="fl">AMOUNT</div>
+   <div class="amtrow"><input class="fld" value="$800"><button class="full">Full balance</button></div>
+   <div class="fl">HOW</div>
+   <div class="methods">
+    <button class="mth">Transfer</button>
+    <button class="mth" data-on>Zelle</button>
+    <button class="mth"><svg><use href="#cash"/></svg>Cash</button>
+    <button class="mth">Cheque</button>
+    <button class="mth"><svg><use href="#card"/></svg>Card</button>
+    <button class="mth">Other</button>
+   </div>
+   <div class="fl">WHEN</div>
+   <input class="fld" value="15 Aug 2026">
+   <div class="fl">REFERENCE — OPTIONAL</div>
+   <input class="fld" value="zelle 2291">
+   <div class="leftover">$730 will still be due after this</div>
+   <button class="save">Record $800</button>
+  </div>
+ </div><div class="lbl mono">PARTIAL PAYMENT</div></div>
+ <p class="cap"><b>3 · Recording it.</b> Amount defaults to the balance with one tap for <b>full balance</b>, because that's the common case. Six methods, no free-text guessing. Type less than the balance and it tells you what's left before you commit — <b>$730 will still be due</b> — so a part payment is a decision rather than a surprise next month. The button says the amount, and on a full balance it says what happens: <i>invoice becomes paid</i>.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+document.querySelectorAll('.methods').forEach(g=>g.querySelectorAll('.mth').forEach(b=>b.onclick=()=>{
+ g.querySelectorAll('.mth').forEach(x=>delete x.dataset.on);b.dataset.on='';}));
+function op(k){document.getElementById('v-'+k).dataset.on='';document.getElementById('sh-'+k).dataset.on=''}
+function cl(k){delete document.getElementById('v-'+k).dataset.on;delete document.getElementById('sh-'+k).dataset.on}
+</script></body></html>

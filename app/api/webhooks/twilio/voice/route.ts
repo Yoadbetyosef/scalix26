@@ -12,6 +12,8 @@ import { catalogPromptLine } from '@/lib/stripe/connect'
 import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
 import { enforce, clientIp } from '@/lib/ratelimit'
 import { assertPartnerActive, PAUSED_VOICE_MESSAGE } from '@/lib/billing/gate'
+import { voiceCapabilities, encodeCapabilities } from '@/lib/voice/capabilities'
+import { getModuleFlags } from '@/lib/admin/module-flags'
 
 // How long the owner's phone rings before the AI receptionist takes over.
 // ~12s ≈ 2-3 rings — short enough to take over before voicemail typically grabs the
@@ -291,16 +293,20 @@ export async function POST(req: NextRequest) {
       let ownerPhone = ''
       let leadToken = ''
       let tenantTz: string | null = null
-      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token, timezone').eq('id', channel.tenant_id).maybeSingle()
+      // The row this comes off is read below either way; nothing extra is queried for it.
+      let tenantRow: { enabled_modules?: string[] | null; tags?: string[] | null } | null = null
+      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token, timezone, enabled_modules, tags').eq('id', channel.tenant_id).maybeSingle()
       if (tWith) {
         ownerPhone = tWith.owner_phone || tWith.phone || ''
         leadToken = tWith.lead_intake_token || ''
         tenantTz = tWith.timezone || null
+        tenantRow = tWith
       } else {
-        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token, timezone').eq('id', channel.tenant_id).maybeSingle()
+        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token, timezone, enabled_modules, tags').eq('id', channel.tenant_id).maybeSingle()
         ownerPhone = tBase?.phone || ''
         leadToken = tBase?.lead_intake_token || ''
         tenantTz = tBase?.timezone || null
+        tenantRow = tBase ?? null
       }
 
       // Live, per-call current date/day/time in THIS tenant's timezone — resolved with
@@ -331,6 +337,26 @@ export async function POST(req: NextRequest) {
         if (bizContext) voiceSystemPrompt += `\n\n${bizContext}`
       } catch { /* fail-safe */ }
 
+      // ── WHAT THIS TENANT'S PHONE AI MAY DO ────────────────────────────────────────────────────
+      //
+      // The text pipeline omits a tool the tenant has not enabled. voice-server had no such idea and
+      // offered every function to everyone, so a business with `scheduling` off had a silent text AI
+      // and a phone AI still taking bookings. This is the same decision, made in the same place as
+      // every other per-call fact, and passed down as ONE parameter.
+      //
+      // Capabilities, not module keys — voice-server knows its own functions and not the module
+      // vocabulary. Through effectiveModules(), so the platform flag layer governs voice too.
+      //
+      // Fail-safe: if the flags cannot be read, every capability is passed. A phone AI that silently
+      // stops booking because an admin table hiccuped is worse than one that books.
+      let capabilities = 'booking,catalog,payments'
+      try {
+        capabilities = encodeCapabilities(voiceCapabilities(tenantRow, await getModuleFlags()))
+      } catch (err) {
+        console.error('[voice] capability resolution failed — passing all:', err instanceof Error ? err.message : err)
+      }
+      console.log('[voice] capabilities', capabilities || '(none)')
+
       const sp = escapeXml(voiceSystemPrompt)
       ownerPhone = ownerPhone || agent?.forward_to_phone || ''
       // Live-transfer target: ONLY this agent's own configured transfer number.
@@ -350,6 +376,7 @@ export async function POST(req: NextRequest) {
       <Parameter name="callerNumber" value="${escapeXml(From || '')}"/>
       <Parameter name="voiceId" value="${escapeXml(langCfg.voiceId)}"/>
       <Parameter name="language" value="${escapeXml(langCfg.stt)}"/>
+      <Parameter name="capabilities" value="${escapeXml(capabilities)}"/>
     </Stream>
   </Connect>
 </Response>`
