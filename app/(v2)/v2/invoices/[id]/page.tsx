@@ -6,6 +6,8 @@ import { listPageContext } from '../../list-page'
 import { MethodGlyph, METHOD_LABEL } from '../glyphs'
 import { RecordPayment } from '../record'
 import { IssueInvoice } from './issue'
+import { SendInvoice } from './send'
+import { Doc } from '../glyphs'
 
 // ONE INVOICE — docs/miles/invoices-income.html.
 //
@@ -46,6 +48,11 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
         <p className="v2-iv-dmeta">
           {isDraft ? `Not issued · created ${day(r.createdAt)}` : `Issued ${r.issuedAt ? day(r.issuedAt) : day(r.createdAt)}`}
           {r.dueOn ? ` · due ${day(`${r.dueOn}T12:00:00Z`)}` : ''}
+          {/* WHETHER IT WENT OUT, on the line that says what happened to it. An issued invoice nobody
+              sent looks identical to one the customer is ignoring, until this says otherwise. */}
+          {!isDraft && (r.sentAt
+            ? ` · sent ${day(r.sentAt)}${r.sentChannel ? ` by ${r.sentChannel === 'sms' ? 'SMS' : 'email'}` : ''}`
+            : ' · not sent')}
           {inv.contact?.email ? ` · ${inv.contact.email}` : inv.contact?.phone ? ` · ${inv.contact.phone}` : ''}
         </p>
         <div className="v2-iv-dnums">
@@ -168,17 +175,33 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
       {/* THE SLOT. One primary, and a sentence that says what is true rather than what to do. */}
       <div className="v2-iv-slot">
         <div className="v2-iv-slotin">
-          {isDraft
-            ? <IssueInvoice invoiceId={r.id} number={r.number} canIssue={inv.lines.length > 0} />
-            : r.outstandingCents > 0
-              ? <RecordPayment invoiceId={r.id} who={r.who} number={r.number} outstandingCents={r.outstandingCents} />
-              : null}
+          {isDraft ? (
+            <IssueInvoice invoiceId={r.id} number={r.number} canIssue={inv.lines.length > 0} />
+          ) : (
+            <>
+              {/* The customer's own page, exactly as they see it — same URL that gets sent. Opening it
+                  is how an owner checks their payment details read right BEFORE somebody else does. */}
+              <a className="v2-iv-btn" href={`/i/${inv.token}`} target="_blank" rel="noreferrer"><Doc />View as customer</a>
+              <SendInvoice
+                invoiceId={r.id} number={r.number} who={r.who}
+                email={inv.contact?.email ?? null} phone={inv.contact?.phone ?? null}
+                sentAt={r.sentAt} sentChannel={r.sentChannel}
+              />
+              {r.outstandingCents > 0 && (
+                <RecordPayment invoiceId={r.id} who={r.who} number={r.number} outstandingCents={r.outstandingCents} />
+              )}
+            </>
+          )}
           <p className="v2-iv-smsg">
             {isDraft
               ? <>Not issued yet. <b>Issuing fixes the total and the date.</b></>
-              : r.outstandingCents > 0
-                ? <><b>{exact(r.outstandingCents)} still due.</b> Nothing goes out automatically.</>
-                : <><b>Paid in full.</b></>}
+              // An issued invoice nobody has sent is not waiting on the customer — it is waiting on
+              // the owner, and saying "still due" would blame the wrong person.
+              : !r.sentAt
+                ? <><b>Not sent yet.</b> Nobody has been given this.</>
+                : r.outstandingCents > 0
+                  ? <><b>{exact(r.outstandingCents)} still due.</b> Nothing chases them automatically.</>
+                  : <><b>Paid in full.</b></>}
           </p>
         </div>
       </div>

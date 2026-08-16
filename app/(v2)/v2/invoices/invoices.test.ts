@@ -383,3 +383,94 @@ describe('one icon map, not two', () => {
     expect(read('../nav.ts')).not.toMatch(/label: 'Leads'/)
   })
 })
+
+describe('sending it to the person who owes the money', () => {
+  const route = read('../../../api/core/documents/[type]/[id]/send/route.ts')
+  const send = read('./[id]/send.tsx')
+  const pub = read('../../../i/[token]/page.tsx')
+  const middleware = read('../../../../lib/supabase/middleware.ts')
+
+  it('a draft is refused, and told why', () => {
+    // Issuing is the irreversible half. Sending a draft hands somebody a document whose number and
+    // total can still change.
+    expect(route).toContain("if (inv.status === 'draft') {")
+    expect(route).toContain('Issue it first')
+    // The refusal lives in the READER, so every caller of it inherits the rule.
+    expect(lib).toContain("if (!inv || inv.status === 'draft') return null")
+  })
+
+  it('the customer page answers a draft exactly as it answers a bad token', () => {
+    // A reader learning that a draft EXISTS learns something about a document they were not given.
+    const reader = lib.slice(lib.indexOf('export async function readPublicInvoice'))
+    expect(reader).not.toMatch(/status:\s*'draft'|isDraft/)
+    expect(strip(pub)).toContain('if (!inv) notFound()')
+  })
+
+  it('/i/ is its own public path — /d/ is not touched', () => {
+    // /d/ resolves against studio_documents, four of which are already in a real customer's hands.
+    expect(middleware).toContain("'/i/',")
+    expect(route).toContain('/i/${inv.token}')
+    // Comments stripped: this route's header NAMES the table it deliberately does not touch.
+    expect(strip(route)).not.toContain('studio_documents')
+  })
+
+  it('nothing is stamped until the provider accepted it', () => {
+    // sendEmail RETURNS { success } rather than throwing, so a refused send would otherwise be
+    // recorded as sent. The same lesson the studio route already learned.
+    expect(route).toContain('if (!sent.success) {')
+    const after = route.slice(route.indexOf('const at = new Date().toISOString()'))
+    expect(after).toContain("update({ sent_at: at, sent_channel: channel")
+    expect(route.indexOf('if (!sent.success) {')).toBeLessThan(route.indexOf('const at = new Date().toISOString()'))
+  })
+
+  it('every send writes history as well, so the first one is never lost', () => {
+    // sent_at means MOST RECENTLY sent. "Sent 3 days ago" after a reminder, hiding that the original
+    // went out three weeks earlier, is true and misleading.
+    expect(route).toContain("db.from('document_status_history').insert({")
+    expect(route).toContain('note: `Sent by ${channel === \'sms\' ? \'SMS\' : \'email\'} to ${to}`,')
+    // Sending is not a status transition, so the row carries the current status on both sides.
+    expect(route).toContain('from_status: inv.status, to_status: inv.status')
+  })
+
+  it('the payment instructions are ABOVE the lines on the customer’s page', () => {
+    // On their screen it is the instruction, not reference material — and an instruction comes before
+    // the detail it applies to.
+    const p = strip(pub)
+    expect(p.indexOf('How to pay')).toBeLessThan(p.indexOf('<tbody'))
+    expect(pub).toContain('text-[15px] leading-relaxed text-neutral-800')
+    expect(pub).toContain('whitespace-pre-line')
+  })
+
+  it('and the printed page carries the tenant’s name, not ours', () => {
+    // Chrome prints document.title at the top of every printed page.
+    expect(pub).toContain('title: [inv.business.name')
+    expect(pub).toContain('<PrintButton />')
+  })
+
+  it('the list and the detail say whether it actually went out', () => {
+    // An issued invoice nobody sent sits in WAITING looking like the customer's fault.
+    expect(lib).toContain('`sent ${ago(inv.sent_at)}')
+    expect(lib).toContain('issued ${inv.issued_at ? ago(inv.issued_at) : ago(inv.created_at)}, not sent`')
+    expect(detail).toContain("' · not sent'")
+    expect(detail).toContain('Nobody has been given this.')
+  })
+
+  it('a draft gets no Send button at all', () => {
+    // A disabled Send beside Issue would read as an alternative to it, not a consequence of it.
+    const slot = detail.slice(detail.indexOf('v2-iv-slotin'))
+    expect(slot.indexOf('<IssueInvoice')).toBeLessThan(slot.indexOf('<SendInvoice'))
+    expect(slot).toContain('{isDraft ? (')
+  })
+
+  it('the customer’s page opens in a NEW TAB, which is why no-escape allows it', () => {
+    // That guard excludes /i/ on the premise that the owner's tab never moves. If this link ever
+    // navigated in place, the exclusion would be covering a real dead end.
+    expect(detail).toContain('href={`/i/${inv.token}`} target="_blank" rel="noreferrer"')
+  })
+
+  it('a one-off address is used for this send only', () => {
+    // A copy to a bookkeeper must not silently become the customer's address.
+    expect(send).toContain('body: JSON.stringify({ channel, to: to.trim() })')
+    expect(send).not.toMatch(/\/api\/contacts/)
+  })
+})

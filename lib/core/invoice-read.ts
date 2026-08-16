@@ -37,6 +37,9 @@ export interface InvoiceRow {
   dueOn: string | null
   /** Negative = late by that many days. Null when there is no due date to be late against. */
   daysToDue: number | null
+  /** MOST RECENTLY sent. Null means nobody has ever been given it — see add_invoice_send.sql. */
+  sentAt: string | null
+  sentChannel: 'email' | 'sms' | null
 }
 
 export interface InvoiceGroup { key: Bucket; label: string; rows: InvoiceRow[] }
@@ -68,6 +71,7 @@ interface Head {
   id: string; number: string; status: string; currency: string; total_cents: number
   contact_id: string | null; company_id: string | null; notes: string | null
   issued_at: string | null; created_at: string; due_on: string | null
+  sent_at: string | null; sent_channel: string | null
 }
 
 /** Whole days from today to the due date, in UTC — `due_on` is a plain date and has no time in it. */
@@ -93,7 +97,7 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
 
   const [{ data: heads }, { data: allocs }] = await Promise.all([
     db.from('invoices')
-      .select('id, number, status, currency, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on')
+      .select('id, number, status, currency, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on, sent_at, sent_channel')
       .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(200),
     db.from('payment_allocations')
       .select('document_id, amount_cents, kind, method, created_at, provider_ref, note')
@@ -136,13 +140,23 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
     const c = inv.contact_id ? contactById.get(inv.contact_id) : null
     const who = companyById.get(inv.company_id ?? '') || c?.name?.trim() || c?.phone?.trim() || c?.email?.trim() || 'No customer yet'
 
+    // ISSUED AND SENT ARE DIFFERENT FACTS, and the sub-line is where the difference is visible.
+    // An invoice issued three weeks ago that nobody was ever given is not waiting to be paid — it is
+    // waiting to be sent, and it will sit in WAITING looking like the customer's fault until somebody
+    // reads this line. `ago(sent_at)` is the MOST RECENT send by definition; the full record is on the
+    // detail screen's history.
+    const sent = inv.sent_at
+      ? `sent ${ago(inv.sent_at)}${inv.sent_channel ? ` by ${inv.sent_channel === 'sms' ? 'SMS' : 'email'}` : ''}`
+      : null
     const sub = isDraft
       ? `Not issued · created ${ago(inv.created_at)}`
       : status === 'partial'
         ? `${inv.number} · part paid`
         : status === 'paid'
           ? `${inv.number} · paid`
-          : `${inv.number} · issued ${inv.issued_at ? ago(inv.issued_at) : ago(inv.created_at)}`
+          : sent
+            ? `${inv.number} · ${sent}`
+            : `${inv.number} · issued ${inv.issued_at ? ago(inv.issued_at) : ago(inv.created_at)}, not sent`
 
     return {
       id: inv.id,
@@ -161,6 +175,8 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
       createdAt: inv.created_at,
       dueOn: inv.due_on,
       daysToDue: days,
+      sentAt: inv.sent_at,
+      sentChannel: inv.sent_channel === 'sms' ? 'sms' : inv.sent_channel === 'email' ? 'email' : null,
     }
   })
 
@@ -217,12 +233,14 @@ export interface InvoiceDetail {
   contact: { name: string | null; phone: string | null; email: string | null } | null
   /** SNAPSHOTTED at issue. A draft shows the tenant's current settings instead — see the page. */
   paymentInstructions: string | null
+  /** The customer's URL is /i/<token>. Minted at creation, so a draft has one before anybody has it. */
+  token: string
 }
 
 export async function readInvoice(tenantId: string, id: string): Promise<InvoiceDetail | null> {
   const db = createAdminClient()
   const { data: inv } = await db.from('invoices')
-    .select('id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on, payment_instructions')
+    .select('id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on, payment_instructions, token, sent_at, sent_channel')
     .eq('tenant_id', tenantId).eq('id', id).maybeSingle()
   if (!inv) return null
 
@@ -254,7 +272,11 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       id: inv.id as string,
       number: inv.number as string,
       who,
-      sub: isDraft ? `Not issued · created ${ago(inv.created_at as string)}` : `Issued ${inv.issued_at ? ago(inv.issued_at as string) : ago(inv.created_at as string)}`,
+      sub: isDraft
+        ? `Not issued · created ${ago(inv.created_at as string)}`
+        : inv.sent_at
+          ? `Sent ${ago(inv.sent_at as string)}${inv.sent_channel ? ` by ${inv.sent_channel === 'sms' ? 'SMS' : 'email'}` : ''}`
+          : `Issued ${inv.issued_at ? ago(inv.issued_at as string) : ago(inv.created_at as string)}`,
       totalCents: total,
       paidCents: paid,
       outstandingCents: total - paid,
@@ -267,6 +289,8 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       createdAt: inv.created_at as string,
       dueOn: (inv.due_on as string) ?? null,
       daysToDue: daysUntil((inv.due_on as string) ?? null),
+      sentAt: (inv.sent_at as string) ?? null,
+      sentChannel: inv.sent_channel === 'sms' ? 'sms' : inv.sent_channel === 'email' ? 'email' : null,
     },
     subtotalCents: Number(inv.subtotal_cents ?? 0),
     discountCents: Number(inv.discount_cents ?? 0),
@@ -296,7 +320,96 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
     })),
     contact: c ? { name: c.name ?? null, phone: c.phone ?? null, email: c.email ?? null } : null,
     paymentInstructions: (inv.payment_instructions as string) ?? null,
+    token: (inv.token as string) ?? '',
   }
 }
 
 export { money }
+
+// ── THE CUSTOMER'S COPY ─────────────────────────────────────────────────────────────────────────
+//
+// Resolved by TOKEN, with no session: the person reading it has no account and never will. The token
+// in the URL is the sole credential, the same arrangement /d/ and /e/ already use.
+//
+// A DRAFT IS NEVER RENDERED. Its total is not frozen, so a link opened twice could show two different
+// numbers — and the second one would be the first thing that customer distrusted. The route answers
+// not-found rather than "not ready", because a draft's existence is not the reader's business.
+
+export interface PublicInvoice {
+  number: string
+  issuedAt: string | null
+  dueOn: string | null
+  currency: string
+  lines: InvoiceLine[]
+  subtotalCents: number
+  discountCents: number
+  taxCents: number
+  totalCents: number
+  paidCents: number
+  outstandingCents: number
+  status: PaymentStatus
+  notes: string | null
+  /** The snapshot taken at issue — where the money was meant to go on the day they got this. */
+  paymentInstructions: string | null
+  customerName: string | null
+  business: {
+    name: string | null; email: string | null; phone: string | null
+    address: string | null; city: string | null; state: string | null; zip: string | null
+  }
+}
+
+export async function readPublicInvoice(token: string): Promise<PublicInvoice | null> {
+  if (!token || token.length < 8) return null
+  const db = createAdminClient()
+
+  const { data: inv } = await db.from('invoices')
+    .select('id, tenant_id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes, issued_at, due_on, payment_instructions, contact_id')
+    .eq('token', token).maybeSingle()
+  // Not found AND not-a-draft answer identically. A reader learning that a draft exists learns
+  // something about a document they were not given.
+  if (!inv || inv.status === 'draft') return null
+
+  const [{ data: lines }, { data: allocs }, { data: tenant }, { data: contact }] = await Promise.all([
+    db.from('sales_document_lines')
+      .select('id, description, quantity, unit_price_cents, line_total_cents')
+      .eq('document_type', 'invoice').eq('document_id', inv.id).order('sort_order'),
+    db.from('payment_allocations')
+      .select('amount_cents').eq('document_type', 'invoice').eq('document_id', inv.id),
+    db.from('tenants').select('business_name, email, phone, address, city, state, zip').eq('id', inv.tenant_id).maybeSingle(),
+    inv.contact_id
+      ? db.from('contacts').select('name').eq('id', inv.contact_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const total = Number(inv.total_cents ?? 0)
+  const paid = ((allocs ?? []) as { amount_cents: number }[]).reduce((s, a) => s + Number(a.amount_cents), 0)
+  const t = (tenant ?? {}) as Record<string, string | null>
+
+  return {
+    number: inv.number as string,
+    issuedAt: inv.issued_at as string | null,
+    dueOn: (inv.due_on as string) ?? null,
+    currency: (inv.currency as string) || 'usd',
+    lines: ((lines ?? []) as Record<string, unknown>[]).map((l) => ({
+      id: l.id as string,
+      description: (l.description as string) || 'Item',
+      quantity: Number(l.quantity ?? 1),
+      unitPriceCents: Number(l.unit_price_cents ?? 0),
+      lineTotalCents: Number(l.line_total_cents ?? 0),
+    })),
+    subtotalCents: Number(inv.subtotal_cents ?? 0),
+    discountCents: Number(inv.discount_cents ?? 0),
+    taxCents: Number(inv.tax_cents ?? 0),
+    totalCents: total,
+    paidCents: paid,
+    outstandingCents: total - paid,
+    status: derivePaymentStatus(total, paid),
+    notes: (inv.notes as string) ?? null,
+    paymentInstructions: (inv.payment_instructions as string) ?? null,
+    customerName: ((contact as { name?: string | null } | null)?.name) ?? null,
+    business: {
+      name: t.business_name ?? null, email: t.email ?? null, phone: t.phone ?? null,
+      address: t.address ?? null, city: t.city ?? null, state: t.state ?? null, zip: t.zip ?? null,
+    },
+  }
+}

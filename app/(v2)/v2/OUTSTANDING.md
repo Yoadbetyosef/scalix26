@@ -836,3 +836,31 @@ line.
 
 Measured, so the number is not a guess: probed on the live database, three lines cost three inserts
 and three header recomputes, and the header read correctly after each one.
+
+---
+
+## §37 — a send is recorded, not confirmed
+
+`POST /api/core/documents/invoice/[id]/send` stamps `sent_at` and writes a `document_status_history`
+row only after the provider ACCEPTED the message — `sendEmail` returns `{ success }` rather than
+throwing, and a refused send is a 502 that stamps nothing. That is as far as the record goes.
+
+What "sent" therefore means: **we handed it to Resend or Twilio and they took it.** It does not mean
+delivered, and it certainly does not mean read. A hard bounce arrives later, on a webhook nobody is
+listening to, and the invoice goes on saying "sent 3 days ago by email" to an address that does not
+exist. The owner's next signal is silence, which they will read as the customer ignoring them.
+
+Three things that do not exist and are each separable:
+
+- **Bounce handling.** Resend posts `email.bounced`; `/api/webhooks` already receives provider posts.
+  One handler, one column (`delivery_state`), and the sub-line can say "bounced" instead of "sent".
+- **Reminders.** Nothing chases an overdue invoice. The detail screen says so out loud — "Nothing
+  chases them automatically" — because an owner who assumes otherwise loses money quietly. The drip
+  engine (`lib/leads/drip.ts`) is the shape this would take, and its brake (any inbound message ends a
+  sequence) is the part that makes it safe.
+- **Opened.** Deliberately not built. A tracking pixel on a document somebody is being asked to pay is
+  a different product decision, not a feature gap.
+
+The one thing already true: every send appends to history, so "when did they FIRST get this?" — the
+question an owner is asked when a customer says they never received it — is answerable even though
+`sent_at` has been overwritten by every reminder since.

@@ -30,7 +30,12 @@ const files = walk(V2).filter((f) => !f.includes('.test.') && !f.endsWith('.md')
 // It also watches router.push/replace. It did not, and this screen navigates ONLY that way — a guard
 // that covers hrefs while the code has moved to programmatic navigation is a guard that passes
 // because it is looking somewhere else. Verified by mutation: pointing a row at /dashboard fails.
-const OUTSIDE = /(?:href:\s*|href=\{?["'`]|href="|router\.(?:push|replace)\(\s*["'`]|`)(\/(?!v2\/|v2["'`\s]|auth\/|api\/)[a-z][a-z0-9-]*(?:\/|["'`]))/g
+//
+// `/i/` is excluded on the same grounds: it is the CUSTOMER's copy of an invoice, a session-less token
+// page opened in a new tab. It is not a destination inside the app at all, so the /v2 tab the owner is
+// standing in never moves and there is no dead end to come back from. (`i/` only matches when the very
+// next character is a slash — a future `/inbox/` would still be caught.)
+const OUTSIDE = /(?:href:\s*|href=\{?["'`]|href="|router\.(?:push|replace)\(\s*["'`]|`)(\/(?!v2\/|v2["'`\s]|auth\/|api\/|i\/)[a-z][a-z0-9-]*(?:\/|["'`]))/g
 
 describe('no row leaves the preview', () => {
   it.each(files.map((f) => [f.slice(V2.length + 1), f]))('%s links nowhere outside /v2', (_name, file) => {
