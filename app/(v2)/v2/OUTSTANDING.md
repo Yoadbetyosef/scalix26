@@ -754,6 +754,29 @@ with, and renumbering them would break every reference anybody already holds.
 Not decided here because it is an accounting question with a jurisdiction in it, not a code
 preference. Whoever picks must also decide what happens to INV-0001, -0002, -0004, -0005.
 
+### WHICH IS CHEAPER TO ADD LATER — the thing not to get wrong
+
+**Option 2 is cheap whenever you do it. Option 1 gets more expensive every day, and after the first
+real issued invoice it stops being reversible.**
+
+*Option 2 (void log)* is purely additive: a table, and a write on the path that deletes a draft.
+It needs no existing row changed, no number reissued, and nothing in the UI to move. Adding it in six
+months costs exactly what it costs today.
+
+*Option 1 (allocate at issue)* is a change to what a number MEANS. Today the four invoices are all
+drafts carrying numbers, so switching is a data question about four rows nobody has seen. Once any of
+them is issued and sent, its number is in somebody else's records — and after that, moving to
+allocate-at-issue leaves two eras of numbering in the same sequence, with no way to tell which era a
+number came from without a column recording that too.
+
+**So the decision that has to be made BEFORE the first issued invoice reaches a customer is option 1.
+Option 2 can wait indefinitely.** If you are unsure, the safe order is: decide 1 now (even if the
+answer is "keep allocate-at-creation"), and leave 2 until somebody actually asks why 0003 is missing.
+
+Concretely: the first `POST /api/core/documents/invoice/{id}/issue` that is followed by sending the
+document to a customer is the point of no return. Nothing in the code stops you today — this is a
+note, not a guard, because a guard would be pretending the accounting answer is known.
+
 ---
 
 ## §34 — an issued document cannot be corrected, deliberately
