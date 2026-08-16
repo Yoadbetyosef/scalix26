@@ -1,22 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { NAV_ICONS, GROUP_HUE } from './nav-icons'
 import { useSignOut } from './sign-out'
 import { useState, type ReactNode } from 'react'
-import {
-  TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
-  Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut,
-} from 'lucide-react'
 
-// The same map the sheet draws from — one label, one mark, both widths.
-const ICONS: Record<string, typeof TrendingUp> = {
-  Leads: TrendingUp, Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
-  'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
-  Orders: Package, Analytics: BarChart3, Reports: FileText,
-  Billing: CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
-}
-// RUDI magenta, BUSINESS violet, ACCOUNT cyan — the sheet's own assignment.
-const GROUP_HUE: Record<string, string> = { g1: 'var(--v2-t1)', g2: 'var(--v2-t3)', g3: 'var(--v2-t4)' }
 
 // The left rail: business identity, the four primary destinations with their counts, three
 // collapsible groups, and the pulse strip pinned to the bottom.
@@ -53,7 +41,7 @@ function Nav({ item, on, shortcut, signOut }: { item: NavItem; on?: boolean; sho
   // what they were — a link to a page that does not exist is a worse lie than an inert row. Written as
   // two branches rather than a dynamic tag because Link's props are not a superset of button's, and
   // the union that satisfies both is less readable than saying it twice.
-  const Icon = ICONS[item.label]
+  const Icon = NAV_ICONS[item.label]
   const inner = (
     <>
       {/* The same 32px chip the sheet uses, at 10% of the group's hue. Primary rows carry the accent's

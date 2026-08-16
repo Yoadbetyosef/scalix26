@@ -8,10 +8,14 @@ import { useEffect, useRef, useState } from 'react'
 // goes through /api/contacts/search, which is searchContacts: tenant-scoped, archived and merged-away
 // records excluded, so the picker can never offer a record that should not be reused.
 //
-// A NEW customer is created through POST /api/contacts, which matches on the last ten digits and
-// answers 409 with the record it clashed with. That matters more here than anywhere: a person typing
-// a number that already belongs to somebody must be shown that somebody, not told "duplicate" and
-// left to guess. `createContactFor` below returns that record so the caller can offer it.
+// The type-ahead matches NAME, EMAIL AND PHONE — `searchContacts` ors across all three — so typing an
+// address that is already in the book offers that person before anything is created.
+//
+// When it is not caught there, POST /api/contacts is the backstop: it dedupes on the normalised email
+// AND on the last ten digits of the phone, and answers 409 with the record it clashed with. That
+// matters more here than anywhere — a person typing an address or a number that already belongs to
+// somebody must be shown that somebody, not told "duplicate" and left to guess. `createContactFor`
+// returns the record so the caller can use it.
 
 export interface PickedContact { id: string; name: string | null; phone: string | null; email: string | null }
 
@@ -19,7 +23,7 @@ export function ContactPick({
   picked, onPick, disabled, autoFocus,
 }: {
   picked: PickedContact | null
-  /** Null clears the choice; a contact sets it. Typing is reported through `onDraft`. */
+  /** Null clears the choice; a contact sets it. What was typed is the caller's own state. */
   onPick: (c: PickedContact | null) => void
   disabled?: boolean
   autoFocus?: boolean
@@ -62,7 +66,7 @@ export function ContactPick({
           ref={field}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search contacts, or type a name"
+          placeholder="Search by name, email or phone"
           disabled={disabled}
         />
       </label>
@@ -77,12 +81,6 @@ export function ContactPick({
       )}
     </>
   )
-}
-
-/** The typed name, for a caller that needs to create the contact rather than pick one. */
-export function useTypedName(): [string, (v: string) => void] {
-  const [v, set] = useState('')
-  return [v, set]
 }
 
 export interface CreateContactResult {

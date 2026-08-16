@@ -315,3 +315,71 @@ describe('the one failure that survives, survives twice', () => {
     expect(nw).toContain('router.push(`/v2/invoices/${docId}`)')
   })
 })
+
+describe('a customer can be reached', () => {
+  const nw = read('./new.tsx')
+  const pick = read('../contact-pick.tsx')
+  const store = read('../../../../lib/contacts/store.ts')
+
+  it('the form asks for an email, and asks for it before the phone', () => {
+    // An invoice usually goes by email. Without an address there is nothing to send it to, so a
+    // customer who is not already a contact could never be invoiced properly.
+    expect(nw).toContain('<span>Email</span>')
+    expect(nw.indexOf('<span>Email</span>')).toBeLessThan(nw.indexOf('<span>Phone</span>'))
+    expect(nw).toContain('createContactFor({ name, email, phone })')
+  })
+
+  it('any ONE of name, email or phone is enough — matching what createContact requires', () => {
+    expect(nw).toContain('const ready = (!!picked || !!name.trim() || !!email.trim() || !!phone.trim()) && usable.length > 0')
+    expect(store).toContain("if (!name && !email && !phone) return { ok: false, error: 'Enter at least a name, email, or phone number.' }")
+  })
+
+  it('an email already in the book offers that person rather than creating a second row', () => {
+    // Twice over: the type-ahead ors across all three columns, and createContact dedupes on the
+    // normalised email as well as the phone.
+    expect(store).toContain('name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%')
+    expect(store).toContain('const dupe = (e && byEmail.get(e)) || (p && byPhone.get(p)) || null')
+    expect(pick).toContain('Search by name, email or phone')
+  })
+})
+
+describe('the header fits', () => {
+  const css = read('../v2-tokens.css')
+
+  it('the title yields and the buttons do not', () => {
+    // Both were `0 1 auto`, so the line shrank whichever it reached first — and .v2-hacts' children
+    // are `flex: none`, so a shrunk container CLIPPED them. Two actions left "New" as a plus and an N.
+    expect(css).toMatch(/\.v2 \.v2-phd h2 \{[^}]*min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis/)
+    expect(css).toContain('.v2 .v2-hacts { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }')
+  })
+
+  it('and sits in the same column as the body it heads', () => {
+    expect(css).toContain('.v2 .v2-phd[data-inner] { padding-left: 0; padding-right: 0; }')
+    expect(css).toMatch(/\.v2-phdin \{[^}]*max-width: 820px; margin: 0 auto/)
+    expect(list).toContain('<header className="v2-phd" data-inner>')
+  })
+})
+
+describe('one icon map, not two', () => {
+  const icons = read('../nav-icons.tsx')
+
+  it('Invoices has a glyph', () => {
+    expect(icons).toContain('Invoices: Receipt,')
+  })
+
+  it('and both surfaces read the same map', () => {
+    // rail.tsx and sheet.tsx each held an identical copy, and rail's carried the comment "the same
+    // map the sheet draws from" — a description of an intention, not of the code. Adding a row to one
+    // left the other drawing no chip, which is exactly what happened here.
+    for (const f of ['../rail.tsx', '../sheet.tsx']) {
+      expect(read(f)).toContain("from './nav-icons'")
+      expect(read(f)).not.toMatch(/^const ICONS/m)
+    }
+  })
+
+  it('and no mark survives for a destination that is gone', () => {
+    // A glyph for Leads is a row waiting to be re-added by somebody who assumes the page went missing.
+    expect(icons).not.toMatch(/^\s*Leads:/m)
+    expect(read('../nav.ts')).not.toMatch(/label: 'Leads'/)
+  })
+})

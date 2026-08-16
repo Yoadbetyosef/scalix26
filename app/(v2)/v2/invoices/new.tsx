@@ -50,6 +50,7 @@ export function NewInvoice() {
 
   const [picked, setPicked] = useState<PickedContact | null>(null)
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [lines, setLines] = useState<Line[]>([blank(1)])
   const [nextId, setNextId] = useState(2)
@@ -61,10 +62,14 @@ export function NewInvoice() {
   // so the only total that exists is the one the server derived.
   const preview = lines.reduce((s, l) => s + Math.round(qty(l.quantity) * cents(l.unitPrice)), 0)
   const usable = lines.filter((l) => l.description.trim() && cents(l.unitPrice) > 0 && qty(l.quantity) > 0)
-  const ready = (!!picked || !!name.trim() || !!phone.trim()) && usable.length > 0
+  // ONE OF THE THREE, which is exactly what createContact requires — it refuses only when all three
+  // are empty. Phone is NOT required: an invoice usually goes by email, and demanding a number would
+  // block a customer who has only ever written to you. Neither is email, because a walk-in with a
+  // name and a cheque is also real.
+  const ready = (!!picked || !!name.trim() || !!email.trim() || !!phone.trim()) && usable.length > 0
 
   function reset() {
-    setPicked(null); setName(''); setPhone(''); setLines([blank(1)]); setNextId(2)
+    setPicked(null); setName(''); setEmail(''); setPhone(''); setLines([blank(1)]); setNextId(2)
     setErr(null); setPartial(null); setBusy(false)
   }
   function close() { setOpen(false); reset() }
@@ -75,9 +80,13 @@ export function NewInvoice() {
 
     // 1 ── the customer. An existing one is used as-is; a typed one is created, and a 409 means they
     //      are already in the book, so we use THAT record rather than refusing the invoice.
+    //
+    //      createContact dedupes on EMAIL and on the last ten digits of the phone, so an address that
+    //      already belongs to somebody collides exactly the way a number does — and the search above
+    //      matches email too, so most of the time the person is offered before it gets this far.
     let contactId = picked?.id ?? null
     if (!contactId) {
-      const r = await createContactFor({ name, phone })
+      const r = await createContactFor({ name, email, phone })
       if (r.duplicateOf) {
         contactId = r.duplicateOf.id
         setPicked(r.duplicateOf)
@@ -175,17 +184,25 @@ export function NewInvoice() {
             </>
           ) : (
             <>
-              <ContactPick picked={picked} onPick={(c) => { setPicked(c); if (!c) { setName(''); setPhone('') } }} disabled={busy} autoFocus />
+              <ContactPick picked={picked} onPick={(c) => { setPicked(c); if (!c) { setName(''); setEmail(''); setPhone('') } }} disabled={busy} autoFocus />
               {!picked && (
                 <>
                   <label className="v2-efield">
                     <span>Name</span>
                     <input value={name} onChange={(e) => setName(e.target.value)} disabled={busy} />
                   </label>
+                  {/* EMAIL FIRST, and before phone. An invoice usually goes by email, and without an
+                      address there is nothing to send it to — a customer who is not already a contact
+                      could never be invoiced properly. */}
+                  <label className="v2-efield">
+                    <span>Email</span>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
+                  </label>
                   <label className="v2-efield">
                     <span>Phone</span>
                     <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} />
                   </label>
+                  <p className="v2-ehint">A name, an email or a phone number — any one is enough.</p>
                 </>
               )}
 

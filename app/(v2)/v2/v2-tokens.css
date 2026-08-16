@@ -752,10 +752,25 @@
   display: flex; align-items: center; gap: 12px;
   padding: 30px 44px 16px; border-bottom: 1px solid var(--v2-line);
 }
-.v2 .v2-phd h2 { font-size: 21px; font-weight: 600; letter-spacing: -0.028em; color: var(--v2-ink); }
+.v2 .v2-phd h2 {
+  font-size: 21px; font-weight: 600; letter-spacing: -0.028em; color: var(--v2-ink);
+  /* THE TITLE YIELDS, NOT THE BUTTONS. Both were `0 1 auto`, so the flex line shrank whichever it
+     reached first — and .v2-hacts' children are `flex: none`, so a shrunk container clipped them
+     instead of reflowing. Two actions on a phone left "New" as a plus and an N running off the edge.
+     A truncated title is still a title; half a button is not a button. */
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* Opposite the title. `margin-left: auto` rather than a spacer, so a header with no actions is
-   unchanged and one with two does not need the h2 to know about them. */
-.v2 .v2-hacts { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+   unchanged and one with two does not need the h2 to know about them. `flex: none` because the
+   buttons inside it cannot shrink — see above. */
+.v2 .v2-hacts { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
+/* A header whose BODY is a centred column aligns with it rather than with the window edge. Opt-in,
+   because most /v2 screens run full width and would gain a margin they never asked for. */
+.v2 .v2-phd[data-inner] { padding-left: 0; padding-right: 0; }
+.v2 .v2-phdin {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  max-width: 820px; margin: 0 auto; padding: 0 44px;
+}
 .v2 .v2-hact {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   padding: 8px 14px; border-radius: 10px; cursor: pointer;
@@ -2536,6 +2551,7 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   /* Two full-width controls in a header that already holds a title is three things fighting for one
      row. The words go; the glyph and the plus carry it. */
   .v2 .v2-hact { padding: 8px 11px; font-size: 12.5px; }
+  .v2 .v2-phdin { padding: 0 16px; }
   .v2 .v2-icounts { grid-template-columns: 1fr; }
 }
 

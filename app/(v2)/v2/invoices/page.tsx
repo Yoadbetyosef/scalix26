@@ -34,15 +34,20 @@ export default async function V2Invoices() {
 
   return (
     <div className="v2-page">
-      <header className="v2-phd">
-        <Link href="/v2" className="v2-bk" aria-label="Home">
-          <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
-        </Link>
-        <h2>Invoices</h2>
-        <div className="v2-hacts">
-          {/* Typed once, and where the question occurs to somebody. */}
-          <PaymentDetails instructions={settings.paymentInstructions} netDays={settings.netDays} />
-          <NewInvoice />
+      {/* The header aligns with the body's own column rather than with the window edge — the figures
+          and the rows below it are a centred 820px, and a title floating 44px from the glass was the
+          only thing on the screen that did not belong to that column. */}
+      <header className="v2-phd" data-inner>
+        <div className="v2-phdin">
+          <Link href="/v2" className="v2-bk" aria-label="Home">
+            <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
+          </Link>
+          <h2>Invoices</h2>
+          <div className="v2-hacts">
+            {/* Typed once, and where the question occurs to somebody. */}
+            <PaymentDetails instructions={settings.paymentInstructions} netDays={settings.netDays} />
+            <NewInvoice />
+          </div>
         </div>
       </header>
 

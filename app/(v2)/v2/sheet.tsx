@@ -1,11 +1,9 @@
 'use client'
 
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
+import { NAV_ICONS, GROUP_HUE } from './nav-icons'
 import { useSignOut } from './sign-out'
-import {
-  TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
-  Package, BarChart3, FileText, CreditCard, Settings, Plug, LogOut, ChevronRight,
-} from 'lucide-react'
 
 import { useRef, useState } from 'react'
 import { useSheetDrag } from './use-sheet-drag'
@@ -18,17 +16,6 @@ import { useSheetDrag } from './use-sheet-drag'
 
 export interface Tile { label: string; value: number | null; sub: string; href?: string }
 
-// Presentation only — a label to a mark. No destination, no data, nothing the nav does not already
-// know; this file simply draws what nav.ts lists.
-const ICONS: Record<string, typeof TrendingUp> = {
-  Leads: TrendingUp, Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
-  'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
-  Orders: Package, Analytics: BarChart3, Reports: FileText,
-  Billing: CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
-}
-// Which sample of the accent a group wears. The heading dot, its fading rule and every icon chip
-// inside the card read from this one value.
-const GROUP_HUE: Record<string, string> = { g1: 'var(--v2-t1)', g2: 'var(--v2-t3)', g3: 'var(--v2-t4)' }
 export interface NeedsItem { title: string; detail: string; action: string }
 export interface NowItem { title: string; detail: string; progress?: number | null }
 
@@ -151,7 +138,7 @@ export function Sheet({ now, needs, tiles, groups, monthLabel, monthStats, live 
                   <p className="v2-ghead"><i />{g.label}<s /></p>
                   <div className="v2-gcard">
                     {g.items.map((d) => {
-                      const Icon = ICONS[d.label] ?? ChevronRight
+                      const Icon = NAV_ICONS[d.label] ?? ChevronRight
                       const inner = (
                         <>
                           <span className="v2-gchip"><Icon /></span>
