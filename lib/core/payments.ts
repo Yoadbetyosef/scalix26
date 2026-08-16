@@ -14,11 +14,19 @@ export function derivePaymentStatus(totalCents: number, paidCents: number): Paym
   return 'partial'
 }
 
-export interface ApplyInput { kind: 'charge' | 'deposit' | 'refund' | 'adjustment'; amountCents: number; currency?: string; providerRef?: string | null; idempotencyKey?: string | null }
+/** How the money arrived. NULL is absent — a payment recorded before the column existed, or one
+ *  nobody said the method for. Not 'other', which is a choice somebody made. */
+export type PaymentMethod = 'transfer' | 'zelle' | 'cash' | 'cheque' | 'card' | 'other'
+
+export interface ApplyInput { kind: 'charge' | 'deposit' | 'refund' | 'adjustment'; amountCents: number; currency?: string; providerRef?: string | null; idempotencyKey?: string | null; method?: PaymentMethod | null }
 export async function applyPayment(tenantId: string, docType: DocType | 'order', docId: string, input: ApplyInput, actor: string) {
   const { data, error } = await admin().rpc('core_apply_payment', {
     p_tenant: tenantId, p_doc_type: docType, p_doc_id: docId, p_kind: input.kind, p_amount_cents: input.amountCents,
     p_currency: input.currency ?? 'usd', p_provider_ref: input.providerRef ?? null, p_key: input.idempotencyKey ?? null, p_actor: actor,
+    // add_payment_method.sql. The method goes THROUGH the RPC rather than being stamped afterwards:
+    // a retry finds the allocation already there, returns idempotent, and a second write would never
+    // land — so the method would be silently absent on exactly the rows that had trouble.
+    p_method: input.method ?? null,
   })
   if (error) return { ok: false as const, error: error.message }
   return (data ?? { ok: false, error: 'no_result' }) as { ok: boolean; total_cents?: number; paid_cents?: number; balance_cents?: number; status?: PaymentStatus; idempotent?: boolean }

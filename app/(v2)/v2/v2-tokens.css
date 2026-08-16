@@ -2813,3 +2813,168 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 @media (max-width: 719.98px) {
   .v2 .v2-ap-kinds { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   INVOICES — docs/miles/invoices-income.html. Both widths, values taken directly.
+
+   THE SPINE IS THE STATE, the same idea the agenda uses for meeting kind: grey draft, violet issued,
+   amber part paid, acid paid. Declared here rather than shared with the agenda's kind colours — where
+   an appointment HAPPENS and where an invoice STANDS are different questions, and one variable
+   serving both is how they drift into each other. */
+
+.v2 {
+  --iv-sent: #8B5CF6;
+  --iv-part: #F5A524;
+  --iv-paid: #D9F224;
+  --iv-late: #FF3B5C;
+  --iv-late-wash: #FFE9ED;
+  --iv-late-ink: #A8102C;
+}
+
+/* ── The money band ───────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-iv-band { display: flex; flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); }
+.v2 .v2-iv-bd { flex: 1; padding: 15px 16px; border-right: 1px solid var(--v2-line); }
+.v2 .v2-iv-bd:last-child { border-right: 0; }
+.v2 .v2-iv-bdk { font-family: var(--v2-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-24); }
+.v2 .v2-iv-bdv {
+  font-size: 22px; font-weight: 500; color: var(--v2-ink); margin-top: 6px;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+.v2 .v2-iv-bdv[data-tone="hold"] { color: var(--v2-hold-ink); }
+.v2 .v2-iv-bdv[data-tone="late"] { color: var(--iv-late-ink); }
+.v2 .v2-iv-bds { font-size: 11px; color: var(--v2-ink-24); margin-top: 4px; }
+
+/* ── A row ────────────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-iv-row {
+  display: flex; gap: 13px; padding: 15px 14px; align-items: center;
+  text-decoration: none; color: inherit; cursor: pointer;
+}
+.v2 .v2-iv-row:hover { background: rgba(0, 0, 0, 0.018); }
+.v2 .v2-iv-row:active { background: rgba(0, 0, 0, 0.025); }
+.v2 .v2-iv-bar { width: 3px; border-radius: 3px; align-self: stretch; flex: none; background: rgba(0, 0, 0, 0.1); }
+.v2 .v2-iv-row[data-s="unpaid"] .v2-iv-bar { background: var(--iv-sent); }
+.v2 .v2-iv-row[data-s="partial"] .v2-iv-bar { background: var(--iv-part); }
+.v2 .v2-iv-row[data-s="paid"] .v2-iv-bar { background: var(--iv-paid); }
+.v2 .v2-iv-row[data-s="overdue"] .v2-iv-bar { background: var(--iv-late); }
+
+.v2 .v2-iv-mid { flex: 1; min-width: 0; }
+.v2 .v2-iv-nm {
+  display: block; font-size: 15px; font-weight: 500; color: var(--v2-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v2 .v2-iv-sub { display: block; font-size: 12.5px; color: var(--v2-ink-42); margin-top: 4px; }
+/* Only drawn when partly paid, so it is always saying something. */
+.v2 .v2-iv-prog {
+  display: block; height: 4px; border-radius: 4px; background: rgba(0, 0, 0, 0.06);
+  overflow: hidden; margin-top: 8px; max-width: 300px;
+}
+.v2 .v2-iv-prog i { display: block; height: 100%; border-radius: 4px; background: var(--iv-part); }
+
+.v2 .v2-iv-amt { text-align: right; flex: none; }
+.v2 .v2-iv-av { display: block; font-size: 15.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
+.v2 .v2-iv-ad { display: block; font-family: var(--v2-mono); font-size: 10.5px; color: var(--v2-ink-24); margin-top: 4px; }
+
+/* ── One invoice ──────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-iv-dtop { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 16px 18px; }
+.v2 .v2-iv-dnum { font-family: var(--v2-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--v2-ink-24); }
+.v2 .v2-iv-dwho { font-size: 20px; font-weight: 500; color: var(--v2-ink); margin-top: 6px; }
+.v2 .v2-iv-dmeta { font-size: 12.5px; color: var(--v2-ink-42); margin-top: 5px; }
+.v2 .v2-iv-dnums { display: flex; margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--v2-line); }
+.v2 .v2-iv-dn { flex: 1; border-right: 1px solid var(--v2-line); padding-right: 14px; margin-right: 14px; }
+.v2 .v2-iv-dn:last-child { border-right: 0; padding-right: 0; margin-right: 0; }
+.v2 .v2-iv-dnk { font-family: var(--v2-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-24); }
+.v2 .v2-iv-dnv { font-size: 18px; font-weight: 500; color: var(--v2-ink); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.v2 .v2-iv-dnv[data-tone="hold"] { color: var(--v2-hold-ink); }
+
+.v2 .v2-iv-li { display: flex; gap: 12px; padding: 12px 14px; align-items: baseline; }
+.v2 .v2-iv-lin { flex: 1; font-size: 14px; color: var(--v2-ink); }
+.v2 .v2-iv-liq { font-family: var(--v2-mono); font-size: 11.5px; color: var(--v2-ink-24); flex: none; }
+.v2 .v2-iv-liv { font-size: 14px; color: var(--v2-ink); font-variant-numeric: tabular-nums; flex: none; min-width: 76px; text-align: right; }
+.v2 .v2-iv-tot { display: flex; justify-content: space-between; padding: 11px 14px; font-size: 13.5px; color: var(--v2-ink-42); }
+.v2 .v2-iv-tot span:last-child { font-variant-numeric: tabular-nums; }
+.v2 .v2-iv-tot[data-big] { font-size: 16px; color: var(--v2-ink); font-weight: 500; border-top: 1px solid var(--v2-line); }
+.v2 .v2-iv-none { padding: 16px 14px; font-size: 13.5px; color: var(--v2-ink-42); }
+
+.v2 .v2-iv-prow { display: flex; gap: 12px; padding: 12px 14px; align-items: center; }
+.v2 .v2-iv-prow[data-quiet] { padding: 11px 13px; }
+.v2 .v2-iv-pic {
+  width: 32px; height: 32px; border-radius: 10px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--v2-miles-wash); color: var(--v2-miles-ink);
+}
+.v2 .v2-iv-pic svg { width: 15px; height: 15px; }
+.v2 .v2-iv-pmid { flex: 1; min-width: 0; }
+.v2 .v2-iv-pm { display: block; font-size: 14px; color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-iv-prow[data-quiet] .v2-iv-pm { font-size: 13px; font-weight: 400; }
+.v2 .v2-iv-pd { display: block; font-size: 11.5px; color: var(--v2-ink-42); margin-top: 3px; }
+.v2 .v2-iv-pv { font-size: 14.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; flex: none; }
+
+/* ── The slot ─────────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-iv-slot {
+  flex: none; background: var(--v2-paper); border-top: 1px solid var(--v2-line);
+  padding: 13px 18px calc(13px + env(safe-area-inset-bottom));
+}
+.v2 .v2-iv-slotin { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.v2 .v2-iv-smsg { flex: 1; order: 3; width: 100%; text-align: center; font-size: 12px; color: var(--v2-ink-42); line-height: 1.4; }
+.v2 .v2-iv-smsg b { color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-iv-btn {
+  flex: 1; justify-content: center; padding: 11px 17px; border-radius: 12px;
+  border: 1px solid var(--v2-line); background: var(--v2-paper); color: var(--v2-ink);
+  font-size: 13.5px; font-family: inherit; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: transform 0.14s var(--v2-ease);
+}
+.v2 .v2-iv-btn:active { transform: scale(0.96); }
+.v2 .v2-iv-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.v2 .v2-iv-btn[data-p] { background: var(--v2-ink); color: #fff; border-color: transparent; font-weight: 500; }
+.v2 .v2-iv-btn[data-p]:hover:not(:disabled) { background: #000; }
+.v2 .v2-iv-btn[data-static] { cursor: default; color: #7a1020; }
+.v2 .v2-iv-btn svg { width: 15px; height: 15px; flex: none; }
+
+/* ── The record sheet's own fields ────────────────────────────────────────────────────────────── */
+.v2 .v2-iv-ss { font-size: 13px; color: var(--v2-ink-42); margin: -6px 0 15px; }
+.v2 .v2-iv-fl { font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.16em; color: var(--v2-ink-24); margin: 14px 0 8px; }
+.v2 .v2-iv-fld {
+  width: 100%; height: 46px; border-radius: 12px; border: 1px solid var(--v2-line);
+  background: var(--v2-paper); padding: 0 14px; font-size: 15px; font-family: inherit;
+  color: var(--v2-ink); outline: none;
+}
+.v2 .v2-iv-fld:focus { border-color: var(--v2-violet); }
+.v2 .v2-iv-amtrow { display: flex; gap: 8px; align-items: center; }
+.v2 .v2-iv-amtrow .v2-iv-fld { flex: 1; }
+.v2 .v2-iv-full {
+  padding: 0 12px; height: 46px; border-radius: 12px; border: 1px solid var(--v2-line);
+  background: var(--v2-paper); font-size: 12.5px; font-family: inherit; color: var(--v2-ink-42);
+  cursor: pointer; white-space: nowrap; flex: none;
+}
+.v2 .v2-iv-methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.v2 .v2-iv-mth {
+  padding: 0 6px; height: 42px; border-radius: 11px; border: 1px solid var(--v2-line);
+  background: var(--v2-paper); font-size: 12.5px; font-family: inherit; color: var(--v2-ink-70);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.v2 .v2-iv-mth[data-on] { background: var(--v2-ink); color: #fff; border-color: transparent; font-weight: 500; }
+.v2 .v2-iv-mth svg { width: 13px; height: 13px; flex: none; }
+.v2 .v2-iv-leftover {
+  font-size: 12.5px; color: var(--v2-hold-ink); background: var(--v2-hold-wash);
+  border-radius: 9px; padding: 9px 11px; margin-top: 11px; text-align: center;
+}
+.v2 .v2-iv-save {
+  width: 100%; height: 48px; border-radius: 13px; border: none; background: var(--v2-ink);
+  color: #fff; font-size: 14.5px; font-family: inherit; font-weight: 500; cursor: pointer; margin-top: 18px;
+}
+.v2 .v2-iv-save:disabled { opacity: 0.5; cursor: default; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   INVOICES, WIDE. The same DOM: the slot's sentence moves beside the button instead of under it, and
+   the row gains room for the state to be a word rather than only a colour. */
+
+@media (min-width: 900px) {
+  .v2 .v2-iv-band .v2-iv-bd { padding: 15px 22px; }
+  .v2 .v2-iv-dtop { padding: 16px 26px; }
+  .v2 .v2-iv-slot { padding: 13px 26px; }
+  .v2 .v2-iv-slotin { flex-wrap: nowrap; }
+  .v2 .v2-iv-btn { flex: none; }
+  .v2 .v2-iv-smsg { order: 0; width: auto; text-align: left; font-size: 13px; }
+  .v2 .v2-iv-prog { max-width: 300px; }
+}

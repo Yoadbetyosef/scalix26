@@ -65,7 +65,14 @@ export const GROUPS: Group[] = [
   {
     id: 'g2',
     label: 'Business',
-    items: [{ label: 'Orders', href: '/v2/orders', module: 'orders' }, { label: 'Analytics', href: '/v2/analytics', module: 'analytics' }, { label: 'Reports', href: '/v2/reports', module: 'analytics' }],
+    items: [
+      { label: 'Orders', href: '/v2/orders', module: 'orders' },
+      // Gated on `invoices`, so a tenant without it never sees the row — the same rule every other
+      // destination here follows, applied once and read by both the rail and the sheet.
+      { label: 'Invoices', href: '/v2/invoices', module: 'invoices' },
+      { label: 'Analytics', href: '/v2/analytics', module: 'analytics' },
+      { label: 'Reports', href: '/v2/reports', module: 'analytics' },
+    ],
   },
   { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Connections', href: '/v2/settings/connections' }, { label: 'Settings', href: '/v2/settings' }, { label: 'Sign Out', out: true, action: 'signout' }] },
 ]

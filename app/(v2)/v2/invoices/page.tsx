@@ -1,0 +1,125 @@
+import Link from 'next/link'
+import { readInvoiceList } from '@/lib/core/invoice-read'
+import { listPageContext, PREVIEW } from '../list-page'
+import { invoicesLine } from './line'
+import { Plus } from './glyphs'
+
+// INVOICES — docs/miles/invoices-income.html, both widths, values taken directly.
+//
+// Not ListPage: the money band, the day-group form and a row that carries a progress bar are this
+// screen's own, and forcing them through the shared list would mean a branch in it for one screen.
+//
+// READ-ONLY here. The one thing that writes is recording a payment, and that lives on the invoice
+// itself — where the balance it changes is on the screen beside it.
+
+export const dynamic = 'force-dynamic'
+
+const dollars = (c: number) => `$${Math.round(c / 100).toLocaleString()}`
+const exact = (c: number) => `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+export default async function V2Invoices() {
+  const { tenantId } = await listPageContext('invoices')
+  const list = await readInvoiceList(tenantId)
+
+  const line = invoicesLine({
+    outstandingCents: list.outstandingCents,
+    outstandingCount: list.outstandingCount,
+    draftCount: list.groups.find((g) => g.key === 'draft')?.rows.length ?? 0,
+    paidCount: list.groups.find((g) => g.key === 'paid')?.rows.length ?? 0,
+  })
+
+  const empty = list.groups.length === 0
+
+  return (
+    <div className="v2-page">
+      <header className="v2-phd">
+        <Link href="/v2" className="v2-bk" aria-label="Home">
+          <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
+        </Link>
+        <h2>Invoices</h2>
+        <div className="v2-hacts">
+          {/* Creating one needs a customer, lines and prices — a form this screen does not have yet.
+              Issuing, recording and reading are the path being proved first. */}
+          <button type="button" className="v2-hact" data-tone="primary" disabled title={PREVIEW}><Plus />New</button>
+        </div>
+      </header>
+
+      {/* THE BAND. Sent this month, received this month, outstanding whenever it was issued — money
+          owed does not stop being owed at a month boundary. */}
+      {!empty && (
+        <div className="v2-iv-band">
+          <div className="v2-iv-bd">
+            <p className="v2-iv-bdk">SENT</p>
+            <p className="v2-iv-bdv">{dollars(list.sentCents)}</p>
+            <p className="v2-iv-bds">{list.sentCount === 1 ? '1 invoice' : `${list.sentCount} invoices`} this month</p>
+          </div>
+          <div className="v2-iv-bd">
+            <p className="v2-iv-bdk">RECEIVED</p>
+            <p className="v2-iv-bdv">{dollars(list.receivedCents)}</p>
+            <p className="v2-iv-bds">{list.receivedCount === 1 ? '1 payment' : `${list.receivedCount} payments`}</p>
+          </div>
+          <div className="v2-iv-bd">
+            <p className="v2-iv-bdk">OUTSTANDING</p>
+            <p className="v2-iv-bdv" data-tone={list.outstandingCents > 0 ? 'hold' : undefined}>{dollars(list.outstandingCents)}</p>
+            <p className="v2-iv-bds">{list.outstandingCount === 1 ? '1 invoice' : `${list.outstandingCount} invoices`} waiting</p>
+          </div>
+        </div>
+      )}
+
+      <div className="v2-pbody" data-scroll>
+        <div className="v2-ag-inner">
+          {empty ? (
+            <div className="v2-pempty">
+              <p className="v2-pempty-t">No invoices yet</p>
+              <p className="v2-pempty-b">An invoice you raise will land here, with what has been paid against it.</p>
+            </div>
+          ) : (
+            <>
+              <p className="v2-ag-open">
+                {line.map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
+              </p>
+
+              {list.groups.map((g) => (
+                <div key={g.key}>
+                  <p className="v2-ag-grp">
+                    <span className="v2-ag-gt">{g.label}</span>
+                    <span className="v2-ag-gn">{g.rows.length}</span>
+                    <span className="v2-ag-gr" />
+                  </p>
+                  <div className="v2-ag-card">
+                    {g.rows.map((r, i) => (
+                      <div key={r.id}>
+                        {i > 0 && <div className="v2-ag-sep" />}
+                        <Link href={`/v2/invoices/${r.id}`} className="v2-iv-row" data-s={r.bucket === 'draft' ? 'draft' : r.status}>
+                          {/* The spine IS the state: grey draft, violet issued, amber part paid, acid paid. */}
+                          <span className="v2-iv-bar" />
+                          <span className="v2-iv-mid">
+                            <span className="v2-iv-nm">{r.who}</span>
+                            <span className="v2-iv-sub">{r.sub}</span>
+                            {/* Only when partly paid — a bar at 0 or 100 says nothing the figure does not. */}
+                            {r.progress !== null && (
+                              <span className="v2-iv-prog"><i style={{ width: `${Math.round(r.progress * 100)}%` }} /></span>
+                            )}
+                          </span>
+                          <span className="v2-iv-amt">
+                            <span className="v2-iv-av">{exact(r.bucket === 'paid' ? r.totalCents : r.outstandingCents)}</span>
+                            <span className="v2-iv-ad">
+                              {r.bucket === 'draft' ? 'DRAFT'
+                                : r.status === 'paid' ? 'PAID'
+                                  : r.status === 'partial' ? `${exact(r.paidCents)} OF ${exact(r.totalCents)}`
+                                    : 'STILL DUE'}
+                            </span>
+                          </span>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
