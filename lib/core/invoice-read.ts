@@ -204,7 +204,7 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
 
 export interface InvoiceLine { id: string; description: string; quantity: number; unitPriceCents: number; lineTotalCents: number }
 export interface InvoicePayment { id: string; method: string | null; kind: string; amountCents: number; at: string; ref: string | null; note: string | null }
-export interface InvoiceEvent { at: string; from: string | null; to: string }
+export interface InvoiceEvent { at: string; from: string | null; to: string; note: string | null }
 
 export interface InvoiceDetail {
   row: InvoiceRow
@@ -234,7 +234,7 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       .select('id, method, kind, amount_cents, created_at, provider_ref, note')
       .eq('tenant_id', tenantId).eq('document_type', 'invoice').eq('document_id', id).order('created_at'),
     db.from('document_status_history')
-      .select('created_at, from_status, to_status')
+      .select('created_at, from_status, to_status, note')
       .eq('tenant_id', tenantId).eq('document_type', 'invoice').eq('document_id', id).order('created_at', { ascending: false }),
     inv.contact_id
       ? db.from('contacts').select('name, phone, email').eq('tenant_id', tenantId).eq('id', inv.contact_id).maybeSingle()
@@ -291,6 +291,8 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       at: h.created_at as string,
       from: (h.from_status as string) ?? null,
       to: h.to_status as string,
+      // A note is how a create that half-succeeded survives the sheet closing — see invoices/new.tsx.
+      note: (h.note as string) ?? null,
     })),
     contact: c ? { name: c.name ?? null, phone: c.phone ?? null, email: c.email ?? null } : null,
     paymentInstructions: (inv.payment_instructions as string) ?? null,

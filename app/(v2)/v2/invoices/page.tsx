@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { readInvoiceList } from '@/lib/core/invoice-read'
 import { readInvoiceSettings } from '@/lib/core/invoice-settings'
-import { listPageContext, PREVIEW } from '../list-page'
+import { listPageContext } from '../list-page'
 import { invoicesLine } from './line'
-import { Plus } from './glyphs'
 import { PaymentDetails } from './settings'
+import { NewInvoice } from './new'
 
 // INVOICES — docs/miles/invoices-income.html, both widths, values taken directly.
 //
@@ -42,9 +42,7 @@ export default async function V2Invoices() {
         <div className="v2-hacts">
           {/* Typed once, and where the question occurs to somebody. */}
           <PaymentDetails instructions={settings.paymentInstructions} netDays={settings.netDays} />
-          {/* Creating one needs a customer, lines and prices — a form this screen does not have yet.
-              Issuing, recording and reading are the path being proved first. */}
-          <button type="button" className="v2-hact" data-tone="primary" disabled title={PREVIEW}><Plus />New</button>
+          <NewInvoice />
         </div>
       </header>
 

@@ -815,3 +815,24 @@ What does not exist yet, and will be wanted the first time somebody issues the w
 
 Until one of them is built, the honest instruction to an owner is: issue carefully, because the only
 correction available is a new document and a conversation.
+
+---
+
+## §36 — adding invoice lines is N+1, deliberately
+
+`addLine` is one call per line, and each call is three queries: a `count` for `sort_order`, the
+insert, then `recomputeTotals` (select every line, update the header). A five-line invoice is one
+create plus fifteen queries, and the header total is recomputed five times with four results thrown
+away.
+
+**Not pre-solved, on purpose.** A bulk `addLines(array)` would be a SECOND write path into
+`sales_document_lines`, and that table now has a trigger (`trg_lines_only_on_draft`) and a recompute
+that both paths would have to keep in step. Fifteen queries on a form somebody fills in a few times a
+day is nothing; two write paths that must agree about a freeze rule is a real cost, paid forever.
+
+**The moment to revisit:** a fifty-line invoice, or an import that creates documents in bulk. Then the
+bulk path is worth its own trigger-awareness, and it should recompute ONCE at the end rather than per
+line.
+
+Measured, so the number is not a guess: probed on the live database, three lines cost three inserts
+and three header recomputes, and the header read correctly after each one.

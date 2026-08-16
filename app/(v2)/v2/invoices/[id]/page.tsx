@@ -149,10 +149,12 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
                 {inv.history.map((h, i) => (
                   <div key={`${h.at}-${i}`}>
                     {i > 0 && <div className="v2-ag-sep" />}
-                    <div className="v2-iv-prow" data-quiet>
+                    <div className="v2-iv-prow" data-quiet data-note={h.note ? true : undefined}>
                       <span className="v2-iv-pmid">
-                        <span className="v2-iv-pm">{h.from ? `${h.from} → ${h.to}` : h.to}</span>
-                        <span className="v2-iv-pd">{day(h.at)}</span>
+                        {/* A note is the whole point of the row when there is one: it is how a create
+                            that half-succeeded reaches an owner who closed the sheet. */}
+                        <span className="v2-iv-pm">{h.note ?? (h.from ? `${h.from} → ${h.to}` : h.to)}</span>
+                        <span className="v2-iv-pd">{day(h.at)}{h.note ? ` · ${h.to}` : ''}</span>
                       </span>
                     </div>
                   </div>

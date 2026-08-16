@@ -2935,6 +2935,35 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-iv-btn[data-static] { cursor: default; color: #7a1020; }
 .v2 .v2-iv-btn svg { width: 15px; height: 15px; flex: none; }
 
+/* ── The new-invoice lines ────────────────────────────────────────────────────────────────────────
+   Description takes the width; quantity and price are as narrow as their content allows, because a
+   price field the width of a description invites a description to be typed into it. */
+.v2 .v2-in-line { display: grid; grid-template-columns: 1fr 58px 92px auto; gap: 6px; margin-bottom: 7px; }
+.v2 .v2-in-line .v2-iv-fld { height: 42px; font-size: 14px; padding: 0 11px; }
+.v2 .v2-in-line .v2-iv-fld[data-qty],
+.v2 .v2-in-line .v2-iv-fld[data-price] { text-align: right; font-variant-numeric: tabular-nums; }
+.v2 .v2-in-x {
+  width: 30px; border: 0; background: none; color: var(--v2-ink-24); font-size: 19px;
+  cursor: pointer; font-family: inherit; line-height: 1;
+}
+.v2 .v2-in-x:hover { color: var(--v2-ink); }
+.v2 .v2-in-add {
+  border: 0; background: none; color: var(--v2-violet); font-size: 13px; font-family: inherit;
+  cursor: pointer; padding: 4px 0; margin-bottom: 4px;
+}
+/* The preview total. Shown while typing and never sent — the server recomputes the header from the
+   lines it stored, so this is the arithmetic and not the source of it. */
+.v2 .v2-in-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--v2-line);
+  font-size: 16px; font-weight: 500; color: var(--v2-ink);
+}
+.v2 .v2-in-total span:last-child { font-variant-numeric: tabular-nums; }
+/* A partial-create report is not a warning tint — it is the only thing on the sheet. */
+.v2 .v2-iv-leftover[data-bad] { background: var(--iv-late-wash); color: var(--iv-late-ink); text-align: left; line-height: 1.5; }
+/* A history row carrying a note reads as prose, because it is. */
+.v2 .v2-iv-prow[data-note] .v2-iv-pm { font-weight: 400; color: var(--iv-late-ink); line-height: 1.45; }
+
 /* ── How they pay you ─────────────────────────────────────────────────────────────────────────────
    NORMAL WEIGHT, deliberately. studio's terms render at 11px grey, which is right for terms and
    conditions and wrong for this: it is the line the customer has to act on, and small print is what

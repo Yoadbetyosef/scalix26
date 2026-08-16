@@ -235,3 +235,83 @@ describe('how they pay you', () => {
     expect(read('../../../api/core/invoice-settings/route.ts')).toContain("requireCoreTenant('invoices')")
   })
 })
+
+describe('creating an invoice', () => {
+  const nw = read('./new.tsx')
+  const pick = read('../contact-pick.tsx')
+  const linesRoute = read('../../../api/core/documents/[type]/[id]/lines/route.ts')
+
+  it('the sheet is the transaction — nothing is written until Save', () => {
+    // Creating the document first and adding lines as they are typed leaves a numbered, listed, EMPTY
+    // draft behind on every abandoned form, and burns an invoice number doing it.
+    const save = nw.slice(nw.indexOf('async function save()'))
+    expect(save.indexOf("fetch('/api/core/documents'")).toBeGreaterThan(-1)
+    expect(nw).not.toMatch(/useEffect\([^)]*fetch\('\/api\/core\/documents'/)
+  })
+
+  it('the total is a preview and is never sent', () => {
+    expect(nw).toContain('const preview = lines.reduce(')
+    const body = nw.slice(nw.indexOf("fetch('/api/core/documents'"), nw.indexOf('// 3 ──'))
+    expect(body).not.toMatch(/total|subtotal/)
+    // The line payload carries quantity and unit price only; the server derives everything else.
+    expect(nw).toContain('unit_price_cents: cents(l.unitPrice),')
+  })
+
+  it('has no discount or tax field', () => {
+    // Tax is jurisdictional, and a free-text cents box invites a number somebody computed wrong.
+    expect(nw).not.toMatch(/discount_cents|tax_cents/)
+  })
+
+  it('uses an existing contact, and a 409 means use THAT one', () => {
+    // A person typing a number that already belongs to somebody must be shown that somebody — and an
+    // invoice must not be refused over it.
+    expect(nw).toContain('if (r.duplicateOf) {')
+    expect(nw).toContain('contactId = r.duplicateOf.id')
+    expect(pick).toContain('if (res.status === 409 && j.duplicateOf) return { ok: false, duplicateOf: j.duplicateOf }')
+  })
+
+  it('the picker is shared with the appointment form, not copied', () => {
+    expect(nw).toContain("from '../contact-pick'")
+    expect(pick).toContain('/api/contacts/search?q=')
+  })
+
+  it('the lines route accepts all four document types', () => {
+    // It shipped with three while DocType had four — invisible until somebody adds a proposal line.
+    expect(linesRoute).toContain("const TYPES = ['estimate', 'quote', 'invoice', 'proposal'] as const")
+  })
+})
+
+describe('the one failure that survives, survives twice', () => {
+  const nw = read('./new.tsx')
+
+  it('the sheet REFUSES to close on a partial create', () => {
+    // A toast would vanish and the owner would find a wrong total later — the exact thing this
+    // sequencing exists to prevent.
+    expect(nw).toContain('onClose={partial ? () => {} : close}')
+    expect(nw).toContain("Sheet title={partial ? 'Something did not save' : 'New invoice'}")
+  })
+
+  it('and both ways out require having read it', () => {
+    expect(nw).toContain("I&apos;ll fix it later")
+    expect(nw).toContain('Open {partial.number}')
+  })
+
+  it('the message names the invoice, the line, and that the total is wrong', () => {
+    expect(nw).toContain('was created, but ${which} of ${usable.length} did not save. Its total is lower than you meant.')
+  })
+
+  it('and it is written to the document’s own history, so it outlives the sheet', () => {
+    expect(nw).toContain("body: JSON.stringify({ status: 'draft', note: message })")
+    expect(lib).toContain("note: (h.note as string) ?? null,")
+    expect(detail).toContain('{h.note ?? (h.from ? `${h.from} → ${h.to}` : h.to)}')
+  })
+
+  it('writing that note cannot itself break the report', () => {
+    // The sheet still says it; history is the durable copy, not the only one.
+    expect(nw).toContain('} catch { /* the sheet still says it; this is the durable copy, not the only one */ }')
+  })
+
+  it('a clean create goes straight to the invoice', () => {
+    expect(nw).toContain('router.push(`/v2/invoices/${docId}`)')
+  })
+})
