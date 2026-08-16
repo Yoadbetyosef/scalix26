@@ -617,3 +617,96 @@ send to an empty string.
 
 Not this commit: it is a schema change with three readers behind it, and the form is usable without
 it for every appointment that has a number — which today is all three in the database.
+
+---
+
+## §30 — voice-server does not gate on modules, and booking has no backstop
+
+The text pipeline omits a tool the tenant has not enabled: `inBooking` requires `scheduling`,
+`catalogEnabled` requires `inventory`, the financial tools require the skill AND Stripe. The tool never
+enters the request, so the model cannot offer what it cannot do.
+
+`voice-server/server.js` has never heard of `enabled_modules`. It offers `check_availability`,
+`book_appointment`, `search_catalog` and `send_payment_link` to every tenant. **A business with
+`scheduling` off has a silent text AI and a phone AI still taking bookings.**
+
+**Two holes, and they fail differently.** `/api/catalog/lookup` gates on `inventory` and the
+payment-link route gates on the skill + Stripe Connect, so those fail gracefully at the route — the
+model offers, calls, and is refused. **`/api/appointments/available` and `/api/appointments/book` have
+no gate at all**, in the routes or in `lib/appointments/create.ts`. That one writes rows.
+
+**The pattern already exists — do not invent a second one.** `transferNumber` is this exact problem
+solved: the app passes a `<Parameter>`, and voice-server includes `transfer_to_human` only when it is
+set. Copy that.
+
+**Shape:**
+
+| Where | Change |
+|---|---|
+| `/api/webhooks/twilio/voice` (Vercel) | It already loads the tenant and assembles per-call config. Add `effectiveModules()` — the same call listPageContext makes, so the global `module_flags` layer is honoured too — and emit one parameter |
+| `voice-server/server.js` (SEPARATE deployment) | Read it into a Set; filter `agentFunctions` the way `transferNumber` already filters transfer. ~10 lines |
+| the two appointment routes | The missing backstop. Refuse when `scheduling` is off, as `/api/catalog/lookup` does. **Do this regardless of the tool list** — a gate that lives only in the offered tools is one a curl walks around |
+
+**Pass CAPABILITIES, not module keys** (`booking`, not `scheduling`), so voice-server never learns the
+module vocabulary and the two deployments cannot drift on naming.
+
+**Absent parameter must mean everything on**, matching `enabledModulesOf()`'s rule for a null column.
+The two deploy separately and in either order; this is what makes both orders safe, with no window
+where a tenant loses booking.
+
+Verification is a phone call, not a test. And note: auto-deploy on the Railway voice-server is
+**currently disabled** — the same manual deploy the landed-cost merge is waiting on.
+
+---
+
+## §31 — Reports is gated on `analytics` and shows four templates that produce nothing
+
+`/v2/reports` and `/reports` list Platform Usage, AI Employee Productivity, Lead Generation and
+Appointment Report. **No generator exists for any of them** — nothing anywhere reads a template id
+except `app/reports/page.tsx:13`, to pick an icon and a Tailwind colour. v1's "View Report" and its
+per-card download are `<Button>` elements with no `onClick`. The only real behaviour is a CSV of
+CONVERSATIONS, over a date range, from `/api/reports/export` — one caller, no persistence, no
+schedule, no consumer.
+
+**It is gated on one module, and it should be derived from all of them.** The four names promise data
+from four different sources, and which of those a tenant even has is a per-tenant fact: 28 of 33
+tenants have no commerce module at all; 1 has `landed_cost`; 2 have `studio`. A locksmith with
+`ai_voice, inbox, contacts` and YDC with ten modules cannot be shown the same screen truthfully.
+
+**The shape this argues for:** one registry of `{ id, module, label, columns, read }`, filtered by
+`effectiveModules()` — the same way `nav.ts` assembles the rail and the sheet from one list so the two
+navigation surfaces cannot drift. Reports then IS whatever the tenant's modules provide, and a report
+that has no data source behind it cannot be listed, because listing it would require writing one.
+
+What is genuinely exportable today, measured: conversations, messages and appointments for every
+tenant; plus product costs and orders where `commerce` is on. Contacts needs its conversation count
+derived (`total_conversations` is 0 on every row); margin needs prices (7 of 211 on YDC); leads,
+invoices and studio quotes need states that nothing currently sets.
+
+---
+
+## §32 — when a CRM push is built, the calendar mirror is the shape
+
+Not now — it is a real project. Recorded so whoever builds it does not invent a second pattern.
+
+There is **no outbound integration of any kind** today. `POST /api/leads/inbound/<token>` accepts leads
+IN (a web form, Zapier, Make). The only thing that goes OUT is the Google/Microsoft calendar mirror in
+`lib/appointments/create.ts`, and QuickBooks, which is connected and has never synced. A contact never
+leaves at all. `connected_calendars` has **0 rows** — so in practice an appointment only ever lives
+here.
+
+**The calendar mirror is already the right shape**, and it is worth copying rather than redesigning:
+
+- ONE call, after the row is written. The appointments row is the system of record.
+- FAIL-SAFE: wrapped, logs a warning, and never affects the confirmed booking. A CRM being down must
+  not cost the customer their appointment.
+- Stores the EXTERNAL ID back on the row (`google_event_id`), which is what makes a later update or a
+  reconciliation possible at all.
+- Dispatches by provider behind one interface (`access.provider === 'microsoft' ? … : …`).
+
+Its known limitation is also the one to fix in a CRM adapter, not repeat: **it is one-way and nothing
+reads back**, so an appointment moved in the external system and the row here diverge silently.
+
+Do NOT build it as a module toggle. Entitlements and interoperability are different problems —
+turning `scheduling` off for a ServiceTitan tenant stops Rudi booking; it does not let Rudi book into
+ServiceTitan, and nothing in the module system is a step toward that.
