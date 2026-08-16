@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import { readInvoiceList } from '@/lib/core/invoice-read'
+import { readInvoiceSettings } from '@/lib/core/invoice-settings'
 import { listPageContext, PREVIEW } from '../list-page'
 import { invoicesLine } from './line'
 import { Plus } from './glyphs'
+import { PaymentDetails } from './settings'
 
 // INVOICES — docs/miles/invoices-income.html, both widths, values taken directly.
 //
@@ -19,7 +21,7 @@ const exact = (c: number) => `$${(c / 100).toLocaleString(undefined, { minimumFr
 
 export default async function V2Invoices() {
   const { tenantId } = await listPageContext('invoices')
-  const list = await readInvoiceList(tenantId)
+  const [list, settings] = await Promise.all([readInvoiceList(tenantId), readInvoiceSettings(tenantId)])
 
   const line = invoicesLine({
     outstandingCents: list.outstandingCents,
@@ -38,6 +40,8 @@ export default async function V2Invoices() {
         </Link>
         <h2>Invoices</h2>
         <div className="v2-hacts">
+          {/* Typed once, and where the question occurs to somebody. */}
+          <PaymentDetails instructions={settings.paymentInstructions} netDays={settings.netDays} />
           {/* Creating one needs a customer, lines and prices — a form this screen does not have yet.
               Issuing, recording and reading are the path being proved first. */}
           <button type="button" className="v2-hact" data-tone="primary" disabled title={PREVIEW}><Plus />New</button>
@@ -63,6 +67,15 @@ export default async function V2Invoices() {
             <p className="v2-iv-bdv" data-tone={list.outstandingCents > 0 ? 'hold' : undefined}>{dollars(list.outstandingCents)}</p>
             <p className="v2-iv-bds">{list.outstandingCount === 1 ? '1 invoice' : `${list.outstandingCount} invoices`} waiting</p>
           </div>
+          {/* Only when something IS overdue. A fourth cell reading $0 every day is a cell that stops
+              being read, and then does not get read on the day it matters. */}
+          {list.overdueCount > 0 && (
+            <div className="v2-iv-bd">
+              <p className="v2-iv-bdk">OVERDUE</p>
+              <p className="v2-iv-bdv" data-tone="late">{dollars(list.overdueCents)}</p>
+              <p className="v2-iv-bds">{list.overdueCount === 1 ? '1 invoice' : `${list.overdueCount} invoices`}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -103,11 +116,16 @@ export default async function V2Invoices() {
                           </span>
                           <span className="v2-iv-amt">
                             <span className="v2-iv-av">{exact(r.bucket === 'paid' ? r.totalCents : r.outstandingCents)}</span>
-                            <span className="v2-iv-ad">
+                            {/* What the number means, in the fewest words that are true. A due date
+                                only appears when one was agreed — an invoice with none says STILL
+                                DUE, which is accurate, rather than a countdown to nothing. */}
+                            <span className="v2-iv-ad" data-tone={r.bucket === 'overdue' ? 'late' : r.daysToDue !== null && r.daysToDue <= 7 ? 'due' : undefined}>
                               {r.bucket === 'draft' ? 'DRAFT'
                                 : r.status === 'paid' ? 'PAID'
-                                  : r.status === 'partial' ? `${exact(r.paidCents)} OF ${exact(r.totalCents)}`
-                                    : 'STILL DUE'}
+                                  : r.bucket === 'overdue' ? `${Math.abs(r.daysToDue ?? 0)} ${Math.abs(r.daysToDue ?? 0) === 1 ? 'DAY' : 'DAYS'} LATE`
+                                    : r.status === 'partial' ? `${exact(r.paidCents)} OF ${exact(r.totalCents)}`
+                                      : r.daysToDue !== null ? `DUE IN ${r.daysToDue} ${r.daysToDue === 1 ? 'DAY' : 'DAYS'}`
+                                        : 'STILL DUE'}
                             </span>
                           </span>
                         </Link>

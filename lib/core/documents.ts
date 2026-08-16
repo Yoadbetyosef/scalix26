@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { lineTotalCents, documentTotals, type LineAmounts } from './money'
+import { readInvoiceSettings } from './invoice-settings'
 
 // Sales-document repository (estimates/quotes/invoices). Totals are recomputed server-side from lines on
 // every mutation (client never sets totals). Status changes are recorded in document_status_history.
@@ -110,10 +111,28 @@ export async function issueDocument(tenantId: string, type: DocType, documentId:
   if (!count) return { ok: false, error: 'no_lines' }
 
   const issuedAt = new Date().toISOString()
+
+  // ── WHAT ISSUING FIXES, BESIDES THE TOTAL ────────────────────────────────────────────────────
+  //
+  // The due date and the payment details are SNAPSHOTTED here, not read at render. Changing your
+  // bank details next month must not rewrite an invoice somebody already has — an issued document is
+  // a record of what was said, and that includes where the money was meant to go.
+  //
+  // Invoices only. An estimate has nothing to pay yet and a quote is not owed.
+  const stamp: Record<string, unknown> = { status: 'issued', issued_at: issuedAt, updated_at: issuedAt }
+  if (type === 'invoice') {
+    const settings = await readInvoiceSettings(tenantId)
+    stamp.payment_instructions = settings.paymentInstructions
+    // A calendar date, computed from the issue date in UTC — `due_on` is a DATE column and a
+    // timestamp would drift by timezone for no benefit.
+    const due = new Date(issuedAt)
+    due.setUTCDate(due.getUTCDate() + settings.netDays)
+    stamp.due_on = due.toISOString().slice(0, 10)
+  }
   // Guarded on status again in the WHERE clause: two people pressing Issue at once must produce one
   // issued document and one 'already_issued', not two rows of history claiming the same transition.
   const { data: updated, error } = await admin().from(TABLE[type])
-    .update({ status: 'issued', issued_at: issuedAt, updated_at: issuedAt })
+    .update(stamp)
     .eq('tenant_id', tenantId).eq('id', documentId).eq('status', 'draft')
     .select('number, total_cents, issued_at').maybeSingle()
   if (error) return { ok: false, error: error.message }

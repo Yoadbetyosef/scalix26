@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { readInvoice } from '@/lib/core/invoice-read'
+import { readInvoiceSettings } from '@/lib/core/invoice-settings'
 import { listPageContext } from '../../list-page'
 import { MethodGlyph, METHOD_LABEL } from '../glyphs'
 import { RecordPayment } from '../record'
@@ -22,6 +23,10 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
   const { id } = await params
   const inv = await readInvoice(tenantId, id)
   if (!inv) notFound()
+  // A DRAFT has no snapshot yet, so it previews what it WOULD carry — which is the only moment the
+  // owner can still change it. An issued invoice shows what it actually went out with, always.
+  const settings = inv.row.bucket === 'draft' ? await readInvoiceSettings(tenantId) : null
+  const payText = inv.paymentInstructions ?? settings?.paymentInstructions ?? null
 
   const r = inv.row
   const isDraft = r.bucket === 'draft'
@@ -40,6 +45,7 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
         <p className="v2-iv-dwho">{r.who}</p>
         <p className="v2-iv-dmeta">
           {isDraft ? `Not issued · created ${day(r.createdAt)}` : `Issued ${r.issuedAt ? day(r.issuedAt) : day(r.createdAt)}`}
+          {r.dueOn ? ` · due ${day(`${r.dueOn}T12:00:00Z`)}` : ''}
           {inv.contact?.email ? ` · ${inv.contact.email}` : inv.contact?.phone ? ` · ${inv.contact.phone}` : ''}
         </p>
         <div className="v2-iv-dnums">
@@ -49,6 +55,16 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
             <p className="v2-iv-dnk">STILL DUE</p>
             <p className="v2-iv-dnv" data-tone={r.outstandingCents > 0 ? 'hold' : undefined}>{exact(r.outstandingCents)}</p>
           </div>
+          {/* Only when a date was agreed AND there is still something to pay. "Due in 11 days" over a
+              paid invoice is a number about nothing. */}
+          {r.daysToDue !== null && r.outstandingCents > 0 && (
+            <div className="v2-iv-dn">
+              <p className="v2-iv-dnk">{r.daysToDue < 0 ? 'LATE BY' : 'DUE IN'}</p>
+              <p className="v2-iv-dnv" data-tone={r.daysToDue < 0 ? 'late' : undefined}>
+                {Math.abs(r.daysToDue)} {Math.abs(r.daysToDue) === 1 ? 'day' : 'days'}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -104,6 +120,24 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
                     </div>
                   </div>
                 ))}
+              </div>
+            </>
+          )}
+
+          {/* HOW THEY PAY YOU. Normal weight, not small print: this is the line the customer acts on,
+              and setting it in grey 11px would be the screen deciding it is a legal footnote.
+              A draft shows the tenant's CURRENT text as a preview; an issued invoice shows the
+              snapshot it went out with, which never changes afterwards. */}
+          {payText && (
+            <>
+              <p className="v2-ag-grp">
+                <span className="v2-ag-gt">HOW THEY PAY YOU</span>
+                {isDraft && <span className="v2-ag-gn">PREVIEW</span>}
+                <span className="v2-ag-gr" />
+              </p>
+              <div className="v2-iv-pay">
+                <p className="v2-iv-payt">{payText}</p>
+                {isDraft && <p className="v2-iv-paynote">This is your current wording. The invoice keeps whatever it says when you issue it.</p>}
               </div>
             </>
           )}

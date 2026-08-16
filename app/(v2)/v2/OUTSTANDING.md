@@ -726,7 +726,27 @@ ServiceTitan, and nothing in the module system is a step toward that.
 
 ---
 
-## §33 — invoice numbers are allocated at CREATION, so the issued sequence has gaps
+## §33 — invoice numbers are allocated at CREATION — DECIDED, keeping it
+
+**Decided 16 Aug 2026, deliberately, while all four invoices were still drafts nobody had seen.**
+
+Option 1 is **rejected and closed**. The number is drawn when the draft is created. A gap means a
+draft was made and deleted, and that is the honest record of what happened. Reallocating at issue
+would mean a draft carries no number until it is sent, which makes it harder to talk about
+internally — and internal conversation about a document that does not exist yet is most of what a
+draft is for.
+
+This was the decision that had to be made before the first issued invoice reached a customer, because
+after that the sequence would contain two eras of numbering with no way to tell them apart. It is
+made. Nothing further is required.
+
+**Option 2 stays open and stays cheap.** If an accountant ever asks why INV-0003 is missing, a void
+log — a table, and a write on the path that deletes a draft — is the answer, and it costs the same
+then as now because it is purely additive. Do not pre-build it.
+
+The original entry follows, for the reasoning.
+
+### The original entry
 
 `createDocument` takes the number from `numbering_counters` when the DRAFT is made, atomically. It is
 not allocated at issue. On the live tenant that has already produced a gap:

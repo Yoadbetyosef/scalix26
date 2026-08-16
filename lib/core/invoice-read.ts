@@ -8,13 +8,12 @@ import { derivePaymentStatus, type PaymentStatus } from './payments'
 // minus paid, computed here from rows the database holds. Nothing caches a balance, so nothing can
 // disagree with the ledger it came from.
 //
-// ── NO DUE DATE EXISTS YET ──────────────────────────────────────────────────────────────────────
+// ── OVERDUE IS A DATE SOMEBODY AGREED, NOT ARITHMETIC ───────────────────────────────────────────
 //
-// The reference draws an OVERDUE group and "DUE IN 11 DAYS" labels. `invoices` has no due-date column
-// — issued_at is the only date on it. Rather than invent one from issued_at + 14 days, which would be
-// a number nobody agreed to shown as though somebody had, the screen omits what it cannot say. The
-// column lands with the settings migration (§35) and the group below is written to light up when it
-// does: `overdue` is already a bucket, and today nothing ever falls into it.
+// `due_on` is stamped ONTO the invoice at issue from the tenant's net terms, so it is a fact about
+// that document rather than a sum this file performs. An invoice with NO due date is never overdue —
+// null means nobody agreed one, which is different from "not yet late" and very different from
+// "late". The four rows that predate the column stay out of the group for exactly that reason.
 
 export type Bucket = 'overdue' | 'waiting' | 'draft' | 'paid'
 
@@ -34,6 +33,10 @@ export interface InvoiceRow {
   currency: string
   issuedAt: string | null
   createdAt: string
+  /** The agreed date, or null when none was. Null is never overdue. */
+  dueOn: string | null
+  /** Negative = late by that many days. Null when there is no due date to be late against. */
+  daysToDue: number | null
 }
 
 export interface InvoiceGroup { key: Bucket; label: string; rows: InvoiceRow[] }
@@ -64,7 +67,14 @@ const ORDER: Bucket[] = ['overdue', 'waiting', 'draft', 'paid']
 interface Head {
   id: string; number: string; status: string; currency: string; total_cents: number
   contact_id: string | null; company_id: string | null; notes: string | null
-  issued_at: string | null; created_at: string
+  issued_at: string | null; created_at: string; due_on: string | null
+}
+
+/** Whole days from today to the due date, in UTC — `due_on` is a plain date and has no time in it. */
+function daysUntil(dueOn: string | null): number | null {
+  if (!dueOn) return null
+  const today = new Date().toISOString().slice(0, 10)
+  return Math.round((Date.parse(`${dueOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000)
 }
 interface Alloc { document_id: string; amount_cents: number; kind: string; method: string | null; created_at: string; provider_ref: string | null; note: string | null }
 
@@ -83,7 +93,7 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
 
   const [{ data: heads }, { data: allocs }] = await Promise.all([
     db.from('invoices')
-      .select('id, number, status, currency, total_cents, contact_id, company_id, notes, issued_at, created_at')
+      .select('id, number, status, currency, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on')
       .eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(200),
     db.from('payment_allocations')
       .select('document_id, amount_cents, kind, method, created_at, provider_ref, note')
@@ -116,9 +126,12 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
     const status = derivePaymentStatus(total, paid)
     const isDraft = inv.status === 'draft'
 
-    // No due date exists, so nothing can be overdue yet. Written as a bucket so the group lights up
-    // the day the column lands rather than needing this file rewritten.
-    const bucket: Bucket = isDraft ? 'draft' : status === 'paid' ? 'paid' : 'waiting'
+    const days = daysUntil(inv.due_on)
+    // Overdue is a real state and it outranks "waiting": money that is late is a different problem
+    // from money that is merely owed. A paid invoice is never overdue however old the date is, and an
+    // invoice with no due date never becomes overdue at all.
+    const late = !isDraft && status !== 'paid' && days !== null && days < 0
+    const bucket: Bucket = isDraft ? 'draft' : status === 'paid' ? 'paid' : late ? 'overdue' : 'waiting'
 
     const c = inv.contact_id ? contactById.get(inv.contact_id) : null
     const who = companyById.get(inv.company_id ?? '') || c?.name?.trim() || c?.phone?.trim() || c?.email?.trim() || 'No customer yet'
@@ -146,6 +159,8 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
       currency: inv.currency || 'usd',
       issuedAt: inv.issued_at,
       createdAt: inv.created_at,
+      dueOn: inv.due_on,
+      daysToDue: days,
     }
   })
 
@@ -165,6 +180,7 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
   const receivedThisMonth = ((allocs ?? []) as unknown as Alloc[])
     .filter((a) => new Date(a.created_at).getTime() >= since)
   const owed = issued.filter((r) => r.outstandingCents > 0)
+  const late = rows.filter((r) => r.bucket === 'overdue')
 
   const groups = ORDER
     .map((key) => ({ key, label: GROUP_LABEL[key], rows: rows.filter((r) => r.bucket === key) }))
@@ -178,8 +194,8 @@ export async function readInvoiceList(tenantId: string): Promise<InvoiceList> {
     receivedCount: receivedThisMonth.length,
     outstandingCents: owed.reduce((s, r) => s + r.outstandingCents, 0),
     outstandingCount: owed.length,
-    overdueCents: 0,
-    overdueCount: 0,
+    overdueCents: late.reduce((s, r) => s + r.outstandingCents, 0),
+    overdueCount: late.length,
     currency: rows[0]?.currency ?? 'usd',
   }
 }
@@ -199,12 +215,14 @@ export interface InvoiceDetail {
   payments: InvoicePayment[]
   history: InvoiceEvent[]
   contact: { name: string | null; phone: string | null; email: string | null } | null
+  /** SNAPSHOTTED at issue. A draft shows the tenant's current settings instead — see the page. */
+  paymentInstructions: string | null
 }
 
 export async function readInvoice(tenantId: string, id: string): Promise<InvoiceDetail | null> {
   const db = createAdminClient()
   const { data: inv } = await db.from('invoices')
-    .select('id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, contact_id, company_id, notes, issued_at, created_at')
+    .select('id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on, payment_instructions')
     .eq('tenant_id', tenantId).eq('id', id).maybeSingle()
   if (!inv) return null
 
@@ -241,11 +259,14 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       paidCents: paid,
       outstandingCents: total - paid,
       status,
-      bucket: isDraft ? 'draft' : status === 'paid' ? 'paid' : 'waiting',
+      bucket: isDraft ? 'draft' : status === 'paid' ? 'paid'
+        : (daysUntil((inv.due_on as string) ?? null) ?? 0) < 0 ? 'overdue' : 'waiting',
       progress: status === 'partial' && total > 0 ? paid / total : null,
       currency: (inv.currency as string) || 'usd',
       issuedAt: inv.issued_at as string | null,
       createdAt: inv.created_at as string,
+      dueOn: (inv.due_on as string) ?? null,
+      daysToDue: daysUntil((inv.due_on as string) ?? null),
     },
     subtotalCents: Number(inv.subtotal_cents ?? 0),
     discountCents: Number(inv.discount_cents ?? 0),
@@ -272,6 +293,7 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       to: h.to_status as string,
     })),
     contact: c ? { name: c.name ?? null, phone: c.phone ?? null, email: c.email ?? null } : null,
+    paymentInstructions: (inv.payment_instructions as string) ?? null,
   }
 }
 

@@ -2873,6 +2873,9 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-iv-amt { text-align: right; flex: none; }
 .v2 .v2-iv-av { display: block; font-size: 15.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
 .v2 .v2-iv-ad { display: block; font-family: var(--v2-mono); font-size: 10.5px; color: var(--v2-ink-24); margin-top: 4px; }
+/* Due soon is worth noticing; late is worth acting on. Nothing else on the row changes colour. */
+.v2 .v2-iv-ad[data-tone="due"] { color: var(--v2-hold-ink); }
+.v2 .v2-iv-ad[data-tone="late"] { color: var(--iv-late-ink); }
 
 /* ── One invoice ──────────────────────────────────────────────────────────────────────────────── */
 .v2 .v2-iv-dtop { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 16px 18px; }
@@ -2885,6 +2888,7 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-iv-dnk { font-family: var(--v2-mono); font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-24); }
 .v2 .v2-iv-dnv { font-size: 18px; font-weight: 500; color: var(--v2-ink); margin-top: 5px; font-variant-numeric: tabular-nums; }
 .v2 .v2-iv-dnv[data-tone="hold"] { color: var(--v2-hold-ink); }
+.v2 .v2-iv-dnv[data-tone="late"] { color: var(--iv-late-ink); }
 
 .v2 .v2-iv-li { display: flex; gap: 12px; padding: 12px 14px; align-items: baseline; }
 .v2 .v2-iv-lin { flex: 1; font-size: 14px; color: var(--v2-ink); }
@@ -2930,6 +2934,18 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-iv-btn[data-p]:hover:not(:disabled) { background: #000; }
 .v2 .v2-iv-btn[data-static] { cursor: default; color: #7a1020; }
 .v2 .v2-iv-btn svg { width: 15px; height: 15px; flex: none; }
+
+/* ── How they pay you ─────────────────────────────────────────────────────────────────────────────
+   NORMAL WEIGHT, deliberately. studio's terms render at 11px grey, which is right for terms and
+   conditions and wrong for this: it is the line the customer has to act on, and small print is what
+   a person's eye skips. `pre-line` because bank details are a shape as much as a string — a routing
+   number reflowed onto the previous line is unreadable. */
+.v2 .v2-iv-pay {
+  background: var(--v2-paper); border-radius: 16px; padding: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.v2 .v2-iv-payt { font-size: 14px; line-height: 1.6; color: var(--v2-ink-70); white-space: pre-line; }
+.v2 .v2-iv-paynote { font-size: 11.5px; color: var(--v2-ink-42); margin-top: 10px; }
 
 /* ── The record sheet's own fields ────────────────────────────────────────────────────────────── */
 .v2 .v2-iv-ss { font-size: 13px; color: var(--v2-ink-42); margin: -6px 0 15px; }

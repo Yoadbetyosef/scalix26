@@ -72,21 +72,10 @@ describe('the money is derived, never stored', () => {
   })
 })
 
-describe('no due date is invented', () => {
-  it('the overdue bucket exists and nothing falls into it yet', () => {
-    // invoices has no due-date column. issued_at + 14 days would be a number nobody agreed to, shown
-    // as though somebody had.
-    expect(lib).toContain("export type Bucket = 'overdue' | 'waiting' | 'draft' | 'paid'")
-    expect(lib).toContain("const bucket: Bucket = isDraft ? 'draft' : status === 'paid' ? 'paid' : 'waiting'")
-    expect(lib).toContain('overdueCents: 0')
-  })
-
-  it('and the screen shows no DUE IN or DAYS LATE label', () => {
-    expect(list).not.toMatch(/DUE IN|DAYS LATE/)
-    // The reference does — this is a deliberate omission, not an oversight.
-    expect(ref).toContain('DAYS LATE')
-  })
-})
+// The block that stood here asserted that no due date was invented — correct while `invoices` had no
+// due-date column, and obsolete the moment add_invoice_settings.sql landed. What replaced it is
+// "due dates, and the overdue group" below, which asserts the real rule: a date is STAMPED at issue
+// from agreed terms, and an invoice with none is never overdue.
 
 describe('recording a payment', () => {
   it('defaults to the balance and can be less', () => {
@@ -165,5 +154,84 @@ describe('the screen is gated and reachable', () => {
   it('on the invoices module, in the one nav list both surfaces read', () => {
     expect(list).toContain("listPageContext('invoices')")
     expect(read('../nav.ts')).toContain("{ label: 'Invoices', href: '/v2/invoices', module: 'invoices' }")
+  })
+})
+
+describe('due dates, and the overdue group', () => {
+  const settings = read('../../../../lib/core/invoice-settings.ts')
+
+  it('the due date is STAMPED at issue, not computed on render', () => {
+    const docs = read('../../../../lib/core/documents.ts')
+    expect(docs).toContain('due.setUTCDate(due.getUTCDate() + settings.netDays)')
+    expect(docs).toContain("stamp.due_on = due.toISOString().slice(0, 10)")
+    // Invoices only. An estimate has nothing to pay yet and a quote is not owed.
+    expect(docs).toContain("if (type === 'invoice') {")
+  })
+
+  it('no due date is never overdue — that is not the same as "not yet late"', () => {
+    expect(lib).toContain("const late = !isDraft && status !== 'paid' && days !== null && days < 0")
+  })
+
+  it('a PAID invoice is never overdue, however old the date', () => {
+    expect(lib).toContain("status === 'paid' ? 'paid' : late ? 'overdue' : 'waiting'")
+  })
+
+  it('the OVERDUE band cell appears only when something is', () => {
+    // A fourth cell reading $0 every day stops being read, and then is not read on the day it matters.
+    expect(list).toContain('{list.overdueCount > 0 && (')
+  })
+
+  it('the row says DAYS LATE or DUE IN, and STILL DUE when no date was agreed', () => {
+    expect(list).toContain("`${Math.abs(r.daysToDue ?? 0)} ${Math.abs(r.daysToDue ?? 0) === 1 ? 'DAY' : 'DAYS'} LATE`")
+    expect(list).toContain("`DUE IN ${r.daysToDue} ${r.daysToDue === 1 ? 'DAY' : 'DAYS'}`")
+    expect(list).toContain(": 'STILL DUE'")
+  })
+
+  it('the detail shows a due figure only when there is still something to pay', () => {
+    // "Due in 11 days" over a paid invoice is a number about nothing.
+    expect(detail).toContain('{r.daysToDue !== null && r.outstandingCents > 0 && (')
+  })
+
+  it('net days defaults to 14 and 0 means due on issue', () => {
+    expect(settings).toContain('export const DEFAULT_NET_DAYS = 14')
+    expect(read('./settings.tsx')).toContain('0 means due the day it is issued.')
+  })
+})
+
+describe('how they pay you', () => {
+  const sheet = read('./settings.tsx')
+
+  it('is SNAPSHOTTED at issue, so a sent invoice never changes', () => {
+    const docs = read('../../../../lib/core/documents.ts')
+    expect(docs).toContain('stamp.payment_instructions = settings.paymentInstructions')
+    expect(lib).toContain('paymentInstructions: (inv.payment_instructions as string) ?? null')
+  })
+
+  it('a draft previews the current wording and says that is what it is', () => {
+    expect(detail).toContain("inv.row.bucket === 'draft' ? await readInvoiceSettings(tenantId) : null")
+    expect(detail).toContain('inv.paymentInstructions ?? settings?.paymentInstructions ?? null')
+    expect(detail).toContain('The invoice keeps whatever it says when you issue it.')
+  })
+
+  it('and the sheet says the same thing before you save', () => {
+    // Otherwise an owner fixing a typo would reasonably assume it had gone out to everybody.
+    expect(sheet).toContain('a customer&apos;s copy never changes after they have it')
+  })
+
+  it('renders at normal weight, NOT as small print', () => {
+    // This is the line the customer acts on. studio's terms are 11px grey, which is right for terms
+    // and conditions and wrong for this.
+    expect(block).toMatch(/\.v2-iv-payt \{ font-size: 14px; line-height: 1\.6/)
+    expect(block).not.toMatch(/\.v2-iv-payt \{[^}]*font-size: 1[12]px/)
+  })
+
+  it('keeps line breaks — bank details are a shape as much as a string', () => {
+    expect(block).toMatch(/\.v2-iv-payt \{[^}]*white-space: pre-line/)
+    expect(sheet).toContain('Line breaks are kept exactly as you type them.')
+  })
+
+  it('is typed once, on the screen where the question occurs', () => {
+    expect(list).toContain('<PaymentDetails instructions={settings.paymentInstructions} netDays={settings.netDays} />')
+    expect(read('../../../api/core/invoice-settings/route.ts')).toContain("requireCoreTenant('invoices')")
   })
 })
