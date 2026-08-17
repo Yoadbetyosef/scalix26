@@ -94,8 +94,8 @@ describe('the owner route sits beside /book, not inside it', () => {
   })
 
   it('the owner payload is validated, and the kind is an enum', () => {
-    expect(ownerRoute).toContain("meeting_kind: z.enum(['on_site', 'zoom', 'google_meet', 'phone']).optional()")
-    expect(MEETING_KINDS).toEqual(['on_site', 'zoom', 'google_meet', 'phone'])
+    expect(ownerRoute).toContain("meeting_kind: z.enum(['on_site', 'at_business', 'zoom', 'google_meet', 'phone']).optional()")
+    expect(MEETING_KINDS).toEqual(['on_site', 'at_business', 'zoom', 'google_meet', 'phone'])
   })
 
   it('a join_url that is not a link is dropped on BOTH doors', () => {

@@ -63,7 +63,10 @@ export type CreateResult =
   | { ok: false; error: string; status?: number }
 
 /** The four the column allows. A fifth would fail the CHECK and lose the booking. */
-export const MEETING_KINDS = ['on_site', 'zoom', 'google_meet', 'phone']
+// FIVE, and the fifth carries the thing the other four never did: DIRECTION.
+// on_site = we travel to them. at_business = they travel to us. Both are "in person"; only one wants
+// an address, and conflating them is what had Rudi asking a jeweller's customer where they live.
+export const MEETING_KINDS = ['on_site', 'at_business', 'zoom', 'google_meet', 'phone']
 
 export async function createAppointment(input: CreateInput, policy: CreatePolicy): Promise<CreateResult> {
   const supabase = await createServiceClient()

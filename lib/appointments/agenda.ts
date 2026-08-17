@@ -32,8 +32,13 @@ import { nameOf } from '@/lib/persona'
 // An on-site job with no address, or a video call with no link, is a real state and the screen's
 // whole reason for being: amber spine, the gap named, and the fix promoted to the first action. It is
 // not an error and the database deliberately permits it — see the migration.
+//
+// AT_BUSINESS IS NEVER MISSING ANYTHING. The customer is coming to us, so the place is the tenant's
+// own address and there was never a question to ask. Before the fifth kind existed these rows were
+// `on_site` with no address and went amber forever — a screen insisting something was absent when
+// nothing was. That was one bug in three places; this is the half of it that lives here.
 
-export type MeetingKind = 'on_site' | 'zoom' | 'google_meet' | 'phone'
+export type MeetingKind = 'on_site' | 'at_business' | 'zoom' | 'google_meet' | 'phone'
 export type Missing = 'address' | 'link' | null
 
 export interface AgendaRow {
@@ -117,12 +122,23 @@ interface Row {
   duration_minutes: number | null
 }
 
-const KINDS: MeetingKind[] = ['on_site', 'zoom', 'google_meet', 'phone']
+const KINDS: MeetingKind[] = ['on_site', 'at_business', 'zoom', 'google_meet', 'phone']
 const kindOf = (v: string | null): MeetingKind => (KINDS.includes(v as MeetingKind) ? (v as MeetingKind) : 'on_site')
 
+/** The business's own address, assembled once. Null when the tenant has not filled it in. */
+function businessAddress(t: { address?: string | null; city?: string | null; state?: string | null } | null): string | null {
+  if (!t) return null
+  const line = [t.address?.trim(), [t.city?.trim(), t.state?.trim()].filter(Boolean).join(', ')].filter(Boolean).join(', ')
+  return line || null
+}
+
 /** The line under the service, and whether the thing that line needs is absent. */
-function placeOf(kind: MeetingKind, r: Row): { where: string | null; missing: Missing } {
+function placeOf(kind: MeetingKind, r: Row, ownAddress: string | null): { where: string | null; missing: Missing } {
   if (kind === 'phone') return { where: r.customer_phone ? `Phone call · ${r.customer_phone}` : null, missing: null }
+  // The customer comes to us. `missing` is null WHATEVER the tenant's address says — an owner who has
+  // not filled in their own address knows where their shop is, and an amber row would be telling them
+  // something they cannot usefully act on from an appointment screen.
+  if (kind === 'at_business') return { where: ownAddress, missing: null }
   if (kind === 'zoom' || kind === 'google_meet') {
     const label = kind === 'zoom' ? 'Zoom' : 'Google Meet'
     return r.join_url
@@ -135,8 +151,10 @@ function placeOf(kind: MeetingKind, r: Row): { where: string | null; missing: Mi
 export async function readAgenda(tenantId: string): Promise<Agenda> {
   const db = createAdminClient()
   const { data: tenant } = await db
-    .from('tenants').select('timezone, default_appointment_minutes').eq('id', tenantId).maybeSingle()
+    .from('tenants').select('timezone, default_appointment_minutes, address, city, state').eq('id', tenantId).maybeSingle()
   const tz = await getBusinessTimezone(tenantId, tenant?.timezone ?? null)
+  // Read ONCE for the whole agenda rather than per row — every at_business row shows the same line.
+  const ownAddress = businessAddress(tenant as { address?: string | null; city?: string | null; state?: string | null } | null)
   const now = nowInTimezone(tz)
   // Nothing more specific was agreed, so the rail falls back to this rather than to a guess.
   const fallback = Number(tenant?.default_appointment_minutes) || 60
@@ -168,7 +186,7 @@ export async function readAgenda(tenantId: string): Promise<Agenda> {
   for (const r of rows) {
     const isPast = r.slot_date < now.dateIso
     const kind = kindOf(r.meeting_kind)
-    const { where, missing } = placeOf(kind, r)
+    const { where, missing } = placeOf(kind, r, ownAddress)
     // Only what is still ahead can need something. A gap on a job that has already happened is
     // history, and counting it would put a number in the opening line nobody can act on.
     if (missing && !isPast) missingCount++

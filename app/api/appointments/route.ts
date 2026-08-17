@@ -33,7 +33,7 @@ const schema = z.object({
   customer_phone: z.string().min(3).max(50),
   customer_email: z.union([z.string().email().max(320), z.literal('')]).nullable().optional(),
   service_type: z.string().max(300).nullable().optional(),
-  meeting_kind: z.enum(['on_site', 'zoom', 'google_meet', 'phone']).optional(),
+  meeting_kind: z.enum(['on_site', 'at_business', 'zoom', 'google_meet', 'phone']).optional(),
   address: z.string().max(1000).nullable().optional(),
   join_url: z.string().max(500).nullable().optional(),
   duration_minutes: z.number().int().min(5).max(480).nullable().optional(),

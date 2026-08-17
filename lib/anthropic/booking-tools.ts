@@ -31,8 +31,8 @@ export const BOOKING_TOOLS: Anthropic.Tool[] = [
         service_type: { type: 'string' },
         // WHERE IT HAPPENS. An enum rather than free text, so the model cannot invent "in person" or
         // "Teams" — a fifth value would fail the column's CHECK and lose the booking.
-        meeting_kind: { type: 'string', enum: ['on_site', 'zoom', 'google_meet', 'phone'], description: 'Where the appointment happens, from what the customer AGREED to. Never from what the service is called: a job named "Google Meet" that the customer expects you at their home is on_site. Default on_site when it was not discussed.' },
-        address: { type: 'string', description: 'Street address for an on_site job, if the customer gave one. Leave it out rather than guessing.' },
+        meeting_kind: { type: 'string', enum: ['on_site', 'at_business', 'zoom', 'google_meet', 'phone'], description: 'Where the appointment happens AND who travels, from what the customer AGREED to. on_site = YOU GO TO THEM, so an address is needed. at_business = THEY COME TO YOU at your premises — ask nothing about location, you already know where you are. Never infer from what the service is called: a job named "Google Meet" that the customer expects you at their home is on_site. When it was not discussed, use the default in your instructions.' },
+        address: { type: 'string', description: 'Street address, and ONLY for on_site — where you are travelling to. Never ask for it on at_business, zoom, google_meet or phone: a customer coming to your shop has no reason to give you their home address. Leave it out rather than guessing.' },
         join_url: { type: 'string', description: 'The meeting link, ONLY if the customer gave you one. Never invent, guess or construct a link.' },
         duration_minutes: { type: 'number', description: 'Length in minutes, ONLY if a length was explicitly agreed. Leave it out otherwise.' },
       },

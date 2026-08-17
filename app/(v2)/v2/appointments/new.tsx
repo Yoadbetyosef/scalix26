@@ -31,8 +31,11 @@ export interface SlotGrid {
 
 interface Contact { id: string; name: string | null; phone: string | null; email: string | null }
 
+// FIVE, and the first two are the ones that used to be one. "On site" means YOU TRAVEL — it wants an
+// address. "At the shop" means THEY travel, and wants nothing: the place is already known.
 const KINDS = [
   { k: 'on_site', label: 'On site' },
+  { k: 'at_business', label: 'At the shop' },
   { k: 'zoom', label: 'Zoom' },
   { k: 'google_meet', label: 'Google Meet' },
   { k: 'phone', label: 'Phone call' },
@@ -203,7 +206,9 @@ export function NewAppointment({ grid, defaultMinutes }: { grid: SlotGrid; defau
               ))}
             </div>
           </label>
-          {kind !== 'phone' && (
+          {/* on_site wants an address, video wants a link. at_business and phone want NOTHING —
+              the place is already known, and asking is the bug this kind exists to fix. */}
+          {kind !== 'phone' && kind !== 'at_business' && (
             <label className="v2-efield">
               <span>{kind === 'on_site' ? 'Address' : 'Joining link'}</span>
               <input value={place} onChange={(e) => setPlace(e.target.value)} placeholder={kind === 'on_site' ? '140 Main St…' : 'https://…'} disabled={busy} />

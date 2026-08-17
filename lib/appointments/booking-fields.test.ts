@@ -48,10 +48,15 @@ describe('a missing address must not cost the booking', () => {
   })
 })
 
-describe('both tools send the same four fields', () => {
+describe('both tools send the same fields', () => {
   it('the text pipeline and the voice server carry identical schemas', () => {
     for (const src of [textTool, voiceTool]) {
-      expect(src).toContain("enum: ['on_site', 'zoom', 'google_meet', 'phone']")
+      expect(src).toContain("enum: ['on_site', 'at_business', 'zoom', 'google_meet', 'phone']")
+        // The fifth kind carries DIRECTION, and the tool must say so — on_site and at_business
+        // are both "in person" and only one of them wants an address.
+        expect(src).toContain('YOU GO TO THEM')
+        expect(src).toContain('THEY COME TO YOU')
+        expect(src).toContain('ONLY for on_site')
       expect(src).toContain('join_url')
       expect(src).toContain('duration_minutes')
       expect(src).toContain('address')
@@ -90,7 +95,7 @@ describe('the route takes them, and none of them can fail a booking', () => {
 
   it('an unrecognised kind falls back rather than 400ing', () => {
     expect(route).toContain("MEETING_KINDS.includes(kindIn) ? kindIn : 'on_site'")
-    expect(core).toContain("export const MEETING_KINDS = ['on_site', 'zoom', 'google_meet', 'phone']")
+    expect(core).toContain("export const MEETING_KINDS = ['on_site', 'at_business', 'zoom', 'google_meet', 'phone']")
   })
 
   it('a join_url that is not a link is dropped, not stored', () => {
@@ -107,5 +112,49 @@ describe('the route takes them, and none of them can fail a booking', () => {
     const block = route.slice(route.indexOf('const kindIn'), route.indexOf('if (!leadToken'))
     expect(block).not.toContain('NextResponse.json')
     expect(block).not.toContain('return')
+  })
+})
+
+describe('at_business — the customer comes to us', () => {
+  const agenda = readFileSync(new URL('./agenda.ts', import.meta.url), 'utf8')
+
+  it('is a fifth kind, not a flag on the tenant', () => {
+    // It is a fact about THIS appointment: a jeweller does home valuations and an HVAC firm takes
+    // shop drop-offs. A per-tenant "we travel / they come to us" is right on average and wrong
+    // exactly when it matters.
+    expect(agenda).toContain("export type MeetingKind = 'on_site' | 'at_business' | 'zoom' | 'google_meet' | 'phone'")
+  })
+
+  it('is NEVER missing anything', () => {
+    // Before it existed these rows were on_site with no address and went amber forever — a screen
+    // insisting something was absent when nothing was.
+    expect(agenda).toContain("if (kind === 'at_business') return { where: ownAddress, missing: null }")
+  })
+
+  it('and stays quiet even when the tenant has no address of their own', () => {
+    // An owner who has not filled in their address knows where their shop is. An amber row would be
+    // telling them something they cannot act on from an appointment screen.
+    const fn = agenda.slice(agenda.indexOf('function placeOf'), agenda.indexOf('export async function readAgenda'))
+    expect(fn).toContain('missing: null }')
+    expect(fn).not.toMatch(/at_business[\s\S]{0,120}missing: 'address'/)
+  })
+
+  it('reads the business address once, not per row', () => {
+    expect(agenda).toContain('const ownAddress = businessAddress(')
+    expect(agenda).toContain("select('timezone, default_appointment_minutes, address, city, state')")
+  })
+
+  it('the owner form offers it and asks for no place', () => {
+    const form = readFileSync(new URL('../../app/(v2)/v2/appointments/new.tsx', import.meta.url), 'utf8')
+    expect(form).toContain("{ k: 'at_business', label: 'At the shop' }")
+    // The place field is for on_site only — at_business and phone both want nothing.
+    expect(form).toContain("{kind !== 'phone' && kind !== 'at_business' && (")
+  })
+
+  it('an unrecognised kind still falls back to on_site rather than 400ing', () => {
+    // Unchanged, and it matters more now: an older voice-server that has never heard of at_business
+    // keeps booking exactly as it does today.
+    const core = readFileSync(new URL('./create.ts', import.meta.url), 'utf8')
+    expect(core).toContain("MEETING_KINDS.includes(input.meetingKind) ? input.meetingKind : 'on_site'")
   })
 })
