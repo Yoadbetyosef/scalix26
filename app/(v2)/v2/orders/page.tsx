@@ -17,7 +17,7 @@ const money = (cents: number, currency: string) =>
 // being made, finished.
 const WAITING = ['new', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved', 'waiting_customer_approval', 'customer_changes_requested', 'customer_approved']
 const MAKING = ['production', 'ready']
-const DONE = ['delivered', 'completed', 'cancelled']
+const DONE = ['delivered', 'completed', 'closed', 'cancelled']
 
 const FILTERS: ListFilter[] = [
   { id: 'open', label: 'Open', buckets: ['waiting', 'making'] },

@@ -202,7 +202,20 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
   if (!data) return { ok: false, error: 'not found' }
   const from = data.stage as OrderStage
   if (!canManualTransition(from, to)) return { ok: false, error: `Transition ${from} → ${to} is not allowed (approval stages change via workflow actions only)` }
-  await sb.from('orders').update({ stage: to, updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', id)
+  // THE WRITE'S ERROR WAS BEING DISCARDED. It returned ok on a refused update, the screen refreshed,
+  // and the stage was simply unchanged — a silent failure with nothing to read. It matters now because
+  // 'closed' is a stage the DATABASE has to be told about: against an unmigrated constraint the write
+  // fails with 23514 and the owner would have seen a button that did nothing.
+  const { error } = await sb.from('orders').update({ stage: to, updated_at: new Date().toISOString() })
+    .eq('tenant_id', c.tenantId).eq('id', id)
+  if (error) {
+    return {
+      ok: false,
+      error: error.code === '23514'
+        ? `The database does not know the stage "${to}" yet — if this is a new install, run add_order_closed_stage.sql.`
+        : error.message,
+    }
+  }
   await addEvent(id, 'stage_changed', { from, to, manual: true })
   return { ok: true }
 }

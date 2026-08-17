@@ -74,7 +74,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Approval workflow</h3>
         {/* A finished job had nowhere to go, so finished work was re-typed into another system. */}
-        {o.stage === 'completed' && (
+        {/* Both finished states, because invoicing is INDEPENDENT of how the job ended. Closing an
+            order neither raises an invoice nor forbids one later — see finish.ts. */}
+        {(o.stage === 'completed' || o.stage === 'closed') && (
           <div className="mb-4">
             <FinishActions orderId={o.id} invoicedAt={o.invoicedAt} archivedAt={o.archivedAt} />
           </div>
