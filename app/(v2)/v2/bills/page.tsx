@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { readBills, type BillRow } from '@/lib/invoices/bills-read'
 import { listPageContext } from '../list-page'
 import { billsLine } from './line'
+import { UploadBill } from './upload'
 import { coveragePct } from './groups'
 
 // SUPPLIER BILLS — docs/miles/supplier-invoices.html.
@@ -110,15 +111,17 @@ export default async function V2Bills() {
             <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
           </Link>
           <h2>Supplier bills</h2>
+          <div className="v2-hacts">
+            <UploadBill />
+          </div>
         </div>
       </header>
 
       <div className="v2-pbody" data-scroll>
         <div className="v2-ag-inner">
-          <p className="v2-lin">
-            {billsLine(list).map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
-          </p>
-
+          {/* The opening line belongs to the LIST. Rendered above the empty state it repeated the
+              empty state's own heading word for word, stacked — the shape /v2/invoices already has
+              right, and this screen did not. */}
           {list.total === 0 ? (
             <div className="v2-pempty">
               <p className="v2-pempty-t">No supplier bills yet.</p>
@@ -126,9 +129,15 @@ export default async function V2Bills() {
                 Upload one and it gets read, matched to your products, and its freight and duty spread
                 across them. Nothing is applied until you say so.
               </p>
+              {/* The action, where somebody most wants it. A sentence promising "upload one and it
+                  gets read" beside no control is a promise the screen cannot keep. */}
+              <div className="v2-pempty-act"><UploadBill tone="empty" /></div>
             </div>
           ) : (
             <>
+              <p className="v2-lin">
+                {billsLine(list).map((s, i) => (s.accent ? <b key={i}>{s.text}</b> : <span key={i}>{s.text}</span>))}
+              </p>
               {/* WAITING FIRST, always. The order is the order the work happens in, not newest-first:
                   an applied bill is finished and a list that leads with finished things is describing
                   itself rather than what is left to do. */}

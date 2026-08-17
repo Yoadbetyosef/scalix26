@@ -3156,6 +3156,17 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-bl-apply svg { width: 15px; height: 15px; flex: none; }
 .v2 .v2-bl-none { font-size: 13.5px; color: var(--v2-ink-42); padding: 22px 2px; }
 
+/* The upload input itself is never seen — the button in front of it is the control. Not display:none:
+   a hidden input cannot be .click()ed reliably in every browser, and this keeps it focusable for
+   anybody arriving by keyboard. */
+.v2 .v2-hidden-file {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+/* The empty state's own action. It sits under the sentence that promises it, because that sentence
+   is the moment somebody wants to do it. */
+.v2 .v2-pempty-act { margin-top: 18px; display: flex; }
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════
    SUPPLIER BILLS, WIDE. The same DOM: the slot's sentence moves beside the button, and the coverage
    bar leaves the name's column for one of its own. */

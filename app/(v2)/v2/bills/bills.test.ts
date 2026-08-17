@@ -250,3 +250,57 @@ describe('coverage is floored, never rounded up', () => {
     }
   })
 })
+
+describe('the empty state, and the upload it promises', () => {
+  const upload = read('./upload.tsx')
+
+  it('does NOT say the same sentence twice', () => {
+    // It rendered the opening line above the empty state, and both read "No supplier bills yet."
+    // stacked. /v2/invoices already had the right shape: the line belongs to the LIST, so it goes
+    // inside the non-empty branch.
+    const body = list.slice(list.indexOf('v2-ag-inner'))
+    expect(body.indexOf('list.total === 0 ? (')).toBeLessThan(body.indexOf('v2-lin'))
+    expect((list.match(/No supplier bills yet/g) ?? [])).toHaveLength(1)
+  })
+
+  it('and the empty state carries the action, not just the promise', () => {
+    // "Upload one and it gets read" beside no control is a promise the screen cannot keep.
+    expect(list).toContain('Upload one and it gets read')
+    expect(list).toContain('<UploadBill tone="empty" />')
+  })
+
+  it('the header has one too, like every other /v2 screen', () => {
+    expect(list).toContain('<div className="v2-hacts">')
+    expect(list).toContain('<UploadBill />')
+  })
+
+  it('one component, two placements — so they cannot drift', () => {
+    expect((list.match(/<UploadBill/g) ?? [])).toHaveLength(2)
+  })
+
+  it('posts to the SAME route v1 uses — it is not a v1-only path', () => {
+    // /landed-cost is a second CALLER of this route, not the owner of it. Linking there instead
+    // would leave the preview, which no-escape refuses and which is a dead end on a phone.
+    expect(upload).toContain("fetch('/api/invoices/shipments', { method: 'POST', body })")
+    expect(strip(upload)).not.toContain('/landed-cost')
+  })
+
+  it('refuses a bad file at the picker, with the server’s own rule', () => {
+    expect(upload).toContain("import { INVOICE_ACCEPT_ATTR, invoiceFileError } from '@/lib/invoices/types'")
+    expect(upload).toContain('const problem = invoiceFileError(file.name, file.size)')
+  })
+
+  it('reads the response with readJson, not res.json()', () => {
+    // An oversized upload is refused by the platform edge with PLAIN TEXT, before the route exists
+    // as far as Vercel is concerned — res.json() would throw a parse error over the real one.
+    expect(upload).toContain('await readJson<')
+    expect(strip(upload)).not.toMatch(/await res\.json\(\)/)
+  })
+
+  it('a duplicate is shown and does not block', () => {
+    // Re-uploading after a failed extraction is legitimate; the owner knows which of the two they
+    // meant. So the warning holds the NAVIGATION, not the upload.
+    expect(upload).toContain('if (d.duplicate) { setDupe(d.duplicate); router.refresh(); return }')
+    expect(upload).toContain('Open the one you already have')
+  })
+})
