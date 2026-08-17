@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Agenda, AgendaRow } from '@/lib/appointments/agenda'
 import { PREVIEW } from '../preview'
+import { Pin, Cam } from './glyphs'
+import { FixPlace } from './fix-place'
 
 // THE AGENDA — docs/miles/appointments-agenda-v2.html, values taken directly.
 //
@@ -25,11 +27,6 @@ interface Props {
   tints: Record<string, { wash: string; ink: string }>
 }
 
-const Pin = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" />
-  </svg>
-)
 const Phone = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M21 16.9v2.6a1.6 1.6 0 0 1-1.8 1.6 16.3 16.3 0 0 1-7.1-2.5 16 16 0 0 1-5-5A16.3 16.3 0 0 1 4.6 6.5 1.6 1.6 0 0 1 6.2 4.7h2.6a1.6 1.6 0 0 1 1.6 1.4c.1.9.3 1.7.6 2.5a1.6 1.6 0 0 1-.4 1.7l-1.1 1.1a13 13 0 0 0 5 5l1.1-1.1a1.6 1.6 0 0 1 1.7-.4c.8.3 1.6.5 2.5.6a1.6 1.6 0 0 1 1.4 1.6z" />
@@ -38,11 +35,6 @@ const Phone = () => (
 const Msg = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z" />
-  </svg>
-)
-const Cam = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <rect x="2" y="6" width="14" height="12" rx="3" /><path d="m16 11 6-3.5v9L16 13z" />
   </svg>
 )
 const Move = () => (
@@ -170,11 +162,17 @@ function Actions({ row, onMove }: { row: AgendaRow; onMove: () => void }) {
   return (
     <div className="v2-ag-acts">
       {/* FIRST SLOT — whatever this appointment's kind makes most useful. */}
+      {/* WIRED. It rendered disabled while PATCH /api/appointments/[id] accepted only status and
+          skip_review — correct then, and wrong the moment the amber row started promising a fix it
+          could not perform. There are fewer of these rows now: most were at_business jobs mislabelled
+          on_site, and the fifth kind deletes those rather than fixing them. */}
       {row.missing ? (
-        <button type="button" className="v2-ag-act" data-fix disabled title={PREVIEW}>
-          {row.missing === 'address' ? <Pin /> : <Cam />}
-          {row.missing === 'address' ? 'Add address' : 'Add link'}
-        </button>
+        <FixPlace
+          appointmentId={row.id}
+          missing={row.missing}
+          current={row.missing === 'address' ? null : row.joinUrl}
+          who={[row.who, row.service].filter(Boolean).join(' · ')}
+        />
       ) : video && row.joinUrl ? (
         <a className="v2-ag-act" data-join data-k={row.kind} href={row.joinUrl} target="_blank" rel="noreferrer"><Cam />Join</a>
       ) : row.kind === 'phone' && tel ? (

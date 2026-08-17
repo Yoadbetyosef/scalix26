@@ -79,10 +79,23 @@ describe('the kind drives the primary action, not just the colour', () => {
   })
 
   it('a missing thing promotes the fix to first position, in amber', () => {
-    expect(view).toContain('data-fix')
-    expect(view).toContain("{row.missing === 'address' ? 'Add address' : 'Add link'}")
+    // The button moved into FixPlace when it stopped being disabled — the amber styling and the two
+    // labels went with it, so the assertions follow rather than pinning the file they used to be in.
+    const fix = read('./fix-place.tsx')
+    expect(view).toContain('<FixPlace')
+    expect(fix).toContain('data-fix')
+    expect(fix).toContain("{isAddress ? 'Add address' : 'Add link'}")
     expect(block).toContain('.v2 .v2-ag-act[data-fix] {')
     expect(block).toMatch(/\.v2-ag-act\[data-fix\] \{[^}]*var\(--v2-hold-wash\)/)
+  })
+
+  it('and the fix is no longer disabled', () => {
+    // It rendered `disabled title={PREVIEW}` while no route could accept an address. A row that names
+    // a problem and offers a button that cannot solve it is worse than a row that says nothing.
+    const fix = read('./fix-place.tsx')
+    expect(fix).not.toMatch(/data-fix[^>]*disabled/)
+    expect(fix).toContain("fetch(`/api/appointments/${appointmentId}`")
+    expect(read('../../../api/appointments/[id]/route.ts')).toContain('updates.address = body.address.trim()')
   })
 
   it('and the amber spine outranks the kind’s colour', () => {
@@ -225,5 +238,55 @@ describe('the past has somewhere to live', () => {
 
   it('the empty state only shows when there is nothing in EITHER direction', () => {
     expect(page).toContain('agenda.days.length === 0 && agenda.earlier.length === 0 ?')
+  })
+})
+
+describe('wiring the fix', () => {
+  const fix = readFileSync(new URL('./fix-place.tsx', import.meta.url), 'utf8')
+  const route = readFileSync(new URL('../../../api/appointments/[id]/route.ts', import.meta.url), 'utf8')
+
+  it('sends ONE key — it has no opinion about whether the appointment happened', () => {
+    expect(fix).toContain("JSON.stringify(isAddress ? { address: value } : { join_url: value })")
+    // Comments stripped: the note above that line NAMES the two keys it deliberately does not send.
+    const code = fix.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+    expect(code).not.toMatch(/status:|skip_review/)
+  })
+
+  it('blank CLEARS, at both ends', () => {
+    // "We had the wrong address and now we have none" is a real state — it is what the amber row
+    // means — and refusing to express it leaves the only correction being a different wrong address.
+    expect(route).toContain("body.address.trim().slice(0, 500) || null")
+    expect(route).toContain('updates.join_url = null')
+    expect(fix).toContain('Leave it empty to remove the address')
+  })
+
+  it('an empty string never reaches the column as an empty string', () => {
+    // The agenda tests `r.address ? …`, so '' would read as present and the row would go quiet while
+    // showing nothing.
+    expect(route).toContain('|| null')
+  })
+
+  it('a link that is not a link is refused, with a sentence', () => {
+    expect(route).toContain('.test(u)')
+    expect(route).toContain('https?:')
+    expect(route).toContain('It should start with http:// or https://')
+    expect(fix).toContain("setErr(j.error || 'That could not be saved.')")
+  })
+
+  it('and the sheet points at the cheaper fix when there is one', () => {
+    // Most of these rows were at_business jobs mislabelled on_site. Typing an address into one is
+    // fixing the symptom.
+    expect(fix).toContain('change the appointment to At the shop instead')
+  })
+
+  it('the two shared glyphs were extracted, not copied', () => {
+    const glyphs = readFileSync(new URL('./glyphs.tsx', import.meta.url), 'utf8')
+    expect(glyphs).toContain('export const Pin')
+    expect(glyphs).toContain('export const Cam')
+    for (const f of ['./agenda.tsx', './fix-place.tsx']) {
+      expect(readFileSync(new URL(f, import.meta.url), 'utf8'), f).toContain("from './glyphs'")
+    }
+    // And the originals are gone rather than left beside the import.
+    expect(readFileSync(new URL('./agenda.tsx', import.meta.url), 'utf8')).not.toMatch(/^const (Pin|Cam) = \(/m)
   })
 })
