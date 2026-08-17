@@ -2,9 +2,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
-import { STAGE_LABELS, isProtectedStage, isTerminalStage } from '@/lib/orders/stages'
+import { STAGE_LABELS, isProtectedStage, canEditWorkflow, canEditDocumentFacts } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
 import { OrderEdit } from '@/components/orders/order-edit'
+import { OrderDocumentEdit } from '@/components/orders/order-document-edit'
 import { DeleteOrderButton } from '@/components/orders/delete-order'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
@@ -48,7 +49,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!isTerminalStage(o.stage) && (
+          {/* TWO GATES, NOT ONE. The full drawer is workflow and closes when the job ends. Tax is a
+              fact about a document that exists, and it is the fact most likely to be missing at that
+              exact moment — so it stays open on finished and completed, and shuts on cancelled,
+              where there is no document to be right about. See lib/orders/stages.ts. */}
+          {canEditWorkflow(o.stage) ? (
             <OrderEdit orderId={o.id} initial={{
               orderNumber: o.orderNumber, contactId: o.contactId,
               customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
@@ -62,7 +67,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
               lineItems: o.lineItems,
             }} />
-          )}
+          ) : canEditDocumentFacts(o.stage) ? (
+            <OrderDocumentEdit
+              orderId={o.id}
+              stage={STAGE_LABELS[o.stage].toLowerCase()}
+              initial={{
+                deliveryProvince: o.deliveryProvince, taxKind: o.taxKind,
+                pstExempt: o.pstExempt, pstExemptionNote: o.pstExemptionNote,
+              }}
+            />
+          ) : null}
           {/* Open in a new tab: the document is a print-to-PDF page, not a place to navigate away to. */}
           <Link href={`/orders/${o.id}/document/estimate`} target="_blank" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Estimate</Link>
           <Link href={`/orders/${o.id}/document/quote`} target="_blank" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Quote</Link>
@@ -132,7 +146,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Attachments</h3>
-        <AttachmentsPanel orderId={o.id} invoiceImageId={o.invoiceImageId} />
+        <AttachmentsPanel orderId={o.id} invoiceImageId={o.invoiceImageId} canSetInvoiceImage={canEditDocumentFacts(o.stage)} />
       </div>
 
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">

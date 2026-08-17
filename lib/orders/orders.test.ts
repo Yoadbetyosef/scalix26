@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { canManualTransition, canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, canSendToProduction, isProtectedStage, isTerminalStage, ORDER_STAGES, STAGE_LABELS } from './stages'
+import { canManualTransition, canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, canSendToProduction, isProtectedStage, isTerminalStage, canEditWorkflow, canEditDocumentFacts,
+  DOCUMENT_FACT_FIELDS, refusedFields, ORDER_STAGES, STAGE_LABELS } from './stages'
 import { orderNumberFromBytes, generateOrderNumber } from './order-number'
 
 describe('Order stage state machine', () => {
@@ -114,5 +115,67 @@ describe('finishing a job, without claiming it was produced', () => {
     }
     expect(canSendForApproval('finished', 'factory')).toBe(false)
     expect(canSendForApproval('finished', 'customer')).toBe(false)
+  })
+})
+
+describe('what a terminal order still accepts', () => {
+  it('the full drawer closes on every terminal stage', () => {
+    for (const s of ORDER_STAGES) expect(canEditWorkflow(s), s).toBe(!isTerminalStage(s))
+  })
+
+  it('but tax and the invoice photo stay open on finished and completed', () => {
+    // They are facts about a document that EXISTS, and tax is the fact most likely to be missing at
+    // the moment a job ends — thirteen of fifteen orders on the live tenant reached it with none.
+    expect(canEditDocumentFacts('finished')).toBe(true)
+    expect(canEditDocumentFacts('completed')).toBe(true)
+  })
+
+  it('and shut on cancelled, which is a different idea', () => {
+    // Not "over" — "it did not happen". There is no document to be right about, and if a cancelled
+    // order did produce an invoice, that invoice is the thing to void rather than re-rate.
+    expect(canEditDocumentFacts('cancelled')).toBe(false)
+  })
+
+  it('the allowed keys are exactly tax and the photo — no price among them', () => {
+    expect([...DOCUMENT_FACT_FIELDS]).toEqual(['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId'])
+    for (const priced of ['lineItems', 'depositCents', 'currency', 'orderNumber', 'contactId', 'customerName']) {
+      expect(DOCUMENT_FACT_FIELDS as readonly string[], priced).not.toContain(priced)
+    }
+  })
+
+  it('taxChoiceId carries the destination, so there is no province field to keep open', () => {
+    // The server resolves province, kind, label and rate from the one id.
+    expect(DOCUMENT_FACT_FIELDS as readonly string[]).not.toContain('deliveryProvince')
+  })
+})
+
+describe('refusedFields — the decision itself, not its wording', () => {
+  const TAX_ONLY = ['taxChoiceId', 'pstExempt', 'pstExemptionNote']
+  const PRICED = ['taxChoiceId', 'lineItems', 'depositCents']
+
+  it('a live order refuses nothing', () => {
+    for (const s of ORDER_STAGES) {
+      if (isTerminalStage(s)) continue
+      expect(refusedFields(s, PRICED), s).toEqual([])
+    }
+  })
+
+  it('a cancelled order refuses the whole edit', () => {
+    expect(refusedFields('cancelled', TAX_ONLY)).toBeNull()
+    expect(refusedFields('cancelled', [])).toBeNull()
+  })
+
+  it('finished and completed take tax and the photo, and nothing else', () => {
+    for (const s of ['finished', 'completed'] as const) {
+      expect(refusedFields(s, TAX_ONLY), s).toEqual([])
+      expect(refusedFields(s, ['invoiceImageId']), s).toEqual([])
+      // The three that would re-price a sent invoice.
+      expect(refusedFields(s, PRICED), s).toEqual(['lineItems', 'depositCents'])
+      expect(refusedFields(s, ['orderNumber', 'customerName']), s).toEqual(['orderNumber', 'customerName'])
+    }
+  })
+
+  it('an empty patch on a finished order is allowed — it changes nothing', () => {
+    expect(refusedFields('finished', [])).toEqual([])
   })
 })
