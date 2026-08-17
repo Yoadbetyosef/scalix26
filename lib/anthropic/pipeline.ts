@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { primaryAgent } from '@/lib/agents/primary'
 import { bookingInProgress, extractBookingFields, buildBookingStatus } from './booking'
 import { BOOKING_TOOLS, executeBookingTool, type BookingToolCtx } from './booking-tools'
+import { resolveMeetingDefault, meetingDefaultInstruction } from '@/lib/appointments/meeting-default'
 import { FINANCIAL_TOOLS, executeFinancialTool, isFinancialTool, isFinancialCapabilityAvailable, detectFinancialIntent, financialIntentPrompt } from './financial-intent'
 import { CATALOG_TOOLS, executeCatalogTool, isCatalogTool, detectCatalogIntent, catalogPromptGuidance } from './catalog-tools'
 import { currentDateContext } from '@/lib/appointments'
@@ -285,6 +286,14 @@ export async function runAIPipeline(input: PipelineInput): Promise<PipelineOutpu
   }
 
   let systemPrompt = buildSystemPrompt(employee, skills, kbForPrompt, tenant, isVoice, bookingStatus)
+
+  // WHO TRAVELS. The same helper the voice prompt uses, because the two prompts are built
+  // separately and a rule stated in one of them holds on one channel only. Unknown means the
+  // agent ASKS — assuming we drive out to the customer is what had a jeweller's caller being
+  // asked for their home address.
+  if (enabledModules.includes('scheduling')) {
+    systemPrompt += `\n\n${meetingDefaultInstruction(resolveMeetingDefault(tenant))}`
+  }
 
   // Catalog awareness (text channels, inventory module on) — tells the AI it can look up real
   // stock and must never invent inventory.

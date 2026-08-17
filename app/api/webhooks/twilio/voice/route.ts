@@ -13,6 +13,7 @@ import { assembleBusinessContext } from '@/lib/brain/context/orchestrate'
 import { enforce, clientIp } from '@/lib/ratelimit'
 import { assertPartnerActive, PAUSED_VOICE_MESSAGE } from '@/lib/billing/gate'
 import { voiceCapabilities, encodeCapabilities } from '@/lib/voice/capabilities'
+import { resolveMeetingDefault, meetingDefaultInstruction } from '@/lib/appointments/meeting-default'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 
 // How long the owner's phone rings before the AI receptionist takes over.
@@ -273,7 +274,8 @@ export async function POST(req: NextRequest) {
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', channel.tenant_id)
         .eq('is_active', true)
-      if (slotsCount && slotsCount > 0) {
+      const canBook = !!(slotsCount && slotsCount > 0)
+      if (canBook) {
         voiceSystemPrompt += `\n\nAPPOINTMENT SCHEDULING: You CAN schedule appointments. When a customer wants to book, use check_availability to find open slots for their preferred date, then use book_appointment to confirm. Always collect name, phone number, and service type before booking.`
       }
 
@@ -294,19 +296,26 @@ export async function POST(req: NextRequest) {
       let leadToken = ''
       let tenantTz: string | null = null
       // The row this comes off is read below either way; nothing extra is queried for it.
-      let tenantRow: { enabled_modules?: string[] | null; tags?: string[] | null } | null = null
-      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token, timezone, enabled_modules, tags').eq('id', channel.tenant_id).maybeSingle()
+      let tenantRow: { enabled_modules?: string[] | null; tags?: string[] | null; default_meeting_kind?: string | null; industry?: string | null } | null = null
+      const { data: tWith } = await supabase.from('tenants').select('owner_phone, phone, lead_intake_token, timezone, enabled_modules, tags, default_meeting_kind, industry').eq('id', channel.tenant_id).maybeSingle()
       if (tWith) {
         ownerPhone = tWith.owner_phone || tWith.phone || ''
         leadToken = tWith.lead_intake_token || ''
         tenantTz = tWith.timezone || null
         tenantRow = tWith
       } else {
-        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token, timezone, enabled_modules, tags').eq('id', channel.tenant_id).maybeSingle()
+        const { data: tBase } = await supabase.from('tenants').select('phone, lead_intake_token, timezone, enabled_modules, tags, default_meeting_kind, industry').eq('id', channel.tenant_id).maybeSingle()
         ownerPhone = tBase?.phone || ''
         leadToken = tBase?.lead_intake_token || ''
         tenantTz = tBase?.timezone || null
         tenantRow = tBase ?? null
+      }
+
+      // WHO TRAVELS — stated only when booking is offered at all, and from the shared helper,
+      // because the text pipeline states the same rule. A rule stated on one channel is a rule
+      // that holds on one channel. Unknown ASKS the caller rather than assuming we drive out.
+      if (canBook) {
+        voiceSystemPrompt += `\n\n${meetingDefaultInstruction(resolveMeetingDefault(tenantRow))}`
       }
 
       // Live, per-call current date/day/time in THIS tenant's timezone — resolved with

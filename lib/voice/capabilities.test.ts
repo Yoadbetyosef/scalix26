@@ -77,7 +77,13 @@ describe('the app decides and passes it', () => {
   })
 
   it('costs no extra query — the tenant row was already being read', () => {
-    expect(twiml).toContain("select('owner_phone, phone, lead_intake_token, timezone, enabled_modules, tags')")
+    // The RULE is one read, not a pinned column list: the select has since widened to carry
+    // default_meeting_kind and industry for the who-travels rule, and widening the existing query is
+    // exactly the thing this test is asking for. What it must catch is a SECOND read appearing.
+    expect(twiml).toMatch(/select\('owner_phone, phone, lead_intake_token, timezone, enabled_modules, tags[^']*'\)/)
+    expect(twiml).toContain('enabled_modules')
+    // Two tenant reads is the failure — one for the row, one fallback, and no more.
+    expect(twiml.match(/from\('tenants'\)/g) ?? []).toHaveLength(2)
   })
 })
 
@@ -134,7 +140,17 @@ describe('the routes are the gate, not the tool list', () => {
   })
 
   it('neither costs an extra query', () => {
-    expect(create).toContain("select('id, business_name, phone, email, timezone, enabled_modules')")
+    // Same rule as above: the column list may widen — createAppointment now also reads
+    // default_meeting_kind so the first in-person booking can teach it — but the number of reads
+    // must not grow.
+    expect(create).toMatch(/select\('id, business_name, phone, email, timezone, enabled_modules[^']*'\)/)
     expect(available).toContain("select('id, timezone, enabled_modules')")
+    // READS only. createAppointment also WRITES to tenants — the learn step that records what an
+    // in-person booking means for this business the first time one is made — and that write is
+    // deliberate, conditional and fire-and-forget. Counting it as a query would be counting the
+    // wrong thing.
+    expect(create.match(/from\('tenants'\)\s*\.select\(/g) ?? []).toHaveLength(1)
+    expect(available.match(/from\('tenants'\)\s*\.select\(/g) ?? []).toHaveLength(1)
+    expect(create).toContain("from('tenants').update({ default_meeting_kind: kind })")
   })
 })

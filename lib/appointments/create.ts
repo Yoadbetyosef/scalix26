@@ -72,7 +72,7 @@ export async function createAppointment(input: CreateInput, policy: CreatePolicy
   const supabase = await createServiceClient()
 
   const { data: tenant } = await supabase
-    .from('tenants').select('id, business_name, phone, email, timezone, enabled_modules').eq('id', input.tenantId).maybeSingle()
+    .from('tenants').select('id, business_name, phone, email, timezone, enabled_modules, default_meeting_kind').eq('id', input.tenantId).maybeSingle()
   if (!tenant) return { ok: false, error: 'invalid tenant', status: 404 }
 
   // THE REAL HOLE, CLOSED HERE RATHER THAN AT EITHER DOOR. Neither /book nor /api/appointments
@@ -156,6 +156,21 @@ export async function createAppointment(input: CreateInput, policy: CreatePolicy
     // The same friendly answer as the pre-check, so the AI offers other times and never a hard error.
     if (apptErr?.code === '23505') return { ok: false, error: 'that time was just taken' }
     return { ok: false, error: apptErr?.message || 'failed to book', status: 500 }
+  }
+
+  // ── LEARNED, NOT CONFIGURED ────────────────────────────────────────────────────────────────
+  //
+  // The first time an in-person appointment is booked for a business that has never said whether
+  // it travels, the answer is written down. The agent was told to ASK on that first booking, so
+  // what lands here is a customer's answer rather than a guess — and it is never asked again.
+  //
+  // Only on_site/at_business teach it: a Zoom call says nothing about premises. Only when the
+  // column is still null, so an owner's explicit setting is never overwritten by a booking. And
+  // it never fails the appointment — the booking is the thing that matters and this is a note.
+  if (!tenant.default_meeting_kind && (kind === 'on_site' || kind === 'at_business')) {
+    await supabase.from('tenants').update({ default_meeting_kind: kind })
+      .eq('id', tenant.id).is('default_meeting_kind', null)
+      .then(() => {}, () => {})
   }
 
   await markLeadsBooked(supabase, tenant.id, contactId, input.phone)
