@@ -29,6 +29,13 @@ export interface Order {
   // The application must render before the migration is run. Optional here means every consumer is
   // forced by the compiler to handle their absence, rather than reading undefined as a value.
   deliveryProvince?: string | null
+  /** SNAPSHOT of the rate charged — see add_order_tax_choice.sql. Null on an order raised before it. */
+  taxKind?: 'gst_only' | 'combined' | null
+  taxLabel?: string | null
+  taxRatePercent?: number | null
+  /** The seller's assertion, and the sentence printed beneath the tax line when it is true. */
+  pstExempt?: boolean
+  pstExemptionNote?: string | null
   documentTemplateId?: string | null
   invoicedAt?: string | null
   archivedAt?: string | null
@@ -70,6 +77,10 @@ export interface LineItemInput extends Partial<JewelrySpec> {
 }
 export interface OrderInput {
   deliveryProvince?: string | null
+  /** An id from TAX_CHOICES. The server resolves province, label and rate from it — never the client. */
+  taxChoiceId?: string | null
+  pstExempt?: boolean
+  pstExemptionNote?: string | null
   documentTemplateId?: string | null
   orderNumber?: string | null
   contactId?: string | null; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null

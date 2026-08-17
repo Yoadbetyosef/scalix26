@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
-import { CA_REGIONS } from '@/lib/tax/canada'
+import { TAX_CHOICES } from '@/lib/tax/canada'
 import { LineItemFields, emptyLine, fetchOptionLists, lineFromSaved, lineToPayload, type LineDraft } from './line-item-fields'
 
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
@@ -18,6 +18,9 @@ export interface OrderEditInitial {
   assignedEmployee: string | null; orderDate: string | null; requestedCompletionDate: string | null
   depositCents: number; currency: string
   deliveryProvince?: string | null
+  taxKind?: 'gst_only' | 'combined' | null
+  pstExempt?: boolean
+  pstExemptionNote?: string | null
   documentTemplateId?: string | null
   templates?: Array<{ id: string; name: string }>
   clientRequirements: string | null; isCustomDesign: boolean
@@ -43,11 +46,17 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
     factoryName: initial.factoryName ?? '', factoryContactName: initial.factoryContactName ?? '', factoryEmail: initial.factoryEmail ?? '',
     assignedEmployee: initial.assignedEmployee ?? '', orderDate: initial.orderDate ?? '', requestedCompletionDate: initial.requestedCompletionDate ?? '',
     depositAmount: initial.depositCents ? (initial.depositCents / 100).toString() : '',
-    deliveryProvince: initial.deliveryProvince ?? '',
+    // The stored choice, reconstructed. A province with a kind is one of the split rows; a province
+    // without one is a province that has only a single reading — see TAX_CHOICES.
+    taxChoiceId: initial.deliveryProvince
+      ? (initial.taxKind ? `${initial.deliveryProvince}:${initial.taxKind}` : initial.deliveryProvince)
+      : '',
+    pstExemptionNote: initial.pstExemptionNote ?? '',
     documentTemplateId: initial.documentTemplateId ?? '',
     clientRequirements: initial.clientRequirements ?? '', internalNotes: initial.internalNotes ?? '', publicNotes: initial.publicNotes ?? '',
   })
   const [isCustomDesign, setIsCustomDesign] = useState(initial.isCustomDesign)
+  const [pstExempt, setPstExempt] = useState(initial.pstExempt === true)
   const [lines, setLines] = useState<LineDraft[]>(initial.lineItems.length ? initial.lineItems.map(lineFromSaved) : [emptyLine()])
 
   // Only fetch the dropdown lists once the dialog is actually opened.
@@ -68,9 +77,12 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
         depositCents: Math.round((parseFloat(f.depositAmount) || 0) * 100),
-        // Empty means "not recorded", not "no tax" — the document then shows no tax line at all
-        // rather than a 0%, which would be a claim that none is due.
-        deliveryProvince: f.deliveryProvince || null,
+        // The ID only. The server reads province, label and rate off TAX_CHOICES — a client that could
+        // post its own percentage could put 3% on a customer's invoice and it would look ordinary.
+        // Empty means no tax line at all rather than a 0%, which would be a claim that none is due.
+        taxChoiceId: f.taxChoiceId || null,
+        pstExempt,
+        pstExemptionNote: f.pstExemptionNote.trim() || null,
         documentTemplateId: f.documentTemplateId || null,
         clientRequirements: f.clientRequirements || null, isCustomDesign,
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
@@ -149,10 +161,19 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                   {/* PLACE OF SUPPLY — the destination, not the seller's province. A BC business
                       delivering to Ontario charges 13% HST, and getting this backwards is invisible on
                       the document: the arithmetic looks right, it is just the wrong rate. */}
-                  <label className="block text-xs text-gray-500">Delivering to (tax)
-                    <select value={f.deliveryProvince} onChange={(e) => setF((p) => ({ ...p, deliveryProvince: e.target.value }))} className={inp}>
-                      <option value="">Not set — no tax shown</option>
-                      {CA_REGIONS.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
+                  {/* ONE control, not two. Picking the rate sets the place of supply with it, so there
+                      is no way to end up with a rate from one province and a destination from another.
+                      BC, SK and MB appear twice because both readings are correct and only the seller
+                      knows which sale it was — the hint beside each says which, without requiring any
+                      tax law to read. */}
+                  <label className="block text-xs text-gray-500">Tax (delivering to)
+                    <select value={f.taxChoiceId} onChange={(e) => setF((p) => ({ ...p, taxChoiceId: e.target.value }))} className={inp}>
+                      <option value="">No tax — nothing shown on the document</option>
+                      {TAX_CHOICES.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.region} · {c.label} {c.ratePercent}%{c.hint ? ` — ${c.hint}` : ''}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   {(initial.templates?.length ?? 0) > 0 && (
@@ -163,6 +184,28 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                       </select>
                     </label>
                   )}
+                  {/* THE EXEMPTION. It is why a GST-only rate was picked, and it is what the customer
+                      reads when a BC invoice shows 5% and they know the province charges PST. Nothing
+                      here validates a certificate and nothing pretends to — she asserts it, we print
+                      it, we keep it. Off by default: an exemption nobody claimed must never appear.
+                      The note prints ONLY while the box is ticked, so unticking it removes the claim
+                      from the document without destroying what she typed. */}
+                  <div className="sm:col-span-3">
+                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                      <input type="checkbox" checked={pstExempt} onChange={(e) => setPstExempt(e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300" />
+                      Provincial tax exempt (resale)
+                    </label>
+                    {pstExempt && (
+                      <label className="mt-2 block text-xs text-gray-500">Printed under the tax line
+                        <input
+                          value={f.pstExemptionNote}
+                          onChange={set('pstExemptionNote')}
+                          placeholder="PST exempt — resale certificate on file"
+                          className={inp}
+                        />
+                      </label>
+                    )}
+                  </div>
                   <label className="block text-xs text-gray-500">Public notes (visible on approval page)<textarea value={f.publicNotes} onChange={set('publicNotes')} rows={2} className={inp} /></label>
                   <label className="block text-xs text-gray-500">Internal notes (never shared)<textarea value={f.internalNotes} onChange={set('internalNotes')} rows={2} className={inp} /></label>
                 </div>

@@ -27,13 +27,15 @@ export interface OrderDocumentProps {
   images: DocumentImage[]
   /** Null when no delivery province is set, or the rate is unknown. Null renders NO tax line. */
   tax: TaxLine | null
+  /** The seller's exemption sentence, printed BENEATH the tax line. Null unless it was asserted. */
+  pstExemptionNote?: string | null
   /** From the selected document template, when there is one. */
   footerNote?: string | null
   /** Owner-only controls. Absent on the customer's copy. */
   toolbar?: ReactNode
 }
 
-export function OrderDocumentBody({ order: o, type, branding, business, images, tax, footerNote, toolbar }: OrderDocumentProps) {
+export function OrderDocumentBody({ order: o, type, branding, business, images, tax, pstExemptionNote, footerNote, toolbar }: OrderDocumentProps) {
   const meta = ORDER_DOC_META[type]
   const accent = branding.accent
   const issued = new Date().toISOString().slice(0, 10)
@@ -157,6 +159,15 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
               <dt className="text-neutral-500">{taxLabel(tax)} <span className="text-neutral-400">({tax.region})</span></dt>
               <dd className="font-medium">{money(tax.amountCents, o.currency)}</dd>
             </div>
+          )}
+
+          {/* THE EXEMPTION, IN THE SELLER'S OWN WORDS, directly beneath the rate it explains. A GST-only
+              figure on a BC sale looks like an error to anybody who knows the province charges PST, and
+              this line is the difference between an invoice that answers that and one that invites the
+              question. It renders WITHOUT a tax line too: "PST exempt" on a document showing no tax is
+              still the seller's account of why. */}
+          {pstExemptionNote && (
+            <div className="pt-0.5 text-[11px] leading-snug text-neutral-500">{pstExemptionNote}</div>
           )}
 
           {tax && o.depositCents > 0 && (

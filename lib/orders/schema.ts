@@ -34,6 +34,15 @@ const orderFields = {
   internalNotes: z.string().max(5000).nullable().optional(), publicNotes: z.string().max(5000).nullable().optional(),
   // Place of supply — the DESTINATION province, which decides the tax rate. Not the seller's.
   deliveryProvince: z.string().max(2).nullable().optional(),
+  // WHICH RATE WAS CHARGED, as an id from TAX_CHOICES ('BC:combined', 'ON', …). An ID and never a
+  // percentage: a client that could post its own rate could put 3% on a customer's invoice, and the
+  // figure would look entirely ordinary. The server reads label, rate and province off the list.
+  // Empty string clears the choice; absent leaves it alone.
+  taxChoiceId: z.string().max(24).nullable().optional(),
+  // The seller's ASSERTION that the provincial part does not apply, and the sentence that explains it.
+  // Nothing validates a certificate and nothing should pretend to.
+  pstExempt: z.boolean().optional(),
+  pstExemptionNote: z.string().max(300).nullable().optional(),
   // Which company's letterhead this order's documents use. Null = the tenant's default.
   documentTemplateId: z.string().uuid().nullable().optional(),
   lineItems: z.array(lineItemSchema).max(200).optional(),

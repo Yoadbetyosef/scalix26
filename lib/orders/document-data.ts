@@ -3,7 +3,7 @@ import { publicDocumentImagesForTenant } from './attachments'
 import { templateForOrder, applyTemplate } from './templates'
 import { getOrderForTenant } from './store'
 import { loadTaxRates } from '@/lib/tax/rates-store'
-import { rateFor, taxOn, type TaxLine } from '@/lib/tax/canada'
+import { rateFor, taxOn, taxFromSnapshot, type TaxLine } from '@/lib/tax/canada'
 import type { OrderWithDetails } from './types'
 import type { DocBranding, DocBusiness } from './documents'
 import type { DocumentImage } from './attachments'
@@ -20,6 +20,8 @@ export interface OrderDocumentData {
   business: DocBusiness
   images: DocumentImage[]
   tax: TaxLine | null
+  /** Printed beneath the tax line, and ONLY when the order asserts the exemption. */
+  pstExemptionNote: string | null
   footerNote: string | null
   templateName: string | null
 }
@@ -38,7 +40,11 @@ export async function loadOrderDocument(
   // `order` may or may not carry document_template_id and delivery_province depending on whether
   // add_orders_6 has been run. Read them off the record defensively rather than selecting them by
   // name, so an unmigrated database renders today's document instead of erroring.
-  const extra = order as unknown as { documentTemplateId?: string | null; deliveryProvince?: string | null }
+  const extra = order as unknown as {
+    documentTemplateId?: string | null; deliveryProvince?: string | null
+    taxLabel?: string | null; taxRatePercent?: number | null
+    pstExempt?: boolean; pstExemptionNote?: string | null
+  }
 
   const [ctx, images, template, rates] = await Promise.all([
     loadDocContext(tenantId),
@@ -55,8 +61,19 @@ export async function loadOrderDocument(
   // single most common Canadian tax error, and it is invisible on the document — the arithmetic looks
   // right, it is just the wrong rate. So there is deliberately NO fallback: no destination, no tax
   // line, and the owner is prompted to set one rather than being given a plausible wrong number.
-  const rate = rateFor(extra.deliveryProvince ?? null, rates)
-  const tax = taxOn(order.subtotalCents, rate)
+  //
+  // ── THE SNAPSHOT WINS ─────────────────────────────────────────────────────────────────────────
+  //
+  // What the seller CHOSE, not what the table says today. One province can mean two correct rates (a
+  // BC sale is 12% retail and 5% wholesale for resale) and only the seller knows which sale it was —
+  // so a live lookup could not pick between them even if the rates never changed. It also means
+  // editing tax_rates next year cannot alter a document a customer already holds.
+  //
+  // The live lookup remains for orders raised before the picker existed. Those render exactly as they
+  // did before, which is the whole reason nothing was backfilled.
+  const snapshot = taxFromSnapshot(
+    extra.deliveryProvince ?? null, extra.taxLabel ?? null, extra.taxRatePercent ?? null, order.subtotalCents)
+  const tax = snapshot ?? taxOn(order.subtotalCents, rateFor(extra.deliveryProvince ?? null, rates))
 
   return {
     order,
@@ -64,6 +81,9 @@ export async function loadOrderDocument(
     business: applied.business,
     images,
     tax,
+    // Only when the assertion was actually made. A note left behind after the box was unticked is not
+    // a claim, and printing it would put an exemption on a document nobody stood behind.
+    pstExemptionNote: extra.pstExempt ? (extra.pstExemptionNote?.trim() || null) : null,
     footerNote: applied.footerNote,
     templateName: applied.templateName,
   }
