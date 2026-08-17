@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { writeCapturedName, looksLikeCapturedName } from '@/lib/contacts/ai-name'
 import { sendSMS } from '@/lib/twilio/client'
 import { assertPartnerActive } from '@/lib/billing/gate'
 import type { LeadSource } from '@/types'
@@ -145,12 +146,14 @@ export async function intakeLead(input: IntakeLeadInput): Promise<IntakeLeadResu
   if (existingContact) {
     contactId = existingContact.id
     if (name) {
-      await supabase.from('contacts').update({ name }).eq('id', contactId).is('name', null)
+      // The name that arrived with the lead — from a web form, or from whatever the AI heard. This
+      // had no filter either.
+      await writeCapturedName(supabase, contactId, name)
     }
   } else {
     const { data: createdContact } = await supabase
       .from('contacts')
-      .insert({ tenant_id: tenantId, phone, name: name ?? null, channel: 'sms' })
+      .insert({ tenant_id: tenantId, phone, name: looksLikeCapturedName(name) ? name : null, channel: 'sms' })
       .select('id')
       .single()
     contactId = createdContact?.id ?? null

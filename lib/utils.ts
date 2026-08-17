@@ -31,6 +31,27 @@ export function formatDateTime(date: string | Date, timeZone?: string) {
 // Does a string look like a real person's name (not a raw STT utterance)?
 // ~1–3 short alphabetic words; no digits, no question marks. Guards against garbled
 // voice transcripts (e.g. "Did I call John Oreo add?") becoming a title/contact name.
+// Words that begin a sentence, never a name. The AI's name capture hands over whatever the customer
+// said, and three of the four names on the live tenant are conversation: "Yes. It's your aunt.",
+// "Your aunt.", "What?". Two of those were already rejected on word count and punctuation; "Your
+// aunt." passed every rule this function had.
+//
+// Deliberately NOT here: 'an' (An is a Vietnamese given name), 'may', 'will', 'rose', 'grace',
+// 'faith', 'hope', 'mark', 'bill', 'frank', 'art' — all real given names. The cost of a wrong
+// rejection is that the AI stores nothing and a person types it later; the cost of a wrong
+// acceptance is a sentence written permanently into the name field. The trade is not symmetric.
+const NOT_A_NAME = new Set([
+  'yes', 'no', 'yeah', 'yep', 'nope', 'nah', 'ok', 'okay', 'sure', 'maybe',
+  'hi', 'hello', 'hey', 'thanks', 'thank', 'please', 'sorry', 'um', 'uh',
+  'what', 'who', 'where', 'when', 'why', 'how',
+  'my', 'your', 'our', 'their', 'his', 'her', 'its', 'it', "it's", 'im', "i'm", 'i',
+  'this', 'that', 'these', 'those', 'the',
+  'is', 'are', 'was', 'were', 'and', 'but', 'or', 'not', "don't", 'dont', "can't", 'cant',
+])
+
+/** Abbreviations where a full stop is part of the word rather than the end of a sentence. */
+const NAME_ABBREV = new Set(['jr', 'sr', 'dr', 'mr', 'mrs', 'ms', 'st', 'prof'])
+
 export function looksLikeName(value: string | null | undefined): boolean {
   if (!value) return false
   const s = value.trim()
@@ -38,7 +59,21 @@ export function looksLikeName(value: string | null | undefined): boolean {
   if (/[\d?]/.test(s)) return false
   const words = s.split(/\s+/)
   if (words.length > 3) return false
-  return words.every((w) => /^[\p{L}][\p{L}'’.-]*$/u.test(w))
+  if (!words.every((w) => /^[\p{L}][\p{L}'\u2019.-]*$/u.test(w))) return false
+
+  const bare = (w: string) => w.replace(/[.'\u2019-]+$/, '').toLowerCase()
+  // A sentence starts with one of these. A name does not.
+  if (NOT_A_NAME.has(bare(words[0]))) return false
+  // A full stop belongs to an initial ("J. Smith") or an abbreviation ("Jr."). Anywhere else it is
+  // the end of a sentence, which is what "Your aunt." is.
+  for (const w of words) {
+    if (!w.includes('.')) continue
+    const head = w.slice(0, w.indexOf('.'))
+    if (head.length === 1) continue
+    if (NAME_ABBREV.has(head.toLowerCase())) continue
+    return false
+  }
+  return true
 }
 
 export function formatDuration(seconds: number) {

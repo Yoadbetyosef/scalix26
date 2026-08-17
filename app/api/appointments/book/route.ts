@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { writeCapturedName, looksLikeCapturedName } from '@/lib/contacts/ai-name'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendSMS } from '@/lib/twilio/client'
 import { sendEmail, emailTemplates } from '@/lib/email/send'
@@ -67,9 +68,11 @@ export async function POST(req: NextRequest) {
   const { data: c } = await supabase.from('contacts').select('id').eq('tenant_id', tenant.id).eq('phone', phone).maybeSingle()
   if (c) {
     contactId = c.id
-    if (name) await supabase.from('contacts').update({ name }).eq('id', contactId).is('name', null)
+    // The booking tool hands over whatever the AI heard, and this had NO filter at all. One door now:
+    // writeCapturedName checks that it looks like a name AND that no person has decided this field.
+    await writeCapturedName(supabase, contactId, name)
   } else {
-    const { data: created } = await supabase.from('contacts').insert({ tenant_id: tenant.id, phone, name, channel: 'voice' }).select('id').single()
+    const { data: created } = await supabase.from('contacts').insert({ tenant_id: tenant.id, phone, name: looksLikeCapturedName(name) ? name : null, channel: 'voice' }).select('id').single()
     contactId = created?.id ?? null
   }
 

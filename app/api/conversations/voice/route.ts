@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { looksLikeName } from '@/lib/utils'
+import { writeCapturedName, looksLikeCapturedName } from '@/lib/contacts/ai-name'
 
 type TranscriptItem = { role?: string; content?: string }
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   // call John Oreo add?"). Only keep it if it actually looks like a name — otherwise
   // store null so junk never reaches contacts.name (which is the inbox title).
   const rawName = typeof data.contact_name === 'string' && data.contact_name.trim() ? data.contact_name.trim() : null
-  const name = looksLikeName(rawName) ? rawName : null
+  const name = looksLikeCapturedName(rawName) ? rawName : null
   const durationSeconds = typeof data.duration_seconds === 'number' ? data.duration_seconds : null
   const transcript: TranscriptItem[] = Array.isArray(data.transcript) ? (data.transcript as TranscriptItem[]) : []
 
@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
     if (existing) {
       contactId = existing.id
-      if (name) await supabase.from('contacts').update({ name }).eq('id', contactId).is('name', null)
+      // writeCapturedName is the ONLY path that may write it. The filter used to live at this call
+      // site alone, which is why the other two doors let junk through.
+      await writeCapturedName(supabase, contactId, name)
     } else {
       const { data: created } = await supabase
         .from('contacts')
