@@ -84,24 +84,24 @@ describe('Order number (non-sequential, unguessable)', () => {
   })
 })
 
-describe('closing a job, without claiming it was produced', () => {
+describe('finishing a job, without claiming it was produced', () => {
   it('is reachable from every non-terminal stage, including new', () => {
     // The fault: from 'new' the only manual move was Cancel, so recording a finished repair meant
     // cancelling it or marching it through factory approval into production first.
     for (const s of ORDER_STAGES) {
       if (isTerminalStage(s)) continue
-      expect(canManualTransition(s, 'closed'), s).toBe(true)
+      expect(canManualTransition(s, 'finished'), s).toBe(true)
     }
   })
 
   it('and nothing moves out of it', () => {
-    // A closed job that can be dragged back into production is not closed.
-    expect(isTerminalStage('closed')).toBe(true)
-    for (const s of ORDER_STAGES) expect(canManualTransition('closed', s), s).toBe(false)
+    // A finished job that can be dragged back into production is not finished.
+    expect(isTerminalStage('finished')).toBe(true)
+    for (const s of ORDER_STAGES) expect(canManualTransition('finished', s), s).toBe(false)
   })
 
   it('is NOT completed — the board must not claim production that did not happen', () => {
-    expect(STAGE_LABELS.closed).toBe('Closed')
+    expect(STAGE_LABELS.finished).toBe('Finished')
     expect(STAGE_LABELS.completed).toBe('Completed')
     // The forward chain still ends at completed; closed is not on it.
     expect(canManualTransition('delivered', 'completed')).toBe(true)
@@ -112,7 +112,7 @@ describe('closing a job, without claiming it was produced', () => {
     for (const s of ORDER_STAGES) {
       if (isProtectedStage(s)) expect(canManualTransition('new', s), s).toBe(false)
     }
-    expect(canSendForApproval('closed', 'factory')).toBe(false)
-    expect(canSendForApproval('closed', 'customer')).toBe(false)
+    expect(canSendForApproval('finished', 'factory')).toBe(false)
+    expect(canSendForApproval('finished', 'customer')).toBe(false)
   })
 })

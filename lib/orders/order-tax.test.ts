@@ -136,20 +136,20 @@ describe('the orders list stopped calling a link a status', () => {
 describe('a refused stage write is no longer silent', () => {
   it('the update error is read, not discarded', () => {
     // It returned ok on a refused update: the screen refreshed and the stage was simply unchanged.
-    // 'closed' makes it reachable, because the DATABASE has to be told about that stage.
+    // 'finished' makes it reachable, because the DATABASE has to be told about that stage.
     expect(store).toContain("const { error } = await sb.from('orders').update({ stage: to")
     expect(store).toContain("error.code === '23514'")
-    expect(store).toContain('run add_order_closed_stage.sql')
+    expect(store).toContain('run add_order_finished_stage.sql')
   })
 
   it('and the board gives terminal stages no column', () => {
     // A column that only ever accumulates is a list, not a stage of work.
-    expect(read('../../app/orders/board/page.tsx')).toContain("s !== 'cancelled' && s !== 'closed'")
+    expect(read('../../app/orders/board/page.tsx')).toContain("s !== 'cancelled' && s !== 'finished'")
   })
 
-  it('closing does not forbid invoicing later', () => {
+  it('finishing does not forbid invoicing later', () => {
     // invoiced_at is a separate timestamp and the two stay independent — see finish.ts.
-    expect(read('../../app/orders/[id]/page.tsx')).toContain("(o.stage === 'completed' || o.stage === 'closed')")
+    expect(read('../../app/orders/[id]/page.tsx')).toContain("(o.stage === 'completed' || o.stage === 'finished')")
   })
 })
 

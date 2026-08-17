@@ -5,14 +5,14 @@
 export const ORDER_STAGES = [
   'new', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved',
   'waiting_customer_approval', 'customer_changes_requested', 'customer_approved',
-  'production', 'ready', 'delivered', 'completed', 'closed', 'cancelled',
+  'production', 'ready', 'delivered', 'completed', 'finished', 'cancelled',
 ] as const
 export type OrderStage = typeof ORDER_STAGES[number]
 
 export const STAGE_LABELS: Record<OrderStage, string> = {
   new: 'New Order', waiting_factory_approval: 'Waiting for Factory Approval', factory_changes_requested: 'Factory Changes Requested',
   factory_approved: 'Factory Approved', waiting_customer_approval: 'Waiting for Customer Approval', customer_changes_requested: 'Customer Changes Requested',
-  customer_approved: 'Customer Approved', production: 'Production', ready: 'Ready', delivered: 'Delivered', completed: 'Completed', closed: 'Closed', cancelled: 'Cancelled',
+  customer_approved: 'Customer Approved', production: 'Production', ready: 'Ready', delivered: 'Delivered', completed: 'Completed', finished: 'Finished', cancelled: 'Cancelled',
 }
 
 // Stages whose entry/exit is governed by the approval workflow — never draggable.
@@ -24,27 +24,27 @@ export const isProtectedStage = (s: OrderStage): boolean => PROTECTED_STAGES.has
 // THREE terminal stages, and the difference between two of them is the point.
 //
 //   completed — produced and finished.
-//   closed    — finished, and saying NOTHING about how. A repair, a stock sale, a piece the customer
+//   finished  — over, and saying NOTHING about how. A repair, a stock sale, a piece the customer
 //               collected; work that never went near a factory. Marking those 'completed' would have
 //               the board claim production that did not happen.
 //   cancelled — it is not happening.
-export const isTerminalStage = (s: OrderStage): boolean => s === 'completed' || s === 'closed' || s === 'cancelled'
+export const isTerminalStage = (s: OrderStage): boolean => s === 'completed' || s === 'finished' || s === 'cancelled'
 
 export type ApprovalType = 'factory' | 'customer'
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected'
 
 // Manual (drag / explicit set-stage) transitions allowed. Excludes ALL approval transitions. Cancel and
-// close are both allowed from any non-terminal stage.
+// finish are both allowed from any non-terminal stage.
 const MANUAL_FORWARD: Partial<Record<OrderStage, OrderStage[]>> = {
   production: ['ready'], ready: ['delivered'], delivered: ['completed'],
 }
 export function canManualTransition(from: OrderStage, to: OrderStage): boolean {
   if (from === to) return false
-  // CLOSE AND CANCEL ARE REACHABLE FROM ANYWHERE, and that is what the forward chain above cannot do.
+  // FINISH AND CANCEL ARE REACHABLE FROM ANYWHERE, and that is what the forward chain above cannot do.
   // A job at 'new' had exactly one move available — Cancel — so the only way to record a finished
   // repair was to cancel it or to march it through factory approval into production first. Both of
   // those put something false on the board.
-  if (to === 'cancelled' || to === 'closed') return !isTerminalStage(from)
+  if (to === 'cancelled' || to === 'finished') return !isTerminalStage(from)
   if (isProtectedStage(to)) return false // entering an approval stage is action-only
   return (MANUAL_FORWARD[from] ?? []).includes(to)
 }
