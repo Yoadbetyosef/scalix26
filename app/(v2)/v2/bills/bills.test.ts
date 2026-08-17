@@ -144,3 +144,83 @@ describe('the screen is gated and reachable', () => {
     expect(body.indexOf('WAITING ON YOU')).toBeLessThan(body.indexOf('APPLIED'))
   })
 })
+
+describe('reviewing one bill', () => {
+  const detail = strip(read('./[id]/page.tsx'))
+  const apply = read('./[id]/apply.tsx')
+  const match = read('./[id]/match.tsx')
+  const groups = read('./groups.ts')
+
+  it('the groups run in the order the work happens in', () => {
+    // Unmatched first because fixing those CHANGES the cost moves below them — reviewing a cost move
+    // before the denominator is settled is reviewing a figure that is about to change.
+    expect(groups).toContain("const ORDER: GroupKey[] = ['unmatched', 'moved', 'clean']")
+    for (const label of ['NEEDS A MATCH', 'COST WILL MOVE', 'MATCHED CLEANLY']) {
+      expect(groups).toContain(label)
+      expect(ref).toContain(label)
+    }
+  })
+
+  it('a SKIPPED line is not asked about again', () => {
+    // "The owner said don't" is a decision already made. Putting it back under "you still have to
+    // decide" would ask them twice.
+    expect(groups).toContain("if (line.status === 'unmatched') return 'unmatched'")
+    expect(match).toContain('choose(null, true)')
+  })
+
+  it('the biggest cost move is read first', () => {
+    expect(groups).toContain('Math.abs(b.divergence?.deltaRelative ?? 0) - Math.abs(a.divergence?.deltaRelative ?? 0)')
+  })
+
+  it('the note says the CONSEQUENCE, not the count', () => {
+    // "31 lines are unmatched" is a fact nobody can act on.
+    expect(detail).toContain('would carry all {money(charges, base)}')
+  })
+
+  it('a foreign invoice with no rate cannot be applied, and says why', () => {
+    // Every cost it wrote would be wrong by the rate.
+    expect(groups).toContain("if (input.foreignWithoutRate) return { can: false, reason: 'rate' }")
+    expect(detail).toContain('foreignWithoutRate: isForeign && !invoice.exchangeRate')
+  })
+
+  it('the slot states the RULE in the rule’s own words', () => {
+    expect(detail).toContain('{Math.round(MIN_COVERAGE * 100)}% is needed before costs can be applied.')
+    // Never a number typed onto the screen.
+    expect(detail).not.toMatch(/\b80%/)
+  })
+
+  it('the divergence 409 is treated as a question, not a failure', () => {
+    // It is the write asking to be confirmed. acknowledgeDivergence is what gets RECORDED, so a
+    // default would turn the audit trail into a lie about what anybody saw.
+    expect(apply).toContain('if (res.status === 409 && j.needsAcknowledgement) {')
+    expect(apply).toContain("body: JSON.stringify(acknowledge ? { acknowledgeDivergence: true } : {})")
+    expect(apply).toContain('I have read these — apply')
+  })
+
+  it('and an already-applied bill does not offer the same button with a different word', () => {
+    // Re-applying OVERWRITES the first apply and needs its own sentence about the earlier date.
+    expect(apply).toContain('if (alreadyApplied) {')
+    expect(apply).not.toContain('reapply: true')
+  })
+
+  it('matching a line refreshes the WHOLE screen', () => {
+    // Freight is spread across matched lines, so matching one moves every other line's share.
+    expect(match).toContain('router.refresh()')
+    expect(match).not.toMatch(/setLines\(|splice\(/)
+  })
+
+  it('the typed search and the shortlist are the SAME scorer', () => {
+    // A product that ranks first when typed and fourth when suggested is two matchers disagreeing in
+    // front of the owner.
+    expect(match).toContain('/api/invoices/lines/${lineId}?q=')
+    expect(read('../../../api/invoices/lines/[id]/route.ts')).toContain('suggestForLine((await params).id, q)')
+    expect(read('../../../../lib/invoices/store.ts')).toContain('? { id: l.id as string, sku: null, description: typed }')
+  })
+
+  it('and the picker lives in /v2 rather than linking to the old screen', () => {
+    // no-escape.test.ts fails the build for a row that leaves the preview; this is also the only
+    // action that can move a bill above the gate.
+    expect(detail).toContain('<MatchLine lineId={l.id}')
+    expect(detail).not.toContain('/landed-cost/')
+  })
+})

@@ -21,8 +21,12 @@ const fail = (reason: 'not_found' | 'forbidden') =>
     ? NextResponse.json({ error: 'You do not have permission to change supplier costs.' }, { status: 403 })
     : NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const r = await suggestForLine((await params).id)
+// `?q=` runs the SAME scorer against text the owner typed, for when the document's own description
+// was a supplier code and the shortlist could not do anything with it. Not a second search endpoint:
+// two matchers would rank the same product differently depending on how it was asked for.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const q = req.nextUrl.searchParams.get('q')
+  const r = await suggestForLine((await params).id, q)
   if (!r.ok) return fail(r.reason)
   return NextResponse.json({ suggestions: r.data })
 }

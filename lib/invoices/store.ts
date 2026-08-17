@@ -734,7 +734,15 @@ export async function createProductsFromLines(
  * person picking from a list and the ladder scoring a name are different kinds of fact and the screen
  * shows them differently.
  */
-export async function suggestForLine(lineId: string): Promise<Result<Array<{ id: string; name: string; sku: string | null }>>> {
+/**
+ * The shortlist for one line — and, with `q`, the same scorer run against text the owner typed.
+ *
+ * ONE function rather than a second search endpoint, because the ordering must agree. The shortlist
+ * the screen offers and the results it offers when that shortlist is wrong are then produced by the
+ * same matcher that produced the automatic matches, so a product cannot rank first when typed and
+ * fourth when suggested. `q` is scored exactly as if the document had said it.
+ */
+export async function suggestForLine(lineId: string, q?: string | null): Promise<Result<Array<{ id: string; name: string; sku: string | null }>>> {
   const g = await gate()
   if (g === 'not_found' || g === 'forbidden') return { ok: false, reason: g }
 
@@ -744,11 +752,13 @@ export async function suggestForLine(lineId: string): Promise<Result<Array<{ id:
   if (!line) return { ok: false, reason: 'not_found' }
 
   const l = line as Record<string, unknown>
-  const suggestions = await suggestProducts(g.tenantId, {
-    id: l.id as string,
-    sku: (l.sku as string) ?? null,
-    description: (l.description as string) ?? null,
-  })
+  const typed = (q ?? '').trim()
+  const suggestions = await suggestProducts(g.tenantId, typed
+    // Typed text replaces BOTH fields rather than being added to them: somebody typing a name after
+    // the shortlist missed is correcting the document, not adding to it, and leaving the line's own
+    // sku in the query would keep pulling the wrong candidate back up.
+    ? { id: l.id as string, sku: null, description: typed }
+    : { id: l.id as string, sku: (l.sku as string) ?? null, description: (l.description as string) ?? null })
   return { ok: true, data: suggestions }
 }
 
