@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { updateContact } from '@/lib/contacts/store'
 import { contactFieldsSchema } from '@/lib/contacts/schema'
-import { v2Allowed } from '@/lib/v2/access'
 
 // Edit one contact. Six fields, the same six create writes, from the same schema.
 //
@@ -18,10 +16,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const c = await requireActiveBusinessContext()
   if (!c) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // /v2-only today — the edit sheet is the sole caller and v1 has no contact edit at all. DELETE
-  // THIS LINE when v1 gains one; it is a rollout gate, not a permission.
-  const { data: { user } } = await (await createClient()).auth.getUser()
-  if (!v2Allowed(c.tenantId, user?.email)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // The v2-only rollout gate that stood here is GONE, as its own comment instructed: v1 has an edit
+  // form now (components/contacts/contact-edit.tsx) and there are two callers. It was never a
+  // permission — requireActiveBusinessContext above is, and it is tenant-scoped and version-agnostic.
 
   const parsed = contactFieldsSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })

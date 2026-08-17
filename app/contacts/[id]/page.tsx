@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ContactEdit } from '@/components/contacts/contact-edit'
 import { ArrowLeft, Phone, Mail, MapPin, MessageCircle, Globe, Calendar, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
@@ -59,7 +60,16 @@ export default async function ContactProfilePage({ params, searchParams }: { par
         {/* Contact details */}
         <div className="lg:col-span-1 space-y-4">
           <div className="bg-white rounded-2xl border border-hairline shadow-e1 p-5">
-            <h2 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-4">Contact Details</h2>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-xs font-semibold text-subtle uppercase tracking-wide">Contact Details</h2>
+              <ContactEdit
+                contactId={contact.id}
+                initial={{
+                  name: contact.name ?? null, email: contact.email ?? null, phone: contact.phone ?? null,
+                  address: contact.address ?? null, currency: contact.currency ?? null, notes: contact.notes ?? null,
+                }}
+              />
+            </div>
             <div className="space-y-3 text-sm">
               {ident && (
                 <div className="flex items-start gap-3">
@@ -109,12 +119,15 @@ export default async function ContactProfilePage({ params, searchParams }: { par
             </div>
           </div>
 
-          {contact.notes && (
-            <div className="bg-white rounded-2xl border border-hairline shadow-e1 p-5">
-              <h2 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-2">Notes</h2>
-              <p className="text-sm text-ink whitespace-pre-wrap">{contact.notes}</p>
-            </div>
-          )}
+          {/* The notes card used to render only when there WERE notes, so an empty one was invisible
+              as well as uneditable — the same fault as the fields above, one card out. It is always
+              here now, and says what it is when it is empty. */}
+          <div className="bg-white rounded-2xl border border-hairline shadow-e1 p-5">
+            <h2 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-2">Notes</h2>
+            {contact.notes
+              ? <p className="text-sm text-ink whitespace-pre-wrap">{contact.notes}</p>
+              : <p className="text-sm text-muted">No notes yet. Use Edit above to add some.</p>}
+          </div>
         </div>
 
         {/* Conversation history */}

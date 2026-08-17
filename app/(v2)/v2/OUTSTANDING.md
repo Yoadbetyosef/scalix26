@@ -864,3 +864,40 @@ Three things that do not exist and are each separable:
 The one thing already true: every send appends to history, so "when did they FIRST get this?" — the
 question an owner is asked when a customer says they never received it — is answerable even though
 `sent_at` has been overwritten by every reminder since.
+
+---
+
+## §38 — TG jewellers: two problems named and deliberately not fixed
+
+Both surfaced while building the four fixes she asked for. Both are real, both
+are bigger than the thing next to them, and neither is what she reported.
+
+### 87 of 217 contacts have no name
+
+Forty per cent. 83 of the 87 have an email and no phone, `channel` is `email` or
+null, and the list includes `accounting@tg-designs.com`, `tatiana@tg-designs.com`,
+`support@scalix26.com` and the platform owner's own address.
+
+They are **inbound mail correspondents auto-promoted to contacts**. The v1 edit
+form now shipped does not fix this and was never going to: she would be
+hand-naming 87 rows, most of which should not be contacts at all.
+
+**What would fix it** is a rule about which inbound addresses become contacts —
+almost certainly "not our own domains, not the platform's" as a first cut — plus
+a way to bulk-archive the ones already made. Both are decisions about her data,
+not bugs, and both should be put to her rather than guessed.
+
+### 12 of 15 orders have no `contact_id`
+
+They store `customer_name` / `customer_email` / `customer_phone` as free text on
+the order row instead. Only 3 of her 15 orders point at a contact record.
+
+The consequence that matters for tax: **there is no path from a customer record
+to a delivery province**. Every order's place of supply has to be picked by hand
+because nothing can suggest one, and a customer who always ships to Ontario is
+re-typed every time.
+
+**What would fix it** is linking orders to contacts at creation, which changes
+how an order is created — a separate design decision, and one that has to answer
+what happens to the 12 orders already carrying free text that may not match any
+contact.

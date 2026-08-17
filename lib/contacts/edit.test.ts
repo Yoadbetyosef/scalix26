@@ -166,8 +166,59 @@ describe('the sheet', () => {
     expect(strip(read('../../app/(v2)/v2/contacts/[id]/body.tsx'))).toContain('<EditContact')
   })
 
-  it('carries the /v2 gate, and says when to remove it', () => {
-    expect(route).toContain('v2Allowed(c.tenantId, user?.email)')
-    expect(route).toMatch(/DELETE\s*\/\/ THIS LINE when v1 gains one/)
+  it('no longer carries the /v2 gate — v1 has a form now', () => {
+    // The gate said of itself: "DELETE THIS LINE when v1 gains one; it is a rollout gate, not a
+    // permission." It has, so it is gone. requireActiveBusinessContext is the real gate and is
+    // tenant-scoped and version-agnostic.
+    expect(strip(route)).not.toContain('v2Allowed')
+    expect(strip(route)).not.toContain("from '@/lib/v2/access'")
+    const patch = route.slice(route.indexOf('export async function PATCH'))
+    expect(patch.indexOf('const c = await requireActiveBusinessContext()')).toBeLessThan(patch.indexOf('updateContact('))
+    expect(patch).toContain("{ error: 'Unauthorized' }, { status: 401 }")
+  })
+})
+
+describe('the v1 form', () => {
+  const form = read('../../components/contacts/contact-edit.tsx')
+  const page = read('../../app/contacts/[id]/page.tsx')
+
+  it('shows EVERY field, whether or not it has a value', () => {
+    // The detail screen renders each field conditionally, which is right for reading and is exactly
+    // why nothing looked editable: a missing field rendered nothing, so there was no empty box to
+    // click and no way to learn the field existed.
+    for (const f of ['name', 'email', 'phone', 'address', 'currency', 'notes']) {
+      expect(form, f).toContain(`key: '${f}'`)
+    }
+    expect(form).toContain('{FIELDS.map((x) => (')
+  })
+
+  it('and they are the schema’s six, not a second list', () => {
+    const declared = Object.keys(contactFieldsSchema.shape)
+    expect([...form.matchAll(/key: '(\w+)'/g)].map((m) => m[1]).sort()).toEqual(declared.sort())
+  })
+
+  it('sends only what changed, exactly as the sheet does', () => {
+    // Sending all six would mark every field decided the first time somebody fixed a typo — the
+    // whole-row freeze the per-field column exists to avoid. This form got it wrong first and the
+    // sheet's own test caught it.
+    expect(form).toContain('if (now !== was) patch[x.key] = now || null')
+    expect(form).toContain('if (!Object.keys(patch).length)')
+  })
+
+  it('a cleared field is still sent, as null', () => {
+    // "We do not have this" is a decision and must be recorded as one.
+    expect(form).toContain('patch[x.key] = now || null')
+  })
+
+  it('a 409 names WHO the number already belongs to', () => {
+    expect(form).toContain('if (res.status === 409 && j.duplicateOf) { setDupe(j.duplicateOf); return }')
+    expect(form).toContain('href={`/contacts/${dupe.id}`}')
+  })
+
+  it('the notes card is always there, empty or not', () => {
+    // It rendered only when there WERE notes, so an empty one was invisible as well as uneditable —
+    // the same fault as the fields, one card out.
+    expect(page).not.toMatch(/\{contact\.notes && \(/)
+    expect(page).toContain('No notes yet. Use Edit above to add some.')
   })
 })
