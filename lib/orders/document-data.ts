@@ -6,6 +6,7 @@ import { loadTaxRates } from '@/lib/tax/rates-store'
 import { rateFor, taxOn, taxFromSnapshot, type TaxLine } from '@/lib/tax/canada'
 import type { OrderWithDetails } from './types'
 import type { DocBranding, DocBusiness } from './documents'
+import type { OrderDocType } from './documents'
 import type { DocumentImage } from './attachments'
 
 // Everything a document needs, assembled ONCE.
@@ -29,6 +30,10 @@ export interface OrderDocumentData {
 export async function loadOrderDocument(
   tenantId: string,
   orderId: string,
+  // WHICH DOCUMENT. Images differ by type and nothing else does, so this is the only reason it is
+  // here — see the filter below. Optional, so a caller that has not been updated gets today's
+  // behaviour (the whole gallery) rather than an empty one.
+  type?: OrderDocType,
 ): Promise<OrderDocumentData | null> {
   // getOrderForTenant, NOT getOrder: this loader serves the public /e/[token] page as well as the
   // owner's, and getOrder resolves tenancy from the signed-in workspace. With no session it returned
@@ -44,6 +49,7 @@ export async function loadOrderDocument(
     documentTemplateId?: string | null; deliveryProvince?: string | null
     taxLabel?: string | null; taxRatePercent?: number | null
     pstExempt?: boolean; pstExemptionNote?: string | null
+    invoiceImageId?: string | null
   }
 
   const [ctx, images, template, rates] = await Promise.all([
@@ -56,6 +62,20 @@ export async function loadOrderDocument(
   ])
 
   const applied = applyTemplate(template, ctx.branding, ctx.business)
+
+  // ── THE INVOICE PRINTS ONE PHOTO. THE ESTIMATE KEEPS THE GALLERY. ───────────────────────────────
+  //
+  // Uploads default to public because a photo the factory needs must not sit unseen, and the same
+  // list has been feeding the customer's invoice — renders, a reference diagram, a competitor's
+  // catalogue photo, all of it. An estimate is where reference material belongs and it is unchanged.
+  //
+  // Nothing chosen prints NO image, deliberately. There is no render/final distinction anywhere in
+  // the data — it lives in the filename and in her head — so the alternative to "none" is not "the
+  // right one", it is "whichever was uploaded first".
+  const forInvoice = type === 'invoice'
+  const chosen = forInvoice
+    ? images.filter((i) => i.id === (extra.invoiceImageId ?? null))
+    : images
 
   // Place of supply: the DELIVERY destination. Falling back to the seller's own province would be the
   // single most common Canadian tax error, and it is invisible on the document — the arithmetic looks
@@ -79,7 +99,7 @@ export async function loadOrderDocument(
     order,
     branding: applied.branding,
     business: applied.business,
-    images,
+    images: chosen,
     tax,
     // Only when the assertion was actually made. A note left behind after the box was unticked is not
     // a claim, and printing it would put an exemption on a document nobody stood behind.

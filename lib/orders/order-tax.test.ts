@@ -152,3 +152,50 @@ describe('a refused stage write is no longer silent', () => {
     expect(read('../../app/orders/[id]/page.tsx')).toContain("(o.stage === 'completed' || o.stage === 'closed')")
   })
 })
+
+describe('one photo on the invoice, the gallery on the estimate', () => {
+  const panel = read('../../components/orders/attachments-panel.tsx')
+  const imgMigration = read('../../supabase/migrations/add_order_invoice_image.sql')
+
+  it('the invoice prints only the chosen image', () => {
+    expect(docData).toContain("const forInvoice = type === 'invoice'")
+    expect(docData).toContain('images.filter((i) => i.id === (extra.invoiceImageId ?? null))')
+  })
+
+  it('and the estimate is unchanged — reference material belongs there', () => {
+    expect(docData).toContain(': images')
+    // Both entry points now say which document they are.
+    expect(read('../../app/orders/[id]/document/[type]/page.tsx')).toContain('loadOrderDocument(a.tenantId, id, type)')
+    expect(read('../../app/e/[token]/page.tsx')).toContain('loadOrderDocument(share.tenantId, share.orderId, share.docType)')
+  })
+
+  it('nothing chosen prints NO image, not the first upload', () => {
+    // There is no render-vs-final distinction in the data — it lives in the filename and in her head.
+    // So the alternative to "none" is not "the right one", it is "whichever was uploaded first".
+    expect(imgMigration).toContain('Nothing chosen means the invoice prints')
+    expect(panel).toContain('it will print without one')
+  })
+
+  it('only PUBLIC images can be chosen', () => {
+    // An internal file is filtered out of the customer's document one layer down, so choosing one
+    // would store a preference that silently did nothing.
+    expect(panel).toContain("isImage(x.mimeType) && x.visibility === 'public' && (")
+  })
+
+  it('a failed write puts the old choice back', () => {
+    // Otherwise the panel claims a photo is on an invoice that it is not.
+    expect(panel).toContain('setChosen(previous)')
+  })
+
+  it('the unwired per-line column is left alone', () => {
+    // order_line_items.image_attachment_id exists and is wired to nothing. Half-wiring it would leave
+    // two columns that both look like the answer.
+    expect(imgMigration).toContain('order_line_items.image_attachment_id')
+    expect(strip(docData)).not.toContain('image_attachment_id')
+    expect(strip(panel)).not.toContain('image_attachment_id')
+  })
+
+  it('deleting the attachment un-chooses it rather than deleting the order', () => {
+    expect(imgMigration).toContain('ON DELETE SET NULL')
+  })
+})

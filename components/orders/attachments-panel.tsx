@@ -22,7 +22,21 @@ function KindIcon({ mime }: { mime: string }) {
   return <Box className={cls} />                                   // CAD / archive / anything else
 }
 
-export function AttachmentsPanel({ orderId }: { orderId: string }) {
+// ── ONE PHOTO GOES ON THE INVOICE ────────────────────────────────────────────────────────────────
+//
+// Everything public here prints on the ESTIMATE, which is right — an estimate is where a reference
+// diagram, a CAD render and three phone photos belong. The invoice is a different document with a
+// different reader, and it prints exactly what is chosen here and nothing else.
+//
+// Only PUBLIC images are offered. An internal file is filtered out of the customer's document one
+// layer down (publicDocumentImagesForTenant), so choosing one would store a preference that silently
+// did nothing — the worst of the three possible behaviours.
+//
+// Nothing chosen prints no image. There is no render-vs-final distinction anywhere in the data; it
+// lives in the filename and in her head. So the alternative to "none" is not "the right one", it is
+// "whichever was uploaded first".
+export function AttachmentsPanel({ orderId, invoiceImageId }: { orderId: string; invoiceImageId?: string | null }) {
+  const [chosen, setChosen] = useState<string | null>(invoiceImageId ?? null)
   const [items, setItems] = useState<Att[]>([])
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -34,6 +48,22 @@ export function AttachmentsPanel({ orderId }: { orderId: string }) {
   const load = useCallback(async () => {
     const r = await fetch(base); if (r.ok) setItems((await r.json()).attachments)
   }, [base])
+
+  // Optimistic, then reconciled by the refresh. A failed write puts the old choice back rather than
+  // leaving the panel claiming a photo is on an invoice that it is not.
+  const chooseForInvoice = async (id: string | null) => {
+    const previous = chosen
+    setChosen(id)
+    const r = await fetch(`/api/orders/${orderId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoiceImageId: id }),
+    })
+    if (!r.ok) {
+      setChosen(previous)
+      const j = await r.json().catch(() => ({}))
+      setErrs([j.detail || j.error || 'That photo could not be set on the invoice.'])
+    }
+  }
   useEffect(() => { let active = true; (async () => { const r = await fetch(base); if (active && r.ok) setItems((await r.json()).attachments) })(); return () => { active = false } }, [base])
 
   // Sequential rather than parallel: a 100 MB video and a stack of photos at once would otherwise
@@ -86,6 +116,15 @@ export function AttachmentsPanel({ orderId }: { orderId: string }) {
         </ul>
       )}
 
+      {/* Said once, above the list, rather than repeated on every row. It is the answer to "why is my
+          ring not on the invoice" and it is true before anything has been chosen. */}
+      {items.some((x) => isImage(x.mimeType) && x.visibility === 'public') && !chosen && (
+        <p className="mb-2 text-xs text-gray-500">
+          No photo is set for the invoice, so it will print without one. Everything shared here still
+          appears on the estimate.
+        </p>
+      )}
+
       {items.length === 0 ? (
         <p className="text-sm text-gray-400">No files yet.</p>
       ) : (
@@ -108,6 +147,21 @@ export function AttachmentsPanel({ orderId }: { orderId: string }) {
                     {x.visibility === 'public' ? 'Shared on approval' : 'Internal only'}
                   </span>
                 </div>
+                {/* The invoice photo. Offered on public images only — see the note above the component. */}
+                {isImage(x.mimeType) && x.visibility === 'public' && (
+                  <div className="mt-1">
+                    {chosen === x.id ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+                        On the invoice
+                        <button onClick={() => void chooseForInvoice(null)} disabled={busy} className="font-normal text-gray-500 underline">remove</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => void chooseForInvoice(x.id)} disabled={busy} className="text-xs text-gray-600 underline">
+                        Use on the invoice
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="mt-1 flex gap-2">
                   <button onClick={() => setVisibility(x.id, x.visibility === 'public' ? 'internal' : 'public')} disabled={busy} className="text-xs text-gray-600 underline">{x.visibility === 'public' ? 'Make internal' : 'Share on approval'}</button>
                   <button onClick={() => remove(x.id, x.fileName)} disabled={busy} className="text-xs text-red-600 underline">Delete</button>

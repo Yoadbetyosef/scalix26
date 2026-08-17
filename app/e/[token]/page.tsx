@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   try {
     const share = await resolveShare((await params).token)
     if (!share) return { title: 'Document', robots: { index: false, follow: false } }
-    const data = await loadOrderDocument(share.tenantId, share.orderId)
+    const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType)
     const label = ORDER_DOC_META[share.docType]?.title ?? 'Document'
     // The tenant's name, never ours — see lib/documents/routes.ts.
     return {
@@ -41,7 +41,7 @@ export default async function SharedDocumentPage({ params }: { params: Promise<{
   // which it was is free information for somebody guessing tokens.
   if (!share) notFound()
 
-  const data = await loadOrderDocument(share.tenantId, share.orderId)
+  const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType)
   if (!data) notFound()
 
   return (

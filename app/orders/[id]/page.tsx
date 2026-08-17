@@ -132,7 +132,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Attachments</h3>
-        <AttachmentsPanel orderId={o.id} />
+        <AttachmentsPanel orderId={o.id} invoiceImageId={o.invoiceImageId} />
       </div>
 
       <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
