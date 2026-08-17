@@ -784,7 +784,16 @@
 .v2 .v2-hact[data-tone="primary"] { background: var(--v2-ink); border-color: var(--v2-ink); color: #fff; }
 .v2 .v2-hact[data-tone="primary"]:hover { background: #000; }
 .v2 .v2-hact:active { transform: scale(0.97); }
-.v2 .v2-hact svg { flex: none; }
+/* THE GLYPH IS SIZED HERE, not by whoever passes one in.
+   `flex: none` alone was the whole rule, and it says nothing about size. An <svg> with a viewBox and
+   no width/height has NO intrinsic width, so it contributes ZERO to the button's max-content size —
+   the box is measured as if the glyph were not there, and the glyph then paints at whatever the cross
+   axis resolves to. Measured: the plus rendered 32.8px wide inside a 62.8px button whose content
+   wanted 80px, putting 31.8px of the word "New" outside the pill. `flex: none` does not protect
+   against that: the base size it refuses to shrink from was already short.
+   Sizing it in the rule rather than on the element means the next header glyph cannot repeat it —
+   which is how .v2-iv-btn svg has always worked, three hundred lines further down. */
+.v2 .v2-hact svg { flex: none; width: 15px; height: 15px; }
 .v2 .v2-bk {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 10px; color: var(--v2-ink-55);

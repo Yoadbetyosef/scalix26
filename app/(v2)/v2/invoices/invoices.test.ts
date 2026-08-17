@@ -346,12 +346,12 @@ describe('a customer can be reached', () => {
 describe('the header fits', () => {
   const css = read('../v2-tokens.css')
 
-  it('the title yields and the buttons do not', () => {
-    // Both were `0 1 auto`, so the line shrank whichever it reached first — and .v2-hacts' children
-    // are `flex: none`, so a shrunk container CLIPPED them. Two actions left "New" as a plus and an N.
-    expect(css).toMatch(/\.v2 \.v2-phd h2 \{[^}]*min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis/)
-    expect(css).toContain('.v2 .v2-hacts { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }')
-  })
+  // WHAT USED TO BE ASSERTED HERE: the exact text of the flex declarations on `.v2-phd h2` and
+  // `.v2-hacts`. It passed while the New button showed a plus and half an "N", because the flex
+  // values were never the mechanism — an unsized <svg> contributes 0 to max-content sizing, so the
+  // button's box was measured as if the glyph were not in it. No string match on either file could
+  // have seen that. It is asserted as a MEASUREMENT now, in ../header-glyph.test.ts: scrollWidth ===
+  // clientWidth, in a real layout engine, with both faults reproduced when their rules are removed.
 
   it('and sits in the same column as the body it heads', () => {
     expect(css).toContain('.v2 .v2-phd[data-inner] { padding-left: 0; padding-right: 0; }')
