@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { looksLikeName } from '@/lib/utils'
 import { CONTACT_FIELDS, contactFieldsSchema } from './schema'
 
@@ -40,16 +40,58 @@ describe('a name is a name, at every door', () => {
   it('all three automated writers go through the one helper', () => {
     // The filter used to be at ONE of three call sites, which is why two names it rejects are in the
     // table. A rule applied at one of three places is a coincidence, not a rule.
-    for (const src of [voice, book, stl]) {
-      expect(src).toContain('writeCapturedName')
-      expect(src).not.toMatch(/update\(\{ name \}\)/)
+    //
+    // The BOOK route reaches it one layer down: it delegates the whole contact/appointment write to
+    // createAppointment(), which is where the guard moved when the meeting-kind work refactored it.
+    // Asserting the route's own text would pin a LOCATION rather than the rule, and the rule is that
+    // no automated writer touches contacts.name without going through the helper.
+    const create = read('../appointments/create.ts')
+    for (const [label, src] of [['voice', voice], ['speed-to-lead', stl], ['createAppointment', create]] as const) {
+      expect(src, label).toContain('writeCapturedName')
+      expect(src, label).not.toMatch(/update\(\{ name \}\)/)
     }
+    expect(book).toContain('createAppointment(')
+    expect(book).not.toMatch(/update\(\{ name \}\)/)
+  })
+
+  it('and no unguarded write to contacts.name survives anywhere', () => {
+    // The audit the assertion above cannot do: every insert/update against contacts, across the tree.
+    // A new door that sets `name` without the helper is the failure this whole thing exists to stop.
+    const roots = ['../../app', '../../lib']
+    const files: string[] = []
+    const walk = (d: string) => {
+      for (const e of readdirSync(new URL(d + '/', import.meta.url), { withFileTypes: true })) {
+        const p = `${d}/${e.name}`
+        if (e.isDirectory()) walk(p)
+        else if (/\.tsx?$/.test(e.name) && !e.name.includes('.test.')) files.push(p)
+      }
+    }
+    roots.forEach(walk)
+    const offenders = files.filter((f) => {
+      const src = read(f)
+      if (!/from\('contacts'\)[\s\S]{0,80}(insert|update)/.test(src)) return false
+      // A write that never mentions `name` cannot set one.
+      const writes = [...src.matchAll(/from\('contacts'\)\s*\.\s*(insert|update)\(([\s\S]{0,300}?)\)/g)]
+      return writes.some((m) => /\bname\b/.test(m[2]) && !/looksLikeCapturedName|writeCapturedName/.test(m[2]))
+    })
+    // Two exemptions, both by construction rather than by convenience:
+    //   lib/contacts/store.ts   the OWNER's door — createContact and the importer. A name a person
+    //                           typed is not a captured name and does not go through the AI guard.
+    //   lib/contacts/ai-name.ts the helper ITSELF. It is the thing doing the guarding.
+    // And a file that filtered the variable before the insert (voice/route.ts does, at its top) is
+    // guarded even though the guard is not on the insert line — so a file mentioning neither helper
+    // is what this looks for.
+    const exempt = ['lib/contacts/store.ts', 'lib/contacts/ai-name.ts']
+    const real = offenders.filter((f) => !exempt.some((e) => f.includes(e)))
+      .filter((f) => !/looksLikeCapturedName|writeCapturedName/.test(read(f)))
+    expect(real).toEqual([])
   })
 
   it('and the INSERT doors apply the same test', () => {
     // An update guard cannot help a path that creates the row. Two of the four got in that way.
-    expect(book).toContain('looksLikeCapturedName(name) ? name : null')
     expect(stl).toContain('looksLikeCapturedName(name) ? name : null')
+    // The book route creates its contact inside createAppointment, so the INSERT guard lives there.
+    expect(read('../appointments/create.ts')).toContain('looksLikeCapturedName(input.name) ? input.name : null')
   })
 
   it('the helper guards on the decision as well as on the gap', () => {
