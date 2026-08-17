@@ -110,3 +110,45 @@ describe('the snapshot cannot be half-written', () => {
     expect(sql).toContain("'gst_only', 'combined'")
   })
 })
+
+describe('the orders list stopped calling a link a status', () => {
+  const listPage = read('../../app/orders/page.tsx')
+
+  it('the fake column is gone entirely', () => {
+    // It was an unlabelled 7th cell holding a hardcoded blue "Open" — the open-this-order affordance,
+    // immediately right of the real Stage column, reading as a status that never changed because it
+    // was a string literal. Every tenant saw it.
+    expect(listPage).not.toMatch(/text-blue-600">Open</)
+    expect(listPage).not.toContain('0.8fr_1fr_auto')
+    expect(strip(listPage)).not.toMatch(/'Requested', ''/)
+  })
+
+  it('and the row is still the link', () => {
+    expect(listPage).toContain('<Link key={o.id} href={`/orders/${o.id}`}')
+  })
+
+  it('the stage chip is the status, and a finished job reads quieter', () => {
+    expect(listPage).toContain('isTerminalStage(o.stage)')
+    expect(listPage).toContain('{STAGE_LABELS[o.stage]}')
+  })
+})
+
+describe('a refused stage write is no longer silent', () => {
+  it('the update error is read, not discarded', () => {
+    // It returned ok on a refused update: the screen refreshed and the stage was simply unchanged.
+    // 'closed' makes it reachable, because the DATABASE has to be told about that stage.
+    expect(store).toContain("const { error } = await sb.from('orders').update({ stage: to")
+    expect(store).toContain("error.code === '23514'")
+    expect(store).toContain('run add_order_closed_stage.sql')
+  })
+
+  it('and the board gives terminal stages no column', () => {
+    // A column that only ever accumulates is a list, not a stage of work.
+    expect(read('../../app/orders/board/page.tsx')).toContain("s !== 'cancelled' && s !== 'closed'")
+  })
+
+  it('closing does not forbid invoicing later', () => {
+    // invoiced_at is a separate timestamp and the two stay independent — see finish.ts.
+    expect(read('../../app/orders/[id]/page.tsx')).toContain("(o.stage === 'completed' || o.stage === 'closed')")
+  })
+})
