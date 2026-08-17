@@ -139,3 +139,132 @@ describe('tokenizing what a caller says', () => {
     expect(tokenize('do you have the Kwikset 660')).toEqual(['kwikset', '660'])
   })
 })
+
+// ── Drafts: bought, on their way, deliberately not priced ───────────────────────────────────────────
+//
+// A draft must never contribute a price and must never be silently dropped. The mixed case is the one
+// that would have shipped broken: the range is built from priced members only, so without an explicit
+// mention a caller would hear a range that quietly excluded a product the business has actually bought.
+
+const draft = (id: string, title: string, extra: Partial<Groupable> = {}): Groupable => ({
+  id, title, price: null, currency: 'USD', sku: null, availability: null,
+  productUrl: null, imageUrl: null, source: 'inventory', notPriced: true, ...extra,
+})
+const priced = (id: string, title: string, price: number, extra: Partial<Groupable> = {}): Groupable => ({
+  id, title, price, currency: 'USD', sku: null, availability: null,
+  productUrl: null, imageUrl: null, source: 'inventory', ...extra,
+})
+
+describe('a group where every member is priced (unchanged)', () => {
+  it('states a range and counts no drafts', () => {
+    const [g] = groupProducts([
+      priced('1', 'Albero Side Table Oak', 439),
+      priced('2', 'Albero Side Table Walnut', 1769),
+    ])
+    expect(g.notPricedCount).toBe(0)
+    expect(g.priceMin).toBe(439)
+    expect(g.priceMax).toBe(1769)
+    expect(speakableAnswer(g)).not.toMatch(/on (its|their) way/)
+  })
+})
+
+describe('a group where every member is a draft', () => {
+  const groupOf = (...rows: Groupable[]) => groupProducts(rows)[0]
+
+  it('has no range at all', () => {
+    const g = groupOf(draft('1', 'RAJA Sofa'))
+    expect(g.priceMin).toBeNull()
+    expect(g.priceMax).toBeNull()
+    expect(g.notPricedCount).toBe(1)
+  })
+
+  it('is answered entirely by the draft sentence — no price, no availability claim', () => {
+    const say = speakableAnswer(groupOf(draft('1', 'RAJA Sofa')))
+    expect(say).toMatch(/on its way to us/)
+    expect(say).toMatch(/isn't priced yet/)
+    // "we have it" is the thing that must never be said about goods still on a ship.
+    expect(say).not.toMatch(/we have|in stock/i)
+    expect(say).not.toMatch(/\$/)
+  })
+
+  it('offers a transfer only when the agent can actually transfer', () => {
+    const g = groupOf(draft('1', 'RAJA Sofa'))
+    expect(speakableAnswer(g, { canTransfer: true })).toMatch(/put you through/)
+    expect(speakableAnswer(g, { canTransfer: false })).toMatch(/call you back/)
+    // Default is the callback: promising a transfer the agent has no tool for is the worse failure.
+    expect(speakableAnswer(g)).toMatch(/call you back/)
+  })
+
+  it('speaks of several drafts in the plural', () => {
+    // Four-token titles sharing three: clusterByStem needs the stem to be at least 70% of the shorter
+    // title, so "RAJA Sofa Oak"/"RAJA Sofa Walnut" (3 tokens sharing 2) stay separate — correctly.
+    const say = speakableAnswer(groupOf(draft('1', 'RAJA Corner Sofa Oak'), draft('2', 'RAJA Corner Sofa Walnut')))
+    expect(say).toMatch(/versions of the/)
+    expect(say).toMatch(/on their way to us/)
+    expect(say).not.toMatch(/\$/)
+  })
+})
+
+describe('a mixed group — the case that would have shipped broken', () => {
+  const mixed = () => groupProducts([
+    priced('1', 'Albero Side Table Oak', 439),
+    priced('2', 'Albero Side Table Brass', 1769),
+    draft('3', 'Albero Side Table Walnut'),
+  ])[0]
+
+  it('computes the range over priced members ONLY', () => {
+    const g = mixed()
+    expect(g.priceMin).toBe(439)
+    expect(g.priceMax).toBe(1769)
+    expect(g.count).toBe(3)
+    expect(g.notPricedCount).toBe(1)
+  })
+
+  it('never lets the draft vanish from the answer', () => {
+    // The whole point. Dropping it silently is what the filter would do on its own, and the caller
+    // would hear a range that excluded a product without being told.
+    const say = speakableAnswer(mixed())
+    expect(say).toMatch(/439/)
+    expect(say).toMatch(/1,769/)
+    expect(say).toMatch(/on its way to us/)
+    expect(say).toMatch(/isn't priced yet/)
+  })
+
+  it('does not attach a price to the draft member', () => {
+    const say = speakableAnswer(mixed())
+    // The draft clause must sit AFTER the range and carry no figure of its own.
+    const tail = say.slice(say.indexOf('on its way to us'))
+    expect(tail).not.toMatch(/\$/)
+  })
+
+  it('keeps the drafts out of the axis, so a price question is asked only about priced options', () => {
+    const g = mixed()
+    if (g.axis) expect(g.axisValues).not.toContain('walnut')
+  })
+})
+
+// Caught by a real lookup against 126 drafts, not by the tests above: the sentence read
+// "2 versions ... are on their way to us — it isn't priced yet". Plurality was being patched with a
+// string replace after the fact instead of decided once.
+describe('the draft sentence agrees with itself', () => {
+  const two = () => groupProducts([draft('1', 'RAJA Corner Stool Wide'), draft('2', 'RAJA Corner Stool Narrow')])[0]
+
+  it('keeps every verb and pronoun plural for several drafts', () => {
+    const say = speakableAnswer(two())
+    expect(say).toMatch(/are on their way/)
+    expect(say).toMatch(/they aren't priced yet/)
+    expect(say).not.toMatch(/\bit isn't\b|\bits way\b/)
+  })
+
+  it('keeps every verb and pronoun singular for one', () => {
+    const say = speakableAnswer(groupProducts([draft('1', 'RAJA Sofa')])[0])
+    expect(say).toMatch(/is on its way/)
+    expect(say).toMatch(/it isn't priced yet/)
+    expect(say).not.toMatch(/they aren't|their way/)
+  })
+
+  it('agrees in the transfer wording too', () => {
+    expect(speakableAnswer(two(), { canTransfer: true })).toMatch(/price them\./)
+    expect(speakableAnswer(two(), { canTransfer: false })).toMatch(/call you back with the figures\./)
+  })
+})

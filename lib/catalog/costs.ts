@@ -2,6 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { requireCatalogTenant } from './session'
 import { enabledModulesOf } from '@/lib/modules'
+import { margin } from './cost-math'
+import { costProvenance, type CostProvenance } from './cost-provenance'
 
 // What a product costs the business, and the margin that follows from it.
 //
@@ -18,6 +20,8 @@ import { enabledModulesOf } from '@/lib/modules'
 
 export interface CostSettings {
   markupPercent: number
+  /** Today's default for NEW cost rows. Existing rows carry their own snapshot; see cost-math.ts. */
+  commissionPercent: number
   baseCurrency: string
   secondaryCurrency: string | null
   // Businesses that import are quoted one figure for shipping and duties and pay one figure, so the
@@ -37,6 +41,8 @@ export interface ProductCost {
   shippingCost: number
   tariffCost: number
   markupPercent: number
+  /** The supplier commission snapshotted on THIS row; see cost-math.ts for why it is goods-only. */
+  commissionPercent: number
   computedCost: number | null   // null when nothing has been recorded — never 0
   updatedAt: string | null
 }
@@ -46,6 +52,12 @@ export interface ProductCostView {
   price: number | null          // the selling price, for the margin figure
   cost: ProductCost | null      // null when no cost has been recorded yet
   marginPercent: number | null  // null when either side is unknown
+  /**
+   * Which supplier invoice put this number here, and what it replaced.
+   *
+   * Null for a hand-typed cost, which is most of them. Reading nothing new — see cost-provenance.ts.
+   */
+  provenance: CostProvenance | null
 }
 
 // Which thing a cost row describes. Both live in one table, so the formula, the RLS policy and the
@@ -69,23 +81,23 @@ const row = (r: Record<string, unknown>): ProductCost => ({
   shippingCost: Number(r.shipping_cost ?? 0),
   tariffCost: Number(r.tariff_cost ?? 0),
   markupPercent: Number(r.markup_percent ?? 0),
+  commissionPercent: Number(r.commission_percent ?? 0),
   computedCost: r.computed_cost === null || r.computed_cost === undefined ? null : Number(r.computed_cost),
   updatedAt: (r.updated_at as string) ?? null,
 })
 
-// Margin against the selling price: what proportion of the price is not cost. Undefined without both
-// numbers, and undefined at a zero price rather than dividing by it.
-const margin = (price: number | null, cost: number | null): number | null =>
-  price === null || cost === null || price <= 0 ? null : ((price - cost) / price) * 100
+// Margin and the landed-cost formula now live in ./cost-math, isomorphic, so the client card and the
+// invoice approval preview compute exactly what this computes and what the generated column stores.
 
 // The tenant's own defaults. Nothing here is assumed: a tenant with no secondary currency gets null and
 // never sees that field.
 export async function getCostSettings(tenantId: string): Promise<CostSettings> {
   const { data } = await createAdminClient()
-    .from('tenants').select('cost_markup_percent, cost_base_currency, cost_secondary_currency, enabled_modules')
+    .from('tenants').select('cost_markup_percent, cost_commission_percent, cost_base_currency, cost_secondary_currency, enabled_modules')
     .eq('id', tenantId).maybeSingle()
   return {
     markupPercent: Number(data?.cost_markup_percent ?? 10),
+    commissionPercent: Number(data?.cost_commission_percent ?? 0),
     baseCurrency: (data?.cost_base_currency as string) || 'USD',
     secondaryCurrency: (data?.cost_secondary_currency as string) || null,
     combineShippingAndDuties: enabledModulesOf(data ?? {}).includes('landed_cost'),
@@ -177,6 +189,14 @@ export async function getCost(target: CostTarget): Promise<CostResult<ProductCos
   const sb = await createClient()
   const { data } = await sb.from('product_costs').select('*').eq(targetColumn(target), target.id).maybeSingle()
   const cost = data ? row(data as Record<string, unknown>) : null
+
+  // Attribution only for a product, and only when there IS a cost to attribute. A variant's costs are
+  // never written by a shipment, and a product with no cost row has nothing to explain — skipping both
+  // keeps this off the common path rather than querying to learn there is nothing to say.
+  const provenance = cost && target.kind === 'product'
+    ? await costProvenance(a.tenantId, target.id)
+    : null
+
   return {
     ok: true,
     data: {
@@ -184,6 +204,7 @@ export async function getCost(target: CostTarget): Promise<CostResult<ProductCos
       price,
       cost,
       marginPercent: margin(price, cost?.computedCost ?? null),
+      provenance,
     },
   }
 }
@@ -201,10 +222,16 @@ export async function saveCost(target: CostTarget, input: CostInput): Promise<Co
 
   const col = targetColumn(target)
   const sb = await createClient()
-  const { data: existing } = await sb.from('product_costs').select('id, markup_percent').eq(col, target.id).maybeSingle()
+  const { data: existing } = await sb.from('product_costs').select('id, markup_percent, commission_percent').eq(col, target.id).maybeSingle()
   // Keep the markup already snapshotted on an existing row; only a brand-new row takes today's default.
   // Identical for a variant — the snapshot rule doesn't change with what the row describes.
-  const markup = existing ? Number(existing.markup_percent) : (await getCostSettings(a.tenantId)).markupPercent
+  //
+  // Commission follows the same rule HERE, on a hand-edited cost, because nothing about typing a new
+  // purchase price says the supplier's term changed. The one place a snapshot is deliberately
+  // overwritten is an apply that carries a shipment-level commission — see add_cost_commission.sql.
+  const defaults = existing ? null : await getCostSettings(a.tenantId)
+  const markup = existing ? Number(existing.markup_percent) : defaults!.markupPercent
+  const commission = existing ? Number(existing.commission_percent ?? 0) : defaults!.commissionPercent
 
   const fields = {
     cost_primary: input.costPrimary ?? null,
@@ -212,6 +239,7 @@ export async function saveCost(target: CostTarget, input: CostInput): Promise<Co
     shipping_cost: input.shippingCost ?? 0,
     tariff_cost: input.tariffCost ?? 0,
     markup_percent: markup,
+    commission_percent: commission,
     updated_at: new Date().toISOString(),
     updated_by: a.actorUserId,
   }

@@ -21,10 +21,15 @@ export const MODULES = [
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
   { key: 'orders', label: 'Orders', description: 'Orders & external factory/customer approvals' },
   { key: 'studio', label: 'Design Studio', description: 'Lean product catalog with variants, QR pages & one-tap production/quotes/invoices' },
-  // For businesses that import: shipping and duties are one number they are quoted and one number
-  // they pay, so the cost card asks for them once instead of asking the owner to add them up. The
-  // stored columns stay separate — tariff is exactly what gets broken back out for customs paperwork.
-  { key: 'landed_cost', label: 'Landed cost', description: 'Shipping & duties captured as one figure on product costs' },
+  // For businesses that import. Two things now, and turning this on means MORE than it did when it
+  // only meant the first:
+  //
+  //   1. The cost card asks for shipping and duties once, because that is one number they are quoted
+  //      and one number they pay. The stored columns stay separate — tariff is exactly what gets
+  //      broken back out for customs paperwork.
+  //   2. A supplier invoice can be uploaded, read, matched to products, and its freight and duty
+  //      spread across them — the same act as (1), done once per shipment instead of per product.
+  { key: 'landed_cost', label: 'Landed cost', description: 'Supplier invoices read and spread across products; shipping & duties as one figure on product costs' },
 ] as const
 
 export type ModuleKey = (typeof MODULES)[number]['key']
@@ -81,6 +86,7 @@ const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/test-ai', module: 'ai_voice' },
   { prefix: '/inventory', module: 'inventory' },
   { prefix: '/catalog', module: 'inventory' },
+  { prefix: '/landed-cost', module: 'landed_cost' },
   { prefix: '/studio', module: 'studio' },
   { prefix: '/pipeline', module: 'pipeline' },
   { prefix: '/estimates', module: 'estimates' },

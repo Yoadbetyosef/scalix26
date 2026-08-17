@@ -1,0 +1,99 @@
+-- ============================================================================
+-- Catalog retrieval — Phase 3: per-stage timings, so latency stops being a guess.
+--
+-- ── WHY THIS EXISTS, AFTER BEING DEFERRED ALL DAY ───────────────────────────────────────────────────
+--
+-- catalog-worker/OUTSTANDING.md has said since the retrieval work shipped: "Next step is measurement,
+-- not tuning. Until that exists, anything else is guessing." Two commits were made against bad
+-- measurements before that note was written, and every latency conversation since has stalled on the
+-- same missing data.
+--
+-- Raising the budget to 2000ms answered the first question — nothing hangs; 60/60 calls completed, and
+-- a rung costs roughly 90–240ms. It did not answer either of the two that matter:
+--
+--   1. WHERE the ~150ms per rung goes. The database does ~1ms of work (EXPLAIN: 0.817ms execution on
+--      a clean table). Everything else is somewhere between this process and Postgres, unattributed.
+--
+--   2. WHY the SAME query varies. `raja` ran 95, 126, 137ms in one pass and timed out at 250ms in
+--      another. Same code, same row count, same tenant. That variance is what makes any ceiling
+--      arbitrary: 250ms was neither right nor wrong, it sat inside the noise.
+--
+-- ── WHY A SPREAD AND NOT AN AVERAGE ─────────────────────────────────────────────────────────────────
+--
+-- A mean would have hidden the entire problem. A stage averaging 120ms that occasionally takes 250 is
+-- indistinguishable, by its average, from one that reliably takes 120 — and only the first one causes
+-- the timeouts a caller actually hears. So the timings are stored PER CALL rather than aggregated, and
+-- the queries below read percentiles.
+--
+-- Additive, idempotent. Safe to run more than once.
+-- ============================================================================
+
+-- Milliseconds per stage, one object per lookup. jsonb rather than columns because the stage list is
+-- not settled — this is a diagnostic instrument and the shape will change as it teaches us things.
+-- Nothing reads it in the request path.
+--
+-- Shape:
+--   {
+--     "tenant":    12,          -- resolving the tenant from the lead token (route, before retrieval)
+--     "agent":      9,          -- reading forward_to_phone, added with the draft handoff
+--     "website":  [131, 118],   -- ONE ENTRY PER RUNG of the ladder, in order
+--     "inventory":[128, 121],
+--     "group":      2,          -- clustering + the spoken sentence
+--     "total":    266
+--   }
+--
+-- The arrays are the point: two entries means the ladder dropped a token, and comparing the entries
+-- shows whether the second rung costs the same as the first (a fixed round-trip cost) or less (a
+-- cheaper query). Those imply different fixes.
+ALTER TABLE catalog_retrieval_log ADD COLUMN IF NOT EXISTS stages jsonb;
+
+COMMENT ON COLUMN catalog_retrieval_log.stages IS
+  'Per-stage milliseconds for one lookup. Diagnostic only — never read on the request path. Arrays hold one entry per ladder rung. Stored per call rather than aggregated because the problem being chased is VARIANCE, and an average hides it: a stage that usually takes 120ms and sometimes 250 is what produces the timeouts a caller hears, and its mean looks healthy.';
+
+-- ── Reading it ──────────────────────────────────────────────────────────────────────────────────────
+--
+-- The spread per stage. This is the query the whole migration is for — if one stage's p95 is far above
+-- its p50, that stage is the variance, and the ceiling is arbitrary because of it:
+--
+--   SELECT
+--     count(*) AS calls,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->>'tenant')::int)  AS tenant_p50,
+--     percentile_disc(0.95) WITHIN GROUP (ORDER BY (stages->>'tenant')::int) AS tenant_p95,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->>'agent')::int)   AS agent_p50,
+--     percentile_disc(0.95) WITHIN GROUP (ORDER BY (stages->>'agent')::int)  AS agent_p95,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->'website'->>0)::int)   AS web_rung1_p50,
+--     percentile_disc(0.95) WITHIN GROUP (ORDER BY (stages->'website'->>0)::int)  AS web_rung1_p95,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->'inventory'->>0)::int) AS inv_rung1_p50,
+--     percentile_disc(0.95) WITHIN GROUP (ORDER BY (stages->'inventory'->>0)::int) AS inv_rung1_p95,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->>'group')::int)   AS group_p50,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->>'total')::int)   AS total_p50,
+--     percentile_disc(0.95) WITHIN GROUP (ORDER BY (stages->>'total')::int)  AS total_p95
+--   FROM catalog_retrieval_log
+--   WHERE stages IS NOT NULL AND created_at > now() - interval '1 day';
+--
+-- What the two stated questions look like as answers:
+--
+--   Q1 — where the ~150ms goes. Sum the p50s. If tenant + agent + rung1 + group is well under `total`,
+--        the missing time is BETWEEN the stages: process start, connection setup, or serialisation —
+--        none of which more indexes will fix.
+--
+--   Q2 — the variance. Compare p95 to p50 stage by stage. One stage with a wide spread and the rest
+--        tight names the culprit. All stages equally wide points at something shared: cold starts,
+--        connection pooling, or the network to Postgres — and that is a deployment problem, not a
+--        query problem.
+--
+-- Second rung vs first, which decides whether parallelising the ladder is worth it:
+--
+--   SELECT
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->'inventory'->>0)::int) AS rung1_p50,
+--     percentile_disc(0.5) WITHIN GROUP (ORDER BY (stages->'inventory'->>1)::int) AS rung2_p50,
+--     count(*) AS two_rung_calls
+--   FROM catalog_retrieval_log
+--   WHERE jsonb_array_length(stages->'inventory') > 1
+--     AND created_at > now() - interval '7 days';
+--
+-- If rung2 ≈ rung1, the cost is a fixed round trip and running the rungs concurrently roughly halves
+-- wall clock. If rung2 is much cheaper, the cost is in the query and parallelising buys little.
+
+-- ── Reverse (down) ──────────────────────────────────────────────────────────────────────────────────
+-- ALTER TABLE catalog_retrieval_log DROP COLUMN IF EXISTS stages;

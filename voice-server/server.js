@@ -55,9 +55,41 @@ wss.on('connection', (twilioWs) => {
     headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
   });
 
-  function sendSettings() {
+  // Product names a general speech model has never heard, fetched once at call setup.
+  //
+  // THIS IS THE REPAIR FOR THE CONSTRAINT THAT BOUND EVERYTHING ELSE. A caller asked for a "RAJA
+  // sofa"; the tool received "Vaja soda", "Rosa raja", "Roger Solphine". The same caller spelled it
+  // R-A-J-A and the agent found it instantly and answered perfectly. Retrieval was never the problem.
+  //
+  // Best-effort on purpose: a call must never fail because a word list did not load. No keyterms means
+  // exactly the behaviour we had before this existed.
+  async function fetchKeyterms() {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl || !leadToken) return [];
+    try {
+      const c = new AbortController();
+      // Hard ceiling. This runs before the caller has spoken, but a hung fetch here delays the
+      // greeting, and a late greeting is worse than an unboosted name.
+      const t = setTimeout(() => c.abort(), 1500);
+      const r = await fetch(`${appUrl}/api/catalog/keyterms?lead_token=${encodeURIComponent(leadToken)}`, { signal: c.signal })
+        .finally(() => clearTimeout(t));
+      if (!r.ok) return [];
+      const d = await r.json();
+      console.log('[keyterms]', d.state, `${(d.keyterms || []).length} terms`,
+        `coverage=${d.coverage !== undefined ? Math.round(d.coverage * 100) + '%' : '?'}`,
+        d.dropped ? `dropped=${d.dropped}` : '');
+      return Array.isArray(d.keyterms) ? d.keyterms : [];
+    } catch (e) {
+      console.log('[keyterms] skipped:', e && e.message);
+      return [];
+    }
+  }
+
+  async function sendSettings() {
     if (settingsSent || !dgOpen || !startReceived) return;
     settingsSent = true;
+
+    const keyterms = await fetchKeyterms();
 
     // STT: Deepgram Flux v2 (flux-general-multi) — faster, interruption-aware
     // turn-taking. Auto-detects language (keeps English + Spanish), so agent.language
@@ -177,7 +209,14 @@ wss.on('connection', (twilioWs) => {
         output: { encoding: 'mulaw', sample_rate: 8000, container: 'none' },
       },
       agent: {
-        listen: { provider: { type: 'deepgram', model: 'flux-general-multi', version: 'v2', eot_threshold: EOT_THRESHOLD } },
+        listen: {
+          provider: {
+            type: 'deepgram', model: 'flux-general-multi', version: 'v2', eot_threshold: EOT_THRESHOLD,
+            // Plain strings, no weights — that is the whole API. Omitted entirely when empty rather
+            // than sent as [], because an empty array is a claim about the settings and absence is not.
+            ...(keyterms.length ? { keyterms } : {}),
+          },
+        },
         think: {
           provider: { type: 'anthropic', model: 'claude-haiku-4-5', temperature: 0.7 },
           // Bring-your-own Anthropic key via a custom endpoint. Deepgram proxies to
@@ -198,6 +237,13 @@ wss.on('connection', (twilioWs) => {
         greeting,
       },
     };
+    // The socket can close while the keyterm fetch is in flight — a caller hanging up during the
+    // greeting is ordinary. Sending on a closed socket throws, and this runs detached, so the throw
+    // would surface as an unhandled rejection rather than anything useful.
+    if (dgWs.readyState !== WebSocket.OPEN) {
+      console.log('[settings] socket closed before settings could be sent — call ended early');
+      return;
+    }
     dgWs.send(JSON.stringify(settings));
     console.log('[deepgram] settings sent (prompt + greeting)');
   }
@@ -205,7 +251,7 @@ wss.on('connection', (twilioWs) => {
   dgWs.on('open', () => {
     console.log('[deepgram] connected');
     dgOpen = true;
-    sendSettings();
+    void sendSettings().catch((e) => console.log('[settings] failed:', e && e.message));
   });
 
   dgWs.on('message', async (data, isBinary) => {
@@ -398,7 +444,7 @@ wss.on('connection', (twilioWs) => {
       if (p.capabilities !== undefined) capabilities = p.capabilities;
       console.log('[start]', streamSid);
       startReceived = true;
-      sendSettings();
+      void sendSettings().catch((e) => console.log('[settings] failed:', e && e.message));
     }
 
     if (msg.event === 'media') {

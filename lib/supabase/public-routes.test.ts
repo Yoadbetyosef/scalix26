@@ -6,8 +6,14 @@ import { PUBLIC_ROUTES } from './middleware'
 //
 // ── WHY THIS TEST EXISTS ────────────────────────────────────────────────────────────────────────────
 //
-// Routes the voice agent calls have shipped missing from PUBLIC_ROUTES more than once — most recently
-// /api/stripe/connect/payment-link, which this test found and which had never worked on a single call.
+// THREE routes the voice agent calls have shipped missing from PUBLIC_ROUTES, and the count is the
+// argument for this file existing:
+//
+//   /api/catalog/lookup                  — shipped 307ing, found on a call
+//   /api/catalog/keyterms                — the same fault two days later
+//   /api/stripe/connect/payment-link     — found BY this test, on two branches independently, after
+//                                          it had never once worked on a real call
+//
 // The failure is INVISIBLE every time:
 //
 //   middleware 307s to /auth/login  →  voice-server receives an HTML login page
@@ -22,6 +28,11 @@ import { PUBLIC_ROUTES } from './middleware'
 // So this test reads the URLs out of voice-server's SOURCE rather than from a list someone maintains.
 // A hand-kept list of "routes voice-server calls" would drift the same way PUBLIC_ROUTES did — the
 // failure mode is forgetting, and a second thing to remember does not fix forgetting.
+//
+// This file was written TWICE, on two branches, within days of each other, neither author knowing the
+// other had done it. Both arrived at the same design and both found the payment-link route. That is
+// not a coincidence worth deleting: it is the strongest evidence available that the failure mode is
+// real and that reading voice-server's source is the obvious answer to it.
 
 const SERVER = readFileSync(new URL('../../voice-server/server.js', import.meta.url), 'utf8')
 

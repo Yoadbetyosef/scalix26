@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { ChevronDown, Lock } from 'lucide-react'
+import Link from 'next/link'
+import { commissionAmount, landedCost, margin, markupAmount, subtotalBeforeMarkup } from '@/lib/catalog/cost-math'
 
 // Cost & Margin for one product.
 //
@@ -13,13 +15,18 @@ import { ChevronDown, Lock } from 'lucide-react'
 // Nothing about currency or markup is written here. Both arrive from tenant settings, and a business
 // with no secondary currency never sees that column at all.
 
-interface Settings { markupPercent: number; baseCurrency: string; secondaryCurrency: string | null; combineShippingAndDuties: boolean }
+interface Settings { markupPercent: number; commissionPercent: number; baseCurrency: string; secondaryCurrency: string | null; combineShippingAndDuties: boolean }
 interface Cost {
   costPrimary: number | null; costSecondary: number | null
-  shippingCost: number; tariffCost: number; markupPercent: number
+  shippingCost: number; tariffCost: number; markupPercent: number; commissionPercent: number
   computedCost: number | null; updatedAt: string | null
 }
-interface View { settings: Settings; price: number | null; cost: Cost | null; marginPercent: number | null }
+interface Previous { costPrimary: number | null; shippingCost: number; tariffCost: number; computedCost: number | null }
+interface Provenance {
+  shipmentId: string; reference: string | null; supplierName: string | null
+  invoiceNumber: string | null; appliedAt: string; previous: Previous | null
+}
+interface View { settings: Settings; price: number | null; cost: Cost | null; marginPercent: number | null; provenance?: Provenance | null }
 
 const input = 'h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
 const num = (s: string): number | null => { const t = s.trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) && n >= 0 ? n : null }
@@ -142,9 +149,12 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   const price = draft ? draft.price : view.price
   // Markup already snapshotted on this row; today's tenant default only applies to a first save.
   const markup = view.cost?.markupPercent ?? settings.markupPercent
+  // Same snapshot rule. A row bought under a 25% supplier term keeps it when the default later moves.
+  const commission = view.cost?.commissionPercent ?? settings.commissionPercent
 
   // Live preview while typing. The saved figure is always the database's generated column — this only
-  // has to agree with it, never replace it.
+  // has to agree with it, never replace it, which is why the arithmetic comes from lib/catalog/cost-math
+  // rather than being written out here for the third time.
   const primary = num(f.primary)
   // Whichever shape the form is in, this is the same number: the formula sums shipping and tariff
   // BEFORE applying markup, so one combined figure and two separate ones that add to it are
@@ -152,9 +162,12 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   const extras = settings.combineShippingAndDuties
     ? (num(f.landed) ?? 0)
     : (num(f.shipping) ?? 0) + (num(f.tariff) ?? 0)
-  const liveTotal = primary === null ? null : (primary + extras) * (1 + markup / 100)
-
-  const liveMargin = liveTotal === null || price === null || price <= 0 ? null : ((price - liveTotal) / price) * 100
+  const components = {
+    costPrimary: primary, shippingCost: extras, tariffCost: 0,
+    markupPercent: markup, commissionPercent: commission,
+  }
+  const liveTotal = landedCost(components)
+  const liveMargin = margin(price, liveTotal)
 
   const save = async () => {
     setSaving(true); setErr(null); setSaved(false)
@@ -247,7 +260,20 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg bg-sunken/60 px-3 py-2.5">
-            <Readout label={`Markup (${markup}%)`} value={primary === null ? '—' : fmt((primary + extras) * (markup / 100), settings.baseCurrency)} />
+            {/* Commission sits directly under the product cost and BEFORE shipping, because it is a
+                percentage of the line above it while markup is a percentage of the running subtotal.
+                Listed after shipping, a reader computes 25% of 120 and gets 165 — the wrong answer.
+                Hidden at 0% so a business with no supplier commission never sees a row of noise. */}
+            {commission > 0 && (
+              <Readout label={`Supplier commission (${commission}%)`}
+                value={fmt(commissionAmount(components), settings.baseCurrency)} />
+            )}
+            {/* The number markup is a percentage OF. Without it the markup figure is a proportion of
+                something that appears nowhere on the card. */}
+            {commission > 0 && (
+              <Readout label="Landed before markup" value={fmt(subtotalBeforeMarkup(components), settings.baseCurrency)} />
+            )}
+            <Readout label={`Markup (${markup}%)`} value={fmt(markupAmount(components), settings.baseCurrency)} />
             <Readout label="Total cost" value={fmt(liveTotal, settings.baseCurrency)} strong />
             <Readout label="Selling price" value={fmt(price, settings.baseCurrency)} />
             <Readout label="Margin" value={liveMargin === null ? '—' : `${liveMargin.toFixed(1)}%`} tone={marginTone(liveMargin)} strong />
@@ -259,6 +285,32 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
             <p className="text-xs text-subtle">
               {`Enter the supplier’s invoice in ${settings.secondaryCurrency} first — it is a reference note only, `}
               {`never converted and never counted. Every figure the total is built from is recorded in ${settings.baseCurrency}.`}
+            </p>
+          )}
+
+          {/* Where this number came from, and what it replaced.
+              
+              The question an owner asks about a cost is "why did this change?", and until now the card
+              could not answer it: a figure that arrived from a supplier invoice looked exactly like one
+              typed by hand, and a reorder overwrote the previous one without trace. Both facts were
+              already in the database and simply unread — see lib/catalog/cost-provenance.ts.
+              
+              Absent for a hand-typed cost, which is most of them. Nothing is claimed when nothing is
+              known. */}
+          {view.provenance && (
+            <p className="text-xs text-subtle">
+              {'From '}
+              <Link href={`/landed-cost/${view.provenance.shipmentId}`} className="font-medium text-accent underline">
+                {view.provenance.reference
+                  || [view.provenance.supplierName, view.provenance.invoiceNumber].filter(Boolean).join(' ')
+                  || 'a supplier invoice'}
+              </Link>
+              {`, applied ${new Date(view.provenance.appliedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}.`}
+              {/* Only after a reorder. The previous figure beside the current one is the whole answer —
+                  "was 14.20, is 16.22" needs no explanation and no memory of last month. */}
+              {view.provenance.previous?.computedCost != null && (
+                <span>{` Was ${fmt(view.provenance.previous.computedCost, settings.baseCurrency)} before this shipment.`}</span>
+              )}
             </p>
           )}
 

@@ -8,24 +8,39 @@ import { enforce, clientIp } from '@/lib/ratelimit'
 // EXPORTED, and that is load-bearing rather than tidy. lib/supabase/public-routes.test.ts reads every
 // URL voice-server constructs against the app and asserts each one is covered here.
 //
-// Routes the voice agent calls have now shipped missing from this list more than once, and the failure
-// is invisible every time: middleware 307s to /auth/login, voice-server parses a login page as JSON,
-// the catch swallows it, and the agent behaves exactly as it did before the feature existed. Nothing
-// errors and nothing logs, because the request SUCCEEDED — it returned a login page.
+// THREE routes have now shipped missing from this list: /api/catalog/lookup, then
+// /api/catalog/keyterms, then /api/stripe/connect/payment-link — the last found by that test, on two
+// branches independently, after it had never once worked on a real call. The failure is invisible
+// every time: middleware 307s to /auth/login, voice-server parses a login page as JSON, the catch
+// swallows it, and the agent behaves exactly as it did before the feature existed. Nothing errors and
+// nothing logs, because the request SUCCEEDED — it returned a login page.
+//
+// See catalog-worker/OUTSTANDING.md §0 for the pattern.
 export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/update-password', '/api/webhooks', '/api/auth/', '/api/leads/inbound', '/api/drip', '/api/mailbox', '/api/analytics', '/api/conversations/voice', '/api/appointments/available', '/api/appointments/book',
     // The voice agent's product lookup. Called by voice-server mid-call with the call's lead token
     // and no session, exactly like /api/appointments/available. The route resolves the tenant from
     // that token and gates on the inventory module itself — ONLY this path is public, not /api/catalog.
     '/api/catalog/lookup',
-    // The AI's "send me a payment link" tool. voice-server has always called this and it has NEVER
-    // been allowlisted, so every attempt on every call 307'd to a login page the handler then failed
-    // to parse — the Payment Collection feature has never worked over the phone. Found by
-    // lib/supabase/public-routes.test.ts.
+    // The keyterm list voice-server fetches at call setup, so Deepgram is told the product names a
+    // general speech model has never heard. Same auth as the lookup above — a lead token, no session,
+    // tenant resolved from the token — and it returns product NAMES only: no prices, no costs, no stock.
     //
-    // Safe to open for the same reason as the lookup above, and no more: the route's own gate is the
-    // lead token (`lead_intake_token` -> tenant, 404 otherwise). The middleware redirect was never
-    // enforcing that gate — it was breaking the route, not protecting it.
-    '/api/stripe/connect/payment-link', '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
+    // Missing from this list is not a quiet degradation. The fetch 307s to /auth/login, voice-server
+    // parses the login page as JSON, fails, and skips keyterms silently — which is exactly the
+    // pre-existing behaviour, so nothing looks broken and every call stays mis-transcribed. That is
+    // how /api/catalog/lookup shipped 307ing once already.
+    '/api/catalog/keyterms',
+    // The AI's "send me a payment link" tool. FOUND BY lib/supabase/public-routes.test.ts, already
+    // broken in production: voice-server has always called this, it has never been allowlisted, and
+    // every attempt 307'd to a login page that the handler then failed to parse. The feature has never
+    // worked on a phone call.
+    //
+    // Safe to open for the same reason as the two above, and no more: the route's own gate is the lead
+    // token (`lead_intake_token` → tenant, 404 otherwise), which the middleware redirect was never
+    // enforcing anyway — it was breaking the route, not protecting it. The exposure is identical to
+    // /api/catalog/lookup and /api/appointments/book, which the same token already reaches.
+    '/api/stripe/connect/payment-link',
+    '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
     // Partner OS public surface: referral redirect + click tracking, partner signup/login,
     // public demo pages + their data, and the public partner marketplace directory.
     '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',

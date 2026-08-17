@@ -1,6 +1,10 @@
 // Business Catalog v1 — shared types + constants (isomorphic, no server imports).
 
-export const PRODUCT_STATUSES = ['active', 'inactive', 'discontinued'] as const
+// `draft` = in the catalogue, has a cost, has NO selling price, so it must never be quoted.
+// Created by lib/invoices — a supplier invoice line becoming a product. The voice agent excludes it
+// (lib/catalog/retrieval.ts); the invoice matcher deliberately includes it (lib/invoices/match.ts) so a
+// repeat invoice updates the draft instead of creating a second copy of it.
+export const PRODUCT_STATUSES = ['active', 'inactive', 'discontinued', 'draft'] as const
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number]
 
 export const AVAILABILITY_STATUSES = ['in_stock', 'out_of_stock', 'incoming', 'special_order'] as const
