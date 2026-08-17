@@ -52,6 +52,7 @@ export default async function SharedDocumentPage({ params }: { params: Promise<{
       business={data.business}
       images={data.images}
       tax={data.tax}
+      pstExemptionNote={data.pstExemptionNote}
       footerNote={data.footerNote}
       // Print only. No branding editor, no Send — this is the recipient's copy, and the one thing
       // they may reasonably want is a PDF of it.

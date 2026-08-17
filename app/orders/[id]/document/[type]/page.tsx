@@ -48,6 +48,7 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
       business={data.business}
       images={data.images}
       tax={data.tax}
+      pstExemptionNote={data.pstExemptionNote}
       footerNote={data.footerNote}
       toolbar={
         <>

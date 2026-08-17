@@ -95,3 +95,92 @@ export function taxOn(subtotalCents: number, rate: TaxRate | null): TaxLine | nu
 /** "HST 13%" — what the document prints beside the amount. */
 export const taxLabel = (t: TaxLine): string =>
   `${t.label} ${t.ratePercent % 1 === 0 ? t.ratePercent : t.ratePercent.toFixed(3)}%`
+
+// ── WHAT THE SELLER PICKS ───────────────────────────────────────────────────────────────────────
+//
+// Everything above answers "what is the statutory rate in this region on this date". This answers a
+// different question: "which reading of it did I charge?" — and for three provinces there are two
+// correct answers.
+//
+// BC, SK and MB levy a provincial tax SEPARATE from GST, and that provincial part is exemptible on a
+// sale to a business for resale. So a BC sale is 12% (GST + PST) at retail and 5% (GST alone) when the
+// provincial part does not apply. BOTH are correct. Nothing in the data can tell them apart — the
+// difference is a certificate in the seller's filing cabinet — so the seller chooses, per sale.
+//
+// HST provinces do not split. One rate, applied either way, nothing to choose. Alberta and the three
+// territories have no provincial sales tax to exempt, so their GST 5% is the only reading there is.
+//
+// QUEBEC IS GST-ONLY HERE, DELIBERATELY. QST is a separate return with separate registration, and a
+// combined 14.975% line is a figure nobody can reconcile against either filing. The 14.975% row stays
+// in tax_rates as the statutory reference; it is not offered as a choice.
+//
+// ── THIS LIST IS THE PICKER, NOT THE RATE TABLE ─────────────────────────────────────────────────
+//
+// tax_rates is keyed UNIQUE (country, region, effective_from) — its only axis for two rows in one
+// province is TIME, which is right for what it does (NS 15% → 14% in April 2025) and wrong for this.
+// So the choices live here, the CHOSEN one is snapshotted onto the order, and tax_rates keeps its
+// single job. See supabase/migrations/add_order_tax_choice.sql.
+
+/** Which reading of a province's tax was charged. Describes the RATE, never the customer. */
+export type TaxKind = 'gst_only' | 'combined'
+
+export interface TaxChoice {
+  /** Stable, and what the form posts. The server resolves everything else from it. */
+  id: string
+  region: string
+  kind: TaxKind | null
+  label: string
+  ratePercent: number
+  /** The half-sentence beside the rate. Says which sale it is without requiring any tax law. */
+  hint: string | null
+}
+
+const choice = (region: string, kind: TaxKind | null, label: string, ratePercent: number, hint: string | null = null): TaxChoice =>
+  ({ id: kind ? `${region}:${kind}` : region, region, kind, label, ratePercent, hint })
+
+/**
+ * Every province, both readings where both apply, in the order a Canadian expects them listed.
+ *
+ * The two readings sit ADJACENT on purpose. "GST 5%" directly beneath "GST + PST 12%" is enough to
+ * choose between without knowing what PST is — she knows which sale she made, and the pair makes the
+ * question obvious where a single entry would hide it.
+ */
+export const TAX_CHOICES: TaxChoice[] = [
+  choice('BC', 'combined', 'GST + PST', 12, 'retail'),
+  choice('BC', 'gst_only', 'GST', 5, 'wholesale for resale'),
+  choice('AB', null, 'GST', 5),
+  choice('SK', 'combined', 'GST + PST', 11, 'retail'),
+  choice('SK', 'gst_only', 'GST', 5, 'wholesale for resale'),
+  choice('MB', 'combined', 'GST + RST', 12, 'retail'),
+  choice('MB', 'gst_only', 'GST', 5, 'wholesale for resale'),
+  choice('ON', null, 'HST', 13),
+  choice('QC', null, 'GST', 5),
+  choice('NB', null, 'HST', 15),
+  choice('NS', null, 'HST', 14),
+  choice('PE', null, 'HST', 15),
+  choice('NL', null, 'HST', 15),
+  choice('YT', null, 'GST', 5),
+  choice('NT', null, 'GST', 5),
+  choice('NU', null, 'GST', 5),
+]
+
+/**
+ * Resolve what the form posted.
+ *
+ * The form posts an ID and NEVER a rate. A client that could send its own percentage could put 3% on
+ * a customer's invoice, and the figure would look entirely ordinary. Everything stored is read from
+ * this list on the server.
+ */
+export const taxChoiceById = (id: string | null | undefined): TaxChoice | null =>
+  (id ? TAX_CHOICES.find((c) => c.id === id) ?? null : null)
+
+/** The stored snapshot, as a TaxLine. Null unless BOTH halves are present — see the migration. */
+export function taxFromSnapshot(
+  region: string | null | undefined,
+  label: string | null | undefined,
+  ratePercent: number | null | undefined,
+  subtotalCents: number,
+): TaxLine | null {
+  if (!region || !label || ratePercent === null || ratePercent === undefined) return null
+  return taxOn(subtotalCents, { region, label, ratePercent, effectiveFrom: '' })
+}

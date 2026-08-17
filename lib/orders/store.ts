@@ -3,6 +3,7 @@ import { requireActiveBusinessContext } from '@/lib/workspace'
 import { ORDER_BUCKET } from './attachments'
 import { generateOrderNumber } from './order-number'
 import { canManualTransition, type OrderStage } from './stages'
+import { taxChoiceById } from '@/lib/tax/canada'
 import type { Order, OrderLineItem, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
 
 // Server-only Orders data access. Every call resolves the validated active tenant (requireActiveBusinessContext)
@@ -27,6 +28,13 @@ const orderRow = (r: Record<string, unknown>): Order => ({
   // Added by add_orders_6. Read off the row rather than selected by name, so a database without the
   // migration yields undefined here instead of failing the whole query.
   deliveryProvince: (r.delivery_province as string) ?? null,
+  // Read off the row rather than selected by name, so a database without add_order_tax_choice renders
+  // through the live fallback instead of erroring — the same defence documentTemplateId already uses.
+  taxKind: (r.tax_kind as 'gst_only' | 'combined') ?? null,
+  taxLabel: (r.tax_label as string) ?? null,
+  taxRatePercent: r.tax_rate_percent === null || r.tax_rate_percent === undefined ? null : Number(r.tax_rate_percent),
+  pstExempt: r.pst_exempt === true,
+  pstExemptionNote: (r.pst_exemption_note as string) ?? null,
   documentTemplateId: (r.document_template_id as string) ?? null,
   invoicedAt: (r.invoiced_at as string) ?? null,
   archivedAt: (r.archived_at as string) ?? null,
@@ -134,6 +142,28 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   return order
 }
 
+/**
+ * Turn the picked choice into the columns the document reads.
+ *
+ * ONE place, so create and edit cannot store it differently. The choice carries the province too, so
+ * picking "ON · HST 13%" sets the place of supply as well — there is no way to end up with a rate
+ * from one province and a destination from another, which was possible while they were two controls.
+ *
+ * An explicit empty string means "No tax": province and snapshot both cleared, and the document prints
+ * no tax line — the same as never having chosen, because a 0% line is a claim that no tax is due.
+ */
+function taxSnapshotFrom(patch: OrderInput): Record<string, unknown> | null {
+  if (!('taxChoiceId' in patch)) return null
+  const picked = taxChoiceById(patch.taxChoiceId ?? null)
+  if (!picked) return { delivery_province: null, tax_kind: null, tax_label: null, tax_rate_percent: null }
+  return {
+    delivery_province: picked.region,
+    tax_kind: picked.kind,
+    tax_label: picked.label,
+    tax_rate_percent: picked.ratePercent,
+  }
+}
+
 export async function updateOrder(id: string, patch: OrderInput): Promise<Order | null> {
   const c = await ctx(); if (!c) return null
   const sb = await createClient()
@@ -143,6 +173,12 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   // optional: a form that does not send delivery_province never names it, so a database without the
   // column is never asked about it.
   for (const [k, col] of Object.entries(map)) if (k in patch) m[col] = (patch as Record<string, unknown>)[k]
+  // The snapshot, resolved from the picked id rather than from anything the client sent. Written after
+  // the field map so it wins over a delivery_province the same patch might also carry.
+  const snap = taxSnapshotFrom(patch)
+  if (snap) Object.assign(m, snap)
+  if ('pstExempt' in patch) m.pst_exempt = patch.pstExempt
+  if ('pstExemptionNote' in patch) m.pst_exemption_note = patch.pstExemptionNote
   // Never blank out the (NOT NULL, unique) order number — ignore an empty edit.
   if (typeof m.order_number === 'string') { const t = m.order_number.trim(); if (t) m.order_number = t; else delete m.order_number }
   // Re-price if line items are replaced.
