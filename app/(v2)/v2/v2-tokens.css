@@ -3053,3 +3053,122 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-iv-smsg { order: 0; width: auto; text-align: left; font-size: 13px; }
   .v2 .v2-iv-prog { max-width: 300px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   SUPPLIER BILLS — docs/miles/supplier-invoices.html. Both widths, values taken directly.
+
+   THE SPINE IS WHO IS HOLDING IT UP: amber while it waits on a person, acid once it is applied. The
+   same two-state idea the held draft uses, because it IS one — the AI read a document and wants a
+   sign-off before it moves numbers that become prices.
+
+   Declared here rather than borrowed from the invoices block above. An invoice's spine says where the
+   MONEY stands; a bill's says whether a DECISION has been made. They happen to share two hex values
+   today, and one variable serving both is how a change to one silently restates the other. */
+
+.v2 {
+  --bl-wait: #F5A524;
+  --bl-wait-wash: #FEF3DC;
+  --bl-wait-ink: #6B4708;
+  --bl-done: #D9F224;
+  --bl-done-wash: #F2FBB8;
+  --bl-done-ink: #41490A;
+  --bl-moved: #FF3B5C;
+  --bl-moved-wash: #FFE9ED;
+  --bl-moved-ink: #A8102C;
+}
+
+/* ── The list ─────────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-bl-row { display: flex; gap: 13px; padding: 15px 14px; align-items: center; width: 100%; text-align: left; background: none; border: 0; font-family: inherit; cursor: pointer; }
+.v2 .v2-bl-row:hover { background: var(--v2-hover-soft); }
+/* The whole row is the link — see /v2/invoices for the same idiom. It must not arrive underlined. */
+.v2 a.v2-bl-row { text-decoration: none; color: inherit; }
+.v2 .v2-bl-bar { width: 3px; border-radius: 3px; align-self: stretch; flex: none; background: var(--bl-wait); }
+.v2 .v2-bl-row[data-done] .v2-bl-bar { background: var(--bl-done); }
+/* Neither waiting nor applied — being read, or failed. Grey, because it is not a state anybody chose. */
+.v2 .v2-bl-row[data-quiet] .v2-bl-bar { background: rgba(0, 0, 0, 0.1); }
+.v2 .v2-bl-mid { flex: 1; min-width: 0; }
+.v2 .v2-bl-nm { font-size: 15px; font-weight: 500; color: var(--v2-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2 .v2-bl-meta { font-size: 12.5px; color: var(--v2-ink-42); margin-top: 4px; }
+.v2 .v2-bl-amt { text-align: right; flex: none; }
+.v2 .v2-bl-val { font-size: 15.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-date { font-size: 10.5px; color: var(--v2-ink-40); font-variant-numeric: tabular-nums; letter-spacing: 0.08em; margin-top: 4px; }
+
+/* ── Coverage. The headline, and the reason the bar sits under the name rather than beside the money.
+      Amber below the gate, acid at or above it — the colour IS the rule, so a bill that cannot be
+      applied cannot look like one that can. */
+.v2 .v2-bl-cov { margin-top: 9px; }
+.v2 .v2-bl-covbar { height: 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.06); overflow: hidden; }
+.v2 .v2-bl-covbar i { display: block; height: 100%; border-radius: 5px; background: var(--bl-done); }
+.v2 .v2-bl-covbar[data-low] i { background: var(--bl-wait); }
+.v2 .v2-bl-covlab { font-size: 11.5px; color: var(--v2-ink-42); margin-top: 6px; display: flex; justify-content: space-between; gap: 12px; }
+.v2 .v2-bl-covlab b { color: var(--v2-ink); font-weight: 500; }
+
+/* ── Review: the header the four stated figures live in ──────────────────────────────────────── */
+.v2 .v2-bl-top { flex: none; background: var(--v2-paper); border-bottom: 1px solid var(--v2-line); padding: 16px 18px; }
+.v2 .v2-bl-sup { font-size: 18px; font-weight: 500; color: var(--v2-ink); }
+.v2 .v2-bl-tmeta { font-size: 11px; letter-spacing: 0.12em; color: var(--v2-ink-40); margin-top: 5px; display: flex; gap: 8px; flex-wrap: wrap; text-transform: uppercase; }
+.v2 .v2-bl-tot { display: flex; margin-top: 14px; border-top: 1px solid var(--v2-line); padding-top: 12px; }
+.v2 .v2-bl-tt { flex: 1; border-right: 1px solid var(--v2-line); padding-right: 12px; margin-right: 12px; min-width: 0; }
+.v2 .v2-bl-tt:last-child { border: none; padding: 0; margin: 0; }
+.v2 .v2-bl-ttk { font-size: 8.5px; letter-spacing: 0.16em; color: var(--v2-ink-40); }
+.v2 .v2-bl-ttv { font-size: 17px; font-weight: 500; color: var(--v2-ink); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-ttv[data-small] { font-size: 14px; }
+/* The computed figure, not a stated one. Amber when it is the one below its bar. */
+.v2 .v2-bl-ttv[data-low] { color: var(--bl-wait-ink); }
+
+/* ── The note. Amber for "you can still fix this", red for "this will be wrong". ─────────────── */
+.v2 .v2-bl-note { background: var(--bl-wait-wash); color: var(--bl-wait-ink); border-radius: 14px; padding: 13px 14px; font-size: 13px; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
+.v2 .v2-bl-note[data-red] { background: var(--bl-moved-wash); color: var(--bl-moved-ink); }
+.v2 .v2-bl-note svg { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+.v2 .v2-bl-note b { font-weight: 500; }
+
+/* ── Review: the lines ───────────────────────────────────────────────────────────────────────── */
+.v2 .v2-bl-line { display: flex; gap: 12px; padding: 13px 14px; align-items: flex-start; }
+.v2 .v2-bl-lbar { width: 3px; border-radius: 3px; flex: none; align-self: stretch; background: rgba(0, 0, 0, 0.08); }
+.v2 .v2-bl-line[data-warn] .v2-bl-lbar { background: var(--bl-wait); }
+.v2 .v2-bl-line[data-moved] .v2-bl-lbar { background: var(--bl-moved); }
+.v2 .v2-bl-lmid { flex: 1; min-width: 0; }
+.v2 .v2-bl-lsup { font-size: 14.5px; color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-bl-larrow { font-size: 12.5px; color: var(--v2-ink-42); margin-top: 5px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.v2 .v2-bl-larrow svg { width: 12px; height: 12px; flex: none; color: var(--v2-ink-40); }
+.v2 .v2-bl-match { color: var(--v2-ink-70); }
+.v2 .v2-bl-lnone { color: var(--bl-wait-ink); background: var(--bl-wait-wash); padding: 2px 8px; border-radius: 5px; font-size: 11.5px; }
+.v2 .v2-bl-lamt { text-align: right; flex: none; min-width: 96px; }
+.v2 .v2-bl-lv { font-size: 14.5px; color: var(--v2-ink); font-variant-numeric: tabular-nums; font-weight: 500; }
+.v2 .v2-bl-lq { font-size: 11px; color: var(--v2-ink-40); font-variant-numeric: tabular-nums; margin-top: 4px; }
+/* was → now. The one thing a spreadsheet would never have told them. */
+.v2 .v2-bl-lcost { font-size: 11.5px; margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.v2 .v2-bl-was { color: var(--v2-ink-40); text-decoration: line-through; font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-now { color: var(--v2-ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-delta { color: var(--bl-moved-ink); background: var(--bl-moved-wash); padding: 1px 6px; border-radius: 4px; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-delta[data-ok] { color: var(--bl-done-ink); background: var(--bl-done-wash); }
+.v2 .v2-bl-fix { padding: 6px 11px; border-radius: 9px; border: 1px solid var(--v2-line); background: var(--v2-paper); font-size: 12px; font-family: inherit; color: var(--v2-ink); cursor: pointer; margin-top: 8px; }
+.v2 .v2-bl-fix:hover { background: var(--v2-hover); }
+
+/* ── The slot ────────────────────────────────────────────────────────────────────────────────── */
+.v2 .v2-bl-slot { flex: none; background: var(--v2-paper); border-top: 1px solid var(--v2-line); padding: 13px 18px calc(13px + env(safe-area-inset-bottom)); }
+.v2 .v2-bl-slotin { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.v2 .v2-bl-smsg { font-size: 13px; color: var(--v2-ink-42); line-height: 1.4; text-align: center; order: 2; }
+.v2 .v2-bl-smsg b { color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-bl-apply { padding: 12px 20px; border-radius: 12px; border: none; background: var(--v2-ink); color: #fff; font-size: 13.5px; font-family: inherit; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: transform 0.14s var(--v2-ease); }
+.v2 .v2-bl-apply:active { transform: scale(0.96); }
+.v2 .v2-bl-apply:disabled { background: rgba(0, 0, 0, 0.12); color: var(--v2-ink-40); cursor: not-allowed; transform: none; }
+.v2 .v2-bl-apply svg { width: 15px; height: 15px; flex: none; }
+.v2 .v2-bl-none { font-size: 13.5px; color: var(--v2-ink-42); padding: 22px 2px; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   SUPPLIER BILLS, WIDE. The same DOM: the slot's sentence moves beside the button, and the coverage
+   bar leaves the name's column for one of its own. */
+
+@media (min-width: 900px) {
+  .v2 .v2-bl-top { padding: 16px 26px; }
+  .v2 .v2-bl-slot { padding: 13px 26px; }
+  .v2 .v2-bl-slotin { flex-direction: row; align-items: center; gap: 14px; }
+  .v2 .v2-bl-smsg { flex: 1; order: 0; text-align: left; }
+  .v2 .v2-bl-apply { flex: none; }
+  /* Name and coverage side by side, which is what the extra width is FOR — the bar stops being a
+     footnote under the supplier and becomes the second column of the row. */
+  .v2 .v2-bl-mid { display: flex; align-items: center; gap: 22px; }
+  .v2 .v2-bl-who { flex: 1; min-width: 0; }
+  .v2 .v2-bl-cov { width: 250px; flex: none; margin-top: 0; }
+}

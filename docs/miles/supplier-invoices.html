@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Supplier invoices — landed cost</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--magenta:#FF2E93;--violet:#8B5CF6;--cyan:#22D3EE;--acid:#D9F224;
+ --awash:#F2FBB8;--aink:#41490A;
+ --hold:#F5A524;--holdw:#FEF3DC;--holdi:#6B4708;
+ --red:#FF3B5C;--redw:#FFE9ED;--redi:#A8102C;
+ --ink:#111114;--ink-70:#4A4A52;--ink-42:#8A8A90;--ink-24:#B4B4BA;
+ --line:rgba(0,0,0,.07);--paper:#F6F6F7;--card:#fff;--ease:cubic-bezier(.32,.72,0,1)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#0d0d0f;font-family:'Inter Tight',system-ui,sans-serif;
+ padding:20px 14px 60px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mono{font-family:'JetBrains Mono',monospace}
+.tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;max-width:620px}
+.tabs button{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.11em;
+ padding:9px 13px;border-radius:999px;border:1px solid rgba(255,255,255,.14);
+ background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);cursor:pointer;min-height:36px}
+.tabs button[data-on]{background:linear-gradient(90deg,var(--magenta),var(--violet));color:#fff;border-color:transparent}
+.stage{display:none}.stage[data-on]{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.cap{font-size:12.5px;color:rgba(255,255,255,.46);text-align:center;max-width:660px;line-height:1.7;margin-top:14px}
+.cap b{color:rgba(255,255,255,.85);font-weight:500}
+.lbl{font-size:9px;letter-spacing:.16em;color:rgba(255,255,255,.3);text-align:center;margin-top:7px}
+.ph{width:378px;height:790px;border-radius:32px;overflow:hidden;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+.dk{width:min(940px,95vw);height:790px;border-radius:16px;overflow:hidden;background:var(--paper);
+ box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+
+.hd{flex:none;background:var(--card);border-bottom:1px solid var(--line);padding:14px 18px;
+ display:flex;align-items:center;gap:12px}
+.bk{font-size:20px;color:var(--ink-24)}
+.hd h1{font-size:19px;font-weight:500;color:var(--ink);flex:1}
+.hd .sub{font-size:10.5px;letter-spacing:.13em;color:var(--ink-24);font-family:'JetBrains Mono',monospace;margin-top:3px}
+.up{padding:9px 14px;border-radius:11px;border:none;background:var(--ink);color:#fff;
+ font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:7px}
+.up svg{width:14px;height:14px}
+.scr{flex:1;overflow-y:auto;padding:16px}
+.dk .scr{padding:20px 26px}
+.open{font-size:18px;line-height:1.4;color:var(--ink);font-weight:500;margin:0 2px 18px}
+.open b{font-weight:500;background:linear-gradient(90deg,var(--magenta),var(--violet) 55%,var(--cyan));
+ -webkit-background-clip:text;background-clip:text;color:transparent}
+.grp{display:flex;align-items:baseline;gap:10px;margin:20px 2px 10px}
+.grp:first-child{margin-top:0}
+.grp .t{font-size:10px;letter-spacing:.18em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.grp .n{font-size:10px;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.grp .r{flex:1;height:1px;background:var(--line);transform:translateY(-3px)}
+.card{background:var(--card);border-radius:18px;overflow:hidden;
+ box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 22px -12px rgba(0,0,0,.14)}
+.sep{height:1px;background:var(--line)}
+.tag{font-size:9px;letter-spacing:.12em;padding:3px 8px;border-radius:5px;font-family:'JetBrains Mono',monospace}
+.t-hold{background:var(--holdw);color:var(--holdi)}
+.t-done{background:var(--awash);color:var(--aink)}
+.t-red{background:var(--redw);color:var(--redi)}
+
+/* ---------- list rows ---------- */
+.srow{display:flex;gap:13px;padding:15px 14px;align-items:center;cursor:pointer}
+.srow:active{background:rgba(0,0,0,.025)}
+.sbar{width:3px;border-radius:3px;align-self:stretch;flex:none;background:var(--hold)}
+.srow.done .sbar{background:var(--acid)}
+.smid{flex:1;min-width:0}
+.snm{font-size:15px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.smeta{font-size:12.5px;color:var(--ink-42);margin-top:4px}
+.samt{text-align:right;flex:none}
+.sval{font-size:15.5px;font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.sdate{font-size:10.5px;color:var(--ink-24);font-family:'JetBrains Mono',monospace;margin-top:4px}
+
+/* ---------- coverage ---------- */
+.cov{margin-top:9px}
+.covbar{height:5px;border-radius:5px;background:rgba(0,0,0,.06);overflow:hidden}
+.covbar i{display:block;height:100%;border-radius:5px;background:var(--acid)}
+.covbar.low i{background:var(--hold)}
+.covlab{font-size:11.5px;color:var(--ink-42);margin-top:6px;display:flex;justify-content:space-between}
+.covlab b{color:var(--ink);font-weight:500}
+
+/* ---------- review ---------- */
+.top{background:var(--card);border-bottom:1px solid var(--line);padding:16px 18px;flex:none}
+.dk .top{padding:16px 26px}
+.tsup{font-size:18px;font-weight:500;color:var(--ink)}
+.tmeta{font-size:11px;letter-spacing:.12em;color:var(--ink-24);font-family:'JetBrains Mono',monospace;
+ margin-top:5px;display:flex;gap:8px;flex-wrap:wrap}
+.tot{display:flex;gap:0;margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.tt{flex:1;border-right:1px solid var(--line);padding-right:12px;margin-right:12px}
+.tt:last-child{border:none;padding:0;margin:0}
+.ttk{font-size:8.5px;letter-spacing:.16em;color:var(--ink-24);font-family:'JetBrains Mono',monospace}
+.ttv{font-size:17px;font-weight:500;color:var(--ink);margin-top:5px;font-variant-numeric:tabular-nums}
+.ttv.small{font-size:14px}
+
+.lrow{display:flex;gap:12px;padding:13px 14px;align-items:flex-start}
+.lbar{width:3px;border-radius:3px;flex:none;align-self:stretch;background:rgba(0,0,0,.08)}
+.lrow.warn .lbar{background:var(--hold)}
+.lrow.moved .lbar{background:var(--red)}
+.lmid{flex:1;min-width:0}
+.lsup{font-size:14.5px;color:var(--ink);font-weight:500}
+.larrow{font-size:12.5px;color:var(--ink-42);margin-top:5px;display:flex;align-items:center;gap:7px}
+.larrow svg{width:12px;height:12px;flex:none;color:var(--ink-24)}
+.larrow .match{color:var(--ink-70)}
+.lnone{color:var(--holdi);background:var(--holdw);padding:2px 8px;border-radius:5px;font-size:11.5px}
+.lamt{text-align:right;flex:none;min-width:96px}
+.lv{font-size:14.5px;color:var(--ink);font-variant-numeric:tabular-nums;font-weight:500}
+.lq{font-size:11px;color:var(--ink-24);font-family:'JetBrains Mono',monospace;margin-top:4px}
+.lcost{font-size:11.5px;margin-top:6px;display:flex;align-items:center;gap:6px}
+.lcost .was{color:var(--ink-24);text-decoration:line-through}
+.lcost .now{color:var(--ink);font-weight:500}
+.lcost .delta{color:var(--redi);background:var(--redw);padding:1px 6px;border-radius:4px;font-size:10.5px}
+.lcost .delta.ok{color:var(--aink);background:var(--awash)}
+.fixb{padding:6px 11px;border-radius:9px;border:1px solid var(--line);background:var(--card);
+ font-size:12px;font-family:inherit;color:var(--ink);cursor:pointer;margin-top:8px}
+.fixb:active{background:var(--paper)}
+
+.note{background:var(--holdw);color:var(--holdi);border-radius:14px;padding:13px 14px;
+ font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
+.note svg{width:15px;height:15px;flex:none;margin-top:2px}
+.note.red{background:var(--redw);color:var(--redi)}
+.note b{font-weight:500}
+
+.slot{flex:none;background:var(--card);border-top:1px solid var(--line);padding:13px 18px}
+.dk .slot{padding:13px 26px}
+.slotin{display:flex;align-items:center;gap:14px;max-width:100%}
+.smsg{flex:1;font-size:13px;color:var(--ink-42);line-height:1.4}
+.smsg b{color:var(--ink);font-weight:500}
+.apply{padding:12px 20px;border-radius:12px;border:none;background:var(--ink);color:#fff;flex:none;
+ font-size:13.5px;font-family:inherit;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;
+ transition:transform .14s var(--ease)}
+.apply:active{transform:scale(.96)}
+.apply:disabled{background:rgba(0,0,0,.12);color:var(--ink-24);cursor:not-allowed}
+.apply svg{width:15px;height:15px}
+.ph .slotin{flex-direction:column;align-items:stretch;gap:10px}
+.ph .apply{justify-content:center}
+.ph .smsg{text-align:center;order:2}
+</style></head><body>
+
+<svg style="display:none">
+ <symbol id="up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+ <symbol id="arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+ <symbol id="alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></symbol>
+ <symbol id="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></symbol>
+ <symbol id="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"/><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2z"/></symbol>
+</svg>
+
+<div class="tabs">
+ <button data-t="L" data-on>1 · THE LIST</button>
+ <button data-t="R">2 · REVIEW</button>
+ <button data-t="D">3 · REVIEW · DESKTOP</button>
+</div>
+
+<!-- ============ LIST ============ -->
+<div class="stage" id="s-L" data-on>
+ <div><div class="ph">
+  <div class="hd"><span class="bk">‹</span>
+   <div style="flex:1"><h1>Supplier bills</h1><div class="sub mono">LANDED COST</div></div>
+   <button class="up"><svg><use href="#up"/></svg>Upload</button></div>
+  <div class="scr">
+   <div class="open">2 bills received. <b>One is waiting on you.</b></div>
+
+   <div class="grp"><span class="t">WAITING ON YOU</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="srow"><span class="sbar"></span>
+     <div class="smid"><div class="snm">B&amp;N Contract Furniture</div>
+      <div class="smeta">INV-2026-0841 · 118 lines</div>
+      <div class="cov"><div class="covbar low"><i style="width:74%"></i></div>
+       <div class="covlab"><span><b>74%</b> matched to products</span><span>31 lines unmatched</span></div></div>
+     </div>
+     <div class="samt"><div class="sval">€18,420</div><div class="sdate mono">6 AUG</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">APPLIED</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="srow done"><span class="sbar"></span>
+     <div class="smid"><div class="snm">Primavera Furniture</div>
+      <div class="smeta">FV/2026/0173 · 95 lines · 95 matched</div>
+      <div class="cov"><div class="covbar"><i style="width:100%"></i></div>
+       <div class="covlab"><span><b>100%</b> matched</span><span>206 products costed</span></div></div>
+     </div>
+     <div class="samt"><div class="sval">€24,905</div><div class="sdate mono">2 AUG</div></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">MOBILE</div></div>
+
+ <div><div class="dk">
+  <div class="hd" style="padding:14px 26px"><span class="bk">‹</span>
+   <div style="flex:1"><h1>Supplier bills</h1><div class="sub mono">LANDED COST</div></div>
+   <button class="up"><svg><use href="#up"/></svg>Upload a bill</button></div>
+  <div class="scr">
+   <div class="open" style="font-size:20px">2 bills received. <b>One is waiting on you.</b></div>
+   <div class="grp"><span class="t">WAITING ON YOU</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="srow"><span class="sbar"></span>
+     <div class="smid" style="display:flex;align-items:center;gap:22px">
+      <div style="flex:1;min-width:0"><div class="snm">B&amp;N Contract Furniture S.A.</div>
+       <div class="smeta">INV-2026-0841 · 118 lines · received 6 Aug</div></div>
+      <div style="width:250px;flex:none"><div class="covbar low"><i style="width:74%"></i></div>
+       <div class="covlab"><span><b>74%</b> matched</span><span>31 unmatched</span></div></div>
+     </div>
+     <div class="samt"><div class="sval">€18,420</div><div class="sdate mono">EUR</div></div></div>
+   </div>
+   <div class="grp"><span class="t">APPLIED</span><span class="n">1</span><span class="r"></span></div>
+   <div class="card">
+    <div class="srow done"><span class="sbar"></span>
+     <div class="smid" style="display:flex;align-items:center;gap:22px">
+      <div style="flex:1;min-width:0"><div class="snm">Primavera Furniture Sp. z o.o.</div>
+       <div class="smeta">FV/2026/0173 · 95 lines · applied 2 Aug</div></div>
+      <div style="width:250px;flex:none"><div class="covbar"><i style="width:100%"></i></div>
+       <div class="covlab"><span><b>100%</b> matched</span><span>206 products costed</span></div></div>
+     </div>
+     <div class="samt"><div class="sval">€24,905</div><div class="sdate mono">EUR</div></div></div>
+   </div>
+  </div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>1 · The list.</b> A bill is either waiting on you or applied — the same two-state shape as a held draft, because it is one: the AI read a document and wants your sign-off before it moves money-adjacent numbers. Coverage is the headline, not the total: <b>74% matched</b> is what decides whether you can apply it at all.</p>
+</div>
+
+<!-- ============ REVIEW MOBILE ============ -->
+<div class="stage" id="s-R">
+ <div><div class="ph">
+  <div class="top">
+   <div class="tsup">B&amp;N Contract Furniture</div>
+   <div class="tmeta mono"><span>INV-2026-0841</span><span>·</span><span>6 AUG 2026</span><span>·</span><span>EUR</span></div>
+   <div class="tot">
+    <div class="tt"><div class="ttk">GOODS</div><div class="ttv">€16,180</div></div>
+    <div class="tt"><div class="ttk">FREIGHT</div><div class="ttv small">€1,840</div></div>
+    <div class="tt"><div class="ttk">DUTIES</div><div class="ttv small">€400</div></div>
+   </div>
+  </div>
+  <div class="scr">
+   <div class="note"><svg><use href="#alert"/></svg>
+    <span><b>31 of 118 lines aren't matched to a product.</b> Freight and duties can only be spread
+    across what's matched, so the 87 matched lines would carry all €2,240.</span></div>
+
+   <div class="grp"><span class="t">NEEDS A MATCH</span><span class="n">31</span><span class="r"></span></div>
+   <div class="card">
+    <div class="lrow warn"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Pear shaped diamond ring 1.2ct</div>
+      <div class="larrow"><span class="lnone">No product matched</span></div>
+      <button class="fixb">Pick a product</button></div>
+     <div class="lamt"><div class="lv">€1,240</div><div class="lq mono">×2</div></div></div>
+    <div class="sep"></div>
+    <div class="lrow warn"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Bezel setting, white gold 18k</div>
+      <div class="larrow"><span class="lnone">Two products are equally close</span></div>
+      <button class="fixb">Choose</button></div>
+     <div class="lamt"><div class="lv">€860</div><div class="lq mono">×4</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">COST WILL MOVE</span><span class="n">3</span><span class="r"></span></div>
+   <div class="card">
+    <div class="lrow moved"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Tennis bracelet 3ct</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">TB-3000-WG</span></div>
+      <div class="lcost"><span class="was">€412</span><span class="now">€498</span>
+       <span class="delta">+21%</span></div></div>
+     <div class="lamt"><div class="lv">€3,984</div><div class="lq mono">×8</div></div></div>
+    <div class="sep"></div>
+    <div class="lrow moved"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Solitaire ring, 0.9ct</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">SR-0900-YG</span></div>
+      <div class="lcost"><span class="was">€780</span><span class="now">€702</span>
+       <span class="delta ok">−10%</span></div></div>
+     <div class="lamt"><div class="lv">€2,106</div><div class="lq mono">×3</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">MATCHED CLEANLY</span><span class="n">84</span><span class="r"></span></div>
+   <div class="card">
+    <div class="lrow"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Stud earrings 0.5ct pair</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">SE-0500-WG</span></div>
+      <div class="lcost"><span class="was">€188</span><span class="now">€194</span>
+       <span class="delta ok">+3%</span></div></div>
+     <div class="lamt"><div class="lv">€2,328</div><div class="lq mono">×12</div></div></div>
+    <div class="sep"></div>
+    <div class="lrow"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Bangle, plain 14k</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">BG-1400-YG</span></div>
+      <div class="lcost"><span class="was">€96</span><span class="now">€99</span>
+       <span class="delta ok">+3%</span></div></div>
+     <div class="lamt"><div class="lv">€594</div><div class="lq mono">×6</div></div></div>
+   </div>
+   <div style="height:12px"></div>
+  </div>
+  <div class="slot"><div class="slotin">
+   <div class="smsg"><b>74% matched.</b> 80% is needed before costs can be applied.</div>
+   <button class="apply" disabled><svg><use href="#check"/></svg>Apply to 87 products</button>
+  </div></div>
+ </div><div class="lbl mono">MOBILE · BELOW THE GATE</div></div>
+ <p class="cap"><b>2 · Review.</b> Three groups in the order you'd work them: what needs a decision, what will change a cost, and what was clean. <b>Cost will move</b> is the group that earns the screen — a bracelet going from €412 to €498 is the margin a shipment is about to collapse, and it's the one thing a spreadsheet would never have told you. Apply is disabled below 80% and says why, in the words of the rule.</p>
+</div>
+
+<!-- ============ REVIEW DESKTOP ============ -->
+<div class="stage" id="s-D">
+ <div><div class="dk">
+  <div class="top">
+   <div style="display:flex;align-items:flex-start;gap:20px">
+    <div style="flex:1"><div class="tsup">B&amp;N Contract Furniture S.A.</div>
+     <div class="tmeta mono"><span>INV-2026-0841</span><span>·</span><span>RECEIVED 6 AUG 2026</span>
+      <span>·</span><span>EUR</span><span>·</span><span>118 LINES</span></div></div>
+    <button class="fixb" style="margin:0;padding:9px 13px"><svg style="width:13px;height:13px;vertical-align:-2px;margin-right:6px"><use href="#doc"/></svg>View the PDF</button>
+   </div>
+   <div class="tot">
+    <div class="tt"><div class="ttk">GOODS</div><div class="ttv">€16,180</div></div>
+    <div class="tt"><div class="ttk">FREIGHT</div><div class="ttv">€1,840</div></div>
+    <div class="tt"><div class="ttk">DUTIES</div><div class="ttv">€400</div></div>
+    <div class="tt"><div class="ttk">INVOICE TOTAL</div><div class="ttv">€18,420</div></div>
+    <div class="tt"><div class="ttk">MATCHED</div><div class="ttv" style="color:var(--holdi)">74%</div></div>
+   </div>
+  </div>
+  <div class="scr">
+   <div class="note"><svg><use href="#alert"/></svg>
+    <span><b>31 of 118 lines aren't matched to a product.</b> Freight and duties are spread across matched
+    lines by value — so until these are resolved, the other 87 would absorb all €2,240 between them.</span></div>
+
+   <div class="grp"><span class="t">NEEDS A MATCH</span><span class="n">31</span><span class="r"></span></div>
+   <div class="card">
+    <div class="lrow warn"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Pear shaped diamond ring 1.2ct</div>
+      <div class="larrow"><span class="lnone">No product matched — the name didn't reach the threshold</span></div></div>
+     <div class="lamt"><div class="lv">€1,240</div><div class="lq mono">×2 · €620 EA</div></div>
+     <button class="fixb" style="margin:0;align-self:center">Pick a product</button></div>
+    <div class="sep"></div>
+    <div class="lrow warn"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Bezel setting, white gold 18k</div>
+      <div class="larrow"><span class="lnone">BZ-1800-WG and BZ-1800-WGX are equally close</span></div></div>
+     <div class="lamt"><div class="lv">€860</div><div class="lq mono">×4 · €215 EA</div></div>
+     <button class="fixb" style="margin:0;align-self:center">Choose</button></div>
+   </div>
+
+   <div class="grp"><span class="t">COST WILL MOVE</span><span class="n">3</span><span class="r"></span></div>
+   <div class="card">
+    <div class="lrow moved"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Tennis bracelet 3ct</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">TB-3000-WG · Tennis Bracelet 3.0ct White Gold</span></div></div>
+     <div class="lamt" style="min-width:150px"><div class="lcost" style="justify-content:flex-end">
+       <span class="was">€412</span><span class="now">€498</span><span class="delta">+21%</span></div>
+      <div class="lq mono" style="text-align:right">€3,984 · ×8</div></div></div>
+    <div class="sep"></div>
+    <div class="lrow moved"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Solitaire ring, 0.9ct</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">SR-0900-YG · Solitaire 0.90ct Yellow Gold</span></div></div>
+     <div class="lamt" style="min-width:150px"><div class="lcost" style="justify-content:flex-end">
+       <span class="was">€780</span><span class="now">€702</span><span class="delta ok">−10%</span></div>
+      <div class="lq mono" style="text-align:right">€2,106 · ×3</div></div></div>
+   </div>
+
+   <div class="grp"><span class="t">MATCHED CLEANLY</span><span class="n">84</span><span class="r"></span></div>
+   <div class="card">
+    <div class="lrow"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Stud earrings 0.5ct pair</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">SE-0500-WG · Stud Earrings 0.50ct</span></div></div>
+     <div class="lamt" style="min-width:150px"><div class="lcost" style="justify-content:flex-end">
+       <span class="was">€188</span><span class="now">€194</span><span class="delta ok">+3%</span></div>
+      <div class="lq mono" style="text-align:right">€2,328 · ×12</div></div></div>
+    <div class="sep"></div>
+    <div class="lrow"><span class="lbar"></span>
+     <div class="lmid"><div class="lsup">Bangle, plain 14k</div>
+      <div class="larrow"><svg><use href="#arr"/></svg><span class="match">BG-1400-YG · Bangle 14k Yellow</span></div></div>
+     <div class="lamt" style="min-width:150px"><div class="lcost" style="justify-content:flex-end">
+       <span class="was">€96</span><span class="now">€99</span><span class="delta ok">+3%</span></div>
+      <div class="lq mono" style="text-align:right">€594 · ×6</div></div></div>
+   </div>
+   <div style="height:12px"></div>
+  </div>
+  <div class="slot"><div class="slotin">
+   <div class="smsg"><b>74% of the invoice value is matched.</b> 80% is needed before costs can be
+    applied — resolve 6 more lines and this unlocks.</div>
+   <button class="apply" disabled><svg><use href="#check"/></svg>Apply to 87 products</button>
+  </div></div>
+ </div><div class="lbl mono">DESKTOP</div></div>
+ <p class="cap"><b>3 · Review, desktop.</b> The header carries the four figures the invoice states and the one the system computed — matched %, in amber because it's the one below its bar. Costs read <b>was → now</b> with the delta, so you're judging a change rather than reading a number. Nothing is written until Apply; everything above it is what would happen.</p>
+</div>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+ document.querySelectorAll('.tabs button').forEach(x=>delete x.dataset.on);b.dataset.on='';
+ document.querySelectorAll('.stage').forEach(s=>delete s.dataset.on);
+ document.getElementById('s-'+b.dataset.t).dataset.on='';});
+</script></body></html>

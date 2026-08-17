@@ -70,6 +70,10 @@ export const GROUPS: Group[] = [
       // Gated on `invoices`, so a tenant without it never sees the row — the same rule every other
       // destination here follows, applied once and read by both the rail and the sheet.
       { label: 'Invoices', href: '/v2/invoices', module: 'invoices' },
+      // The other direction: what the business OWES its suppliers, read off the document. Gated on
+      // `landed_cost`, which now means more than it did when it only meant the cost card — see
+      // lib/modules.ts. A tenant that does not import never sees the row.
+      { label: 'Bills', href: '/v2/bills', module: 'landed_cost' },
       { label: 'Analytics', href: '/v2/analytics', module: 'analytics' },
       { label: 'Reports', href: '/v2/reports', module: 'analytics' },
     ],
