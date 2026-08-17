@@ -4,7 +4,7 @@ import { getShipment } from '@/lib/invoices/store'
 import { coverage } from '@/lib/invoices/allocate'
 import { MIN_COVERAGE } from '@/lib/invoices/types'
 import { listPageContext } from '../../list-page'
-import { groupLines, applyState, skippedCount } from '../groups'
+import { groupLines, applyState, skippedCount, coveragePct } from '../groups'
 import { Arrow, Warn } from '../glyphs'
 import { ApplyBill } from './apply'
 import { MatchLine } from './match'
@@ -50,7 +50,7 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
     status: shipment.status,
     foreignWithoutRate: isForeign && !invoice.exchangeRate,
   })
-  const pct = Math.round(cov.ratio * 100)
+  const pct = coveragePct(cov.ratio)
   const charges = shipment.freightTotal + shipment.dutiesTotal + shipment.otherTotal
 
   return (

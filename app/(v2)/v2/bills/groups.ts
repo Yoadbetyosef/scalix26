@@ -55,6 +55,24 @@ export function groupLines(lines: InvoiceLine[]): LineGroup[] {
     .filter((g) => g.lines.length > 0)
 }
 
+/**
+ * Coverage as a whole number, and it FLOORS rather than rounds.
+ *
+ * Found by probing the real data: Primavera is 99.6% matched — 7 of its 133 lines were set aside —
+ * and `Math.round` printed "100% matched" for it. On a screen whose entire argument is coverage, that
+ * is the one rounding error that must not happen: 100% means every line is accounted for, and a bill
+ * that reads 100% while seven lines carry no freight is telling the owner the opposite of the truth.
+ *
+ * The floor is clamped up to 1 rather than down to 0 for the same reason in the other direction: a
+ * bill with one matched line out of four hundred has done SOMETHING, and "0% matched" beside a
+ * drawn bar reads as a failure to run rather than a small result.
+ */
+export function coveragePct(ratio: number): number {
+  if (ratio >= 1) return 100
+  if (ratio <= 0) return 0
+  return Math.max(1, Math.floor(ratio * 100))
+}
+
 /** Skipped lines, which belong to none of the three: a decision already made, shown as its own count. */
 export const skippedCount = (lines: InvoiceLine[]) => lines.filter((l) => l.status === 'skipped').length
 

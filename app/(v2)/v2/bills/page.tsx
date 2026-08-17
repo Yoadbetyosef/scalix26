@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { readBills, type BillRow } from '@/lib/invoices/bills-read'
 import { listPageContext } from '../list-page'
 import { billsLine } from './line'
+import { coveragePct } from './groups'
 
 // SUPPLIER BILLS — docs/miles/supplier-invoices.html.
 //
@@ -24,7 +25,7 @@ const money = (n: number, cur: string) =>
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' }).toUpperCase()
 
 function Row({ b }: { b: BillRow }) {
-  const pct = Math.round(b.coverage.ratio * 100)
+  const pct = coveragePct(b.coverage.ratio)
   const done = b.status === 'applied'
   const quiet = b.status === 'reading' || b.status === 'failed'
   return (

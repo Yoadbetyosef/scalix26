@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { billsLine } from './line'
+import { coveragePct } from './groups'
 
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
@@ -222,5 +223,30 @@ describe('reviewing one bill', () => {
     // action that can move a bill above the gate.
     expect(detail).toContain('<MatchLine lineId={l.id}')
     expect(detail).not.toContain('/landed-cost/')
+  })
+})
+
+describe('coverage is floored, never rounded up', () => {
+  it('99.6% does not read as 100%', () => {
+    // Found by probing the real data: Primavera is 133 lines with 7 set aside, and Math.round printed
+    // "100% matched" for it. 100% means every line is accounted for. A bill that reads 100% while
+    // seven lines carry no freight tells the owner the opposite of the truth.
+    expect(coveragePct(0.996)).toBe(99)
+    expect(coveragePct(0.9999)).toBe(99)
+    expect(coveragePct(1)).toBe(100)
+  })
+
+  it('and a small result does not read as no result', () => {
+    // "0% matched" beside a drawn bar reads as a failure to run rather than one line out of four hundred.
+    expect(coveragePct(0.0025)).toBe(1)
+    expect(coveragePct(0)).toBe(0)
+  })
+
+  it('both screens use it — neither rounds on its own', () => {
+    expect(list).toContain('coveragePct(b.coverage.ratio)')
+    expect(strip(read('./[id]/page.tsx'))).toContain('coveragePct(cov.ratio)')
+    for (const f of ['./page.tsx', './[id]/page.tsx']) {
+      expect(strip(read(f)), f).not.toMatch(/Math\.round\([^)]*ratio[^)]*\* 100\)/)
+    }
   })
 })
