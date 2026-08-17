@@ -36,6 +36,8 @@ export interface Order {
   /** The seller's assertion, and the sentence printed beneath the tax line when it is true. */
   pstExempt?: boolean
   pstExemptionNote?: string | null
+  /** The ONE attachment printed on the invoice. Null = no image, which beats the wrong image. */
+  invoiceImageId?: string | null
   documentTemplateId?: string | null
   invoicedAt?: string | null
   archivedAt?: string | null
@@ -79,6 +81,7 @@ export interface OrderInput {
   deliveryProvince?: string | null
   /** An id from TAX_CHOICES. The server resolves province, label and rate from it — never the client. */
   taxChoiceId?: string | null
+  invoiceImageId?: string | null
   pstExempt?: boolean
   pstExemptionNote?: string | null
   documentTemplateId?: string | null

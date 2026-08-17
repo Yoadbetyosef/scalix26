@@ -37,7 +37,7 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
   const { id, type } = await params
   if (!isOrderDocType(type)) notFound()
 
-  const data = await loadOrderDocument(a.tenantId, id)
+  const data = await loadOrderDocument(a.tenantId, id, type)
   if (!data) notFound()
 
   return (

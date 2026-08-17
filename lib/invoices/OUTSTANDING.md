@@ -790,3 +790,32 @@ any tenant who had it on before this shipped gained a feature without asking.
 **No navigation entry.** `/landed-cost` is routable and module-gated but appears in no sidebar. Reaching
 it means typing the URL. Deliberate — it should be placed once someone has used it and knows where it
 belongs.
+
+---
+
+## §9 — `order_line_items.image_attachment_id` is unwired, and stays that way
+
+The column exists on `order_line_items`. It is referenced **nowhere in the
+codebase** — no read, no write, no field on any type — and is set on 0 of TG
+jewellers' 12 line items. Somebody added it in a migration and never built the
+rest.
+
+It is the correct shape for **one photo per line item**, which is what a
+multi-line order eventually wants: a ring and a matching band on one invoice,
+each with its own photograph.
+
+`add_order_invoice_image.sql` deliberately did not use it. Tatiana asked for "one
+final photo of the ring" — one per ORDER — and that landed on
+`orders.invoice_image_id`. Half-wiring the per-line column at the same time would
+have left two columns that both look like the answer, and the next person would
+have to work out which one is real before they could safely touch either.
+
+**What building it would take:** read it in `lineRow`, write it through the line
+item schema, and change the invoice's image filter from "the order's chosen
+photo" to "each line's chosen photo, in line order" — which is a different
+document layout, not just a different query. The estimate keeps the gallery
+either way.
+
+**The moment to revisit:** an order where two line items are two distinct pieces
+and the customer needs to tell them apart on the invoice. Until then, one photo
+per order is what was asked for and the smaller thing to maintain.

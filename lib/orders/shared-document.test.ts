@@ -119,7 +119,9 @@ describe('the shared loader never depends on a session', () => {
 
   it('the public page passes the tenant the TOKEN resolved, never a session', () => {
     const src = code('app/e/[token]/page.tsx')
-    expect(src).toMatch(/loadOrderDocument\(share\.tenantId, share\.orderId\)/)
+    // The first two arguments are the rule; the third (the document type, added when the invoice
+    // stopped printing the whole gallery) is not, so it is allowed to be there without being pinned.
+    expect(src).toMatch(/loadOrderDocument\(share\.tenantId, share\.orderId[,)]/)
     for (const banned of [/requireOrdersAccess/, /getActiveTenantId/, /auth\.getUser/]) {
       expect(src).not.toMatch(banned)
     }

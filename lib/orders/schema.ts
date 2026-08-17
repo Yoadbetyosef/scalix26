@@ -43,6 +43,8 @@ const orderFields = {
   // Nothing validates a certificate and nothing should pretend to.
   pstExempt: z.boolean().optional(),
   pstExemptionNote: z.string().max(300).nullable().optional(),
+  // The ONE attachment printed on the invoice. Null clears it and the invoice prints no image.
+  invoiceImageId: z.string().uuid().nullable().optional(),
   // Which company's letterhead this order's documents use. Null = the tenant's default.
   documentTemplateId: z.string().uuid().nullable().optional(),
   lineItems: z.array(lineItemSchema).max(200).optional(),
