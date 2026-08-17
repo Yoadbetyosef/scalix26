@@ -205,7 +205,7 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
   if (!canManualTransition(from, to)) return { ok: false, error: `Transition ${from} → ${to} is not allowed (approval stages change via workflow actions only)` }
   // THE WRITE'S ERROR WAS BEING DISCARDED. It returned ok on a refused update, the screen refreshed,
   // and the stage was simply unchanged — a silent failure with nothing to read. It matters now because
-  // 'closed' is a stage the DATABASE has to be told about: against an unmigrated constraint the write
+  // 'finished' is a stage the DATABASE has to be told about: against an unmigrated constraint the write
   // fails with 23514 and the owner would have seen a button that did nothing.
   const { error } = await sb.from('orders').update({ stage: to, updated_at: new Date().toISOString() })
     .eq('tenant_id', c.tenantId).eq('id', id)
@@ -213,7 +213,7 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
     return {
       ok: false,
       error: error.code === '23514'
-        ? `The database does not know the stage "${to}" yet — if this is a new install, run add_order_closed_stage.sql.`
+        ? `The database does not know the stage "${to}" yet — if this is a new install, run add_order_finished_stage.sql.`
         : error.message,
     }
   }

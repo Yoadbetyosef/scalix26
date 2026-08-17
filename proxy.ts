@@ -18,10 +18,19 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // mp4/webm sit beside mp3/wav, which were already here: a media file has no session to update, and
-    // running the auth middleware on a video means a redirect for a logged-out visitor and a wasted
-    // round trip for everyone else. Found by fetching the hero's own assets — .webp returned 200 and
-    // .mp4 returned 307, from the same directory.
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|gltf|bin|mp3|mp4|webm|wav|woff|woff2|ttf|ico)$).*)',
+    // TWO EXCLUSIONS, BOTH LOAD-BEARING, MERGED RATHER THAN CHOSEN BETWEEN.
+    //
+    // mp4/webm sit beside mp3/wav: a media file has no session to update, and running the auth
+    // middleware on a video means a redirect for a logged-out visitor and a wasted round trip for
+    // everyone else. Found by fetching the hero's own assets — .webp returned 200 and .mp4 returned
+    // 307, from the same directory.
+    //
+    // \.well-known/ is Azure publisher-domain verification. Microsoft fetches it with no session; a
+    // login 307 makes Entra think the file is missing, because the browser follows to /auth/login HTML.
+    //
+    // These arrived on two branches, days apart, editing the same regex for the same reason. Taking
+    // either side wholesale silently reverts the other — video goes back to 307, or Entra stops
+    // seeing the file. Neither failure announces itself.
+    '/((?!_next/static|_next/image|favicon.ico|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb|gltf|bin|mp3|mp4|webm|wav|woff|woff2|ttf|ico)$).*)',
   ],
 }

@@ -154,20 +154,6 @@ export async function commitImport(rows: ImportRow[]): Promise<{ ok: boolean; cr
   return { ok: true, created }
 }
 
-// ── Edit ────────────────────────────────────────────────────────────────────────────────────────
-//
-// A contact was write-once. No PATCH route, no edit form, in either UI: once a row existed, nothing
-// in the product could change any field on it — including the four names on the live tenant that the
-// AI wrote and nobody could correct.
-//
-// ── ABSENT IS NOT THE SAME AS EMPTY ─────────────────────────────────────────────────────────────
-//
-// A key that is not in the request is UNTOUCHED. A key present and blank is CLEARED, and clearing is
-// a decision: it is the owner saying "we do not have this", which is different from "nobody has
-// looked". Both record the field in `manual_fields`, and that is the whole point of the column —
-// `.is('name', null)` cannot tell a deliberate blank from a gap, so clearing a wrong name used to
-// hand it straight back to the AI on the next call.
-
 export interface EditResult {
   ok: boolean
   error?: string

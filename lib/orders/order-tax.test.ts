@@ -136,20 +136,20 @@ describe('the orders list stopped calling a link a status', () => {
 describe('a refused stage write is no longer silent', () => {
   it('the update error is read, not discarded', () => {
     // It returned ok on a refused update: the screen refreshed and the stage was simply unchanged.
-    // 'closed' makes it reachable, because the DATABASE has to be told about that stage.
+    // 'finished' makes it reachable, because the DATABASE has to be told about that stage.
     expect(store).toContain("const { error } = await sb.from('orders').update({ stage: to")
     expect(store).toContain("error.code === '23514'")
-    expect(store).toContain('run add_order_closed_stage.sql')
+    expect(store).toContain('run add_order_finished_stage.sql')
   })
 
   it('and the board gives terminal stages no column', () => {
     // A column that only ever accumulates is a list, not a stage of work.
-    expect(read('../../app/orders/board/page.tsx')).toContain("s !== 'cancelled' && s !== 'closed'")
+    expect(read('../../app/orders/board/page.tsx')).toContain("s !== 'cancelled' && s !== 'finished'")
   })
 
-  it('closing does not forbid invoicing later', () => {
+  it('finishing does not forbid invoicing later', () => {
     // invoiced_at is a separate timestamp and the two stay independent — see finish.ts.
-    expect(read('../../app/orders/[id]/page.tsx')).toContain("(o.stage === 'completed' || o.stage === 'closed')")
+    expect(read('../../app/orders/[id]/page.tsx')).toContain("(o.stage === 'completed' || o.stage === 'finished')")
   })
 })
 
@@ -179,7 +179,9 @@ describe('one photo on the invoice, the gallery on the estimate', () => {
   it('only PUBLIC images can be chosen', () => {
     // An internal file is filtered out of the customer's document one layer down, so choosing one
     // would store a preference that silently did nothing.
-    expect(panel).toContain("isImage(x.mimeType) && x.visibility === 'public' && (")
+    // The clause gained `&& canSetInvoiceImage` when cancelled orders lost the choice; the rule it
+    // asserts — public images only — is the part that is pinned.
+    expect(panel).toContain("isImage(x.mimeType) && x.visibility === 'public' &&")
   })
 
   it('a failed write puts the old choice back', () => {
@@ -197,5 +199,52 @@ describe('one photo on the invoice, the gallery on the estimate', () => {
 
   it('deleting the attachment un-chooses it rather than deleting the order', () => {
     expect(imgMigration).toContain('ON DELETE SET NULL')
+  })
+})
+
+describe('the gate is a rule, not a hidden button', () => {
+  const route = read('../../app/api/orders/[id]/route.ts')
+  const narrow = read('../../components/orders/order-document-edit.tsx')
+  const page = read('../../app/orders/[id]/page.tsx')
+
+  it('the ROUTE enforces it — it had no stage check at all before', () => {
+    // The only thing stopping an edit to a finished order was that the page did not render the
+    // button, so every other caller inherited the hole.
+    expect(route).toContain('refusedFields(existing.stage, Object.keys(parsed.data))')
+    // Reading the order is what makes the check possible at all — the route wrote blind before.
+    expect(route).toContain('const existing = await getOrder(id)')
+  })
+
+  it('a cancelled order refuses everything', () => {
+    expect(route).toContain('This order is cancelled. Nothing on it can be changed.')
+  })
+
+  it('a finished order refuses the keys that would re-price it, and names them', () => {
+    // The DECISION is unit-tested in orders.test.ts against refusedFields; this pins only that the
+    // route acts on it and says which keys it refused.
+    expect(route).toContain('if (refused.length) {')
+    expect(route).toContain('${refused.join(\', \')} cannot.`')
+  })
+
+  it('the narrow form cannot reach a price — it posts three keys', () => {
+    // The full drawer always sends lineItems, and updateOrder recomputes subtotal_cents whenever that
+    // key is present. Saving a tax change through the drawer would silently re-price a sent invoice.
+    const body = narrow.slice(narrow.indexOf('body: JSON.stringify({'), narrow.indexOf('})', narrow.indexOf('body: JSON.stringify({')))
+    expect(body).toContain('taxChoiceId')
+    expect(body).toContain('pstExempt')
+    expect(body).toContain('pstExemptionNote')
+    for (const priced of ['lineItems', 'depositCents', 'currency', 'orderNumber', 'customerName']) {
+      expect(body, priced).not.toContain(priced)
+    }
+  })
+
+  it('the page shows the drawer OR the narrow form, never both', () => {
+    expect(page).toContain('canEditWorkflow(o.stage) ? (')
+    expect(page).toContain(') : canEditDocumentFacts(o.stage) ? (')
+    expect(page).toContain(') : null}')
+  })
+
+  it('and the photo choice closes on cancelled only', () => {
+    expect(page).toContain('canSetInvoiceImage={canEditDocumentFacts(o.stage)}')
   })
 })

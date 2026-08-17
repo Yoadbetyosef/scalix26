@@ -35,7 +35,13 @@ function KindIcon({ mime }: { mime: string }) {
 // Nothing chosen prints no image. There is no render-vs-final distinction anywhere in the data; it
 // lives in the filename and in her head. So the alternative to "none" is not "the right one", it is
 // "whichever was uploaded first".
-export function AttachmentsPanel({ orderId, invoiceImageId }: { orderId: string; invoiceImageId?: string | null }) {
+export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage = true }: {
+  orderId: string
+  invoiceImageId?: string | null
+  /** False on a cancelled order — there is no document to put a photograph on. Uploading, sharing and
+   *  deleting stay available; only the invoice choice closes, and the route refuses it either way. */
+  canSetInvoiceImage?: boolean
+}) {
   const [chosen, setChosen] = useState<string | null>(invoiceImageId ?? null)
   const [items, setItems] = useState<Att[]>([])
   const [busy, setBusy] = useState(false)
@@ -118,7 +124,7 @@ export function AttachmentsPanel({ orderId, invoiceImageId }: { orderId: string;
 
       {/* Said once, above the list, rather than repeated on every row. It is the answer to "why is my
           ring not on the invoice" and it is true before anything has been chosen. */}
-      {items.some((x) => isImage(x.mimeType) && x.visibility === 'public') && !chosen && (
+      {canSetInvoiceImage && items.some((x) => isImage(x.mimeType) && x.visibility === 'public') && !chosen && (
         <p className="mb-2 text-xs text-gray-500">
           No photo is set for the invoice, so it will print without one. Everything shared here still
           appears on the estimate.
@@ -148,7 +154,7 @@ export function AttachmentsPanel({ orderId, invoiceImageId }: { orderId: string;
                   </span>
                 </div>
                 {/* The invoice photo. Offered on public images only — see the note above the component. */}
-                {isImage(x.mimeType) && x.visibility === 'public' && (
+                {isImage(x.mimeType) && x.visibility === 'public' && canSetInvoiceImage && (
                   <div className="mt-1">
                     {chosen === x.id ? (
                       <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">

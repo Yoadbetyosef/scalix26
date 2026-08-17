@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { contactFieldsSchema } from '@/lib/contacts/schema'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { createContact } from '@/lib/contacts/store'
-import { contactFieldsSchema } from '@/lib/contacts/schema'
 
-// The same six fields the edit route writes, from one schema so the two cannot drift.
+// The same six fields the edit route writes, from one schema so the two cannot drift. They were
+// byte-identical when this was split — which is exactly how two copies start.
 const schema = contactFieldsSchema
 
 export async function POST(req: NextRequest) {

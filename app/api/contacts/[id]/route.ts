@@ -16,9 +16,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const c = await requireActiveBusinessContext()
   if (!c) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // The v2-only rollout gate that stood here is GONE, as its own comment instructed: v1 has an edit
-  // form now (components/contacts/contact-edit.tsx) and there are two callers. It was never a
-  // permission — requireActiveBusinessContext above is, and it is tenant-scoped and version-agnostic.
+  // No rollout gate. The /v2 preview does not exist on this branch and v1's form is the only caller —
+  // requireActiveBusinessContext above is the real gate, and it is tenant-scoped.
 
   const parsed = contactFieldsSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })

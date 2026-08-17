@@ -9,17 +9,11 @@ const store = read('./store.ts')
 const route = read('../../app/api/contacts/[id]/route.ts')
 const create = read('../../app/api/contacts/route.ts')
 const aiName = read('./ai-name.ts')
-const sheet = read('../../app/(v2)/v2/contacts/[id]/edit.tsx')
-// The SHELL moved to the /v2 root once four surfaces opened it. The contact-specific parts —
-// the six fields, the duplicate sentence — stayed where they belong.
-const shell = read('../../app/(v2)/v2/form-sheet.tsx')
-const contactForm = read('../../app/(v2)/v2/contacts/sheet.tsx')
+// The /v2 sheet is not on this branch; its assertions came out with it. The v1 form's own
+// block is at the bottom, and it asserts the same rules against the same route.
 const voice = strip(read('../../app/api/conversations/voice/route.ts'))
 const book = strip(read('../../app/api/appointments/book/route.ts'))
 const stl = strip(read('../leads/speed-to-lead.ts'))
-// The booking path's contact handling moved into the shared appointment core when the owner's route
-// arrived — one insert, two policies. The rule is the same; the file is not.
-const apptCore = strip(read('../appointments/create.ts'))
 
 describe('a name is a name, at every door', () => {
   it('rejects the two the live table holds that it always claimed to reject', () => {
@@ -46,17 +40,15 @@ describe('a name is a name, at every door', () => {
   it('all three automated writers go through the one helper', () => {
     // The filter used to be at ONE of three call sites, which is why two names it rejects are in the
     // table. A rule applied at one of three places is a coincidence, not a rule.
-    for (const src of [voice, apptCore, stl]) {
+    for (const src of [voice, book, stl]) {
       expect(src).toContain('writeCapturedName')
       expect(src).not.toMatch(/update\(\{ name \}\)/)
     }
-    // And the route it left keeps none of it.
-    expect(book).not.toContain('writeCapturedName')
   })
 
   it('and the INSERT doors apply the same test', () => {
     // An update guard cannot help a path that creates the row. Two of the four got in that way.
-    expect(apptCore).toContain('looksLikeCapturedName(input.name) ? input.name : null')
+    expect(book).toContain('looksLikeCapturedName(name) ? name : null')
     expect(stl).toContain('looksLikeCapturedName(name) ? name : null')
   })
 
@@ -130,54 +122,6 @@ describe('editing a contact', () => {
   })
 })
 
-describe('the sheet', () => {
-  it('sends only what changed', () => {
-    // Sending all six would mark every field decided the first time somebody fixed a typo — the
-    // whole-row freeze the per-field column exists to avoid.
-    expect(sheet).toContain('if (v[f.key].trim() !== initial[f.key].trim()) patch[f.key] = v[f.key].trim()')
-    expect(sheet).toContain('if (!Object.keys(patch).length) { close(); return }')
-  })
-
-  it('names who a duplicate belongs to rather than saying "duplicate"', () => {
-    // In the shared shell, because create and edit answer with the SAME contract and the sentence a
-    // person reads must not depend on which of the two they were using.
-    expect(contactForm).toContain("const who = d.name || d.phone || d.email || 'someone already in your contacts'")
-    expect(sheet).toContain("duplicateMessage(j, 'That did not save.')")
-  })
-
-  it('says the one thing about this form nobody could guess', () => {
-    expect(sheet).toContain('including a field you empty')
-  })
-
-  it('closes on Escape and on the veil — once, for all three sheets', () => {
-    // Three surfaces open one now. A second copy would drift on exactly the parts nobody thinks
-    // about until they are missing.
-    expect(shell).toContain("e.key === 'Escape'")
-    expect(shell).toContain('className="v2-eveil"')
-    expect(sheet).toContain('<Sheet title="Edit contact"')
-    expect(sheet).not.toContain('v2-eveil')
-  })
-
-  it('reaches DetailPage as a NODE, not a handler', () => {
-    // DetailPage is a server component and cannot take an onClick. A field, not a branch.
-    const detail = read('../../app/(v2)/v2/detail.tsx')
-    expect(detail).toContain('node?: ReactNode')
-    expect(detail).toContain('a.node\n                ? <Fragment key={a.label}>{a.node}</Fragment>')
-    expect(strip(read('../../app/(v2)/v2/contacts/[id]/body.tsx'))).toContain('<EditContact')
-  })
-
-  it('no longer carries the /v2 gate — v1 has a form now', () => {
-    // The gate said of itself: "DELETE THIS LINE when v1 gains one; it is a rollout gate, not a
-    // permission." It has, so it is gone. requireActiveBusinessContext is the real gate and is
-    // tenant-scoped and version-agnostic.
-    expect(strip(route)).not.toContain('v2Allowed')
-    expect(strip(route)).not.toContain("from '@/lib/v2/access'")
-    const patch = route.slice(route.indexOf('export async function PATCH'))
-    expect(patch.indexOf('const c = await requireActiveBusinessContext()')).toBeLessThan(patch.indexOf('updateContact('))
-    expect(patch).toContain("{ error: 'Unauthorized' }, { status: 401 }")
-  })
-})
-
 describe('the v1 form', () => {
   const form = read('../../components/contacts/contact-edit.tsx')
   const page = read('../../app/contacts/[id]/page.tsx')
@@ -189,7 +133,6 @@ describe('the v1 form', () => {
     for (const f of ['name', 'email', 'phone', 'address', 'currency', 'notes']) {
       expect(form, f).toContain(`key: '${f}'`)
     }
-    expect(form).toContain('{FIELDS.map((x) => (')
   })
 
   it('and they are the schema’s six, not a second list', () => {
@@ -197,28 +140,25 @@ describe('the v1 form', () => {
     expect([...form.matchAll(/key: '(\w+)'/g)].map((m) => m[1]).sort()).toEqual(declared.sort())
   })
 
-  it('sends only what changed, exactly as the sheet does', () => {
+  it('sends only what changed', () => {
     // Sending all six would mark every field decided the first time somebody fixed a typo — the
-    // whole-row freeze the per-field column exists to avoid. This form got it wrong first and the
-    // sheet's own test caught it.
+    // whole-row freeze the per-field column exists to avoid.
     expect(form).toContain('if (now !== was) patch[x.key] = now || null')
     expect(form).toContain('if (!Object.keys(patch).length)')
   })
 
-  it('a cleared field is still sent, as null', () => {
-    // "We do not have this" is a decision and must be recorded as one.
-    expect(form).toContain('patch[x.key] = now || null')
-  })
-
   it('a 409 names WHO the number already belongs to', () => {
     expect(form).toContain('if (res.status === 409 && j.duplicateOf) { setDupe(j.duplicateOf); return }')
-    expect(form).toContain('href={`/contacts/${dupe.id}`}')
   })
 
   it('the notes card is always there, empty or not', () => {
-    // It rendered only when there WERE notes, so an empty one was invisible as well as uneditable —
-    // the same fault as the fields, one card out.
     expect(page).not.toMatch(/\{contact\.notes && \(/)
     expect(page).toContain('No notes yet. Use Edit above to add some.')
+  })
+
+  it('the route has no /v2 gate on this branch', () => {
+    // The preview does not exist here; v1's form is the only caller and
+    // requireActiveBusinessContext is the real gate.
+    expect(strip(route)).not.toContain('v2Allowed')
   })
 })

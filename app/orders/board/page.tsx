@@ -26,8 +26,8 @@ export default async function OrdersBoardPage() {
       </div>
       <div className="flex gap-3 overflow-x-auto pb-4">
         {/* Terminal stages get no column — a board column that only ever accumulates is a list, not a
-            stage of work. 'closed' joins 'cancelled' here; both are still on /orders. */}
-        {ORDER_STAGES.filter((s) => s !== 'cancelled' && s !== 'closed').map((s) => (
+            stage of work. 'finished' joins 'cancelled' here; both are still on /orders. */}
+        {ORDER_STAGES.filter((s) => s !== 'cancelled' && s !== 'finished').map((s) => (
           <div key={s} className="w-64 shrink-0 rounded-xl border border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
               <span className="text-xs font-semibold text-gray-700">{STAGE_LABELS[s]}</span>
