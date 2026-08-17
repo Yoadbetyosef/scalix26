@@ -31,6 +31,18 @@ wss.on('connection', (twilioWs) => {
   // is different and means nothing is allowed: a tenant with all three modules off is a real state.
   // See lib/voice/capabilities.ts, which owns both halves of that rule.
   let capabilities = null;
+  /**
+   * Does this tenant allow a capability? ONE definition, because there are now two consumers — the
+   * function list below and the keyterm fetch above it — and two parses of the same string is how the
+   * two drift apart.
+   *
+   * NULL capabilities means the app did not say, which means everything: an older app deployment that
+   * does not send the parameter behaves exactly as it did before this existed.
+   */
+  function allows(capability) {
+    if (capabilities === null || capabilities === undefined) return true;
+    return capabilities.split(',').map((c) => c.trim()).filter(Boolean).includes(capability);
+  }
   let fromNumber = null;
   let leadToken = null;    // tenant's secret intake token — to save the lead
   let callerNumber = null; // caller's real phone (From) — reliable fallback
@@ -66,6 +78,15 @@ wss.on('connection', (twilioWs) => {
   async function fetchKeyterms() {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
     if (!appUrl || !leadToken) return [];
+    // GATED ON THE SAME CAPABILITY AS search_catalog, because it IS the catalog: these are the
+    // tenant's product names, and a tenant whose catalog capability is off is one the agent must not
+    // be able to answer product questions for. Fetching them anyway sent a business's product list to
+    // a speech vendor to sharpen transcription for a function the model is not even offered — no
+    // prices and no stock, so not an exposure, but it contradicts the rule the gate exists to state.
+    if (!allows('catalog')) {
+      console.log('[keyterms] skipped — this tenant has no catalog capability');
+      return [];
+    }
     try {
       const c = new AbortController();
       // Hard ceiling. This runs before the caller has spoken, but a hung fetch here delays the
@@ -172,18 +193,13 @@ wss.on('connection', (twilioWs) => {
     //
     // The names here are CAPABILITIES, not module keys: this server knows its own functions and has
     // no business learning the app's module vocabulary.
-    const allowed = capabilities === null || capabilities === undefined
-      ? null                                   // the app did not say → everything, unchanged
-      : new Set(capabilities.split(',').map((c) => c.trim()).filter(Boolean));
     const NEEDS = {
       check_availability: 'booking',
       book_appointment: 'booking',
       search_catalog: 'catalog',
       send_payment_link: 'payments',
     };
-    const gated = allowed === null
-      ? agentFunctions
-      : agentFunctions.filter((f) => !NEEDS[f.name] || allowed.has(NEEDS[f.name]));
+    const gated = agentFunctions.filter((f) => !NEEDS[f.name] || allows(NEEDS[f.name]));
     console.log('[functions] capabilities', capabilities === null ? '(not sent — all)' : capabilities || '(none)',
       '| offering', gated.map((f) => f.name).join(', ') || '(none)');
 

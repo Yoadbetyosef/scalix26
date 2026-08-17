@@ -99,6 +99,25 @@ describe('voice-server filters, it does not decide', () => {
     expect(server).toContain('if (transferNumber) {')
     expect(server).not.toMatch(/NEEDS\[[^\]]*\] = 'transfer/)
   })
+
+  it('the KEYTERM list is gated on catalog too — it IS the catalog', () => {
+    // The merge with feat/landed-cost-invoices put a second consumer of `capabilities` in this file:
+    // keyterms, which sends the tenant's PRODUCT NAMES to Deepgram at call setup. It arrived
+    // ungated, so a tenant whose catalog capability is off had its product list sent to a speech
+    // vendor to sharpen transcription for a function the model is not even offered. Names only — no
+    // prices, no stock — so not an exposure, but it contradicted the rule this gate exists to state.
+    expect(server).toContain("if (!allows('catalog')) {")
+    const fetchFn = server.slice(server.indexOf('async function fetchKeyterms'))
+    expect(fetchFn.indexOf("allows('catalog')")).toBeLessThan(fetchFn.indexOf('await fetch('))
+  })
+
+  it('and both consumers read ONE definition of what a capability means', () => {
+    // Two parses of the same comma-separated string is how the two drift apart.
+    expect(server).toContain('function allows(capability) {')
+    expect(server).toContain('allows(NEEDS[f.name])')
+    // The old inline Set is gone rather than left beside its replacement.
+    expect(server).not.toContain('new Set(capabilities.split')
+  })
 })
 
 describe('the routes are the gate, not the tool list', () => {
