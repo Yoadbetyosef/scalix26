@@ -236,7 +236,11 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
       <div className="v2-hero">
         {hero}
         {amyLayer}
-      <div className="v2-overlay">
+      {/* data-bottom-block is READ BY THE SCAN. Its readouts have to stay above whatever this
+          element turns out to be, and its height is not knowable from here — the caption wraps to a
+          different number of lines depending on what Rudi has to say and how wide the phone is. So
+          the scan measures this box rather than either of us guessing a fraction. See rudi-scan.tsx. */}
+      <div className="v2-overlay" data-bottom-block>
         {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
         {said && <p className="v2-you">You · {said}</p>}
         {caption}

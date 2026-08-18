@@ -972,10 +972,22 @@
      SWIPE UP label, and the composer was landing on the same rows — two things in one place, which is
      the one arrangement that reads as broken rather than dense. The padding puts the button above the
      handle with real clearance; nothing moves on desktop, where .v2-grab does not exist. */
+  /* ── HOW FAR DOWN THE BOTTOM BLOCK SITS ───────────────────────────────────────────────────────
+     ONE number for the whole group — the sentence, the button, the handle and SWIPE UP — because
+     they are two elements pinned to the bottom at two different offsets and the spacing between them
+     IS the difference between those offsets. Move one and the group changes shape; move both by the
+     same amount and it only changes position.
+
+     The block used to end 92px above the bottom edge, where the reference ends 30px above it, so it
+     read as floating. `.v2-grab` lands at 36px with this, which keeps the label clear of the home
+     indicator without pretending the safe area is bigger than it is. The closed sheet is translated
+     fully off-screen, so nothing down there is competing for the room. */
+  .v2 { --v2-bottom-drop: 56px; }
   .v2 .v2-overlay {
-    padding: 0 16px calc(132px + env(safe-area-inset-bottom));
+    padding: 0 16px calc(132px - var(--v2-bottom-drop) + env(safe-area-inset-bottom));
     z-index: 5;
   }
+  .v2 .v2-grab { bottom: calc(92px - var(--v2-bottom-drop)); }
   .v2 .v2-overlay .v2-composer { max-width: none; margin-top: 18px; }
   .v2 .v2-overlay .v2-ctl { right: 0; }
 

@@ -36,8 +36,46 @@ describe('the sequence is the reference’s, number for number', () => {
     expect(body).toContain('const CARD_CYCLE = 5.25')
   })
 
-  it('the ceiling that keeps the readouts off the copy', () => {
-    both('const CEILING=.660', 'const CEILING = 0.66', 'ceiling')
+  it('the ceiling that keeps the readouts off the copy — as a FALLBACK', () => {
+    // The reference's 0.660 was measured against one sentence at one width. It survives as the value
+    // used when there is nothing to measure, not as the rule.
+    both('const CEILING=.660', 'const CEILING_FALLBACK = 0.66', 'ceiling')
+  })
+
+  it('and the real ceiling is measured from the block it has to clear', () => {
+    // A fixed fraction put CALLS TODAY on top of the sentence the moment the caption wrapped to two
+    // lines, which it does on a narrow phone.
+    expect(body).toContain("querySelector('[data-bottom-block]')")
+    expect(read('./home-client.tsx')).toContain('<div className="v2-overlay" data-bottom-block>')
+    expect(body).toContain('const want = top - CARD_DROP - CARD_GAP')
+  })
+
+  it('the LOWER card is the one that has to clear it', () => {
+    // A ceiling computed without the drop leaves exactly one of the two overlapping, which is the
+    // half-fixed version of the bug and harder to see than the whole one.
+    expect(body).toContain('const CARD_DROP = 0.055')
+    expect(body).toContain('const drop = i === 1 ? H * CARD_DROP : 0')
+  })
+
+  it('measured on layout, never per frame', () => {
+    // getBoundingClientRect is a layout read; sixty a second to answer a question that changes when
+    // the text wraps is what makes a canvas feel expensive.
+    expect(body).toContain('const bro = block ? new ResizeObserver(() => measureCeiling()) : null')
+    // Bounded to the frame function itself — everything after it is setup, and the setup is exactly
+    // where these two calls belong.
+    const from = body.indexOf('function frame()')
+    const loop = body.slice(from, body.indexOf('if (!reduced) {', from))
+    expect(loop).not.toContain('measureCeiling()')
+    expect(loop).not.toContain('getBoundingClientRect')
+    expect(loop).not.toContain('fit()')
+  })
+
+  it('and the whole bottom block moves as ONE number', () => {
+    // The sentence, the button, the handle and SWIPE UP are two elements pinned at two offsets, and
+    // the spacing between them IS the difference between those offsets.
+    expect(css).toContain('.v2 { --v2-bottom-drop: 56px; }')
+    expect(css).toContain('padding: 0 16px calc(132px - var(--v2-bottom-drop) + env(safe-area-inset-bottom));')
+    expect(css).toContain('.v2 .v2-grab { bottom: calc(92px - var(--v2-bottom-drop)); }')
   })
 
   it('the card envelope: ~0.45s in, 3.4s hold, ~1.15s out', () => {

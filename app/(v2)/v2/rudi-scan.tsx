@@ -41,8 +41,31 @@ import type { RudiHandle, RudiState, Props } from './rudi-canvas'
 /** The reference's own layout constants. */
 const CYCLE = 5.4
 const CARD_CYCLE = 5.25
-/** The fraction of height the readouts must not pass, so the copy underneath is never covered. */
-const CEILING = 0.66
+/**
+ * The fraction of height the readouts must not pass, so the copy underneath is never covered.
+ *
+ * THE REFERENCE'S 0.660 IS THE FALLBACK, NOT THE RULE. It was measured against one sentence at one
+ * width in a 392×830 frame. On a real phone the caption is whatever Rudi has to say — "1 job on the
+ * books today" wraps to two lines on a narrow screen — and the block underneath grows upward past a
+ * fixed fraction, which is how CALLS TODAY ended up sitting on top of the sentence and ANSWERED
+ * covering the end of the line.
+ *
+ * So the ceiling is MEASURED from the element the cards must clear, and this number is only what it
+ * falls back to when there is nothing to measure — a desktop hero, or a first frame before layout.
+ */
+const CEILING_FALLBACK = 0.66
+
+/**
+ * How far the right-hand card hangs below the left one, as a fraction of height.
+ *
+ * Shared by the drawing and the ceiling deliberately: the LOWER card is the one that has to clear the
+ * copy, so a ceiling computed without this would leave exactly one of the two overlapping — which is
+ * the half-fixed version of this bug and harder to see than the whole one.
+ */
+const CARD_DROP = 0.055
+
+/** Clear air between the lowest card and the top of the block, as a fraction of height. */
+const CARD_GAP = 0.02
 
 const MARK: Array<{ x: number; y: number; t: string; c: string }> = [
   { x: 0.26, y: 0.13, t: 'V·004', c: '34,211,238' }, { x: 0.70, y: 0.10, t: 'C·012', c: '255,46,147' },
@@ -152,6 +175,30 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
     // The scan's own opacity, so stopping for a speech is a fade rather than a cut.
     let scanA = 1
     let phaseKey = ''
+    // Where the cards may reach. Recomputed on layout, never per frame — getBoundingClientRect is a
+    // layout read, and sixty of them a second to answer a question that changes when the text wraps
+    // is the kind of thing that makes a canvas feel expensive.
+    let ceiling = CEILING_FALLBACK
+
+    /**
+     * Measure the block the readouts must stay above.
+     *
+     * Both rects come from the same viewport, so the subtraction is in CSS pixels and the ratio is
+     * the same in canvas pixels — no DPR term, and none wanted: a fraction is a fraction.
+     */
+    function measureCeiling() {
+      const block = canvas!.closest('.v2-hero')?.querySelector('[data-bottom-block]')
+      if (!block) { ceiling = CEILING_FALLBACK; return }
+      const cr = canvas!.getBoundingClientRect()
+      const br = block.getBoundingClientRect()
+      if (!cr.height || !br.height) return
+      const top = (br.top - cr.top) / cr.height
+      // The lowest card is the dropped one, so that is what has to clear the block.
+      const want = top - CARD_DROP - CARD_GAP
+      // Never above the top third: a ceiling that high would mean the copy has eaten the screen, and
+      // cards floating by her forehead is a worse answer than cards that are simply not shown.
+      ceiling = Math.max(0.30, Math.min(CEILING_FALLBACK, want))
+    }
 
     // ASSIGNING canvas.width WIPES THE CANVAS — and resets the 2D context — even when the value is
     // unchanged. The old loop learned this the hard way (a mouse move blanked the screen), so measure
@@ -163,6 +210,7 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       if (!w || !h || (w === W && h === H)) return
       W = w; H = h
       canvas!.width = W; canvas!.height = H
+      measureCeiling()
     }
 
     const seg = (a: number, b: number) => Math.max(0, Math.min(1, (t - a) / (b - a)))
@@ -202,12 +250,12 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
         return { k: s[0], v: s[1], w: Math.max(kw, vw) + padX * 2 }
       })
       const hh = padY * 2 + lead + W * 0.040
-      const y = H * CEILING - hh
+      const y = H * ceiling - hh
       const rise = (1 - a) * H * 0.012
       const margin = W * 0.056
       cs.forEach((cd, i) => {
         const x = i === 0 ? margin : W - margin - cd.w
-        const drop = i === 1 ? H * 0.055 : 0
+        const drop = i === 1 ? H * CARD_DROP : 0
         ctx!.fillStyle = `rgba(217,242,36,${a * 0.92})`
         rr(x, y + rise + drop, cd.w, hh, W * 0.013); ctx!.fill()
         ctx!.fillStyle = `rgba(65,73,10,${a * 0.78})`; ctx!.font = kf
@@ -222,7 +270,9 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       const now = performance.now()
       const dt = (now - last) / 1000
       last = now
-      fit()
+      // NOT fit() — that reads getBoundingClientRect, and a layout read every frame is a cost paid
+      // sixty times a second to answer a question that only changes when something resizes. The
+      // ResizeObserver below is what answers it, which is where the old loop put it too.
       if (!W || !H) { raf = requestAnimationFrame(frame); return }
 
       // Speaking is the one state that stops the sequence. The clock keeps running underneath so the
@@ -423,6 +473,13 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
 
     const ro = new ResizeObserver(() => fit())
     ro.observe(canvas)
+
+    // The BLOCK's own size, watched separately from the canvas's. The canvas does not change when the
+    // caption wraps to a second line — the block does, and that is the whole case this exists for.
+    const block = canvas.closest('.v2-hero')?.querySelector('[data-bottom-block]')
+    const bro = block ? new ResizeObserver(() => measureCeiling()) : null
+    if (block && bro) bro.observe(block)
+    measureCeiling()
     const onVisibility = () => { last = performance.now() }
     document.addEventListener('visibilitychange', onVisibility)
 
@@ -430,6 +487,7 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       disposed = true
       cancelAnimationFrame(raf)
       ro.disconnect()
+      bro?.disconnect()
       document.removeEventListener('visibilitychange', onVisibility)
       if (timerRef.current) clearTimeout(timerRef.current)
     }
