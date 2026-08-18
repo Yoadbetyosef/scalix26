@@ -73,8 +73,13 @@ export function UploadBill({ tone = 'header' }: { tone?: 'header' | 'empty' }) {
       />
       <button
         type="button"
-        className={tone === 'header' ? 'v2-hact' : 'v2-epri'}
-        data-tone={tone === 'header' ? 'primary' : undefined}
+        // ONE TREATMENT, BOTH PLACES. This used to switch to `v2-epri` in the empty state, which
+        // carries only background and colour — all of its geometry lives on `.v2-eacts button`, so
+        // outside a sheet it rendered as a black rectangle behind text: no padding, no radius, 18px
+        // tall, the glyph above the fill rather than inside it. A button in a different place is
+        // still the same button.
+        className="v2-hact"
+        data-tone="primary"
         data-touch
         onClick={() => input.current?.click()}
         disabled={busy}

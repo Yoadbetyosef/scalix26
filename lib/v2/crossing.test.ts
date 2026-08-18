@@ -101,3 +101,38 @@ describe('no calling file names a v1 URL', () => {
     expect(door).toContain('data-classic')
   })
 })
+
+describe('a crossing is a button that happens to leave', () => {
+  const css = read('../../app/(v2)/v2/v2-tokens.css')
+
+  it('it INHERITS the header-action rule rather than restating it', () => {
+    // The first version wrote its own block and got a dashed border, a column layout and a second
+    // font size that matched nothing else on the screen. A control that looks unlike every button
+    // beside it reads as broken, not as deliberate.
+    expect(css).toMatch(/\.v2 \.v2-hact,\s*\n\.v2 \.v2-classic \{/)
+    expect(css).toMatch(/\.v2 \.v2-hact:hover,\s*\n\.v2 \.v2-classic:hover/)
+  })
+
+  it('and its own block restates NO geometry', () => {
+    // Padding, radius, font-size, display — all of it comes from the shared rule. Anything here is a
+    // second source of truth for how a button is shaped.
+    // The BUTTON's own declaration only — not the `i` chip beside it, which is a chip and is
+    // entitled to its own padding and radius.
+    const decl = '.v2 .v2-classic { text-decoration: none; }'
+    expect(css).toContain(decl)
+    for (const prop of ['padding:', 'border-radius:', 'font-size:', 'display:']) {
+      expect(decl, prop).not.toContain(prop)
+    }
+  })
+
+  it('the rule is written where the next person will read it', () => {
+    expect(css).toContain('A CROSSING BUTTON IS A BUTTON THAT HAPPENS TO LEAVE')
+    expect(css).toContain('Do not write a new block')
+  })
+
+  it('the why line is a SIBLING of the button', () => {
+    // A button containing a paragraph stops being the same shape as the buttons beside it.
+    const door = read('../../app/(v2)/v2/classic-link.tsx')
+    expect(door).toMatch(/<\/a>[\s\S]{0,300}v2-classic-why/)
+  })
+})

@@ -771,14 +771,16 @@
   display: flex; align-items: center; gap: 12px; width: 100%;
   max-width: 820px; margin: 0 auto; padding: 0 44px;
 }
-.v2 .v2-hact {
+.v2 .v2-hact,
+.v2 .v2-classic {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   padding: 8px 14px; border-radius: 10px; cursor: pointer;
   font-size: 13px; font-weight: 500; font-family: inherit;
   border: 1px solid var(--v2-line); background: var(--v2-paper); color: var(--v2-ink-70);
   transition: background 0.16s, color 0.16s;
 }
-.v2 .v2-hact:hover { color: var(--v2-ink); background: var(--v2-hover); }
+.v2 .v2-hact:hover,
+.v2 .v2-classic:hover { color: var(--v2-ink); background: var(--v2-hover); }
 /* The filled one, the same treatment the conversation's primary wears: ink, not an accent. An accent
    here would compete with the channel hues in the list below it. */
 .v2 .v2-hact[data-tone="primary"] { background: var(--v2-ink); border-color: var(--v2-ink); color: #fff; }
@@ -3185,20 +3187,22 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 
 /* ── The declared crossing ────────────────────────────────────────────────────────────────────────
-   A door, dressed as one. It reads as a v2 control so it does not look broken, and carries the word
-   Classic so nobody arrives in the old design wondering what happened. Quieter than a primary action
-   on purpose: crossing is a fallback, not the thing the screen is for. */
-.v2 .v2-classic {
-  display: inline-flex; flex-direction: column; gap: 2px; text-decoration: none;
-  padding: 8px 13px; border-radius: 10px; cursor: pointer;
-  border: 1px dashed var(--v2-line-strong); background: var(--v2-paper); color: var(--v2-ink-70);
-  transition: background 0.16s, color 0.16s;
-}
-.v2 .v2-classic:hover { background: var(--v2-hover); color: var(--v2-ink); }
-.v2 .v2-classic-main { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
-/* The label, not a tooltip. A tooltip is a thing nobody reads before clicking. */
-.v2 .v2-classic-main i {
+   A CROSSING BUTTON IS A BUTTON THAT HAPPENS TO LEAVE, not a different kind of control. So
+   `.v2-classic` is bolted onto the `.v2-hact` rule above and inherits every measurement from it —
+   padding, radius, font, the 15px glyph, the hover. Nothing here restates geometry.
+
+   THE NEXT PERSON ADDING A CROSSING: put your class on that selector list too, or just use
+   .v2-classic. Do not write a new block. The first version of this file did, and got a dashed border,
+   a column layout and a second font size that matched nothing else on the screen — a control that
+   looks unlike every other button reads as broken rather than as deliberate.
+
+   The ONLY thing that differs is the marker: a small "Classic" chip, on the button's own face rather
+   than in a tooltip, because a tooltip is a thing nobody reads before clicking. */
+.v2 .v2-classic { text-decoration: none; }
+.v2 .v2-classic i {
   font-style: normal; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--v2-ink-40); border: 1px solid var(--v2-line); border-radius: 4px; padding: 1px 5px;
 }
-.v2 .v2-classic-why { font-size: 11.5px; color: var(--v2-ink-42); line-height: 1.35; }
+/* The half-sentence under it, a SIBLING of the button rather than inside it — a button that contains
+   a paragraph stops being the same shape as the buttons beside it. */
+.v2 .v2-classic-why { display: block; margin-top: 5px; font-size: 11.5px; color: var(--v2-ink-42); line-height: 1.35; }

@@ -30,6 +30,7 @@ export function ClassicLink({ to }: { to: CrossingKey }) {
   const { href, label, why } = CROSSINGS[to]
 
   return (
+    <>
     <a
       // The marker the guard reads. Not decoration: no-escape allows an outbound href ONLY on an
       // element carrying it, so removing this attribute fails the build rather than quietly widening
@@ -44,11 +45,13 @@ export function ClassicLink({ to }: { to: CrossingKey }) {
         if (label) document.cookie = crossingCookieValue(from)
       }}
     >
-      <span className="v2-classic-main">
-        {label}
-        <i>Classic</i>
-      </span>
-      {why && <span className="v2-classic-why">{why}</span>}
+      {label}
+      {/* The marker, on the button's own face. A tooltip is a thing nobody reads before clicking. */}
+      <i>Classic</i>
     </a>
+    {/* A SIBLING, not a child: a button containing a paragraph stops being the same shape as the
+        buttons beside it, which is what made the first version look like its own kind of control. */}
+    {why && <span className="v2-classic-why">{why}</span>}
+    </>
   )
 }

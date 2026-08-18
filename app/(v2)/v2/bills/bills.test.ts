@@ -278,6 +278,15 @@ describe('the empty state, and the upload it promises', () => {
     expect((list.match(/<UploadBill/g) ?? [])).toHaveLength(2)
   })
 
+  it('and BOTH wear the header-action treatment', () => {
+    // The empty one used `v2-epri`, which carries only background and colour — every measurement it
+    // looks like it has comes from `.v2-eacts button`. Outside a sheet it rendered 18px tall with no
+    // padding and no radius: a black rectangle behind text. Measured before and after.
+    expect(upload).toContain('className="v2-hact"')
+    expect(upload).toContain('data-tone="primary"')
+    expect(strip(upload)).not.toContain('v2-epri')
+  })
+
   it('posts to the SAME route v1 uses — it is not a v1-only path', () => {
     // /landed-cost is a second CALLER of this route, not the owner of it. Linking there instead
     // would leave the preview, which no-escape refuses and which is a dead end on a phone.
