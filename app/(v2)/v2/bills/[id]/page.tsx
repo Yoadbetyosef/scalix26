@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getShipment } from '@/lib/invoices/store'
-import { coverage } from '@/lib/invoices/allocate'
+import { coverage, unitShare } from '@/lib/invoices/allocate'
+import { landedCost } from '@/lib/catalog/cost-math'
 import { MIN_COVERAGE } from '@/lib/invoices/types'
 import { listPageContext } from '../../list-page'
 import { groupLines, applyState, overridable, skippedCount, coveragePct } from '../groups'
@@ -10,7 +11,8 @@ import { ApplyBill } from './apply'
 import { CreateProducts } from './create'
 import { NotStock } from './reclassify'
 import { BillCharge, BillRate } from './inputs'
-import { MatchLine } from './match'
+import { MatchLine, UnSkip } from './match'
+import { ViewDocument } from './document'
 
 // REVIEWING ONE BILL — docs/miles/supplier-invoices.html, stages 2 and 3.
 //
@@ -64,6 +66,13 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
   })
   const pct = coveragePct(cov.ratio)
 
+  // What a line's unit cost converts at, and what the apply would charge on top. The SAME three
+  // inputs apply_shipment_costs uses, so the preview beside a line and the figure that gets written
+  // cannot disagree — a preview computed from anything else would be a second opinion about the
+  // number this whole screen exists to get right.
+  const rate = isForeign ? invoice.exchangeRate : 1
+  const commission = shipment.commissionPercent ?? settings.commissionPercent
+
   return (
     <div className="v2-page">
       <header className="v2-phd" data-inner>
@@ -77,6 +86,10 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
 
       <div className="v2-bl-top">
         <p className="v2-bl-sup">{invoice.supplierName || shipment.reference || invoice.fileName}</p>
+        {/* The paper. Every sentence on this screen asks somebody to check a figure against it. */}
+        <p className="v2-bl-docrow">
+          <ViewDocument shipmentId={shipment.id} fileName={invoice.fileName} />
+        </p>
         <p className="v2-bl-tmeta">
           {[
             invoice.invoiceNumber,
@@ -304,15 +317,65 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
                             </p>
                           )}
                           {/* The only action that can move this bill above the coverage gate. Built
-                              in /v2 rather than linked to /landed-cost — a row that leaves for the
-                              old app is a dead end in one tap. */}
-                          {g.key === 'unmatched' && (
+                              in /v2 rather than linked to the old app — a row that leaves for it is
+                              a dead end in one tap. */}
+                          {!applied && g.key === 'unmatched' && (
                             <MatchLine lineId={l.id} description={l.description || l.sku || `Line ${l.lineNo}`} />
                           )}
+                          {/* A match that already exists is the more dangerous one: it writes a cost
+                              onto whatever it points at, and nothing downstream cross-checks that
+                              column. It gets the same picker. */}
+                          {!applied && (g.key === 'moved' || g.key === 'clean') && (
+                            <MatchLine lineId={l.id} description={l.description || l.sku || `Line ${l.lineNo}`} matched />
+                          )}
+                          {/* A decision a person can make on this screen is one they must be able to
+                              unmake on it. */}
+                          {!applied && g.key === 'aside' && <UnSkip lineId={l.id} />}
                         </div>
                         <div className="v2-bl-lamt">
                           <p className="v2-bl-lv">{money(l.extended, cur)}</p>
                           {l.quantity !== null && <p className="v2-bl-lq">×{l.quantity}</p>}
+                          {/* ── WHAT THIS LINE DOES TO THE PRODUCT ──────────────────────────────
+                              The unit cost twice — as the supplier wrote it, and as it will be
+                              stored — because reading the paper, reading the screen and seeing the
+                              same number is the check an owner actually performs. It is also the
+                              ONLY place a mistyped exchange rate becomes visible before it reaches a
+                              product: divergence compares against a previous cost, and a product
+                              created from this invoice has none, so a rate typed as 12 instead of
+                              1.2 would otherwise write 126 costs an order of magnitude out with
+                              nothing on any screen saying so.
+
+                              PER UNIT, like everything in product_costs: the allocation is a whole
+                              line's share of the freight pool, but cost_primary is what ONE cost and
+                              margin is measured against one unit's selling price. unitShare is the
+                              shared definition apply_shipment_costs divides by in SQL. */}
+                          {g.key !== 'unmatched' && g.key !== 'aside' && (() => {
+                            const unit = l.quantity && l.quantity > 0 ? l.extended / l.quantity : null
+                            const unitBase = unit !== null && rate !== null ? unit * rate : null
+                            const takes = l.allocatedFreight + l.allocatedDuties
+                            const lands = landedCost({
+                              costPrimary: unitBase,
+                              shippingCost: unitShare(l.allocatedFreight, l.quantity),
+                              tariffCost: unitShare(l.allocatedDuties, l.quantity),
+                              markupPercent: settings.markupPercent,
+                              commissionPercent: commission,
+                            })
+                            return (
+                              <>
+                                {isForeign && unit !== null && (
+                                  <p className="v2-bl-lconv">
+                                    {unitBase === null
+                                      ? 'Unit cost — needs the rate'
+                                      : `${exact(unit, cur)} → ${exact(unitBase, base)}`}
+                                  </p>
+                                )}
+                                {takes > 0 && <p className="v2-bl-lconv">{`Takes ${exact(takes, base)}`}</p>}
+                                {lands !== null && (
+                                  <p className="v2-bl-llands">{`Lands at ${exact(lands, base)}`}</p>
+                                )}
+                              </>
+                            )
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -340,9 +403,13 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
             </div>
           ))}
 
+          {/* The count used to be said here as well, under a screen that also listed those same rows
+              inside MATCHED CLEANLY. They have their own group now, so the sentence says the one
+              thing the heading cannot: what being set aside DOES. */}
           {skipped > 0 && (
             <p className="v2-bl-none">
-              {skipped} {skipped === 1 ? 'line was' : 'lines were'} set aside. They take no freight and no duty.
+              Set-aside lines take no freight and no duty, and they stay in the denominator — so
+              setting one aside does not flatter the matched percentage above.
             </p>
           )}
         </div>

@@ -170,19 +170,74 @@ describe('reviewing one bill', () => {
 
   it('the groups run in the order the work happens in', () => {
     // Unmatched first because fixing those CHANGES the cost moves below them — reviewing a cost move
-    // before the denominator is settled is reviewing a figure that is about to change.
-    expect(groups).toContain("const ORDER: GroupKey[] = ['unmatched', 'moved', 'clean']")
+    // before the denominator is settled is reviewing a figure that is about to change. SET ASIDE
+    // last: it is the only group holding nothing anybody has to do.
+    expect(groups).toContain("const ORDER: GroupKey[] = ['unmatched', 'moved', 'clean', 'aside']")
     for (const label of ['NEEDS A MATCH', 'COST WILL MOVE', 'MATCHED CLEANLY']) {
       expect(groups).toContain(label)
       expect(ref).toContain(label)
     }
+    // SET ASIDE is ours rather than the reference's — the reference has no state for it.
+    expect(groups).toContain('SET ASIDE')
   })
 
-  it('a SKIPPED line is not asked about again', () => {
+  it('a SKIPPED line is not asked about again, and is not called matched either', () => {
     // "The owner said don't" is a decision already made. Putting it back under "you still have to
     // decide" would ask them twice.
     expect(groups).toContain("if (line.status === 'unmatched') return 'unmatched'")
     expect(match).toContain('choose(null, true)')
+    // But it used to fall through to MATCHED CLEANLY, so PRIMAVERA's seven set-aside lines sat under
+    // a heading claiming they were matched while a sentence at the foot of the same screen said
+    // seven had been set aside. Both were about the same seven rows.
+    expect(groups).toContain("if (line.status === 'skipped') return 'aside'")
+    expect(groups.indexOf("status === 'skipped'")).toBeLessThan(groups.indexOf("return 'clean'"))
+  })
+
+  it('and it can be put back, which is the half that was missing', () => {
+    // A decision a person can make on this screen is one they must be able to unmake on it. Without
+    // this a line set aside by a mis-tap had no control of any kind — the picker only ever rendered
+    // on unmatched rows — so the only way back was the old app.
+    expect(match).toContain('export function UnSkip({ lineId }: { lineId: string })')
+    expect(match).toContain("body: JSON.stringify({ productId: null, skip: false })")
+    expect(detail).toContain("{!applied && g.key === 'aside' && <UnSkip lineId={l.id} />}")
+  })
+
+  it('an existing match can be corrected, not only a missing one', () => {
+    // The more dangerous case of the two: a wrong automatic match writes a cost onto a product that
+    // was never on this shipment, and nothing downstream cross-checks that column.
+    expect(detail).toContain("{!applied && (g.key === 'moved' || g.key === 'clean') && (")
+    expect(match).toContain("{matched ? 'Change this match' : 'Pick a product'}")
+  })
+
+  it('the document itself can be opened, which every sentence here assumes', () => {
+    // The screen asks an owner to check figures against a piece of paper and would not show them the
+    // paper. The link is minted on the PRESS: the signature lasts five minutes, and one handed out at
+    // render is dead by the time somebody scrolling 133 lines reaches for it.
+    const doc = read('./[id]/document.tsx')
+    expect(detail).toContain('<ViewDocument shipmentId={shipment.id} fileName={invoice.fileName} />')
+    expect(doc).toContain('await fetch(`/api/invoices/shipments/${shipmentId}/file`)')
+    expect(strip(doc)).not.toMatch(/useEffect/)
+  })
+
+  it('and a line says what it does to the product, in both currencies', () => {
+    // The only place a mistyped exchange rate becomes visible before it reaches a product: divergence
+    // compares against a PREVIOUS cost, and a product created from this invoice has none — so a rate
+    // typed as 12 instead of 1.2 would write 126 costs an order of magnitude out with nothing on any
+    // screen saying so.
+    expect(detail).toContain('const unitBase = unit !== null && rate !== null ? unit * rate : null')
+    expect(detail).toContain('`${exact(unit, cur)} → ${exact(unitBase, base)}`')
+    expect(detail).toContain('`Lands at ${exact(lands, base)}`')
+  })
+
+  it('and it previews with the SAME functions the write uses', () => {
+    // unitShare is what apply_shipment_costs divides by in SQL, and landedCost is the formula the
+    // generated column holds. A preview computed from anything else is a second opinion about the
+    // number this screen exists to get right.
+    expect(detail).toContain("import { coverage, unitShare } from '@/lib/invoices/allocate'")
+    expect(detail).toContain("import { landedCost } from '@/lib/catalog/cost-math'")
+    expect(detail).toContain('shippingCost: unitShare(l.allocatedFreight, l.quantity)')
+    // The commission the APPLY would write, not whatever each cost row happens to hold today.
+    expect(detail).toContain('const commission = shipment.commissionPercent ?? settings.commissionPercent')
   })
 
   it('the biggest cost move is read first', () => {

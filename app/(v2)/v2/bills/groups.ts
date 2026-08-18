@@ -5,6 +5,7 @@ import type { InvoiceLine } from '@/lib/invoices/types'
 //   NEEDS A MATCH   — nothing will happen to these until a person decides. They block the gate.
 //   COST WILL MOVE  — matched, and applying would move the product's cost enough to matter.
 //   MATCHED CLEANLY — matched, and the cost barely moves. The largest group and the least interesting.
+//   SET ASIDE       — the owner said "not ours". A decision already made, kept where it can be undone.
 //
 // COST WILL MOVE is the group that earns the screen. A bracelet going from €412 to €498 is the margin
 // a shipment is about to collapse, and it is the one thing a spreadsheet would never have told you.
@@ -16,7 +17,7 @@ import type { InvoiceLine } from '@/lib/invoices/types'
 // lib/invoices/divergence.ts and arrives on the line; this file does not decide what "enough to
 // matter" means, it only reads the answer.
 
-export type GroupKey = 'unmatched' | 'moved' | 'clean'
+export type GroupKey = 'unmatched' | 'moved' | 'clean' | 'aside'
 
 export interface LineGroup {
   key: GroupKey
@@ -28,12 +29,21 @@ const LABEL: Record<GroupKey, string> = {
   unmatched: 'NEEDS A MATCH',
   moved: 'COST WILL MOVE',
   clean: 'MATCHED CLEANLY',
+  aside: 'SET ASIDE',
 }
-const ORDER: GroupKey[] = ['unmatched', 'moved', 'clean']
+// SET ASIDE goes last: it is the only group holding nothing anybody has to do.
+const ORDER: GroupKey[] = ['unmatched', 'moved', 'clean', 'aside']
 
 export function groupOf(line: InvoiceLine): GroupKey {
   // A SKIPPED line is not unmatched. The owner said "don't", which is a decision already made, and
   // putting it back in the group that means "you still have to decide" would ask them twice.
+  //
+  // It is not MATCHED CLEANLY either, and it used to land there — everything that was not unmatched
+  // and had no divergence fell through to 'clean'. So PRIMAVERA's seven set-aside lines were listed
+  // under a heading claiming they were matched, while a sentence at the foot of the same screen said
+  // seven lines had been set aside. Both were about the same seven rows. A line that takes no freight
+  // and points at no product is not matched to anything, cleanly or otherwise.
+  if (line.status === 'skipped') return 'aside'
   if (line.status === 'unmatched') return 'unmatched'
   if (line.divergence) return 'moved'
   return 'clean'

@@ -27,8 +27,21 @@ import { Sheet } from '../../form-sheet'
 interface Suggestion { id: string; name: string; sku: string | null }
 
 export function MatchLine({
-  lineId, description,
-}: { lineId: string; description: string }) {
+  lineId, description, matched,
+}: {
+  lineId: string
+  description: string
+  /**
+   * This line already points at a product, so the picker is a CORRECTION rather than a first answer.
+   *
+   * It used to be rendered for unmatched lines only, which left the more dangerous case with no
+   * control at all: a wrong automatic match writes a cost onto a product that was never on this
+   * shipment, and nothing downstream cross-checks that column. Nothing was wrong on the two real
+   * bills — every match on them is 'created' — but the moment a catalogue has products in it the SKU
+   * ladder starts matching, and a wrong one has to be correctable on the screen that shows it.
+   */
+  matched?: boolean
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -98,10 +111,12 @@ export function MatchLine({
 
   return (
     <>
-      <button type="button" className="v2-bl-fix" onClick={() => setOpen(true)}>Pick a product</button>
+      <button type="button" className="v2-bl-fix" onClick={() => setOpen(true)}>
+        {matched ? 'Change this match' : 'Pick a product'}
+      </button>
 
       {open && (
-        <Sheet title="Which product is this?" busy={busy} onClose={close}>
+        <Sheet title={matched ? 'Point this line somewhere else' : 'Which product is this?'} busy={busy} onClose={close}>
           <p className="v2-iv-ss">{description}</p>
 
           <label className="v2-efield">
@@ -139,6 +154,56 @@ export function MatchLine({
           </div>
         </Sheet>
       )}
+    </>
+  )
+}
+
+/**
+ * Undo a set-aside.
+ *
+ * The counterpart of "We don't stock this" above, and it exists because a decision a person can make
+ * on this screen is a decision they must be able to unmake on it. Without it a line set aside by a
+ * mis-tap had no control of any kind — not even the picker, which only ever rendered on unmatched
+ * rows — so the only way back was the old app.
+ *
+ * Sends the same two fields v1 sends: `skip: false` puts the line back in the denominator, and
+ * `productId: null` returns it to unmatched rather than to whatever it pointed at before somebody
+ * decided it was not stock.
+ */
+export function UnSkip({ lineId }: { lineId: string }) {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function undo() {
+    if (busy) return
+    setBusy(true); setErr(null)
+    try {
+      const res = await fetch(`/api/invoices/lines/${lineId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: null, skip: false }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setErr(j.error || 'That did not save.')
+        return
+      }
+      // The whole screen: this line is back in the denominator, so every other line's share moved.
+      router.refresh()
+    } catch {
+      setErr('That did not save — check your connection.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className="v2-bl-fix" onClick={() => void undo()} disabled={busy}>
+        {busy ? 'Putting it back…' : 'Put this back'}
+      </button>
+      {err && <p className="v2-emsg" data-bad>{err}</p>}
     </>
   )
 }
