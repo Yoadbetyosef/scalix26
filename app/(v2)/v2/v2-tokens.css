@@ -3199,6 +3199,49 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 .v2 .v2-bl-spread b { font-size: 15px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
 
+/* ── Creating products from lines ─────────────────────────────────────────────────────────────────
+   The bar under NEEDS A MATCH. Quiet, not amber: on an empty catalogue every line is unmatched and
+   nothing has gone wrong — the goods are simply new. The group's own bars are already saying a
+   decision is owed; a second alarm under them would be the screen shouting at a beginner. */
+.v2 .v2-bl-mkbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin: 10px 0 4px; padding: 12px 14px;
+  background: var(--v2-quiet); border-radius: 12px;
+}
+.v2 .v2-bl-mkbar p { flex: 1; min-width: 220px; font-size: 12.5px; line-height: 1.45; color: var(--v2-ink-42); }
+.v2 .v2-bl-mkbar b { color: var(--v2-ink); font-weight: 500; }
+.v2 .v2-bl-mkbar .v2-bl-fix { margin-top: 0; flex: none; }
+
+.v2 .v2-bl-mkall {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--v2-line);
+}
+.v2 .v2-bl-mkall span { font-size: 12px; color: var(--v2-ink-42); font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-mkall button {
+  background: none; border: 0; padding: 0; font-family: inherit; font-size: 12.5px;
+  color: var(--v2-ink); text-decoration: underline; cursor: pointer;
+}
+/* Scrolls INSIDE the sheet: a 133-line invoice must not push the Create button off the bottom of a
+   phone, which is the one control the list exists to reach. */
+.v2 .v2-bl-mklist { max-height: min(46vh, 420px); overflow-y: auto; margin: 0 -2px; padding: 0 2px; }
+.v2 .v2-bl-mkrow { display: flex; gap: 11px; padding: 10px 0; border-bottom: 1px solid var(--v2-line); }
+.v2 .v2-bl-mkrow:last-child { border-bottom: 0; }
+.v2 .v2-bl-mkpick { flex: none; padding-top: 2px; }
+.v2 .v2-bl-mkpick input { width: 17px; height: 17px; accent-color: var(--v2-ink); cursor: pointer; }
+.v2 .v2-bl-mkmid { flex: 1; min-width: 0; }
+.v2 .v2-bl-mknm { font-size: 13.5px; color: var(--v2-ink); }
+.v2 .v2-bl-mkrow[data-on] .v2-bl-mknm { font-weight: 500; }
+/* The money and the SKU, on the row whether or not it is ticked — they are what the decision is made
+   WITH, not a detail of it. */
+.v2 .v2-bl-mkmeta { font-size: 11.5px; color: var(--v2-ink-40); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.v2 .v2-bl-mkname {
+  width: 100%; box-sizing: border-box; margin-top: 7px; font-family: inherit; font-size: 13px;
+  padding: 7px 9px; border: 1px solid var(--v2-line); border-radius: 8px;
+  background: var(--v2-quiet); color: var(--v2-ink);
+}
+.v2 .v2-bl-mkname:focus { border-color: var(--v2-violet); background: var(--v2-paper); outline: none; }
+.v2 .v2-bl-mkname:disabled { opacity: 0.6; }
+
 /* The upload input itself is never seen — the button in front of it is the control. Not display:none:
    a hidden input cannot be .click()ed reliably in every browser, and this keeps it focusable for
    anybody arriving by keyboard. */
@@ -3273,7 +3316,7 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-efield select {
   width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14px;
   padding: 9px 10px; border: 1px solid var(--v2-line); border-radius: 8px;
-  background: var(--v2-paper-2); color: var(--v2-ink); appearance: none;
+  background: var(--v2-quiet); color: var(--v2-ink); appearance: none;
 }
 .v2 .v2-efield select:focus { border-color: var(--v2-violet); background: var(--v2-paper); outline: none; }
 .v2 .v2-efield select:disabled { opacity: 0.6; }
