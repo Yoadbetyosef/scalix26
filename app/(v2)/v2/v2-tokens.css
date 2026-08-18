@@ -3256,7 +3256,48 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-bl-apply:active { transform: scale(0.96); }
 .v2 .v2-bl-apply:disabled { background: rgba(0, 0, 0, 0.12); color: var(--v2-ink-40); cursor: not-allowed; transform: none; }
 .v2 .v2-bl-apply svg { width: 15px; height: 15px; flex: none; }
+/* Apply again is not Apply. Same geometry, hollow face: it OVERWRITES what the first apply wrote, and
+   the loudest control on the screen should not be the one that undoes a decision already made. */
+.v2 .v2-bl-apply[data-again] { background: none; color: var(--v2-ink); border: 1px solid var(--v2-line); }
+.v2 .v2-bl-apply[data-again]:hover { background: var(--v2-hover); }
+/* The coverage override. A word, not a button — the same act at a worse coverage, and it must not
+   compete with the gate it is stepping around. Amber because that is this screen's colour for "a
+   decision is owed", the same as the bar and the notes. */
+.v2 .v2-bl-over {
+  background: none; border: 0; padding: 4px 0; font-family: inherit; font-size: 12.5px;
+  color: var(--bl-wait-ink); text-decoration: underline; cursor: pointer; text-align: center;
+}
 .v2 .v2-bl-none { font-size: 13.5px; color: var(--v2-ink-42); padding: 22px 2px; }
+
+/* ── The two documents ────────────────────────────────────────────────────────────────────────────
+   The supplier's invoice and the forwarder's bill, side by side on width and stacked without it. TWO
+   CARDS rather than one panel of six fields, because they are two pieces of paper in two currencies
+   and the whole risk on this surface is a figure typed into the wrong one. */
+.v2 .v2-bl-docs { display: grid; gap: 12px; margin-bottom: 16px; }
+.v2 .v2-bl-doc { background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: 14px; padding: 14px; }
+.v2 .v2-bl-dock {
+  font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--v2-ink-40);
+  margin-bottom: 12px;
+}
+/* The half-sentence under a field. Carries the reasoning — which currency this box is in, and what
+   the rate does and does not multiply — so it is body text, not a hint. */
+.v2 .v2-bl-docwhy { font-size: 11.5px; line-height: 1.45; color: var(--v2-ink-42); margin-top: 8px; }
+/* 1 EUR = [    ] USD. The currencies are part of the control, not a caption above it. */
+.v2 .v2-bl-rate { display: flex; align-items: center; gap: 8px; }
+.v2 .v2-bl-rate i { font-style: normal; font-size: 13px; color: var(--v2-ink-42); flex: none; }
+.v2 .v2-bl-rate input { width: 110px; flex: none; }
+/* Freight, Duty, Other and their sum. Two columns on a phone: three charge boxes in one row are
+   28px wide each, and these are figures somebody is reading off paper. */
+.v2 .v2-bl-chg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.v2 .v2-bl-chg .v2-efield { margin-bottom: 0; min-width: 0; }
+/* NOT a field. It is the sum of the three beside it and there is nothing to type into it, so it is
+   flat text — an input-shaped box holding a number nobody can change is a lie about what it is. */
+.v2 .v2-bl-spread { align-self: end; padding-bottom: 9px; }
+.v2 .v2-bl-spread span {
+  display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--v2-ink-40); margin-bottom: 6px;
+}
+.v2 .v2-bl-spread b { font-size: 15px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
 
 /* The upload input itself is never seen — the button in front of it is the control. Not display:none:
    a hidden input cannot be .click()ed reliably in every browser, and this keeps it focusable for
@@ -3284,6 +3325,11 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-bl-mid { display: flex; align-items: center; gap: 22px; }
   .v2 .v2-bl-who { flex: 1; min-width: 0; }
   .v2 .v2-bl-cov { width: 250px; flex: none; margin-top: 0; }
+  /* The two documents beside each other, which is what reading one against the other needs. */
+  .v2 .v2-bl-docs { grid-template-columns: 1fr 1fr; align-items: start; }
+  .v2 .v2-bl-chg { grid-template-columns: repeat(4, 1fr); }
+  /* Beside Apply rather than under it, on the row the slot becomes at this width. */
+  .v2 .v2-bl-over { flex: none; text-align: right; }
 }
 
 /* ── The declared crossing ────────────────────────────────────────────────────────────────────────

@@ -84,9 +84,23 @@ describe('the reader goes through one door', () => {
     expect(strip(reader)).not.toContain("from('landed_cost_shipments')")
   })
 
-  it('and reads every line on the page in ONE query, not one per bill', () => {
+  it('and reads every line on the page in one query PER PAGE, not one per bill', () => {
+    // The loop is over pages of rows, not over bills: `invoiceIds` still goes in whole.
     expect(reader).toContain('.in(\'invoice_id\', invoiceIds)')
-    expect(strip(reader)).not.toMatch(/for \([^)]*\)\s*\{[^}]*await/)
+    expect(reader).toContain('await readLines(tenantId, invoiceIds)')
+    expect(strip(reader)).not.toMatch(/res\.data\.map[^\n]*await|for \(const s of res\.data\)/)
+  })
+
+  it('and it PAGES, because a truncated read looks exactly like a bill nobody matched', () => {
+    // PostgREST caps a response at 1,000 rows whatever we ask for. listShipments fetches up to 100
+    // shipments and real invoices run to 133 lines, so the cap is about eight bills away — and a bill
+    // whose lines fell off the end renders "0 lines · 0% matched" with an amber bar, which is the
+    // reading of a bill the matcher could not place. Identical symptom, unrelated cause.
+    expect(reader).toContain('const PAGE = 1000')
+    expect(reader).toContain('.range(from, from + PAGE - 1)')
+    // A range with no order is a range over an unspecified sequence: a row can arrive twice or never.
+    expect(reader).toContain(".order('id')")
+    expect(reader).toContain('if (page.length < PAGE) break')
   })
 
   it('coverage is computed by the pipeline’s own function', () => {
@@ -196,14 +210,55 @@ describe('reviewing one bill', () => {
     // It is the write asking to be confirmed. acknowledgeDivergence is what gets RECORDED, so a
     // default would turn the audit trail into a lie about what anybody saw.
     expect(apply).toContain('if (res.status === 409 && j.needsAcknowledgement) {')
-    expect(apply).toContain("body: JSON.stringify(acknowledge ? { acknowledgeDivergence: true } : {})")
+    expect(apply).toContain('if (acknowledge) body.acknowledgeDivergence = true')
     expect(apply).toContain('I have read these — apply')
+    // Exactly one caller passes acknowledge=true, and it is the button rendered BESIDE the list the
+    // server sent back. v1 sent it unconditionally from a block that only assumed the banner was on
+    // screen; on 7 Aug 2026 a stale tab moved 166 products' costs with a record saying otherwise.
+    expect((apply.match(/void apply\([^)]*, true\)/g) ?? [])).toHaveLength(1)
   })
 
-  it('and an already-applied bill does not offer the same button with a different word', () => {
-    // Re-applying OVERWRITES the first apply and needs its own sentence about the earlier date.
-    expect(apply).toContain('if (alreadyApplied) {')
-    expect(apply).not.toContain('reapply: true')
+  it('and the flags of a refused attempt survive the acknowledgement', () => {
+    // An override that dropped on the way to the acknowledgement would come back as a coverage
+    // refusal the owner has already answered.
+    expect(apply).toContain('setPending(attempt)')
+    expect(apply).toContain('void apply(pending ?? { override: false, reapply: false }, true)')
+  })
+
+  it('an already-applied bill offers a DIFFERENT button, which says overwrite', () => {
+    // Re-applying overwrites what the first apply wrote, so it is asked for by name — and the date of
+    // the earlier apply is the information the owner needs, so it travels into the sheet.
+    expect(apply).toContain('reapply: true')
+    expect(apply).toContain('Apply again')
+    expect(apply).toContain('Overwrite')
+    expect(apply).toContain('replacing what the apply of ${day(appliedAt)} put there')
+    // Never Apply wearing a different word: the two are separate buttons with separate faces.
+    expect(read('../v2-tokens.css')).toContain('.v2 .v2-bl-apply[data-again]')
+  })
+
+  it('the coverage gate has an override, and nothing else does', () => {
+    // v1's rule, in v1's words: a missing rate and a mis-denominated freight figure are not
+    // judgements, they are wrong numbers, and there is no button for those.
+    expect(groups).toContain("export const overridable = (reason: ApplyReason) => reason === 'coverage'")
+    expect(apply).toContain('{!canApply && canOverride && !busy && (')
+    expect(detail).toContain('canOverride={overridable(state.reason)}')
+  })
+
+  it('and the override button states the coverage it is stepping around, floored', () => {
+    // The one number on this screen that must never flatter the bill it is about to apply.
+    expect(apply).toContain('`Apply anyway, at ${coveragePct}% coverage`')
+    expect(apply).not.toMatch(/Math\.round\([^)]*(?:ratio|coverage)/i)
+    expect(detail).toContain('coveragePct={pct}')
+  })
+
+  it('every refusal the database enforces is a refusal the screen shows', () => {
+    // v1's `blocked` is an OR of five. A gate softer than the RPC's sends the owner into an error
+    // with no field to correct — which is the failure the freight-currency guard exists to prevent.
+    for (const reason of ['applied', 'failed', 'nothing', 'rate', 'currency', 'coverage']) {
+      expect(groups, reason).toContain(`reason: '${reason}'`)
+    }
+    expect(detail).toContain('extractionFailed: invoice.status === \'failed\'')
+    expect(detail).toContain('freightNotInBase: charges > 0 && shipment.currency.toUpperCase() !== base')
   })
 
   it('matching a line refreshes the WHOLE screen', () => {
@@ -225,6 +280,82 @@ describe('reviewing one bill', () => {
     // action that can move a bill above the gate.
     expect(detail).toContain('<MatchLine lineId={l.id}')
     expect(detail).not.toContain('/landed-cost/')
+  })
+})
+
+describe('the rate and the charges are v1’s components, not new ones', () => {
+  const v1 = read('../../../landed-cost/[id]/page.tsx')
+  const inputs = read('./[id]/inputs.tsx')
+  const detail = strip(read('./[id]/page.tsx'))
+
+  it('the save bodies are character-for-character v1’s', () => {
+    // These two fields are the ONLY place in the application that writes supplier_invoices
+    // .exchange_rate and landed_cost_shipments.freight_total. A second implementation of a field that
+    // gates a cost write is a second set of guards to get wrong — so this asserts the guards are the
+    // same text in both files rather than merely equivalent.
+    for (const line of [
+      'const t = v.trim()',
+      'const n = t ? Number(t) : null',
+      'if (t && (!Number.isFinite(n) || (n as number) <= 0)) return',
+      'if (n === value) return',
+      'const n = Number(v.trim() || 0)',
+      'if (!Number.isFinite(n) || n < 0 || n === value) return',
+      "body: JSON.stringify({ exchangeRate: n }),",
+      "body: JSON.stringify({ [field]: n }),",
+    ]) {
+      expect(v1, `v1: ${line}`).toContain(line)
+      expect(inputs, `/v2: ${line}`).toContain(line)
+    }
+  })
+
+  it('saves on blur — no save button, no debounce', () => {
+    expect((inputs.match(/onBlur=\{save\}/g) ?? [])).toHaveLength(2)
+    expect(v1).toContain('onChange={(e) => setV(e.target.value)} onBlur={save}')
+    expect(inputs).toContain('onChange={(e) => setV(e.target.value)} onBlur={save}')
+  })
+
+  it('and takes a new server value by REMOUNTING, not by syncing a prop into state', () => {
+    // State derived from a prop would fight the cursor mid-edit. v1 keys on the value; so does this.
+    expect(v1).toContain('key={`rate-${invoice.exchangeRate ?? \'\'}`}')
+    expect(detail).toContain('key={`rate-${invoice.exchangeRate ?? \'\'}`}')
+    expect(detail).toContain('key={`freight-${shipment.freightTotal}`}')
+    expect(inputs).not.toMatch(/useEffect/)
+  })
+
+  it('a refused save is SHOWN — the one place this is not v1', () => {
+    // v1 has `if (r.ok)` with no else, so a refused PATCH leaves the typed value in the box and looks
+    // exactly like a saved one. On the field that decides whether Apply may write anything, that is
+    // not a carry-over worth honouring.
+    expect(inputs).toContain("|| 'That rate did not save.'")
+    expect(inputs).toContain("|| 'That figure did not save.'")
+  })
+
+  it('the response is discarded and the server re-reads', () => {
+    // v1 adopts the PATCH response into client state; this screen is a server component. The re-read
+    // is the stronger of the two anyway — setShipmentInputs re-runs reallocate() before it answers,
+    // so every other line's share has already moved by the time this returns.
+    expect(inputs).toContain('router.refresh()')
+    expect(strip(inputs)).not.toMatch(/onSaved/)
+  })
+
+  it('and there is somewhere to type the rate at all, which was the whole gap', () => {
+    expect(detail).toContain('<BillRate')
+    expect(detail).toContain('field="freightTotal"')
+    expect(detail).toContain('field="dutiesTotal"')
+    expect(detail).toContain('field="otherTotal"')
+  })
+
+  it('every figure is labelled with its currency, even where it looks obvious', () => {
+    // Four things meet on this surface in three currencies: line values in the invoice's, a rate the
+    // owner types, freight off a separate bill in base, and the result in base. An unlabelled number
+    // between a EUR field and a USD field is exactly where a wrong one hides.
+    expect(detail).toContain('{`Supplier invoice · ${cur}`}')
+    expect(detail).toContain('{`Freight forwarder · ${base}`}')
+    expect(inputs).toContain('{`${label} (${ccy})`}')
+  })
+
+  it('the charges are disabled once applied, and the rate with them', () => {
+    expect((strip(read('./[id]/page.tsx')).match(/disabled=\{applied\}/g) ?? [])).toHaveLength(4)
   })
 })
 

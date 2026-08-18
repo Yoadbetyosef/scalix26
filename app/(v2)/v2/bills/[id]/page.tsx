@@ -4,9 +4,10 @@ import { getShipment } from '@/lib/invoices/store'
 import { coverage } from '@/lib/invoices/allocate'
 import { MIN_COVERAGE } from '@/lib/invoices/types'
 import { listPageContext } from '../../list-page'
-import { groupLines, applyState, skippedCount, coveragePct } from '../groups'
+import { groupLines, applyState, overridable, skippedCount, coveragePct } from '../groups'
 import { Arrow, Warn } from '../glyphs'
 import { ApplyBill } from './apply'
+import { BillCharge, BillRate } from './inputs'
 import { MatchLine } from './match'
 
 // REVIEWING ONE BILL — docs/miles/supplier-invoices.html, stages 2 and 3.
@@ -43,15 +44,23 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
   const base = settings.baseCurrency.toUpperCase()
   const isForeign = cur !== base
 
+  const applied = shipment.status === 'applied'
+  const charges = shipment.freightTotal + shipment.dutiesTotal + shipment.otherTotal
+
   const state = applyState({
     ratio: cov.ratio,
     minCoverage: MIN_COVERAGE,
     matchedLines: cov.matchedLines,
     status: shipment.status,
     foreignWithoutRate: isForeign && !invoice.exchangeRate,
+    // Belt-and-braces, like v1's: the shipment's currency is always the tenant's base because freight
+    // is never seeded from the document, so this should not fire. Kept because the RPC enforces the
+    // same thing, and a screen that cannot show a state the database can refuse would leave the owner
+    // reading an error with no matching field.
+    freightNotInBase: charges > 0 && shipment.currency.toUpperCase() !== base,
+    extractionFailed: invoice.status === 'failed',
   })
   const pct = coveragePct(cov.ratio)
-  const charges = shipment.freightTotal + shipment.dutiesTotal + shipment.otherTotal
 
   return (
     <div className="v2-page">
@@ -99,6 +108,73 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
 
       <div className="v2-pbody" data-scroll>
         <div className="v2-ag-inner">
+          {/* ── TWO DOCUMENTS, KEPT VISIBLY APART, BECAUSE THEY ARE TWO DOCUMENTS ──────────────
+              Left: the supplier's invoice and the rate paid on it. Right: the forwarder's bill.
+
+              This is the most dangerous surface in the feature, because four different things meet
+              on it: line values in the INVOICE's currency, a rate the owner types, freight and duty
+              in BASE currency off a separate bill, and the result in base currency. So every figure
+              carries its currency, always, even where it looks obvious — an unlabelled number
+              between a EUR field and a USD field is exactly where a wrong one hides.
+
+              The tiles in the header show the same two charges. They are the SUMMARY of what this
+              screen holds and these are the fields that set it; they cannot disagree, because both
+              are rendered from one server read. */}
+          <section className="v2-bl-docs">
+            <div className="v2-bl-doc">
+              <p className="v2-bl-dock">{`Supplier invoice · ${cur}`}</p>
+              {isForeign ? (
+                <>
+                  <BillRate
+                    key={`rate-${invoice.exchangeRate ?? ''}`}
+                    id={shipment.id} from={cur} to={base}
+                    value={invoice.exchangeRate} disabled={applied}
+                  />
+                  <p className="v2-bl-docwhy">
+                    {`The rate you actually paid on this invoice. It converts the line values below into ${base} — `}
+                    {`and nothing else. Freight is never multiplied by it: that arrives from your forwarder already in ${base}.`}
+                  </p>
+                </>
+              ) : (
+                <p className="v2-bl-docwhy">{`Invoiced in ${base}, so nothing needs converting.`}</p>
+              )}
+              {invoice.grandTotal !== null && (
+                <p className="v2-bl-docwhy">{`Invoice total ${exact(invoice.grandTotal, cur)}`}</p>
+              )}
+            </div>
+
+            <div className="v2-bl-doc">
+              <p className="v2-bl-dock">{`Freight forwarder · ${base}`}</p>
+              <div className="v2-bl-chg">
+                <BillCharge key={`freight-${shipment.freightTotal}`} label="Freight" value={shipment.freightTotal} id={shipment.id} field="freightTotal" ccy={base} disabled={applied} />
+                <BillCharge key={`duties-${shipment.dutiesTotal}`} label="Duty" value={shipment.dutiesTotal} id={shipment.id} field="dutiesTotal" ccy={base} disabled={applied} />
+                <BillCharge key={`other-${shipment.otherTotal}`} label="Other" value={shipment.otherTotal} id={shipment.id} field="otherTotal" ccy={base} disabled={applied} />
+                <p className="v2-bl-spread">
+                  <span>To spread</span>
+                  <b>{exact(charges, base)}</b>
+                </p>
+              </div>
+              {/* Evidence, not a value. Worth seeing beside the forwarder's figure because sometimes
+                  it is the same shipment quoted twice — and worth NOT copying automatically, because
+                  it is in the invoice's currency and these boxes are in base currency. */}
+              {invoice.extractedFreight ? (
+                <p className="v2-bl-docwhy">
+                  {`The supplier's own invoice also lists ${exact(invoice.extractedFreight, cur)} of freight`}
+                  {invoice.extractedDuties ? ` and ${exact(invoice.extractedDuties, cur)} of duty` : ''}
+                  {`. Not copied above — these boxes are ${base}, from your forwarder. Check whether it is the same shipment billed twice.`}
+                </p>
+              ) : (
+                <p className="v2-bl-docwhy">{`Type these from your forwarder's bill, in ${base}.`}</p>
+              )}
+            </div>
+          </section>
+
+          {invoice.status === 'failed' && (
+            <div className="v2-bl-note" data-red>
+              <Warn /><span>{invoice.extractionError || 'This invoice could not be read.'}</span>
+            </div>
+          )}
+
           {/* The note says the CONSEQUENCE, not the count. "31 lines are unmatched" is a fact nobody
               can act on; "the 87 matched lines would carry all €2,240" is the reason to go and fix
               them. */}
@@ -119,6 +195,18 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
               <span>
                 <b>This invoice is in {cur} and your costs are in {base}.</b>{' '}
                 Without the rate you actually paid, every cost this would write is wrong by that rate.
+                Enter it above — until then these products would take the freight and end up with no
+                landed cost at all.
+              </span>
+            </div>
+          )}
+
+          {state.reason === 'currency' && (
+            <div className="v2-bl-note" data-red>
+              <Warn />
+              <span>
+                <b>The freight on this bill is recorded in {shipment.currency.toUpperCase()}, and costs are kept in {base}.</b>{' '}
+                Freight is never converted — it comes from the forwarder in {base}. Re-enter it above.
               </span>
             </div>
           )}
@@ -216,15 +304,23 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
                 ? <><b>{pct}% matched.</b> {Math.round(MIN_COVERAGE * 100)}% is needed before costs can be applied.</>
                 : state.reason === 'rate'
                   ? <><b>The exchange rate is missing.</b> Nothing can be applied until it is entered.</>
-                  : state.reason === 'nothing'
-                    ? <><b>Nothing is matched yet.</b> There is no product for these costs to land on.</>
-                    : <><b>{pct}% matched.</b> This writes a cost onto {cov.matchedLines} {cov.matchedLines === 1 ? 'line' : 'lines'}.</>}
+                  : state.reason === 'currency'
+                    ? <><b>The freight is in the wrong currency.</b> Nothing can be applied until it is re-entered.</>
+                    : state.reason === 'failed'
+                      ? <><b>This invoice could not be read.</b> There are no lines to spread anything across.</>
+                      : state.reason === 'nothing'
+                        ? <><b>Nothing is matched yet.</b> There is no product for these costs to land on.</>
+                        : <><b>{pct}% matched.</b> This writes a cost onto {cov.matchedLines} {cov.matchedLines === 1 ? 'line' : 'lines'}.</>}
           </p>
           <ApplyBill
             shipmentId={shipment.id}
             canApply={state.can}
+            canOverride={overridable(state.reason)}
             matchedLines={cov.matchedLines}
-            alreadyApplied={shipment.status === 'applied'}
+            unmatchedLines={cov.unmatchedLines}
+            coveragePct={pct}
+            alreadyApplied={applied}
+            appliedAt={shipment.appliedAt}
           />
         </div>
       </div>
