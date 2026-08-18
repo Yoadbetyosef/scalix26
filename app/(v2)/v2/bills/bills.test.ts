@@ -359,6 +359,72 @@ describe('the rate and the charges are v1’s components, not new ones', () => {
   })
 })
 
+describe('the invoice can BE the catalogue', () => {
+  const create = read('./[id]/create.tsx')
+  const detail = strip(read('./[id]/page.tsx'))
+
+  it('creating products is offered where nothing matched', () => {
+    // On an empty catalogue this is not one route to coverage, it is the only one: nothing can be
+    // matched to products that do not exist yet. 126 of the applied PRIMAVERA bill's 133 lines carry
+    // match_method = 'created', which is this control having been used.
+    expect(detail).toContain("{g.key === 'unmatched' && !applied && modules.includes('inventory') && (")
+    expect(create).toContain("fetch('/api/invoices/lines/create-products'")
+  })
+
+  it('and gated on inventory, because that is what the route requires', () => {
+    // A button that comes back "turn on the Inventory module" is a worse answer than no button.
+    expect(read('../../../api/invoices/lines/create-products/route.ts')).toContain('createProductsFromLines')
+    expect(read('../../../../lib/invoices/store.ts')).toContain("!enabledModulesOf(t).includes('inventory')")
+    expect(detail).toContain("const { modules } = await listPageContext('landed_cost')")
+  })
+
+  it('it is a SELECTION, never create-everything-unmatched', () => {
+    // A catalogue full of rows nobody chose still has to be cleaned by hand afterwards. Select all is
+    // a press, not a default.
+    expect(create).toContain('picked.size === 0')
+    expect(create).toContain('`Select all ${lines.length}`')
+    expect(create).toContain('disabled={busy || picked.size === 0 || tooMany}')
+  })
+
+  it('the name defaults to the supplier’s own words, unedited', () => {
+    // Their shorthand is better evidence than our title-casing, and the SKU beside it is what makes
+    // their next invoice match this product instead of making a second one.
+    expect(create).toContain('value={names[l.id] ?? l.description ?? \'\'}')
+    expect(create).toContain('so the next invoice from them matches these instead of making more.')
+  })
+
+  it('and only the names that were TYPED are sent', () => {
+    // An absent one means the raw description, which the server reads off the line itself. Sending
+    // our copy of it would let a stale screen rename a line.
+    expect(create).toContain('body: JSON.stringify({ lineIds: [...picked], names })')
+    expect(read('../../../../lib/invoices/store.ts'))
+      .toContain("const name = (names[id] ?? (line.description as string) ?? '').trim().slice(0, 200) || 'Untitled'")
+  })
+
+  it('the money is on every row, ticked or not', () => {
+    // It is what the decision is made WITH — v1 puts the description and the price in front of the
+    // person naming the thing, and that reason has to survive the move into a sheet.
+    expect(create).toContain('<p className="v2-bl-mkmeta">')
+    expect(detail).toContain('amount: exact(l.extended, cur)')
+  })
+
+  it('one money formatter on the screen, not a second one inside the client', () => {
+    // A client component formatting a different currency on the same page is how two figures that
+    // should agree stop agreeing.
+    expect(create).not.toMatch(/toLocaleString|Intl\.NumberFormat/)
+  })
+
+  it('and it refuses past the route’s own ceiling rather than posting a 400', () => {
+    expect(create).toContain('const MAX_AT_ONCE = 500')
+    expect(read('../../../api/invoices/lines/create-products/route.ts')).toContain('.max(500)')
+  })
+
+  it('creating refreshes the WHOLE screen', () => {
+    // Every line that just became matched moves every other line's share of the freight.
+    expect(create).toContain('router.refresh()')
+  })
+})
+
 describe('coverage is floored, never rounded up', () => {
   it('99.6% does not read as 100%', () => {
     // Found by probing the real data: Primavera is 133 lines with 7 set aside, and Math.round printed

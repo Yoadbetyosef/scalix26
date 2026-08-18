@@ -7,6 +7,7 @@ import { listPageContext } from '../../list-page'
 import { groupLines, applyState, overridable, skippedCount, coveragePct } from '../groups'
 import { Arrow, Warn } from '../glyphs'
 import { ApplyBill } from './apply'
+import { CreateProducts } from './create'
 import { BillCharge, BillRate } from './inputs'
 import { MatchLine } from './match'
 
@@ -31,7 +32,7 @@ const money = (n: number, cur: string) => `${sym(cur)}${Math.round(n).toLocaleSt
 const exact = (n: number, cur: string) => `${sym(cur)}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 
 export default async function V2Bill({ params }: { params: Promise<{ id: string }> }) {
-  await listPageContext('landed_cost')
+  const { modules } = await listPageContext('landed_cost')
   const { id } = await params
   const res = await getShipment(id)
   if (!res.ok) notFound()
@@ -284,6 +285,24 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
                   )
                 })}
               </div>
+              {/* The other way past the gate, and on an empty catalogue the ONLY way: nothing can be
+                  matched to products that do not exist yet. Gated on `inventory` as well as
+                  `landed_cost`, because that is what the route requires — offering a button that comes
+                  back "turn on the Inventory module" is a worse answer than not offering it. */}
+              {g.key === 'unmatched' && !applied && modules.includes('inventory') && (
+                <CreateProducts
+                  lines={g.lines.map((l) => ({
+                    id: l.id,
+                    description: l.description,
+                    sku: l.sku,
+                    lineNo: l.lineNo,
+                    // Formatted HERE so there is one money formatter on this screen rather than a
+                    // second one inside a client component, in a different currency, on the same page.
+                    amount: exact(l.extended, cur),
+                    qty: l.quantity !== null ? `${l.quantity} ×` : null,
+                  }))}
+                />
+              )}
             </div>
           ))}
 
