@@ -8,6 +8,8 @@ import { resolveBrandData, resolveBrandForPartner, strongColor, type BrandData }
 import { BrandProvider } from '@/components/brand/brand-provider'
 import { getActiveWorkspace } from '@/lib/workspace'
 import { NEUTRAL_BRAND, PATHNAME_HEADER, isCustomerDocumentPath } from '@/lib/documents/routes'
+import { CROSSING_COOKIE, parseCrossing } from '@/lib/v2/crossing'
+import { ReturnPill } from '@/components/classic/return-pill'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -62,6 +64,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const brand = await resolveActiveBrand()
+
+  // THE WAY BACK FROM A CLASSIC SCREEN. Read on the server so the pill arrives with the page rather
+  // than a frame later, and only outside /v2 — inside the preview there is nothing to return from.
+  //
+  // The path comes from the header the middleware stamps, because Next gives a layout no other way
+  // to know which route it is rendering. `parseCrossing` allowlists the destination: the cookie
+  // decides where a pill sends somebody, and an unchecked value would be an open redirect in a
+  // friendly hat.
+  const hdrs = await headers()
+  const here = hdrs.get(PATHNAME_HEADER) || ''
+  const crossing = here.startsWith('/v2') ? null : parseCrossing(hdrs.get('cookie')?.match(new RegExp(`${CROSSING_COOKIE}=([^;]+)`))?.[1] ?? null)
   // Inject the partner's accent as CSS variables → rebrands the entire app in one place.
   const style = brand.primaryColor
     ? ({ '--color-accent': brand.primaryColor, '--color-accent-strong': strongColor(brand.primaryColor) || brand.primaryColor } as React.CSSProperties)
@@ -71,6 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" className="h-full" style={style}>
       <body className={`${inter.className} h-full antialiased`}>
         <BrandProvider brand={brand}>
+          {crossing && <ReturnPill crossing={crossing} />}
           {children}
         </BrandProvider>
         <Toaster />

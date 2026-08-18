@@ -3183,3 +3183,22 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   .v2 .v2-bl-who { flex: 1; min-width: 0; }
   .v2 .v2-bl-cov { width: 250px; flex: none; margin-top: 0; }
 }
+
+/* ── The declared crossing ────────────────────────────────────────────────────────────────────────
+   A door, dressed as one. It reads as a v2 control so it does not look broken, and carries the word
+   Classic so nobody arrives in the old design wondering what happened. Quieter than a primary action
+   on purpose: crossing is a fallback, not the thing the screen is for. */
+.v2 .v2-classic {
+  display: inline-flex; flex-direction: column; gap: 2px; text-decoration: none;
+  padding: 8px 13px; border-radius: 10px; cursor: pointer;
+  border: 1px dashed var(--v2-line-strong); background: var(--v2-paper); color: var(--v2-ink-70);
+  transition: background 0.16s, color 0.16s;
+}
+.v2 .v2-classic:hover { background: var(--v2-hover); color: var(--v2-ink); }
+.v2 .v2-classic-main { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
+/* The label, not a tooltip. A tooltip is a thing nobody reads before clicking. */
+.v2 .v2-classic-main i {
+  font-style: normal; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--v2-ink-40); border: 1px solid var(--v2-line); border-radius: 4px; padding: 1px 5px;
+}
+.v2 .v2-classic-why { font-size: 11.5px; color: var(--v2-ink-42); line-height: 1.35; }

@@ -2,6 +2,7 @@ import { listOrders } from '@/lib/orders/store'
 import { STAGE_LABELS, isTerminalStage } from '@/lib/orders/stages'
 import { OrderBody } from './[id]/body'
 import { ListPage, type ListFilter, type ListRow } from '../list'
+import { ClassicLink } from '../classic-link'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { ordersLine } from './line'
 
@@ -57,6 +58,7 @@ export default async function V2Orders({ searchParams }: { searchParams: Promise
 
   return (
     <ListPage
+      headerActions={<ClassicLink to="newOrder" />}
       selectedId={open ?? null}
       detail={detail}
       title="Orders"

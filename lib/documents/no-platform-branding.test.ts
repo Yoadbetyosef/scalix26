@@ -88,8 +88,11 @@ describe('the printed page carries no browser header or footer', () => {
     // Chrome draws its header and footer in the page MARGIN and omits them when there is none. There
     // is no CSS property that disables them directly, so this rule IS the fix.
     const css = readFileSync('app/globals.css', 'utf8')
-    const print = css.slice(css.lastIndexOf('@media print'))
-    expect(print).toMatch(/@page\s*\{\s*margin:\s*0/)
+    // Searched across the WHOLE file, not from the last `@media print`. It used to slice from
+    // lastIndexOf, which meant any print rule appended after this one — the classic-return pill was
+    // the first — silently became the only block the assertion could see, and the test failed on
+    // something entirely unrelated to what it is about.
+    expect(css).toMatch(/@page\s*\{\s*margin:\s*0/)
   })
 })
 
@@ -112,9 +115,14 @@ describe('the approval page prints as a work order', () => {
 
   it('the print stylesheet flattens the card', () => {
     // On screen it is a card on grey; on paper that is the browser pretending to be a screen.
-    const print = readFileSync('app/globals.css', 'utf8')
-    const block = print.slice(print.lastIndexOf('@media print'))
-    expect(block).toMatch(/\.approval-card/)
+    // The approval-card block specifically, found by name rather than by being the LAST print block.
+    // Slicing from lastIndexOf made this assertion depend on nothing else ever appending an
+    // `@media print` — and the classic-return pill did, breaking a test about approval documents.
+    const css = readFileSync('app/globals.css', 'utf8')
+    const at = css.indexOf('.approval-card')
+    expect(at, 'globals.css has no .approval-card print rule').toBeGreaterThan(-1)
+    const block = css.slice(css.lastIndexOf('@media print', at), at + 400)
+    expect(block).toMatch(/@media print/)
     expect(block).toMatch(/border:\s*none\s*!important/)
   })
 

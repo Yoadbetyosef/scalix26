@@ -416,3 +416,19 @@ a[role="button"]:not([aria-disabled="true"]):active,
      worse than a page break in the middle of the list. */
   .approval-card > div > div { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* ── The way back from a classic screen ───────────────────────────────────────────────────────────
+   Rendered by the root layout on every non-/v2 page while the crossing cookie is set, so somebody
+   who was redirected two screens deep still has a named exit. Fixed rather than in the flow: these
+   are v1 pages with their own headers, and threading a slot through each of them to host this would
+   be touching every screen it appears on. */
+.classic-return {
+  position: fixed; z-index: 60; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: 999px;
+  background: #0e0e11; color: #fff; font-size: 13px; font-weight: 500;
+  text-decoration: none; box-shadow: 0 6px 24px -6px rgba(0, 0, 0, 0.45);
+}
+.classic-return:hover { background: #000; }
+@media print { .classic-return { display: none; } }

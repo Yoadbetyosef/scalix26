@@ -3,6 +3,7 @@ import { ListPage, type ListFilter, type ListRow } from '../list'
 import { channelKey, CHANNEL_LABEL } from '../channels'
 import { listPageContext, relativeTime, PREVIEW } from '../list-page'
 import { agentsLine } from './line'
+import { ClassicLink } from '../classic-link'
 
 // AI Employees, reskinned. readAgents is the /ai-employees page's own read, extracted verbatim — same
 // queries, same join, same ordering. No new query. READ-ONLY.
@@ -47,6 +48,7 @@ export default async function V2Agents() {
 
   return (
     <ListPage
+      headerActions={<ClassicLink to="aiEmployees" />}
       title="AI Employees"
       line={agentsLine({
         total: rows.length,

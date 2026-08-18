@@ -6,6 +6,7 @@ import type { Tenant, Channel } from '@/types'
 import { useSettings } from '@/components/settings/use-settings'
 import { StatusPill } from '../controls'
 import { usePressState } from '../use-press'
+import { ClassicLink } from '../classic-link'
 
 // PURE RENDERING over useSettings — the same handlers the real settings screen calls. Nothing here
 // holds state, fetches, or decides what a change means.
@@ -115,6 +116,27 @@ export function SettingsClient({ tenant, channels, hideBilling = false }: {
               </section>
             </>
           )}
+
+          {/* THE CLASSIC SCREENS, COLLECTED. Three capabilities /v2 has no equivalent for yet, in one
+              place rather than scattered as disabled controls on screens that are otherwise finished.
+              Each says where it goes and leaves a named way back — see classic-link.tsx. */}
+          <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+            <p className="v2-ghead"><i />Classic screens<s /></p>
+            <div className="v2-gcard">
+              <div className="v2-grow" data-static>
+                <span className="v2-glab">A few things still live in the older design. They open there and bring you back.</span>
+              </div>
+              <div className="v2-grow" data-static>
+                <span className="v2-gtrail"><ClassicLink to="catalog" /></span>
+              </div>
+              <div className="v2-grow" data-static>
+                <span className="v2-gtrail"><ClassicLink to="studio" /></span>
+              </div>
+              <div className="v2-grow" data-static>
+                <span className="v2-gtrail"><ClassicLink to="availability" /></span>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
