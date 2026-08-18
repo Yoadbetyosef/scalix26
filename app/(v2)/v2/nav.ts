@@ -70,10 +70,15 @@ export const GROUPS: Group[] = [
       // Gated on `invoices`, so a tenant without it never sees the row — the same rule every other
       // destination here follows, applied once and read by both the rail and the sheet.
       { label: 'Invoices', href: '/v2/invoices', module: 'invoices' },
-      // The other direction: what the business OWES its suppliers, read off the document. Gated on
-      // `landed_cost`, which now means more than it did when it only meant the cost card — see
-      // lib/modules.ts. A tenant that does not import never sees the row.
-      { label: 'Bills', href: '/v2/bills', module: 'landed_cost' },
+      // Everything else the business spends: rent, fuel, payroll, software. NOT gated on a module —
+      // every business spends money, and `landed_cost` being off is exactly why a locksmith's Money
+      // out reads $0 today.
+      { label: 'Expenses', href: '/v2/expenses' },
+      // "SUPPLIER BILLS", not "Bills". The screen's own heading has said so since it was built; the
+      // rail said "Bills", which claims the whole category of money-owed and left Expenses with
+      // nowhere natural to sit beside it. It is also the narrower thing: supplier invoices for stock,
+      // gated on `landed_cost`, which a locksmith never sees at all.
+      { label: 'Supplier bills', href: '/v2/bills', module: 'landed_cost' },
       { label: 'Analytics', href: '/v2/analytics', module: 'analytics' },
       { label: 'Reports', href: '/v2/reports', module: 'analytics' },
     ],

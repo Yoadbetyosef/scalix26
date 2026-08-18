@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { billsLine } from './line'
 import { coveragePct } from './groups'
+import { GROUPS } from '../nav'
+import { NAV_ICONS } from '../nav-icons'
 
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
@@ -132,12 +134,12 @@ describe('the opening line', () => {
 describe('the screen is gated and reachable', () => {
   it('on landed_cost, which now means more than it used to', () => {
     expect(list).toContain("listPageContext('landed_cost')")
-    expect(read('../nav.ts')).toContain("{ label: 'Bills', href: '/v2/bills', module: 'landed_cost' }")
+    expect(GROUPS.flatMap((g) => g.items).find((i) => i.href === '/v2/bills')?.module).toBe('landed_cost')
     expect(read('../../../../lib/modules.ts')).toContain("{ prefix: '/landed-cost', module: 'landed_cost' }")
   })
 
   it('and the row has a glyph, like every other row in BUSINESS', () => {
-    expect(read('../nav-icons.tsx')).toContain('Bills: Truck,')
+    expect(NAV_ICONS['Supplier bills']).toBeTruthy()
   })
 
   it('waiting is listed FIRST, whatever the dates say', () => {
@@ -314,27 +316,44 @@ describe('the empty state, and the upload it promises', () => {
   })
 })
 
-describe('three things called some variant of "bill"', () => {
-  const nav = read('../nav.ts')
-  const icons = read('../nav-icons.tsx')
+describe('four things called some variant of "bill"', () => {
+  // Read through the REAL exports rather than the file's text. These assertions used to pin source
+  // strings — "{ label: 'Bills', href: '/v2/bills', module: 'landed_cost' }" — and a rename the whole
+  // point of which was to make the rail clearer broke two tests that had no opinion about clarity.
+  // What matters is the shape, and the shape is checkable.
+  const items = GROUPS.flatMap((g) => g.items)
+  const labelled = (href: string) => items.find((i) => i.href === href)?.label
 
   it('each row says whose money it is', () => {
-    // Invoices = what a customer owes the tenant. Bills = what the tenant owes a supplier. Your plan =
-    // what the tenant owes Scalix. All three in one rail with the last called "Billing" is why a
-    // supplier invoice got looked for under the wrong row.
-    expect(nav).toContain("{ label: 'Invoices', href: '/v2/invoices'")
-    expect(nav).toContain("{ label: 'Bills', href: '/v2/bills'")
-    expect(nav).toContain("{ label: 'Your plan' }")
+    // Invoices = what a CUSTOMER owes the tenant. Supplier bills = what the tenant owes a SUPPLIER
+    // for stock. Expenses = everything else the tenant spends. Your plan = what the tenant owes
+    // Scalix. Four directions of money; the rail has to say which is which, and "Bills" on its own
+    // claimed two of them — which is why a supplier invoice got looked for under the wrong row.
+    expect(labelled('/v2/invoices')).toBe('Invoices')
+    expect(labelled('/v2/bills')).toBe('Supplier bills')
+    expect(labelled('/v2/expenses')).toBe('Expenses')
+    expect(items.some((i) => i.label === 'Your plan')).toBe(true)
   })
 
-  it('and "Billing" is gone rather than sitting beside its replacement', () => {
-    expect(nav).not.toMatch(/label: 'Billing'/)
-    expect(icons).not.toMatch(/^\s*Billing:/m)
+  it('and neither of the ambiguous names survives anywhere in the rail', () => {
+    expect(items.map((i) => i.label)).not.toContain('Billing')
+    expect(items.map((i) => i.label)).not.toContain('Bills')
   })
 
-  it('the renamed row still draws a chip — the key is the LABEL', () => {
-    // nav-icons is keyed by label, so renaming a row without renaming its key leaves it undrawn —
-    // exactly how Invoices shipped with no chip.
-    expect(icons).toContain("'Your plan': CreditCard")
+  it('every row with a screen draws a chip — the map is keyed by LABEL', () => {
+    // The general form of the bug rather than one instance of it: nav-icons is keyed by label, so
+    // renaming a row without renaming its key leaves it undrawn. That is how Invoices shipped with no
+    // chip, and how "Supplier bills" would have. Sign Out is an action, not a screen, and still has
+    // one; a row with no href is not built yet and is allowed none.
+    const undrawn = items.filter((i) => (i.href || i.action) && !NAV_ICONS[i.label]).map((i) => i.label)
+    expect(undrawn).toEqual([])
+  })
+
+  it('supplier bills stay gated on landed_cost; expenses are gated on nothing', () => {
+    // The asymmetry is the point. A locksmith imports nothing and never sees a supplier bill — and
+    // that is exactly why Money out read $0 for them, which expenses exist to fix. Gating expenses on
+    // a module would reproduce the fault.
+    expect(items.find((i) => i.href === '/v2/bills')?.module).toBe('landed_cost')
+    expect(items.find((i) => i.href === '/v2/expenses')?.module).toBeUndefined()
   })
 })

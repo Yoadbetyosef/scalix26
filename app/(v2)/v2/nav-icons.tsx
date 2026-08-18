@@ -1,6 +1,6 @@
 import {
   TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
-  Package, Receipt, Truck, BarChart3, FileText, CreditCard, Settings, Plug, LogOut,
+  Package, Receipt, Truck, Wallet, BarChart3, FileText, CreditCard, Settings, Plug, LogOut,
 } from 'lucide-react'
 
 // ONE LABEL, ONE MARK, BOTH WIDTHS.
@@ -18,7 +18,10 @@ import {
 export const NAV_ICONS: Record<string, typeof TrendingUp> = {
   Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
   'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
-  Orders: Package, Invoices: Receipt, Bills: Truck, Analytics: BarChart3, Reports: FileText,
+  // Truck stays with SUPPLIER BILLS — it is stock arriving. Expenses gets the wallet: money leaving
+  // that never became stock.
+  Orders: Package, Invoices: Receipt, Expenses: Wallet, 'Supplier bills': Truck,
+  Analytics: BarChart3, Reports: FileText,
   'Your plan': CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
 }
 // `Leads` was here and is gone with its screen (§22). A mark for a destination that does not exist is

@@ -3206,3 +3206,68 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 /* The half-sentence under it, a SIBLING of the button rather than inside it — a button that contains
    a paragraph stops being the same shape as the buttons beside it. */
 .v2 .v2-classic-why { display: block; margin-top: 5px; font-size: 11.5px; color: var(--v2-ink-42); line-height: 1.35; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   EXPENSES — money leaving that is not a supplier invoice.
+
+   Deliberately the SAME geometry as .v2-bl-* rather than a new one. The two screens are siblings
+   under BUSINESS and a person moving between them should feel one product, not two: same row height,
+   same name/meta stack, same tabular figures on the right. What differs is what each row has to say,
+   not how a row is built. */
+
+/* The sheet's paired fields. Date and Amount belong on one line — they are the two things a person
+   reads straight off the receipt, and stacking them puts a scroll between the top of the paper and
+   the number on it. */
+.v2 .v2-xrow { display: flex; gap: 10px; }
+.v2 .v2-xrow .v2-efield { flex: 1; min-width: 0; }
+
+/* The picker had no styling at all: .v2-efield dressed input and textarea only, so a <select> in the
+   same sheet rendered as the browser's default control beside two that did not. Same rule, one more
+   element — not a second class, or the next field type repeats this. */
+.v2 .v2-efield select {
+  width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14px;
+  padding: 9px 10px; border: 1px solid var(--v2-line); border-radius: 8px;
+  background: var(--v2-paper-2); color: var(--v2-ink); appearance: none;
+}
+.v2 .v2-efield select:focus { border-color: var(--v2-violet); background: var(--v2-paper); outline: none; }
+.v2 .v2-efield select:disabled { opacity: 0.6; }
+
+/* The half-sentence beneath a field. Not italic despite the <i>: it carries meaning, not emphasis,
+   and italic body text at 11px is harder to read for no gain. */
+.v2 .v2-xhint { display: block; font-style: normal; font-size: 11.5px; line-height: 1.4; color: var(--v2-ink-42); margin-top: 5px; }
+
+.v2 .v2-xreceipt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.v2 .v2-xattach {
+  display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: 13px;
+  padding: 7px 11px; border: 1px dashed var(--v2-line); border-radius: 8px;
+  background: none; color: var(--v2-ink-70); cursor: pointer;
+}
+.v2 .v2-xattach:hover:not(:disabled) { border-style: solid; color: var(--v2-ink); }
+.v2 .v2-xattach:disabled { opacity: 0.5; cursor: default; }
+.v2 .v2-xattach svg { flex: none; width: 14px; height: 14px; }
+.v2 .v2-xfile { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--v2-ink-42); font-variant-numeric: tabular-nums; }
+.v2 .v2-xfile button { background: none; border: 0; font-size: 15px; line-height: 1; color: var(--v2-ink-40); cursor: pointer; padding: 0 2px; }
+.v2 .v2-xfile button:hover { color: var(--v2-ink); }
+
+/* The row. */
+.v2 .v2-xrw { display: flex; gap: 13px; padding: 15px 14px; align-items: center; width: 100%; }
+.v2 .v2-xmid { flex: 1; min-width: 0; }
+.v2 .v2-xnm { font-size: 15px; font-weight: 500; color: var(--v2-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2 .v2-xmeta { font-size: 12.5px; color: var(--v2-ink-42); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2 .v2-xamt { text-align: right; flex: none; }
+.v2 .v2-xval { font-size: 15.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
+.v2 .v2-xnet { font-size: 10.5px; color: var(--v2-ink-40); font-variant-numeric: tabular-nums; letter-spacing: 0.06em; margin-top: 4px; }
+
+/* The receipt slot is a FIXED WIDTH whether or not there is a receipt, so the column stays a column.
+   An optional element that collapses when absent makes every row a different shape, and the thing
+   this screen most needs to show at a glance is which rows are missing one. */
+.v2 .v2-xrec {
+  flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; color: var(--v2-ink-70); text-decoration: none;
+}
+.v2 a.v2-xrec:hover { background: var(--v2-hover-soft); color: var(--v2-ink); }
+.v2 .v2-xrec svg { flex: none; width: 14px; height: 14px; }
+/* An em dash, not a warning. A missing receipt is worth noticing and is not an error — the opening
+   line already names the count, and thirty amber marks down a column would make the list unreadable
+   while telling somebody nothing they could act on row by row. */
+.v2 .v2-xrec[data-none] { color: var(--v2-ink-40); font-size: 13px; }
