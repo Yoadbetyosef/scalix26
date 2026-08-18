@@ -42,6 +42,12 @@ export const POLICIES = {
   // shops should be able to refresh each one — the limit exists to stop someone hammering a single
   // site, not to ration the button.
   catalog_sync:    { limit: 1,   window: '15 m', fail: 'open' },
+  // Reading a receipt photograph. Authenticated and keyed by tenant, but it is the only surface here
+  // where ONE TAP spends model money, so it gets its own bucket rather than sharing ai_chat's: a
+  // person photographing a shoebox of receipts is the intended use, and 40 a minute is far above any
+  // human rate while still capping a script. Fails OPEN — a Redis outage must not stop somebody
+  // recording an expense, and the failure it would prevent is a few dollars, not a breach.
+  expense_read:    { limit: 40,  window: '1 m',  fail: 'open' },
   demo_generate:   { limit: 20,  window: '1 h',  fail: 'open' },
   coach_email:     { limit: 30,  window: '1 h',  fail: 'open' },
   convo_send:      { limit: 60,  window: '1 m',  fail: 'open' },

@@ -8,6 +8,7 @@ import {
   RECEIPT_MAX_BYTES, RECEIPT_LONG_EDGE, RECEIPT_STORED_TYPES, RECEIPT_EXTENSIONS,
 } from './receipt'
 import { jpegName } from './downscale'
+import { resolveSpentOn, shapeReading } from './extract'
 
 const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 
@@ -273,6 +274,136 @@ describe('deciding what happens to a receipt already on a row', () => {
   it('ignores a file that came with a remove', () => {
     // Contradictory, and the explicit word wins over the accidental attachment.
     expect(receiptChangeFrom('remove', photo)).toEqual({ kind: 'remove' })
+  })
+})
+
+describe('the date off a receipt — blank asks, today asserts', () => {
+  const today = '2026-08-18'
+
+  it('takes what the receipt says, however old', () => {
+    // The shoebox of eighteen-month-old receipts is the case this feature exists for. A rule against
+    // old dates would refuse its own best use.
+    expect(resolveSpentOn('2026-08-01', today)).toBe('2026-08-01')
+    expect(resolveSpentOn('2025-01-14', today)).toBe('2025-01-14')
+    expect(resolveSpentOn('2019-06-30', today)).toBe('2019-06-30')
+  })
+
+  it('allows tomorrow and refuses next week', () => {
+    // The same one-day tolerance parseExpense has, for the same reason: the tenant's today and the
+    // server's can legitimately differ by one across a timezone.
+    expect(resolveSpentOn('2026-08-19', today)).toBe('2026-08-19')
+    expect(resolveSpentOn('2026-08-20', today)).toBeNull()
+    expect(resolveSpentOn('2027-08-18', today)).toBeNull()
+  })
+
+  it('refuses a date the calendar does not have', () => {
+    // Date.parse accepts 2026-02-31 and quietly hands back 3 March. A silent three-day drift on a
+    // date nobody was asked to confirm is exactly the bug this whole rule exists to prevent.
+    expect(resolveSpentOn('2026-02-31', today)).toBeNull()
+    expect(resolveSpentOn('2026-13-01', today)).toBeNull()
+    expect(resolveSpentOn('2026-00-10', today)).toBeNull()
+  })
+
+  it('refuses anything that is not an ISO date, rather than interpreting it', () => {
+    // "04/03/2026" is the ambiguous case the model is asked to resolve into spentOn. If it arrives
+    // here unresolved, this must not pick an order — datePrinted is what the person reads instead.
+    for (const junk of ['04/03/2026', '4 March 2026', '2026-8-1', 'yesterday', '', '   ']) {
+      expect(resolveSpentOn(junk, today)).toBeNull()
+    }
+    expect(resolveSpentOn(null, today)).toBeNull()
+  })
+})
+
+describe('shaping what came back from a receipt', () => {
+  const today = '2026-08-18'
+  const raw = (over: Partial<Parameters<typeof shapeReading>[0]> = {}) => shapeReading({
+    readable: 'receipt', merchant: 'Shell', totalText: '42.50', taxText: null,
+    datePrinted: '18/08/2026', spentOn: '2026-08-18', currency: 'usd', category: 'vehicle_fuel',
+    ...over,
+  }, today)
+
+  it('turns printed text into cents through the one function that does that', () => {
+    const r = raw()
+    expect(r.amountCents).toBe(4250)
+    expect(r.merchant).toBe('Shell')
+    expect(r.spentOn).toBe('2026-08-18')
+    expect(r.currency).toBe('USD')
+    expect(r.category).toBe('vehicle_fuel')
+  })
+
+  // THE RULE THE WHOLE FEATURE RESTS ON. A blank asks the person a question; a wrong number gets
+  // waved through, and an amount is the field they are least able to check from memory.
+  it('never invents an amount', () => {
+    expect(raw({ totalText: null }).amountCents).toBeNull()
+    expect(raw({ totalText: 'illegible' }).amountCents).toBeNull()
+    expect(raw({ totalText: '' }).amountCents).toBeNull()
+    // Zero and negative are refused by the form and by the database. Offering either would fill the
+    // field with something that cannot be saved.
+    expect(raw({ totalText: '0' }).amountCents).toBeNull()
+    expect(raw({ totalText: '0.00' }).amountCents).toBeNull()
+    expect(raw({ totalText: '-12.00' }).amountCents).toBeNull()
+    // Ambiguous to the cent — parseAmountCents already refuses this and it must not be rounded here.
+    expect(raw({ totalText: '1.234' }).amountCents).toBeNull()
+  })
+
+  it('drops a tax it cannot stand behind rather than offering it', () => {
+    expect(raw({ taxText: '5.10' }).taxCents).toBe(510)
+    // Not smaller than the total is a misread, and parseExpense would refuse it at save time — so
+    // offering it would put a value on screen that blocks the save the person is about to make.
+    expect(raw({ totalText: '42.50', taxText: '42.50' }).taxCents).toBeNull()
+    expect(raw({ totalText: '42.50', taxText: '99.00' }).taxCents).toBeNull()
+    // No total to compare against: cannot be checked, so it is not offered.
+    expect(raw({ totalText: null, taxText: '5.10' }).taxCents).toBeNull()
+    expect(raw({ taxText: null }).taxCents).toBeNull()
+  })
+
+  it('refuses a category the database would refuse', () => {
+    // The schema constrains this to the eighteen, but that constraint lives in a string the API
+    // enforces. A category that got through anyway would fail the insert AFTER the person had
+    // finished checking everything.
+    expect(raw({ category: 'other' }).category).toBeNull()
+    expect(raw({ category: 'petrol' }).category).toBeNull()
+    expect(raw({ category: null }).category).toBeNull()
+    expect(raw({ category: 'meals' }).category).toBe('meals')
+  })
+
+  it('keeps what it could read when the rest is missing', () => {
+    // A partial read is the NORMAL case, not the sad path — merchant and total are usually legible
+    // when the date has faded. Three fields and a null is the feature working.
+    const r = raw({ spentOn: null, datePrinted: null, category: null, currency: null })
+    expect(r.merchant).toBe('Shell')
+    expect(r.amountCents).toBe(4250)
+    expect(r.spentOn).toBeNull()
+    expect(r.category).toBeNull()
+  })
+
+  it('carries the printed date through even when it could not be resolved', () => {
+    // The one thing that lets a person catch a swapped day and month, so it must survive a spentOn
+    // that was thrown away.
+    const r = raw({ spentOn: '2026-02-31', datePrinted: '31/02/2026' })
+    expect(r.spentOn).toBeNull()
+    expect(r.datePrinted).toBe('31/02/2026')
+  })
+
+  it('passes on which kind of nothing it got', () => {
+    // "I photographed my dog" and "the print has faded" need different sentences on screen.
+    expect(raw({ readable: 'not_a_receipt' }).readable).toBe('not_a_receipt')
+    expect(raw({ readable: 'unreadable' }).readable).toBe('unreadable')
+  })
+
+  it('bounds the strings it hands to a form', () => {
+    expect(raw({ merchant: '  Shell  ' }).merchant).toBe('Shell')
+    expect(raw({ merchant: '' }).merchant).toBeNull()
+    expect(raw({ merchant: 'x'.repeat(400) }).merchant!.length).toBe(200)
+  })
+
+  it('takes an ISO currency code or nothing', () => {
+    expect(raw({ currency: 'cad' }).currency).toBe('CAD')
+    // Truncating to three characters would invent a currency that does not exist, arrived at by
+    // string slicing — a value that looks deliberate to everything downstream.
+    expect(raw({ currency: 'canadian dollars' }).currency).toBeNull()
+    expect(raw({ currency: '$' }).currency).toBeNull()
+    expect(raw({ currency: null }).currency).toBeNull()
   })
 })
 

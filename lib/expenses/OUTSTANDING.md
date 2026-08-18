@@ -48,16 +48,53 @@ Two things it has to get right that are already decided in the data:
   expense part. An export that lists them beside the others is quietly wrong about the section.
 - **A Net column** derived from `amount_cents - tax_cents`, and only where `tax_cents` is non-null.
 
-## 3. NOTHING READS THE RECEIPT, ON PURPOSE
+## 3. THE RECEIPT IS READ ONCE, TO FILL THE FORM
 
-The file is proof, not input. `lib/invoices/extract.ts` exists and could read one — it is structured
-outputs against `INVOICE_SCHEMA`, and a till receipt is well within what it handles. It is not wired
-in, and should not be until somebody has actually used the manual path enough to say what is tedious
-about it.
+Built 18 Aug 2026. The condition this section used to set — *not until somebody has used the manual
+path enough to say what is tedious about it* — was met: typing the amount, the merchant and the
+category off a receipt already in your hand is the work, and skipping it was the point.
 
-If it is wired in later, the thing to preserve: an extracted amount must be **shown as a suggestion
-the person confirms**, never written silently. The screen currently makes no claim to have read
-anything, which is honest and is worth not losing.
+The rule it set was kept. An extracted value is **a suggestion the person confirms**, never a silent
+write: nothing saves, the sheet stays live while the model reads, and a reading fills only the fields
+nobody has touched. Edit and delete were built **first**, deliberately — a confirmation only means
+something if a wrong one can be taken back (§6).
+
+Measured, on `claude-sonnet-5` at `effort: 'low'`, one page:
+
+| | |
+|---|---|
+| cost | **1.2–1.6¢** a receipt — 3,000–4,700 input tokens, ~90 output. 40 a month ≈ 60¢ |
+| time | **3–7s** end to end for the model call; the 1600px read copy is ~200 KB on the wire |
+| ceiling | route 30s, client aborts at 20s and falls through to typing |
+
+**What is still unknown is fill rate on real paper.** Everything above was exercised against rendered
+receipts and PDFs — crisp text, no creases, no thermal fade, no flash glare, no receipt photographed
+at an angle on a car seat. Those are the conditions that decide whether this is worth the tap, and
+none of them have happened yet. The first ten real photographs are the measurement; `usage_events`
+already records what each one cost.
+
+**The failure that matters, and what was done about it.** A photograph that misses the bottom of a
+long receipt is the ordinary case, and the first version of the prompt answered it by promoting a
+LINE ITEM to the total — 71.80 on a fuel receipt whose total was 87.99. The number is printed on the
+page, which is what makes it dangerous: it arrives pre-filled and looks right. Two rules in the
+prompt fix it, and the clause doing the work is *"even when it is the only one you can see"* —
+softening it brought 71.80 straight back. See the comment above `PROMPT` before touching that line.
+
+Smaller things deliberately not done:
+
+- **A replaced photo on an EDIT is not read.** Those fields were already checked by a person, and
+  rewriting six of them because somebody re-photographed a receipt is the overwrite this design
+  exists to prevent. If it is ever wanted, it needs to be an explicit "read this again" action.
+- **The currency is read and thrown away.** `expenses.currency` defaults to `usd` and the form has no
+  currency field, so a CAD receipt records CAD in the reading and USD in the row. Harmless today —
+  `cost_base_currency` is USD for all 33 tenants — and the fix is a currency field, not a silent
+  write of whatever the photograph said.
+- **The photograph is uploaded twice**: the 1600px copy to be read, the 2000px copy at save. The
+  alternative is storing at read time, which needs a reaper for every receipt somebody read and then
+  abandoned, and breaks the invariant `createExpense` was built on — the bucket never holds a file
+  nothing points at. The second upload sits behind a button the person has already pressed.
+- **No prompt caching.** The prompt and schema come to roughly 900 tokens, under Sonnet 5's 1024
+  minimum, so a `cache_control` marker there would pay the write premium and never read.
 
 ## 4. THE TENANT'S COUNTRY IS INFERRED, NOT KNOWN
 

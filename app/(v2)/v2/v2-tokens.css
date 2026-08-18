@@ -3236,6 +3236,29 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    and italic body text at 11px is harder to read for no gain. */
 .v2 .v2-xhint { display: block; font-style: normal; font-size: 11.5px; line-height: 1.4; color: var(--v2-ink-42); margin-top: 5px; }
 
+/* The line that says a photograph is being read.
+   ABOVE the fields, not over them — the form stays live the whole time, and anything laid across it
+   would be saying "wait" when the honest instruction is "type what you already know". */
+.v2 .v2-xreading {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; line-height: 1.45; color: var(--v2-ink-70);
+  margin: -4px 0 10px;
+}
+.v2 .v2-xreading[data-quiet] { color: var(--v2-ink-42); }
+.v2 .v2-xspin { flex: none; animation: v2-xspin 0.8s linear infinite; }
+@keyframes v2-xspin { to { transform: rotate(360deg); } }
+/* A read that took a moment must not then make the answer arrive with a flourish. */
+@media (prefers-reduced-motion: reduce) { .v2 .v2-xspin { animation: none; } }
+
+/* Which fields the photograph filled in. A tag beside the LABEL rather than a colour on the input:
+   the person is checking these against paper in their hand, and what they need to know is which four
+   to look at — not that something happened to the box. It disappears on the first keystroke, because
+   after that the field is theirs and the tag would be a lie. */
+.v2 .v2-xtag {
+  font-style: normal; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--v2-ink-40); margin-left: 7px; font-weight: 400;
+}
+
 .v2 .v2-xreceipt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .v2 .v2-xattach {
   display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: 13px;

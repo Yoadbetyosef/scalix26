@@ -32,6 +32,21 @@ export const RECEIPT_MAX_BYTES = 3.5 * 1024 * 1024
 /** Long edge after downscaling. A till receipt at 2000px is comfortably readable. */
 export const RECEIPT_LONG_EDGE = 2000
 
+/**
+ * And a SMALLER copy again, for the one that goes to the model.
+ *
+ * Two copies of the same photograph travel, and they travel at different moments. The stored copy
+ * goes at SAVE, behind a button somebody has already pressed and expects to take a beat. The read
+ * copy goes at PICK, and it is the one a person actually waits on — so it is the one to make small.
+ *
+ * 1600px rather than 2000: about a third fewer pixels, which is a third off both the upload and the
+ * image tokens, and a till receipt photographed full-frame still lands ~40px of height per line of
+ * print, which is comfortably above what faded thermal needs. Not 1200 — that is where the narrow
+ * ones start losing the cents column, and a wrong cent is the one error the person is least likely to
+ * catch while checking.
+ */
+export const RECEIPT_READ_LONG_EDGE = 1600
+
 /** JPEG quality. High enough that small print survives, low enough to land well under the ceiling. */
 export const RECEIPT_QUALITY = 0.82
 
@@ -67,6 +82,19 @@ export const RECEIPT_ACCEPT_ATTR = Object.keys(RECEIPT_EXTENSIONS).map((e) => `.
 
 /** What the bucket will actually hold. Everything else must be redrawn into one of these first. */
 export const RECEIPT_STORED_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp'])
+
+/**
+ * Whether the model can be shown this file at all.
+ *
+ * The same four types, deliberately — the API takes a PDF as a document and PNG/JPEG/WEBP as images,
+ * which is exactly the set the bucket holds. A HEIC that survived the redraw (Chrome cannot decode
+ * one) is therefore not sent: the read is SKIPPED and the person types, rather than the route
+ * answering with an error about a format for a photograph that is perfectly fine.
+ */
+export const canBeRead = (name: string): boolean => {
+  const mime = RECEIPT_EXTENSIONS[receiptExtensionOf(name)]
+  return !!mime && RECEIPT_STORED_TYPES.has(mime)
+}
 
 export const receiptExtensionOf = (name: string): string => {
   const dot = name.lastIndexOf('.')
