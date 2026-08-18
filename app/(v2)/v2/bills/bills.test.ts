@@ -313,3 +313,28 @@ describe('the empty state, and the upload it promises', () => {
     expect(upload).toContain('Open the one you already have')
   })
 })
+
+describe('three things called some variant of "bill"', () => {
+  const nav = read('../nav.ts')
+  const icons = read('../nav-icons.tsx')
+
+  it('each row says whose money it is', () => {
+    // Invoices = what a customer owes the tenant. Bills = what the tenant owes a supplier. Your plan =
+    // what the tenant owes Scalix. All three in one rail with the last called "Billing" is why a
+    // supplier invoice got looked for under the wrong row.
+    expect(nav).toContain("{ label: 'Invoices', href: '/v2/invoices'")
+    expect(nav).toContain("{ label: 'Bills', href: '/v2/bills'")
+    expect(nav).toContain("{ label: 'Your plan' }")
+  })
+
+  it('and "Billing" is gone rather than sitting beside its replacement', () => {
+    expect(nav).not.toMatch(/label: 'Billing'/)
+    expect(icons).not.toMatch(/^\s*Billing:/m)
+  })
+
+  it('the renamed row still draws a chip — the key is the LABEL', () => {
+    // nav-icons is keyed by label, so renaming a row without renaming its key leaves it undrawn —
+    // exactly how Invoices shipped with no chip.
+    expect(icons).toContain("'Your plan': CreditCard")
+  })
+})

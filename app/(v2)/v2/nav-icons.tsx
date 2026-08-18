@@ -19,7 +19,7 @@ export const NAV_ICONS: Record<string, typeof TrendingUp> = {
   Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
   'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
   Orders: Package, Invoices: Receipt, Bills: Truck, Analytics: BarChart3, Reports: FileText,
-  Billing: CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
+  'Your plan': CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
 }
 // `Leads` was here and is gone with its screen (§22). A mark for a destination that does not exist is
 // a row waiting to be re-added by somebody who finds the icon and assumes the page went missing.

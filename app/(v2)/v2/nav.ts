@@ -78,7 +78,11 @@ export const GROUPS: Group[] = [
       { label: 'Reports', href: '/v2/reports', module: 'analytics' },
     ],
   },
-  { id: 'g3', label: 'Account', items: [{ label: 'Billing' }, { label: 'Connections', href: '/v2/settings/connections' }, { label: 'Settings', href: '/v2/settings' }, { label: 'Sign Out', out: true, action: 'signout' }] },
+  // "YOUR PLAN", not "Billing". Three things in this product are a variant of "bill" and they point in
+  // different directions: Invoices is what a customer owes the tenant, Bills is what the tenant owes a
+  // supplier, and this is what the tenant owes Scalix. A rail carrying all three with the middle one
+  // called "Billing" is why a supplier invoice got looked for under the wrong row.
+  { id: 'g3', label: 'Account', items: [{ label: 'Your plan' }, { label: 'Connections', href: '/v2/settings/connections' }, { label: 'Settings', href: '/v2/settings' }, { label: 'Sign Out', out: true, action: 'signout' }] },
 ]
 
 /** Applied once, to both surfaces. A tenant without the module never sees the row. */
