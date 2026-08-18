@@ -1,18 +1,12 @@
-import { anthropic } from '@/lib/anthropic/client'
-import { trackLlm } from '@/lib/cost/track'
+import { nullable, readDocument } from '@/lib/anthropic/read-document'
 import { MAX_INVOICE_PAGES } from './types'
 
 // Reading a supplier invoice.
 //
-// ── WHY THE DOCUMENT GOES TO THE MODEL WHOLE ────────────────────────────────────────────────────────
-//
-// pdf-parse is already a dependency and could turn this PDF into a string, but an invoice's meaning is
-// in its COLUMN LAYOUT: which number is a unit price, which is a line total, which is the freight line
-// at the bottom. Flattening the table to a text stream destroys exactly the association the extraction
-// depends on, and no prompt recovers it afterwards. The document goes as a document.
-//
-// This file uses no PDF library at all. It briefly used pdf-parse to count pages, which broke the whole
-// upload path on Vercel — see pageCountOf below.
+// What is HERE is what is particular to an invoice: the schema, the prompt, the page ceiling, and the
+// fallback currency. The call itself — document turn, streaming, structured output, metering, the
+// narrowing of the response — is in lib/anthropic/read-document.ts, shared with the receipt reader.
+// See that file's header for why the document goes to the model whole.
 //
 // ── MODEL ───────────────────────────────────────────────────────────────────────────────────────────
 //
@@ -23,16 +17,6 @@ import { MAX_INVOICE_PAGES } from './types'
 // under-reported at Haiku's price.
 
 export const EXTRACTION_MODEL = 'claude-sonnet-5'
-
-/**
- * Structured outputs, not prompt-and-hope. The response is constrained to this schema by the API, so
- * there is no parse step that can fail at midnight and no retry loop around a regex. Numbers arrive as
- * numbers.
- *
- * Nullable fields are written as `anyOf` rather than `type: [..., 'null']` — the supported subset of
- * JSON Schema is narrow, and anyOf is in it.
- */
-const nullable = (type: string) => ({ anyOf: [{ type }, { type: 'null' }] })
 
 const LINE_SCHEMA = {
   type: 'object',
@@ -178,50 +162,29 @@ export async function extractInvoice(
     )
   }
 
-  // base64 with no newlines, and the document BEFORE the instruction — both are how the API expects a
-  // document turn to be shaped.
-  const data = bytes.toString('base64')
-  const source = { type: 'base64' as const, media_type: mimeType, data }
-  const documentBlock = mimeType === 'application/pdf'
-    ? { type: 'document' as const, source: { ...source, media_type: 'application/pdf' as const } }
-    : { type: 'image' as const, source: source as { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; data: string } }
-
-  // Streamed: a long invoice's structured output can run past the point where a non-streaming request
-  // risks an SDK HTTP timeout, and the failure mode there is a lost extraction the owner already paid for.
-  const stream = anthropic.messages.stream({
+  const read = await readDocument<ExtractedInvoice>({
+    tenantId,
+    bytes,
+    mimeType,
+    schema: INVOICE_SCHEMA,
+    prompt: PROMPT,
     model: EXTRACTION_MODEL,
-    max_tokens: 16000,
     // Transcription with layout comprehension: it has to follow a column across a page, but it is not
     // being asked to reason about the business. Medium buys that without paying for deliberation.
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: INVOICE_SCHEMA } },
-    messages: [{ role: 'user', content: [documentBlock, { type: 'text', text: PROMPT }] }],
-  } as Parameters<typeof anthropic.messages.stream>[0])
+    effort: 'medium',
+    subject: 'invoice',
+  })
 
-  const message = await stream.finalMessage()
-
-  // Metered the moment it is known, with the real completion id as resourceId so the usage_events row
-  // is deterministic and deduped rather than a fresh uuid per attempt.
-  trackLlm(tenantId, EXTRACTION_MODEL, message.usage, { resourceId: message.id })
-
-  // Narrowed structurally rather than with a type predicate: `content` is a union whose other members
-  // have no `text`, and asserting a shape that isn't assignable to ContentBlock is how you get a cast
-  // that compiles and lies. `in` narrows without claiming anything the SDK hasn't declared.
-  const block = message.content.find((b) => b.type === 'text')
-  const text = block && 'text' in block ? block.text : null
-  if (!text) throw new Error('The model returned no content for this invoice.')
-
-  // Guaranteed to parse and to match the schema — that is what output_config.format buys. A throw here
-  // means something changed about the API, not about this invoice, and it should read that way.
-  const invoice = JSON.parse(text) as ExtractedInvoice
+  const invoice = read.value
   if (!invoice.currency) invoice.currency = fallbackCurrency
 
   return {
     invoice,
     pageCount,
-    model: EXTRACTION_MODEL,
-    inputTokens: message.usage.input_tokens ?? 0,
-    outputTokens: message.usage.output_tokens ?? 0,
-    completionId: message.id,
+    model: read.model,
+    inputTokens: read.inputTokens,
+    outputTokens: read.outputTokens,
+    completionId: read.completionId,
   }
 }
 
