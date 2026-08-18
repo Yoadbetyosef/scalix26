@@ -70,10 +70,15 @@ export const GROUPS: Group[] = [
       // Gated on `invoices`, so a tenant without it never sees the row — the same rule every other
       // destination here follows, applied once and read by both the rail and the sheet.
       { label: 'Invoices', href: '/v2/invoices', module: 'invoices' },
-      // Everything else the business spends: rent, fuel, payroll, software. NOT gated on a module —
-      // every business spends money, and `landed_cost` being off is exactly why a locksmith's Money
-      // out reads $0 today.
-      { label: 'Expenses', href: '/v2/expenses' },
+      // "MONEY OUT", not "Expenses". This row is the ONE DOOR every bill comes in through — a photo
+      // or a PDF, read, and then landed as an expense or as a supplier bill by what is in it. So the
+      // label has to name the whole category of money leaving, not one of the two outcomes behind it:
+      // a tenant with a catalogue who reads "Expenses" decides a supplier bill does not go there, and
+      // goes looking for a second upload, which is the confusion the one door exists to remove.
+      //
+      // NOT gated on a module — every business spends money, and `landed_cost` being off is exactly
+      // why a locksmith's Money out reads $0 today. For them the door has one outcome and never asks.
+      { label: 'Money out', href: '/v2/expenses' },
       // "SUPPLIER BILLS", not "Bills". The screen's own heading has said so since it was built; the
       // rail said "Bills", which claims the whole category of money-owed and left Expenses with
       // nowhere natural to sit beside it. It is also the narrower thing: supplier invoices for stock,

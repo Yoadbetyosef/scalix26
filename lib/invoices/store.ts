@@ -6,7 +6,7 @@ import { getCostSettings } from '@/lib/catalog/costs'
 import { allocate, coverage, type Charges } from './allocate'
 import { clearsGates, describe as describeDivergence, divergenceSentence, projectCost, type Divergence } from './divergence'
 import { matchInvoiceLines, suggestProducts } from './match'
-import { extractInvoice, extendedOf } from './extract'
+import { extractInvoice, extendedOf, type ExtractionResult } from './extract'
 import {
   EXTRACTABLE_EXTENSIONS, MAX_INVOICE_BYTES, MIN_COVERAGE, extensionOf, invoiceFileError,
   type DuplicateWarning, type InvoiceLine, type ShipmentDetail, type Shipment, type SupplierInvoice,
@@ -161,7 +161,25 @@ export async function findDuplicate(tenantId: string, fileHash: string, supplier
  * return the shipment is in 'review' and one action away from being applied, or in 'failed' with a
  * reason they can act on.
  */
-export async function createShipmentFromFile(file: File): Promise<Result<{ shipmentId: string; duplicate: DuplicateWarning | null }>> {
+export async function createShipmentFromFile(
+  file: File,
+  /**
+   * An extraction ALREADY PAID FOR, from the money-out door.
+   *
+   * The door has to know what is in a document before it can decide whether the document is a
+   * supplier bill at all, so on the short-read path it reads first and only then calls this. Passing
+   * the result back in is what stops the same page being sent to the model twice.
+   *
+   * It also flips the order the rows are written in, and that is the point rather than a side effect.
+   * With no extraction the rows go in FIRST, so a read that fails or is abandoned leaves something on
+   * screen carrying the reason — right for a fifteen-page PDF nobody is going to sit and watch. With
+   * one, the read has already happened and the rows are written after, so a document that turns out
+   * to be an expense never leaves a shipment behind to clean up. See OUTSTANDING.md §10d: these are
+   * two deliberate invariants for two different waits, and collapsing them into one rule breaks
+   * whichever case it was not written for.
+   */
+  already?: ExtractionResult,
+): Promise<Result<{ shipmentId: string; duplicate: DuplicateWarning | null }>> {
   const g = await gate()
   if (g === 'not_found' || g === 'forbidden') return { ok: false, reason: g }
 
@@ -209,7 +227,7 @@ export async function createShipmentFromFile(file: File): Promise<Result<{ shipm
   const invoiceId = (invoice as Record<string, unknown>).id as string
 
   try {
-    const ex = await extractInvoice(g.tenantId, bytes, mimeType, settings.baseCurrency)
+    const ex = already ?? await extractInvoice(g.tenantId, bytes, mimeType, settings.baseCurrency)
     const inv = ex.invoice
 
     await db.from('supplier_invoices').update({

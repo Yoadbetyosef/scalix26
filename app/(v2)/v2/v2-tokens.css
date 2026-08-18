@@ -3242,6 +3242,32 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-bl-mkname:focus { border-color: var(--v2-violet); background: var(--v2-paper); outline: none; }
 .v2 .v2-bl-mkname:disabled { opacity: 0.6; }
 
+/* ── THE ONE DOOR ─────────────────────────────────────────────────────────────────────────────────
+   Two pickers, one door. Snap is the primary control because a receipt in somebody's hand is the
+   common case; choosing a file is a WORD beside it rather than a second button, because two equal
+   buttons would read as two choices to make — and the whole point is that there is no choice to
+   make. Neither of them decides anything. */
+.v2 .v2-mo-acts { display: flex; align-items: center; gap: 12px; }
+.v2 .v2-mo-acts[data-tone="empty"] { flex-wrap: wrap; }
+.v2 .v2-mo-file {
+  background: none; border: 0; padding: 0; font-family: inherit; font-size: 12.5px;
+  color: var(--v2-ink-42); text-decoration: underline; cursor: pointer; white-space: nowrap;
+}
+.v2 .v2-mo-file:hover:not(:disabled) { color: var(--v2-ink); }
+.v2 .v2-mo-file:disabled { opacity: 0.5; cursor: default; }
+
+/* ── THE ONE QUESTION ─────────────────────────────────────────────────────────────────────────────
+   Bordered rather than washed, and NOT amber. Every other note on this screen is a warning about a
+   number; this one is a question with two right answers, and dressing it as a problem would tell an
+   owner they had done something wrong by putting a document in. */
+.v2 .v2-bl-ask {
+  border: 1px solid var(--v2-line); border-radius: 14px; padding: 14px;
+  background: var(--v2-paper); margin-bottom: 16px;
+}
+.v2 .v2-bl-askq { font-size: 15px; font-weight: 500; color: var(--v2-ink); }
+.v2 .v2-bl-askb { font-size: 12.5px; line-height: 1.5; color: var(--v2-ink-42); margin-top: 6px; }
+.v2 .v2-bl-ask .v2-bl-fix { margin-top: 11px; }
+
 /* The upload input itself is never seen — the button in front of it is the control. Not display:none:
    a hidden input cannot be .click()ed reliably in every browser, and this keeps it focusable for
    anybody arriving by keyboard. */

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { billsLine } from './line'
 import { coveragePct } from './groups'
 import { GROUPS } from '../nav'
@@ -450,8 +450,9 @@ describe('coverage is floored, never rounded up', () => {
   })
 })
 
-describe('the empty state, and the upload it promises', () => {
-  const upload = read('./upload.tsx')
+describe('the empty state, and the ONE DOOR it promises', () => {
+  const door = read('../money-out/door.tsx')
+  const moneyOut = strip(read('../expenses/page.tsx'))
 
   it('does NOT say the same sentence twice', () => {
     // It rendered the opening line above the empty state, and both read "No supplier bills yet."
@@ -463,53 +464,76 @@ describe('the empty state, and the upload it promises', () => {
   })
 
   it('and the empty state carries the action, not just the promise', () => {
-    // "Upload one and it gets read" beside no control is a promise the screen cannot keep.
-    expect(list).toContain('Upload one and it gets read')
-    expect(list).toContain('<UploadBill tone="empty" />')
+    // "Put one in and it gets read" beside no control is a promise the screen cannot keep.
+    expect(list).toContain('Put one in and it gets read')
+    expect(list).toContain('<MoneyOutDoor showsTax={showsTax} tone="empty" />')
   })
 
   it('the header has one too, like every other /v2 screen', () => {
     expect(list).toContain('<div className="v2-hacts">')
-    expect(list).toContain('<UploadBill />')
+    expect(list).toContain('<MoneyOutDoor showsTax={showsTax} />')
   })
 
-  it('one component, two placements — so they cannot drift', () => {
-    expect((list.match(/<UploadBill/g) ?? [])).toHaveLength(2)
+  it('ONE component, FOUR placements — both screens, header and empty', () => {
+    // The invariant is one PATH, not one location. An owner standing in Supplier bills with a
+    // supplier bill in their hand must not have to go somewhere else to put it in.
+    expect((list.match(/<MoneyOutDoor/g) ?? [])).toHaveLength(2)
+    expect((moneyOut.match(/<MoneyOutDoor/g) ?? [])).toHaveLength(2)
   })
 
-  it('and BOTH wear the header-action treatment', () => {
+  it('and neither screen keeps an upload of its own', () => {
+    // Two doors is how the same supplier invoice ended up in both tables. The old components are
+    // gone rather than left unused: an unreferenced second uploader is a second door waiting to be
+    // wired back up.
+    expect(existsSync(new URL('./upload.tsx', import.meta.url))).toBe(false)
+    expect(existsSync(new URL('../expenses/add.tsx', import.meta.url))).toBe(false)
+  })
+
+  it('the primary control wears the header-action treatment', () => {
     // The empty one used `v2-epri`, which carries only background and colour — every measurement it
     // looks like it has comes from `.v2-eacts button`. Outside a sheet it rendered 18px tall with no
-    // padding and no radius: a black rectangle behind text. Measured before and after.
-    expect(upload).toContain('className="v2-hact"')
-    expect(upload).toContain('data-tone="primary"')
-    expect(strip(upload)).not.toContain('v2-epri')
+    // padding and no radius: a black rectangle behind text.
+    expect(door).toContain('className="v2-hact"')
+    expect(door).toContain('data-tone="primary"')
+    expect(strip(door)).not.toContain('v2-epri')
   })
 
-  it('posts to the SAME route v1 uses — it is not a v1-only path', () => {
-    // /landed-cost is a second CALLER of this route, not the owner of it. Linking there instead
-    // would leave the preview, which no-escape refuses and which is a dead end on a phone.
-    expect(upload).toContain("fetch('/api/invoices/shipments', { method: 'POST', body })")
-    expect(strip(upload)).not.toContain('/landed-cost')
+  it('posts to the door, and the door is what decides — not the screen it was opened from', () => {
+    expect(door).toContain("fetch('/api/money-out', { method: 'POST', body, signal: ctrl.signal })")
+    // Neither screen may pre-decide the answer by posting to one of the two writers itself.
+    expect(strip(list)).not.toContain('/api/invoices/shipments')
+    expect(strip(moneyOut)).not.toContain('/api/expenses')
+    expect(strip(door)).not.toContain('/landed-cost')
   })
 
   it('refuses a bad file at the picker, with the server’s own rule', () => {
-    expect(upload).toContain("import { INVOICE_ACCEPT_ATTR, invoiceFileError } from '@/lib/invoices/types'")
-    expect(upload).toContain('const problem = invoiceFileError(file.name, file.size)')
+    expect(door).toContain("import { INVOICE_ACCEPT_ATTR, invoiceFileError } from '@/lib/invoices/types'")
+    expect(door).toContain('const problem = invoiceFileError(file.name, file.size)')
   })
 
   it('reads the response with readJson, not res.json()', () => {
     // An oversized upload is refused by the platform edge with PLAIN TEXT, before the route exists
     // as far as Vercel is concerned — res.json() would throw a parse error over the real one.
-    expect(upload).toContain('await readJson<')
-    expect(strip(upload)).not.toMatch(/await res\.json\(\)/)
+    expect(door).toContain('await readJson<')
+    expect(strip(door)).not.toMatch(/await res\.json\(\)/)
   })
 
   it('a duplicate is shown and does not block', () => {
-    // Re-uploading after a failed extraction is legitimate; the owner knows which of the two they
-    // meant. So the warning holds the NAVIGATION, not the upload.
-    expect(upload).toContain('if (d.duplicate) { setDupe(d.duplicate); router.refresh(); return }')
-    expect(upload).toContain('Open the one you already have')
+    // Re-uploading after a failed read is legitimate; the owner knows which of the two they meant.
+    expect(door).toContain('Open the one you already have')
+    expect(door).toContain(', or carry on and keep both.')
+  })
+
+  it('one prepare, and the photograph is never encoded twice', () => {
+    // The door redraws once and hands the stored copy to the sheet. A second prepareReceipt inside
+    // the sheet would re-encode the same photograph and would hash differently from what was read.
+    expect(door).toContain('prepared = await prepareReceipt(file)')
+    expect(door).toContain('const forReading = prepared.read ?? prepared.stored')
+    expect(read('../expenses/sheet.tsx')).toContain("const ready = prepared?.already ? { stored: file, read: null } : await prepareReceipt(file)")
+  })
+
+  it('and the sheet never pays for a read the door already paid for', () => {
+    expect(read('../expenses/sheet.tsx')).toContain('if (initialReading !== undefined) applyReading(initialReading)')
   })
 })
 
@@ -522,14 +546,22 @@ describe('four things called some variant of "bill"', () => {
   const labelled = (href: string) => items.find((i) => i.href === href)?.label
 
   it('each row says whose money it is', () => {
-    // Invoices = what a CUSTOMER owes the tenant. Supplier bills = what the tenant owes a SUPPLIER
-    // for stock. Expenses = everything else the tenant spends. Your plan = what the tenant owes
-    // Scalix. Four directions of money; the rail has to say which is which, and "Bills" on its own
-    // claimed two of them — which is why a supplier invoice got looked for under the wrong row.
+    // Invoices = what a CUSTOMER owes the tenant. Supplier bills = the matching work on stock the
+    // tenant bought. Money out = the DOOR everything leaving comes in through. Your plan = what the
+    // tenant owes Scalix. Four directions of money; the rail has to say which is which, and "Bills"
+    // on its own claimed two of them — which is why a supplier invoice got looked for under the
+    // wrong row.
     expect(labelled('/v2/invoices')).toBe('Invoices')
     expect(labelled('/v2/bills')).toBe('Supplier bills')
-    expect(labelled('/v2/expenses')).toBe('Expenses')
+    expect(labelled('/v2/expenses')).toBe('Money out')
     expect(items.some((i) => i.label === 'Your plan')).toBe(true)
+  })
+
+  it('and the door is not named after one of its two outcomes', () => {
+    // "Expenses" named both the way in and one of the things it lands as. A tenant with a catalogue
+    // reads that, decides a supplier bill does not go there, and goes looking for a second upload —
+    // which is the confusion the one door exists to remove.
+    expect(items.map((i) => i.label)).not.toContain('Expenses')
   })
 
   it('and neither of the ambiguous names survives anywhere in the rail', () => {
