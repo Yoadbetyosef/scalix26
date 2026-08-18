@@ -819,3 +819,144 @@ either way.
 **The moment to revisit:** an order where two line items are two distinct pieces
 and the customer needs to tell them apart on the invoice. Until then, one photo
 per order is what was asked for and the smaller thing to maintain.
+
+---
+
+## §10 — ONE DOOR for money out, and the reversal that is not in it
+
+Decided 18 Aug 2026, before any of it was built, because it changes both screens.
+
+### 10a. The fault
+
+An owner puts the same supplier invoice in Expenses **and** in Supplier bills.
+Nothing prevents it and nothing warns. The cause is not carelessness: we ask for
+an accounting distinction — operating expense or cost of goods — **before** the
+owner knows what is in the document, and in our vocabulary rather than theirs.
+Theirs is "I got a piece of paper, put it in."
+
+The distinction is real and cannot be deduped away afterwards. An expense is
+deducted when it is paid; a supplier bill is capitalised into product cost and
+deducted as COGS when the goods sell. Same paper, two treatments, one of them
+right. So the answer still has to be made — the design question is only who makes
+it and when.
+
+**Where it bites today, precisely.** No report sums both tables: `REPORT_TEMPLATES`
+holds platform usage, AI productivity, lead generation and appointments, and none
+touch money out. So today the cost is two screens each showing the same €37,084
+as money leaving, plus whatever the owner carries into their own books. The moment
+a money-out export ships — which `lib/expenses/categories.ts` is explicitly
+written for — it becomes an arithmetic error in a filing. Fixed before that
+export exists it is a schema decision; fixed after, it is a correction to a
+number somebody has already sent to an accountant.
+
+### 10b. The shape
+
+ONE PLACE TO PUT A DOCUMENT IN. Photo or PDF. It is read, and the system decides
+where it lands:
+
+| tenant | document | lands as |
+|---|---|---|
+| no catalogue module | anything | an expense, no question asked |
+| catalogue | lines, some matched | a supplier bill, matching already ran |
+| catalogue | lines, none matched | ASK, once, in their words |
+| catalogue | no product lines at all | an expense, no question asked |
+
+The question is *"Are these products you sell, or is this an expense?"* — the only
+one an owner ever answers, and answerable without knowing what a landed cost is.
+
+The last row is a REFINEMENT of what was specified, and it is deliberate: the
+rule as written asked the question whenever nothing matched, which includes a
+petrol receipt with no line items on it. Asking "are these products you sell"
+about a document with no products on it is exactly the kind of question this
+design exists to delete.
+
+**The invariant is one PATH, not one location.** The door renders in both places
+— Money out and the Supplier bills header — as one component, the idiom both
+screens already use for their own uploads. A redirect from /v2/bills to
+/v2/expenses would be a crossing out of the screen somebody is standing in, which
+`no-escape.test.ts` refuses and which is a dead end on a phone.
+
+### 10c. Two schemas, picked by MODULE
+
+Not run-both: for a locksmith the invoice read is pure waste on every petrol
+receipt, and the door already knows they have no catalogue. Not
+run-one-and-fall-back: there is nothing to fall back *on* — a one-page supplier
+invoice read against the receipt schema returns a merchant and a total and
+**silently drops every line**, with no signal that matching was skipped.
+
+So the SCHEMA is chosen from a fact (the module), never from a guess about the
+document. The DIALS — effort, maxTokens, and whether the read is worth waiting
+for — are chosen from the document's shape via `pageCountOf()`, which is a pure
+byte scan that cannot throw. A wrong guess there costs money or seconds and can
+never cost a line item.
+
+**Merging the two prompts was considered and rejected.** They have opposite
+virtues — the receipt prompt's is "return null rather than guess", the invoice
+prompt's is "follow the column, never multiply quantity by price to invent a
+total" — and merging them trades a real risk of one job quietly getting worse
+against money nobody is spending. A catalogue tenant overpaying on a petrol
+receipt is not a problem; a merged prompt degrading is one you find out about
+from a wrong number. **Revisit when there is fill-rate data from real receipts on
+a catalogue tenant**, which the meter already records per read.
+
+### 10d. Two opposite invariants, and the door picks between them
+
+They are both deliberate and neither is wrong:
+
+- **Expenses reads first and stores nothing.** `/api/expenses/read` takes bytes,
+  returns fields, forgets them — which is what keeps "the bucket never holds a
+  file nothing points at" true without a reaper for abandoned uploads.
+- **Bills creates the row first.** A failed extraction leaves something on screen
+  with a reason on it, rather than a file nobody can see.
+
+They are built for different waits. A phone photo is a five-second read with a
+person watching; a fifteen-page PDF is minutes and the person may navigate away.
+So the door picks by the same triage that picks the dials: short read →
+read-first, nothing stored; long read → row-first. **Collapsing these into one
+rule is the single most likely thing to happen during the build, and either rule
+alone breaks the other case.**
+
+### 10e. Reclassifying — and the reversal that is OUT OF SCOPE
+
+- **Expense → bill** costs one paid re-read. The expense path never extracted the
+  lines, so they do not exist to promote. The file itself does not move — both
+  tables share `INVOICE_BUCKET` — only what points at it.
+- **Bill → expense** is free: supplier, number, date, currency and grand total
+  are all already extracted.
+- Never delete-and-re-upload. That loses the file, the provenance of any products
+  created from the document, and any matching done by hand.
+
+**AN APPLIED BILL CANNOT BE RECLASSIFIED, PERMANENTLY, AND THE SCREEN SAYS SO IN
+WORDS.** Its costs are on the products — 126 of them for PRIMAVERA. Moving it to
+an expense would leave those products carrying freight from a document that no
+longer exists as a bill.
+
+**UN-APPLY IS NOT IN THIS WORK, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT.**
+There is no reverse today: `apply_shipment_costs` has `p_reapply`, which
+overwrites, not undoes. A reversal has to answer questions this feature has never
+had to answer — what a product's cost becomes when the shipment that set it is
+withdrawn (its previous cost? none? the cost from the shipment before that?),
+what happens to products created BY the bill, and what the record says afterwards
+so "why is this sofa's margin 19%" stays answerable. `applied_before` is
+first-write-wins and does not re-snapshot on a re-apply, so it is not a
+restore point either. That is its own design, and doing it in the corner of a
+classification change would produce a reversal nobody could explain six months
+later. **The moment to revisit:** the first real request to undo an apply — not
+before, because the right answer depends on which of the three cost models above
+the business actually keeps.
+
+### 10f. The duplicate backstop is still worth adding
+
+One door stops the same paper landing in BOTH tables. It does nothing about the
+same paper landing twice in ONE, which is already possible and already asymmetric:
+`findDuplicate()` checks file hash plus supplier and number, but only within
+`supplier_invoices`, and it warns rather than blocks. `expenses` has **no hash
+column at all**, so photographing the same receipt twice is completely silent.
+
+One column, one index, one function, since both tables already share a bucket.
+Two conditions on it: it WARNS and never blocks — re-uploading after a failed read
+is legitimate, and that is the rule `findDuplicate` already follows — and it runs
+AFTER extraction, not at the picker, because a hash only catches the byte-identical
+file. The same invoice photographed twice, or re-rendered by an email client, has
+a different hash; what catches those is supplier plus invoice number, and that
+does not exist until the document has been read.

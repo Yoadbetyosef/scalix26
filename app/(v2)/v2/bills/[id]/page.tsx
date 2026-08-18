@@ -8,6 +8,7 @@ import { groupLines, applyState, overridable, skippedCount, coveragePct } from '
 import { Arrow, Warn } from '../glyphs'
 import { ApplyBill } from './apply'
 import { CreateProducts } from './create'
+import { NotStock } from './reclassify'
 import { BillCharge, BillRate } from './inputs'
 import { MatchLine } from './match'
 
@@ -169,6 +170,39 @@ export default async function V2Bill({ params }: { params: Promise<{ id: string 
               )}
             </div>
           </section>
+
+          {/* ── THE ONE QUESTION ──────────────────────────────────────────────────────────────
+              Lines on the document and NOTHING matched is the only state where "is this stock at
+              all?" is a real question rather than a formality. It is asked here, once, in words an
+              owner can answer without knowing what a landed cost is — and both answers are actions
+              they already have: create these as products, below, or move the whole thing to Money
+              out. Nothing records that it was asked; the question is a function of the state and
+              disappears by itself the moment one line matches. */}
+          {!applied && lines.length > 0 && cov.matchedLines === 0 && (
+            <div className="v2-bl-ask">
+              <p className="v2-bl-askq">Are these products you sell, or is this an expense?</p>
+              <p className="v2-bl-askb">
+                {`Nothing on this document matched your catalogue. If these are goods you stock, create `}
+                {`them below and their share of the freight lands on each one. If it is a bill for `}
+                {`something else — a service, a delivery, a supplier you do not buy stock from — it `}
+                {`belongs in Money out, and nothing here touches a product cost.`}
+              </p>
+              <NotStock
+                shipmentId={shipment.id}
+                supplier={invoice.supplierName || shipment.reference || invoice.fileName}
+                amount={exact(invoice.grandTotal ?? cov.totalValue, cur)}
+              />
+            </div>
+          )}
+
+          {/* Said in words rather than by a missing button. An applied bill's costs are on the
+              products, an expense row cannot carry them, and undoing an apply is a feature that does
+              not exist — so this is permanent and the screen owes an owner the reason. */}
+          {applied && (
+            <p className="v2-bl-none">
+              These costs are on your products, so this bill can no longer be moved to Money out.
+            </p>
+          )}
 
           {invoice.status === 'failed' && (
             <div className="v2-bl-note" data-red>

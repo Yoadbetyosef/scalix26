@@ -82,7 +82,7 @@ const rowOf = (r: Record<string, unknown>): ExpenseRow => ({
  * hot, and deliberately not cached today, because a wrong cached answer here shows a tax box to a
  * business that has none.
  */
-async function taxSignals(tenantId: string): Promise<boolean> {
+export async function taxSignals(tenantId: string): Promise<boolean> {
   const db = createAdminClient()
   const [{ data: tenant }, { count }] = await Promise.all([
     db.from('tenants').select('state').eq('id', tenantId).maybeSingle(),
@@ -167,7 +167,12 @@ async function putReceipt(
  * The file goes up FIRST and is removed again if the insert fails, so a failed save cannot leave an
  * orphan in the bucket that nothing points at and nobody will ever find.
  */
-export async function createExpense(input: ExpenseInput, file: File | null): Promise<CreateResult> {
+export async function createExpense(
+  input: ExpenseInput,
+  file: File | null,
+  /** SHA-256 of what the door read, for the duplicate warning. Null when this was typed by hand. */
+  fileHash: string | null = null,
+): Promise<CreateResult> {
   const g = await gate()
   if (!g) return { ok: false, error: 'Unauthorized' }
 
@@ -193,6 +198,7 @@ export async function createExpense(input: ExpenseInput, file: File | null): Pro
     note: input.note,
     receipt_path: storagePath,
     receipt_name: receiptName,
+    file_hash: fileHash,
     created_by: g.actorUserId,
   }).select('*').single()
 

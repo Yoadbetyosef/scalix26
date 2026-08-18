@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { readBills, type BillRow } from '@/lib/invoices/bills-read'
+import { taxSignals } from '@/lib/expenses/store'
 import { listPageContext } from '../list-page'
 import { billsLine } from './line'
-import { UploadBill } from './upload'
+import { MoneyOutDoor } from '../money-out/door'
 import { coveragePct } from './groups'
 
 // SUPPLIER BILLS — docs/miles/supplier-invoices.html.
@@ -98,6 +99,11 @@ function Group({ label, rows }: { label: string; rows: BillRow[] }) {
 export default async function V2Bills() {
   const { tenantId } = await listPageContext('landed_cost')
   const list = await readBills(tenantId)
+  // The door can land a document here as an EXPENSE, and the expense sheet needs to know whether
+  // this business recovers tax before it can decide whether to show the second money field. Read
+  // here rather than inside the door so a client component never has to ask the server a question
+  // the server already knew the answer to.
+  const showsTax = await taxSignals(tenantId)
   // readBills returns null only when the store's own gate refused — the module check above has
   // already passed, so this is a tenant/session mismatch rather than an empty list, and an empty
   // list would be the wrong thing to show for it.
@@ -112,7 +118,7 @@ export default async function V2Bills() {
           </Link>
           <h2>Supplier bills</h2>
           <div className="v2-hacts">
-            <UploadBill />
+            <MoneyOutDoor showsTax={showsTax} />
           </div>
         </div>
       </header>
@@ -126,12 +132,13 @@ export default async function V2Bills() {
             <div className="v2-pempty">
               <p className="v2-pempty-t">No supplier bills yet.</p>
               <p className="v2-pempty-b">
-                Upload one and it gets read, matched to your products, and its freight and duty spread
-                across them. Nothing is applied until you say so.
+                Put one in and it gets read, matched to your products, and its freight and duty spread
+                across them. Nothing is applied until you say so. A document with nothing to sell on it
+                lands in Money out instead — you never have to decide which it is.
               </p>
               {/* The action, where somebody most wants it. A sentence promising "upload one and it
                   gets read" beside no control is a promise the screen cannot keep. */}
-              <div className="v2-pempty-act"><UploadBill tone="empty" /></div>
+              <div className="v2-pempty-act"><MoneyOutDoor showsTax={showsTax} tone="empty" /></div>
             </div>
           ) : (
             <>

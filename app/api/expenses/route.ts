@@ -33,7 +33,12 @@ export async function POST(req: NextRequest) {
   const raw = form.get('receipt')
   const file = raw instanceof File && raw.size > 0 ? raw : null
 
-  const r = await createExpense(parsed.value, file)
+  // Carried from the money-out door, which hashed the bytes it read. Absent for an expense typed
+  // by hand, which has no document to be a duplicate of.
+  const rawHash = form.get('fileHash')
+  const fileHash = typeof rawHash === 'string' && /^[0-9a-f]{64}$/.test(rawHash) ? rawHash : null
+
+  const r = await createExpense(parsed.value, file, fileHash)
   if (!r.ok) {
     return NextResponse.json({ error: r.error, field: r.field }, { status: r.error === 'Unauthorized' ? 401 : 400 })
   }

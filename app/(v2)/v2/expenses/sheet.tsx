@@ -100,13 +100,30 @@ const initialReceipt = (e?: ExpenseRow): ReceiptState =>
   e?.hasReceipt ? { kind: 'existing', name: e.receiptName || 'Receipt' } : { kind: 'none' }
 
 export function ExpenseSheet({
-  showsTax, expense, initialFile, expectPhoto, onClose,
+  showsTax, expense, initialFile, initialReading, prepared, expectPhoto, onClose,
 }: {
   showsTax: boolean
   /** Absent = recording a new one. Present = correcting that one. */
   expense?: ExpenseRow
   /** A photograph already taken, arriving with the sheet. Read immediately. */
   initialFile?: File | null
+  /**
+   * A reading the MONEY-OUT DOOR already paid for, arriving with the file.
+   *
+   * When it is here the sheet does not read again — the same page going to the model twice is money
+   * spent to learn what is already on screen. The file still goes through prepareReceipt, because
+   * that produces the copy that gets STORED and that step is not the read.
+   *
+   * The door is the only caller that has one: it has to read a document before it can know whether
+   * the document is an expense at all, and this is what it does with the answer when it is.
+   */
+  initialReading?: ReceiptReading | null
+  /**
+   * The door has already run prepareReceipt on this file, and the hash it computed of what it sent
+   * to the model. Re-encoding the same photograph a second time would lose detail for nothing and
+   * would produce a different hash from the one the duplicate check is about to store.
+   */
+  prepared?: { already: true; fileHash: string | null } | null
   /** The camera was opened along with this sheet — so a date is coming, or is being declined. */
   expectPhoto?: boolean
   onClose: () => void
@@ -205,16 +222,19 @@ export function ExpenseSheet({
     try {
       // Redrawn first, then checked — checking the original would refuse a 6 MB photo that was one
       // canvas away from being a 500 KB one.
-      const prepared = await prepareReceipt(file)
-      const problem = receiptFileError(prepared.stored.name, prepared.stored.size)
+      const ready = prepared?.already ? { stored: file, read: null } : await prepareReceipt(file)
+      const problem = receiptFileError(ready.stored.name, ready.stored.size)
       if (problem) { setErr(problem); return }
-      setReceipt({ kind: 'new', file: prepared.stored })
+      setReceipt({ kind: 'new', file: ready.stored })
 
       // Reading happens on a NEW expense only. On an edit the fields are already right and were
       // already checked by a person; a replacement photo is a replacement photo, and quietly
       // rewriting six fields because somebody re-photographed a receipt is the overwrite this whole
       // component is built to avoid.
-      if (!editing) void readPhoto(prepared.read ?? prepared.stored)
+      // Already read at the door — apply it rather than paying for the same page twice.
+      if (editing) return
+      if (initialReading !== undefined) applyReading(initialReading)
+      else void readPhoto(ready.read ?? ready.stored)
     } finally {
       setPreparing(false)
       if (input.current) input.current.value = ''
@@ -255,6 +275,11 @@ export function ExpenseSheet({
     b.append('category', v.category)
     b.append('note', v.note.trim())
     if (receipt.kind === 'new') b.append('receipt', receipt.file)
+    // The hash the DOOR computed of the bytes it read, carried through so the next upload of the
+    // same file can say "you have put this in before". Only ever a warning and only ever within one
+    // tenant, which is why a client carrying it is acceptable: the worst a wrong value can do is miss
+    // a warning or raise a spurious one, and neither changes a number.
+    if (!editing && prepared?.fileHash) b.append('fileHash', prepared.fileHash)
     if (editing) {
       b.append('receiptAction', receipt.kind === 'new' ? 'replace' : receipt.kind === 'removed' ? 'remove' : 'keep')
     }

@@ -18,9 +18,9 @@ import {
 export const NAV_ICONS: Record<string, typeof TrendingUp> = {
   Inbox: MessageSquare, Appointments: Calendar, Contacts: Users,
   'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
-  // Truck stays with SUPPLIER BILLS — it is stock arriving. Expenses gets the wallet: money leaving
-  // that never became stock.
-  Orders: Package, Invoices: Receipt, Expenses: Wallet, 'Supplier bills': Truck,
+  // Truck stays with SUPPLIER BILLS — it is stock arriving. MONEY OUT gets the wallet, because it is
+  // the door everything leaving goes through, and only some of what goes through it becomes stock.
+  Orders: Package, Invoices: Receipt, 'Money out': Wallet, 'Supplier bills': Truck,
   Analytics: BarChart3, Reports: FileText,
   'Your plan': CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
 }

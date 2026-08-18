@@ -2,15 +2,24 @@ import Link from 'next/link'
 import { readExpenses, type ExpenseRow } from '@/lib/expenses/store'
 import { listPageContext } from '../list-page'
 import { expensesLine } from './line'
-import { AddExpense } from './add'
+import { MoneyOutDoor } from '../money-out/door'
 import { Row } from './row'
 
-// EXPENSES — money leaving that is not a supplier invoice.
+// MONEY OUT — the door everything leaving comes in through, and the list of what did not become stock.
 //
-// The sibling of /v2/bills, not a mode of it. A supplier bill has line items that become product
-// costs, a coverage gate, an apply step and an allocation; an expense is one amount and a category.
-// Merging them would mean one screen with two modes, and the mode with two rows platform-wide would
-// end up shaping the mode every tenant uses.
+// Still the sibling of /v2/bills rather than a mode of it: a supplier bill has line items that become
+// product costs, a coverage gate, an apply step and an allocation, and an expense is one amount and a
+// category. Merging the two SCREENS would mean one screen with two modes, and the mode with two rows
+// platform-wide would end up shaping the mode every tenant uses.
+//
+// What IS merged is the way in. The owner used to have to answer "is this an operating expense or is
+// this cost of goods" before they knew what was in the document, in our vocabulary rather than
+// theirs — and nothing stopped them answering it twice, once on each screen, which double-counts.
+// Now there is one door and the document decides. See lib/money-out/door.tsx and OUTSTANDING.md §10.
+//
+// The heading says "Money out" for the same reason the rail row does: this page is both the door and
+// one of the two things a document can land as, and naming it after the outcome is what sent people
+// looking for a second upload.
 //
 // ── GROUPED BY MONTH, NOT BY CATEGORY ───────────────────────────────────────────────────────────
 //
@@ -54,9 +63,9 @@ export default async function V2Expenses() {
           <Link href="/v2" className="v2-bk" aria-label="Home">
             <svg viewBox="0 0 24 24" aria-hidden><path d="M15 5l-7 7 7 7" /></svg>
           </Link>
-          <h2>Expenses</h2>
+          <h2>Money out</h2>
           <div className="v2-hacts">
-            <AddExpense showsTax={list.showsTax} />
+            <MoneyOutDoor showsTax={list.showsTax} />
           </div>
         </div>
       </header>
@@ -67,10 +76,11 @@ export default async function V2Expenses() {
             <div className="v2-pempty">
               <p className="v2-pempty-t">No expenses recorded yet.</p>
               <p className="v2-pempty-b">
-                Rent, fuel, insurance, software, a courier — anything you spend that is not a supplier
-                bill. Photograph the receipt and it is kept as proof for the day somebody asks.
+                Rent, fuel, insurance, software, a courier, a supplier — anything you spend. Photograph
+                it or pick the file and it gets read; what is on it decides where it lands, and the
+                paper is kept as proof for the day somebody asks.
               </p>
-              <div className="v2-pempty-act"><AddExpense showsTax={list.showsTax} tone="empty" /></div>
+              <div className="v2-pempty-act"><MoneyOutDoor showsTax={list.showsTax} tone="empty" /></div>
             </div>
           ) : (
             <>
