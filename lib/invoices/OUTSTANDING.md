@@ -960,3 +960,64 @@ AFTER extraction, not at the picker, because a hash only catches the byte-identi
 file. The same invoice photographed twice, or re-rendered by an email client, has
 a different hash; what catches those is supplier plus invoice number, and that
 does not exist until the document has been read.
+
+---
+
+## §11 — The node meshes: Rudi's is gone, Miles's is load-bearing
+
+Recorded 18 Aug 2026, so nobody regenerates a mesh nothing draws.
+
+### 11a. What happened
+
+Rudi's home screen was rebuilt from `docs/miles/rudi-scan-v26.html`. The new
+resting state is a **scan sequence** — a centre line that opens into a box, a
+warped wireframe, a square grid, heat blooms, coded markers, a crosshair, a
+rotating tick ring in acid, and two acid readouts on their own clock. It replaces
+the old loop's scan sweep and its **900-node nearest-neighbour network**
+entirely.
+
+So `public/v2/rudi-nodes.json` was **deleted**, and `PERSONAS.rudi.nodes` is now
+`null`.
+
+### 11b. `public/v2/miles-nodes.json` STAYS, and is not dead
+
+Miles is still on the old loop, behind `SCAN_PERSONAS` in
+`app/(v2)/v2/rudi-canvas.tsx`. **That is a wait, not a design decision.** There is
+no scan reference for him, and one was deliberately not invented from hers: his
+portrait is a different shape and a different colour, and the tick ring and the
+acid readouts are HERS. He keeps something coherent rather than getting something
+borrowed.
+
+His mesh is therefore live code with one caller. Do not delete it, and do not
+delete the legacy loop, until he has a reference of his own — at which point his
+key joins that set and both go together.
+
+### 11c. There was never a generator, and now there is one
+
+The meshes were not produced by anything re-runnable: `rudi-nodes.json`'s own
+header said `docs/rudi-desktop.html (MESH)`, a hardcoded array of 900 pairs baked
+into the approved reference by hand. They were also **face-anchored** — plotted on
+their own they draw a head, a neck and two shoulders — so a new portrait would
+have landed them as a constellation of somebody else. That is what forced the
+question when the portrait changed.
+
+`scripts/build-portrait-nodes.mjs` was written to answer it: Sobel-weighted
+sampling, seeded so the same portrait always yields the same mesh, matched against
+the original's measured spacing (p25 2.2 / median 4.5 / p75 7.1 px). **It is kept
+even though the scan made it unnecessary for Rudi**, because it is the only way
+Miles's mesh could ever be regenerated, and because the next portrait swap on the
+legacy loop would otherwise hit exactly the same wall.
+
+### 11d. The assets changed shape
+
+Rudi's still is **784×1660** — the phone frame's own ratio, so `object-fit: cover`
+neither crops her nor letterboxes the field. The legacy loop's `IW`/`IH` constants
+are **680×907** and it draws the portrait ITSELF, so the two are not
+interchangeable: flipping Rudi back to the old loop would stretch her. Miles's
+assets are untouched and still match his loop.
+
+Her speaking clip was reframed to match the still — same head size, same crown
+height, and the field colour matched to within 1/255 — so the crossfade at the
+moment she starts speaking has nothing to jump. `ground` moved from `#0d0d10` to
+`#a1a3a4`, measured from the new file's own margins, which is the rule Miles's
+record already followed.

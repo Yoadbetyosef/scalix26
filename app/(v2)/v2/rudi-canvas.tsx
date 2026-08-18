@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { mark } from './timing'
 import { PERSONAS, portraitOf, hexToRgb, type PersonaKey } from '@/lib/persona'
+// Type-only in the other direction, so the pair does not form a runtime cycle.
+import { RudiScan } from './rudi-scan'
 
 // Rudi's face. A reproduction of the reference's canvas engine.
 //
@@ -67,7 +69,7 @@ export interface RudiHandle {
   state: () => RudiState
 }
 
-interface Props {
+export interface Props {
   /** Which employee this canvas paints. Remount (via `key`) to change it — every asset differs. */
   persona?: PersonaKey
   handleRef?: RefObject<RudiHandle | null>
@@ -132,7 +134,30 @@ function hue(stops: Paint['stops'], t: number): [number, number, number] {
 
 const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick, persona = 'rudi' }: Props) {
+/**
+ * WHICH LOOP AN EMPLOYEE GETS — and why there are two.
+ *
+ * Rudi's home screen was rebuilt from docs/miles/rudi-scan-v26.html: the portrait moved off the
+ * canvas onto an <img>, and the scan sequence replaced the sweep and the node network entirely. See
+ * ./rudi-scan.tsx.
+ *
+ * MILES IS STILL ON THE OLD LOOP, AND THAT IS A WAIT RATHER THAN A DESIGN DECISION. There is no scan
+ * reference for him, and his was not invented from hers: his portrait is a different shape and a
+ * different colour, and the tick ring and the acid readouts are HERS. Better he keeps something
+ * coherent than gets something borrowed. When a reference for him exists, this set gets his key and
+ * the legacy loop below goes with it.
+ *
+ * The legacy loop is therefore live code with one caller, not dead code kept for sentiment — do not
+ * delete it, and do not delete public/v2/miles-nodes.json, which is the mesh it draws.
+ */
+const SCAN_PERSONAS = new Set<PersonaKey>(['rudi'])
+
+export function RudiCanvas(props: Props) {
+  // Read once, like paintFor: callers key this component by persona, so a change is a remount.
+  return SCAN_PERSONAS.has(props.persona ?? 'rudi') ? <RudiScan {...props} /> : <LegacyCanvas {...props} />
+}
+
+function LegacyCanvas({ handleRef, onStateChange, minimised = false, className, onClick, persona = 'rudi' }: Props) {
   // Read once. See paintFor: a persona change means a remount, keyed by the caller.
   const paint = useRef(paintFor(persona)).current
   const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS } = paint

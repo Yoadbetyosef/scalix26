@@ -263,6 +263,53 @@
   transition: opacity 0.35s;
 }
 .v2-overlay { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 46px 42px; transition: opacity 0.35s; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   THE SCAN — docs/miles/rudi-scan-v26.html.
+
+   Rudi's resting state. The canvas no longer holds the portrait: an <img> and a <video> sit under a
+   transparent overlay that draws only the sequence, which is what lets `object-fit` do the cropping
+   and lets the speaking crossfade be an opacity the compositor runs rather than a drawImage the main
+   thread pays for every frame. .v2-face keeps its own position, size and collapse transitions — this
+   block only dresses what is inside it. */
+.v2 .v2-face[data-scan] { overflow: hidden; }
+.v2 .v2-scan-portrait {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 20%;
+  user-select: none; -webkit-user-drag: none;
+}
+/* The clip sits ON the still rather than replacing it: a fade between two elements in the same box
+   cannot show a gap, and if the bytes never arrive the still is simply still there. */
+.v2 video.v2-scan-portrait { transition: opacity 0.28s var(--v2-ease); }
+.v2 .v2-scan-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+
+/* Grain, at a tenth, in overlay. It is what stops the flat grey field reading as a fill — the
+   portrait is photographic and the field it was shot against has grain the padding does not. */
+.v2 .v2-scan-grain {
+  position: absolute; inset: 0; z-index: 8; opacity: 0.1; pointer-events: none; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='150' height='150' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+}
+/* The veil is the SCAN's own, and it is not .v2-scrim: that one is 62% tall and exists to carry the
+   caption over a lit shoulder. This one is 44% and darker at the foot, and the two stack. */
+.v2 .v2-scan-veil {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 44%; z-index: 9; pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 10, 12, 0), rgba(8, 10, 12, 0.55) 34%, rgba(8, 10, 12, 0.95));
+}
+
+/* The phase readout. Belongs to the sequence, so it fades with it rather than naming a phase nothing
+   is in. */
+.v2 .v2-scan-phase {
+  position: absolute; top: 52px; left: 22px; right: 22px; z-index: 12;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--v2-mono); font-size: 11.5px; pointer-events: none;
+  transition: opacity 0.28s var(--v2-ease);
+}
+.v2 .v2-scan-phase[data-quiet] { opacity: 0; }
+.v2 .v2-scan-n { color: rgba(255, 255, 255, 0.42); }
+.v2 .v2-scan-n b { color: rgba(255, 255, 255, 0.9); font-weight: 500; }
+.v2 .v2-scan-t { letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.85); }
+/* Collapsed, she is a thumbnail: the readout would be four unreadable characters over her chin. */
+.v2 .v2-root[data-min] .v2-scan-phase { opacity: 0; }
 .v2-tag {
   font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5); margin-bottom: 16px;

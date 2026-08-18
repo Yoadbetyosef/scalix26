@@ -46,11 +46,29 @@ describe('the same engine paints both employees', () => {
     expect(canvas).toContain('paintFor(persona)')
   })
 
-  it('still paints Rudi exactly as it did', () => {
+  it('keeps the ramp through a portrait swap', () => {
     // The ramp used to be three RGB triples written by hand in this file. Whatever else moved, these
-    // three numbers must not have.
+    // three numbers must not have — the cyan band is the product's colour before it is an echo of
+    // anything in the photograph, so it survived the scan rebuild deliberately.
     expect(PERSONAS.rudi.ramp!.map(hexToRgb)).toEqual([[34, 211, 238], [139, 92, 246], [255, 46, 147]])
-    expect(PERSONAS.rudi.ground).toBe('#0d0d10')
+  })
+
+  it('but the ground is MEASURED from the portrait, so it moves when she does', () => {
+    // Miles's record set the rule: his ground is the acid his own photograph was shot against,
+    // measured from the file rather than guessed, so there is no seam at its edge. Rudi's new
+    // portrait is a mid-grey field, and #0d0d10 behind it would have seamed.
+    expect(PERSONAS.rudi.ground).toBe('#a1a3a4')
+    // Every persona has one, and none of them is a guess.
+    for (const k of Object.keys(PERSONAS) as Array<keyof typeof PERSONAS>) {
+      expect(PERSONAS[k].ground, k).toMatch(/^#[0-9a-f]{6}$/i)
+    }
+  })
+
+  it('and Rudi has no mesh, because nothing draws one for her any more', () => {
+    // The scan replaced the node network. Miles keeps his — he keeps the loop that draws it.
+    // See lib/invoices/OUTSTANDING.md §11.
+    expect(PERSONAS.rudi.nodes).toBeNull()
+    expect(PERSONAS.miles.nodes).toBe('/v2/miles-nodes.json')
   })
 
   it('tolerates an employee with no speaking loop and no mesh', () => {

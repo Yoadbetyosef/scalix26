@@ -77,10 +77,16 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     owns: 'the phone',
     voice: 'aura-2-asteria-en',
     avatar: '/avatars/asteria.png',
+    // 784×1660 — the phone frame's own ratio, so `object-fit: cover` neither crops her nor
+    // letterboxes the field. NOT the 680×907 the legacy loop assumes; see rudi-scan.tsx.
     still: '/v2/rudi-still.webp',
+    // Framed to match the still exactly — same head size, same crown height, same field colour — so
+    // the crossfade at the moment she starts speaking has nothing to jump.
     video: '/v2/rudi-speaking.mp4',
-    nodes: '/v2/rudi-nodes.json',
-    ground: '#0d0d10',
+    // NO MESH. The scan replaced the node network, and rudi-nodes.json went with it — see
+    // lib/invoices/OUTSTANDING.md §11. Miles keeps his, because he keeps the loop that draws it.
+    nodes: null,
+    ground: '#a1a3a4',
     accent: '#FF2E93',
     wash: '#FFEDF6',
     washInk: '#B0126A',
