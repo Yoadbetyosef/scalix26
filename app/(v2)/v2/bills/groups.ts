@@ -76,11 +76,18 @@ export function coveragePct(ratio: number): number {
 /** Skipped lines, which belong to none of the three: a decision already made, shown as its own count. */
 export const skippedCount = (lines: InvoiceLine[]) => lines.filter((l) => l.status === 'skipped').length
 
+export type ApplyReason = 'ok' | 'coverage' | 'applied' | 'rate' | 'nothing' | 'currency' | 'failed'
+
 /**
  * What the slot says, and whether Apply is live.
  *
  * The sentence is the RULE in the rule's own words, not an instruction — "80% is needed before costs
  * can be applied" tells an owner what to do next without pretending the button is broken.
+ *
+ * The same five refusals v1's `blocked` is an OR of (app/landed-cost/[id]/page.tsx). v1 renders every
+ * one of them as its own banner simultaneously; a slot has room for one sentence, so they are ordered
+ * by what has to be fixed FIRST. Coverage is deliberately LAST, which is what makes `overridable`
+ * below a one-line test rather than a repeat of v1's four-term condition.
  */
 export function applyState(input: {
   ratio: number
@@ -88,12 +95,31 @@ export function applyState(input: {
   matchedLines: number
   status: string
   foreignWithoutRate: boolean
-}): { can: boolean; reason: 'ok' | 'coverage' | 'applied' | 'rate' | 'nothing' } {
+  /** Freight recorded in something other than base currency. The RPC refuses it and has no override. */
+  freightNotInBase: boolean
+  /** The document could not be read, so there are no line values to spread anything across. */
+  extractionFailed: boolean
+}): { can: boolean; reason: ApplyReason } {
   if (input.status === 'applied') return { can: false, reason: 'applied' }
+  if (input.extractionFailed) return { can: false, reason: 'failed' }
   if (input.matchedLines === 0) return { can: false, reason: 'nothing' }
   // A foreign invoice with no exchange rate has line values in a currency the costs are not in. The
   // allocation would run and every figure it wrote would be wrong by the rate.
   if (input.foreignWithoutRate) return { can: false, reason: 'rate' }
+  // Freight arrives from the forwarder in base currency and is never converted. A figure denominated
+  // in anything else is a wrong number rather than a judgement, so it blocks with no way past.
+  if (input.freightNotInBase) return { can: false, reason: 'currency' }
   if (input.ratio < input.minCoverage) return { can: false, reason: 'coverage' }
   return { can: true, reason: 'ok' }
 }
+
+/**
+ * Coverage is the ONLY refusal the owner is entitled to overrule, and v1 says why: a missing rate and
+ * a mis-denominated freight figure are not judgements, they are wrong numbers, and there is no button
+ * for those. Low coverage is a judgement — the freight of the unmatched goods lands on the matched
+ * products, the screen says so, and an owner who has read that may still be right to go ahead.
+ *
+ * Equivalent to v1's `below && !rateMissing && !wrongFreightCurrency && cov.matchedLines > 0` by the
+ * ordering above: 'coverage' is only reached once every other refusal has been ruled out.
+ */
+export const overridable = (reason: ApplyReason) => reason === 'coverage'

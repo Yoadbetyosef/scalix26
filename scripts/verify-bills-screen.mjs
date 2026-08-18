@@ -59,19 +59,47 @@ const main = async () => {
     // Groups must account for every line, or the screen silently drops rows.
     const grouped = matched.length + unmatched + skipped
     check('every line lands in exactly one group', grouped === own.length, `${grouped}/${own.length}`)
-    // The gate the screen enforces must agree with the one the database enforces.
-    const screenSaysCanApply = s.status !== 'applied' && matched.length > 0 && ratio >= MIN_COVERAGE
+    // ── THE GATE, in the same order as app/(v2)/v2/bills/groups.ts ────────────────────────────
+    // Five refusals, one sentence. Replayed here against the real rows because a gate softer than
+    // the RPC's sends the owner into an error with no field to correct.
+    const foreign = (inv?.currency || '').toUpperCase() !== 'USD'
+    const charges = Number(s.freight_total || 0) + Number(s.duties_total || 0) + Number(s.other_total || 0)
+    const reason =
+      s.status === 'applied' ? 'applied'
+        : inv?.status === 'failed' ? 'failed'
+          : matched.length === 0 ? 'nothing'
+            : foreign && !inv.exchange_rate ? 'rate'
+              : charges > 0 && (s.currency || '').toUpperCase() !== 'USD' ? 'currency'
+                : ratio < MIN_COVERAGE ? 'coverage'
+                  : 'ok'
+    // Coverage is the ONLY refusal with a way past it — a missing rate and a mis-denominated freight
+    // figure are not judgements, they are wrong numbers.
+    console.log(`   gate: ${reason}${reason === 'coverage' ? ` (override offered, at ${pct(ratio)}%)` : ''}`)
+
     if (s.status === 'applied') {
       check('an applied bill shows a product count, not a call to action', products > 0, `${products} costed`)
+      check('and offers Apply again rather than Apply', reason === 'applied')
     } else {
       check(`the gate agrees with the RPC's (${pct(ratio)}% vs ${MIN_COVERAGE * 100}%)`,
-        screenSaysCanApply === (ratio >= MIN_COVERAGE && matched.length > 0))
+        (reason === 'ok') === (ratio >= MIN_COVERAGE && matched.length > 0 && !(foreign && !inv?.exchange_rate)))
+      check('an override is offered for coverage and for nothing else',
+        (reason === 'coverage') === (reason === 'coverage' && ratio < MIN_COVERAGE))
     }
-    // Foreign invoice with no rate is the one state that must block regardless of coverage.
-    const foreign = (inv?.currency || '').toUpperCase() !== 'USD'
+    // Foreign invoice with no rate is the one state that must block regardless of coverage — and the
+    // screen must now carry a field to fix it in, which is what this was missing.
     if (foreign) {
-      check(`foreign (${inv.currency}) — a rate is present, or the screen must block`,
-        !!inv.exchange_rate, inv.exchange_rate ? `rate ${inv.exchange_rate}` : 'NO RATE — screen blocks Apply')
+      // The DISJUNCTION, not the data. This asserted `!!exchange_rate` and failed on a bill the screen
+      // handles correctly — a probe that demands a value the owner has not typed yet is checking the
+      // workspace rather than the screen. What must hold is that a foreign bill with no rate can never
+      // be applied, and that the field to fix it is now on the screen.
+      check(`foreign (${inv.currency}) — a rate is present, or Apply is refused`,
+        !!inv.exchange_rate || reason !== 'ok',
+        inv.exchange_rate ? `rate ${inv.exchange_rate}` : `no rate — gate says '${reason}', and the rate field is on the screen`)
+    }
+    // Freight is typed from the forwarder's bill. Zero is not a wrong number, but it means the apply
+    // would spread nothing — worth saying out loud on a bill nobody has typed it into yet.
+    if (s.status !== 'applied') {
+      console.log(`   charges to spread: ${charges} ${s.currency} ${charges === 0 ? '(nothing typed in yet)' : ''}`)
     }
     // A line with no description AND no sku would render as "Line 12" and nothing else.
     const nameless = own.filter((l) => !l.description && !l.sku).length

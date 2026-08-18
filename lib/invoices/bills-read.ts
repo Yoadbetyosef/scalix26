@@ -19,8 +19,22 @@ import type { Coverage } from './allocate'
 // WERE applied at 74%, the matched products would absorb freight belonging to goods nobody identified.
 // See MIN_COVERAGE in ./types for why that is the number and not a preference.
 //
-// One query for every line on the page, not one per bill. Two bills is fine either way; an importer
-// with forty is not, and this is a list screen.
+// One query per PAGE OF LINES, not one per bill. Two bills is fine either way; an importer with forty
+// is not, and this is a list screen.
+//
+// ── WHY IT PAGES ────────────────────────────────────────────────────────────────────────────────
+//
+// PostgREST returns at most 1,000 rows per request regardless of any limit, so a plain select against
+// every line on the screen SILENTLY returns a truncated set. `listShipments()` fetches up to 100
+// shipments; two real invoices are 133 and 80 lines, so the cap sits about eight bills away.
+//
+// What truncation looks like is the reason this is worth the loop: a bill whose lines fell off the end
+// of the page gets an empty line array, which is a coverage of 0 — so it renders as "0 lines · 0%
+// matched" and an amber bar, indistinguishable from a bill the matcher genuinely could not place. An
+// hour was spent on that reading once already, from a different cause (a bill uploaded into a
+// workspace with no catalogue). Once is enough. The same cap has produced one wrong answer elsewhere
+// in this codebase — the orphan cleanup reported 1,000 rows when there were 9,179 — and lib/invoices/
+// match.ts pages for exactly this reason.
 
 export interface BillRow {
   id: string
@@ -60,20 +74,53 @@ function billStatus(s: string): BillRow['status'] {
   return 'reading'
 }
 
+/** The page size PostgREST enforces whatever we ask for. */
+const PAGE = 1000
+
+/**
+ * Every line belonging to these invoices, paged.
+ *
+ * Ordered by `id` because a range without an order is a range over an unspecified sequence — the same
+ * row could arrive on two pages or on none. `id` is arbitrary but stable, and nothing downstream cares
+ * about line order: the caller groups by invoice and sums.
+ *
+ * The ceiling exists only so a server that kept answering full pages cannot spin here forever. It is
+ * two orders of magnitude above the real shape (100 shipments, a large invoice being a few hundred
+ * lines), so the normal exit is always the short page.
+ */
+const MAX_LINES = 200_000
+
+interface LineRow { invoice_id: string; extended: number; status: string; product_id: string | null }
+
+async function readLines(tenantId: string, invoiceIds: string[]): Promise<LineRow[]> {
+  if (!invoiceIds.length) return []
+  const db = createAdminClient()
+  const out: LineRow[] = []
+
+  for (let from = 0; from < MAX_LINES; from += PAGE) {
+    const { data } = await db.from('supplier_invoice_lines')
+      .select('invoice_id, extended, status, product_id')
+      .eq('tenant_id', tenantId).in('invoice_id', invoiceIds)
+      .order('id')
+      .range(from, from + PAGE - 1)
+
+    const page = ((data as LineRow[] | null) ?? [])
+    out.push(...page)
+    if (page.length < PAGE) break   // a short page means the end, and saves a request that returns nothing
+  }
+
+  return out
+}
+
 export async function readBills(tenantId: string): Promise<BillList | null> {
   const res = await listShipments()
   if (!res.ok) return null
 
   const invoiceIds = res.data.map((s) => s.invoice?.id).filter((x): x is string => !!x)
-  const db = createAdminClient()
-  const { data: lines } = invoiceIds.length
-    ? await db.from('supplier_invoice_lines')
-        .select('invoice_id, extended, status, product_id')
-        .eq('tenant_id', tenantId).in('invoice_id', invoiceIds)
-    : { data: [] }
+  const lines = await readLines(tenantId, invoiceIds)
 
   const byInvoice = new Map<string, Array<{ extended: number; status: string; product_id: string | null }>>()
-  for (const l of (lines ?? []) as Array<{ invoice_id: string; extended: number; status: string; product_id: string | null }>) {
+  for (const l of lines) {
     const arr = byInvoice.get(l.invoice_id) ?? []
     arr.push({ extended: Number(l.extended ?? 0), status: l.status, product_id: l.product_id })
     byInvoice.set(l.invoice_id, arr)
