@@ -86,8 +86,13 @@ Specifically untested against reality:
 
 ## 6. SMALL AND KNOWN
 
-- **No edit, no delete.** A typo means a wrong row that stays. This is the most likely first
-  complaint.
+- ~~**No edit, no delete.**~~ Built 18 Aug 2026, ahead of extraction and on purpose: extraction fills
+  fields from a photograph and asks a person to confirm them, and a confirmation is only meaningful
+  if a wrong one can be taken back. Tapping a row opens the same sheet that added it.
+  What that leaves open: **no history.** An edit overwrites, so there is no record that the amount
+  used to be something else, and a delete is a delete. Fine while one person keeps their own books;
+  the day two people share a workspace, "who changed this and when" becomes a real question and the
+  answer is a separate table, not a flag on this one.
 - **Currency is per-row and defaults to `usd`,** but the screen reads the currency off the first row
   and formats every row with it. A tenant with mixed currencies would be shown one symbol over two
   currencies. No tenant has mixed currencies today; `cost_base_currency` is USD for all 33.

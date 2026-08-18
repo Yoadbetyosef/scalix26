@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { readExpenses, type ExpenseRow } from '@/lib/expenses/store'
-import { categoryLabel } from '@/lib/expenses/categories'
 import { listPageContext } from '../list-page'
 import { expensesLine } from './line'
 import { AddExpense } from './add'
+import { Row } from './row'
 
 // EXPENSES — money leaving that is not a supplier invoice.
 //
@@ -31,44 +31,8 @@ const money = (cents: number, currency: string) => {
   return `${sym}${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-const day = (iso: string) =>
-  new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' }).toUpperCase()
-
 const monthOf = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).toUpperCase()
-
-function Row({ e, showsTax }: { e: ExpenseRow; showsTax: boolean }) {
-  return (
-    <div className="v2-xrw">
-      <div className="v2-xmid">
-        <div className="v2-xnm">{e.merchant}</div>
-        <div className="v2-xmeta">
-          {[
-            categoryLabel(e.category),
-            day(e.spentOn),
-            e.note,
-          ].filter(Boolean).join(' · ')}
-        </div>
-      </div>
-      <div className="v2-xamt">
-        <div className="v2-xval">{money(e.amountCents, e.currency)}</div>
-        {/* Only where it means something. A net figure on a US row would be the same number twice. */}
-        {showsTax && e.taxCents !== null && (
-          <div className="v2-xnet">{money(e.amountCents - e.taxCents, e.currency)} net</div>
-        )}
-      </div>
-      {/* A link when there is one, a marker when there is not — same slot either way, so the column
-          reads as a column rather than as ragged optional decoration. */}
-      {e.hasReceipt ? (
-        <a className="v2-xrec" href={`/api/expenses/${e.id}/receipt`} target="_blank" rel="noreferrer" aria-label={`Receipt for ${e.merchant}`}>
-          <Paper />
-        </a>
-      ) : (
-        <span className="v2-xrec" data-none aria-label="No receipt">—</span>
-      )}
-    </div>
-  )
-}
 
 export default async function V2Expenses() {
   // No module gate. Every business spends money, and `landed_cost` being off is exactly why a
@@ -149,9 +113,3 @@ function groupByMonth(rows: ExpenseRow[]): { label: string; rows: ExpenseRow[]; 
   }
   return out
 }
-
-const Paper = () => (
-  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M14 3v5h5" /><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2z" />
-  </svg>
-)

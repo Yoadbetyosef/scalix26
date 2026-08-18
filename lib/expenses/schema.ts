@@ -97,6 +97,24 @@ export function parseExpense(
   }
 }
 
+/**
+ * The six text fields, lifted off a multipart body.
+ *
+ * Here rather than in each route because there are two of them now — create and correct — posting the
+ * identical form, and a field read in one place and forgotten in the other is a field that silently
+ * stops being editable.
+ */
+export function expenseFieldsFrom(form: FormData): Record<string, string | undefined> {
+  const str = (k: string) => {
+    const v = form.get(k)
+    return typeof v === 'string' ? v : undefined
+  }
+  return {
+    spentOn: str('spentOn'), merchant: str('merchant'), amount: str('amount'),
+    tax: str('tax'), category: str('category'), note: str('note'),
+  }
+}
+
 /** ISO date arithmetic without a Date round trip losing a day to the local timezone. */
 export function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`)

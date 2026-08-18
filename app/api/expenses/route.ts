@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { parseExpense } from '@/lib/expenses/schema'
+import { expenseFieldsFrom, parseExpense } from '@/lib/expenses/schema'
 import { createExpense } from '@/lib/expenses/store'
 
 // RECORDING ONE EXPENSE.
@@ -22,17 +22,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'That upload could not be read. If the receipt is a large photo, try again.' }, { status: 400 })
   }
 
-  const str = (k: string) => {
-    const v = form.get(k)
-    return typeof v === 'string' ? v : undefined
-  }
-
   // UTC today. The schema allows a day of tolerance either side precisely so this does not have to
   // resolve the tenant's timezone to decide whether a receipt bought this evening is "in the future".
-  const parsed = parseExpense(
-    { spentOn: str('spentOn'), merchant: str('merchant'), amount: str('amount'), tax: str('tax'), category: str('category'), note: str('note') },
-    new Date().toISOString().slice(0, 10),
-  )
+  const parsed = parseExpense(expenseFieldsFrom(form), new Date().toISOString().slice(0, 10))
   if (!parsed.ok) {
     const first = parsed.problems[0]
     return NextResponse.json({ error: first.message, field: first.field, problems: parsed.problems }, { status: 400 })

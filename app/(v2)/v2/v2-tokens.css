@@ -3248,15 +3248,51 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-xfile { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--v2-ink-42); font-variant-numeric: tabular-nums; }
 .v2 .v2-xfile button { background: none; border: 0; font-size: 15px; line-height: 1; color: var(--v2-ink-40); cursor: pointer; padding: 0 2px; }
 .v2 .v2-xfile button:hover { color: var(--v2-ink); }
+/* "Will be removed" is a PENDING state, not a warning — nothing has happened yet and nothing does
+   until Save. Amber rather than red for exactly that reason, and the Undo beside it is a word rather
+   than an × so it does not read as one more thing to dismiss. */
+.v2 .v2-xfile[data-warn] { color: #8a5a12; }
+.v2 .v2-xundo {
+  font-size: 12px !important; line-height: inherit !important; color: inherit !important;
+  text-decoration: underline; padding: 0 !important;
+}
+
+/* Delete, on its own row above the Cancel/Save pair.
+   A TEXT button, not a third block the same size as the other two: those two are the two answers to
+   one question, and this is a different question with an answer nobody can take back. Sized and
+   coloured so it is findable without being the loudest thing in the sheet. */
+.v2 .v2-xdelrow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--v2-line);
+}
+.v2 .v2-xdel, .v2 .v2-xdel-yes, .v2 .v2-xdel-no {
+  background: none; border: 0; font-family: inherit; font-size: 13px; cursor: pointer; padding: 4px 0;
+}
+.v2 .v2-xdel { color: var(--v2-ink-42); }
+.v2 .v2-xdel:hover:not(:disabled) { color: #7a1020; }
+.v2 .v2-xdel-ask { font-size: 12.5px; color: var(--v2-ink-70); flex: 1; min-width: 0; }
+.v2 .v2-xdel-yes { color: #7a1020; font-weight: 500; }
+.v2 .v2-xdel-no { color: var(--v2-ink-42); }
+.v2 .v2-xdelrow button:disabled { opacity: 0.5; cursor: default; }
 
 /* The row. */
 .v2 .v2-xrw { display: flex; gap: 13px; padding: 15px 14px; align-items: center; width: 100%; }
+/* The tappable part — name and amount — as a button, so correcting a row is reachable by keyboard and
+   announced as an action. Everything visual is inherited: a button that looks like a button here
+   would make every row look like a control rather than a fact. */
+.v2 .v2-xopen {
+  flex: 1; min-width: 0; display: flex; gap: 13px; align-items: center;
+  background: none; border: 0; padding: 0; margin: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
 .v2 .v2-xmid { flex: 1; min-width: 0; }
-.v2 .v2-xnm { font-size: 15px; font-weight: 500; color: var(--v2-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.v2 .v2-xmeta { font-size: 12.5px; color: var(--v2-ink-42); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* display:block on all four because they became spans when the row grew a button around them —
+   an <a> inside a <button> is invalid, so the tappable part had to be the inner element. */
+.v2 .v2-xnm { display: block; font-size: 15px; font-weight: 500; color: var(--v2-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2 .v2-xmeta { display: block; font-size: 12.5px; color: var(--v2-ink-42); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .v2 .v2-xamt { text-align: right; flex: none; }
-.v2 .v2-xval { font-size: 15.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
-.v2 .v2-xnet { font-size: 10.5px; color: var(--v2-ink-40); font-variant-numeric: tabular-nums; letter-spacing: 0.06em; margin-top: 4px; }
+.v2 .v2-xval { display: block; font-size: 15.5px; font-weight: 500; color: var(--v2-ink); font-variant-numeric: tabular-nums; }
+.v2 .v2-xnet { display: block; font-size: 10.5px; color: var(--v2-ink-40); font-variant-numeric: tabular-nums; letter-spacing: 0.06em; margin-top: 4px; }
 
 /* The receipt slot is a FIXED WIDTH whether or not there is a receipt, so the column stays a column.
    An optional element that collapses when absent makes every row a different shape, and the thing

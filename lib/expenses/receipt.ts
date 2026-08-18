@@ -96,6 +96,33 @@ export function fittedSize(width: number, height: number, longEdge = RECEIPT_LON
 }
 
 /**
+ * What is to happen to the receipt already on a row.
+ *
+ * Three cases and not two, because "no new file in this request" and "take the old one off" are
+ * different intents that a nullable File cannot tell apart — and guessing wrong deletes proof
+ * somebody meant to keep, silently, on a screen they opened to fix a typo in a merchant name.
+ */
+export type ReceiptChange =
+  | { kind: 'keep' }
+  | { kind: 'remove' }
+  | { kind: 'replace'; file: File }
+
+/**
+ * Read that intent off a submitted form.
+ *
+ * Isomorphic and pure so it can be tested, because every wrong answer here is destructive and none of
+ * them raise an error. The rule the tests pin: **anything ambiguous means keep.** A 'replace' that
+ * arrives without a file is a client that lost the file between picking and sending — not an
+ * instruction to clear the one already there — and an action word this function does not recognise is
+ * a version skew, not permission to delete.
+ */
+export function receiptChangeFrom(action: unknown, file: File | null): ReceiptChange {
+  if (action === 'remove') return { kind: 'remove' }
+  if (action === 'replace' && file) return { kind: 'replace', file }
+  return { kind: 'keep' }
+}
+
+/**
  * Why a file was refused, phrased for the person holding it.
  *
  * Checked AFTER the downscale, on what is actually about to be sent — checking the original would

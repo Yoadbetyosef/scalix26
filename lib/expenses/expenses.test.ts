@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { CATEGORIES, CATEGORY_KEYS, categoryByKey, categoryLabel } from './categories'
-import { parseAmountCents, parseExpense, addDays } from './schema'
+import { parseAmountCents, parseExpense, addDays, expenseFieldsFrom } from './schema'
 import { recoversTaxOnExpenses, isCanadianRegion } from './recoverable-tax'
 import {
-  fittedSize, receiptFileError, shouldDownscale, isReceiptImage,
+  fittedSize, receiptFileError, shouldDownscale, isReceiptImage, receiptChangeFrom,
   RECEIPT_MAX_BYTES, RECEIPT_LONG_EDGE, RECEIPT_STORED_TYPES, RECEIPT_EXTENSIONS,
 } from './receipt'
 import { jpegName } from './downscale'
@@ -237,5 +237,78 @@ describe('the receipt file', () => {
     expect(receiptFileError('big.pdf', 9 * 1024 * 1024)).toMatch(/photo of the receipt/i)
     expect(receiptFileError('huge.jpg', 9 * 1024 * 1024)).toMatch(/after shrinking/i)
     expect(receiptFileError('fine.jpg', 400 * 1024)).toBeNull()
+  })
+})
+
+describe('deciding what happens to a receipt already on a row', () => {
+  const photo = new File([new Uint8Array([1, 2, 3])], 'receipt.jpg', { type: 'image/jpeg' })
+
+  it('keeps it when the form says nothing about it', () => {
+    // Editing the merchant name posts no receipt and no action. The old photo must survive that.
+    expect(receiptChangeFrom(undefined, null)).toEqual({ kind: 'keep' })
+    expect(receiptChangeFrom(null, null)).toEqual({ kind: 'keep' })
+    expect(receiptChangeFrom('keep', null)).toEqual({ kind: 'keep' })
+  })
+
+  it('removes it only when asked in so many words', () => {
+    expect(receiptChangeFrom('remove', null)).toEqual({ kind: 'remove' })
+  })
+
+  it('replaces it when a file actually arrived', () => {
+    expect(receiptChangeFrom('replace', photo)).toEqual({ kind: 'replace', file: photo })
+  })
+
+  // THE ONE THAT MATTERS. Every wrong answer in this function is destructive and none of them raise
+  // an error, so the rule is: anything ambiguous keeps.
+  it('keeps rather than deletes when the instruction cannot be honoured', () => {
+    // 'replace' with no file — a client that lost the file between picking and sending. Reading this
+    // as "clear it" would destroy proof on a request that was trying to add some.
+    expect(receiptChangeFrom('replace', null)).toEqual({ kind: 'keep' })
+    // An action word from a newer client than this server. Version skew, not permission to delete.
+    expect(receiptChangeFrom('detach', null)).toEqual({ kind: 'keep' })
+    expect(receiptChangeFrom('REMOVE', null)).toEqual({ kind: 'keep' })
+    expect(receiptChangeFrom(1, null)).toEqual({ kind: 'keep' })
+  })
+
+  it('ignores a file that came with a remove', () => {
+    // Contradictory, and the explicit word wins over the accidental attachment.
+    expect(receiptChangeFrom('remove', photo)).toEqual({ kind: 'remove' })
+  })
+})
+
+describe('lifting the fields off a submitted form', () => {
+  it('reads all six and nothing else', () => {
+    const f = new FormData()
+    f.append('spentOn', '2026-08-01')
+    f.append('merchant', 'Shell')
+    f.append('amount', '42.50')
+    f.append('tax', '5.10')
+    f.append('category', 'vehicle_fuel')
+    f.append('note', 'the van')
+    f.append('tenantId', 'someone-elses')   // not a field, and must not become one
+    expect(expenseFieldsFrom(f)).toEqual({
+      spentOn: '2026-08-01', merchant: 'Shell', amount: '42.50',
+      tax: '5.10', category: 'vehicle_fuel', note: 'the van',
+    })
+  })
+
+  it('gives undefined for a field that was not sent, never the File beside it', () => {
+    const f = new FormData()
+    f.append('amount', '9.99')
+    // A file posted under a text field's name must not be read as that field's value.
+    f.append('merchant', new File([new Uint8Array([1])], 'x.jpg', { type: 'image/jpeg' }))
+    const fields = expenseFieldsFrom(f)
+    expect(fields.amount).toBe('9.99')
+    expect(fields.merchant).toBeUndefined()
+    expect(fields.category).toBeUndefined()
+  })
+
+  // The reason this function exists rather than six lines in each route: create and correct post the
+  // identical form, and a field read in one and forgotten in the other stops being editable without
+  // anything failing.
+  it('covers every field parseExpense reads', () => {
+    const f = new FormData()
+    for (const k of ['spentOn', 'merchant', 'amount', 'tax', 'category', 'note']) f.append(k, 'x')
+    expect(Object.values(expenseFieldsFrom(f)).every((v) => v === 'x')).toBe(true)
   })
 })
