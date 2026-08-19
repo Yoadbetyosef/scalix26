@@ -282,6 +282,14 @@
    cannot show a gap, and if the bytes never arrive the still is simply still there. */
 .v2 video.v2-scan-portrait { transition: opacity 0.28s var(--v2-ease); }
 .v2 .v2-scan-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+/* The readouts, ABOVE the veil at 9. Identical box to the scan canvas above, so the two layers cannot
+   disagree about where anything is — the only difference between them is what they are painted over.
+
+   z-10 also puts them above the grain at 8, which is unavoidable: to clear the veil they have to
+   clear everything below it. The cost is a tenth of an overlay pass of texture that used to fall
+   across the acid; the alternative was lifting the grain over the veil instead, which would have
+   changed the veil. */
+.v2 .v2-scan-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
 
 /* Grain, at a tenth, in overlay. It is what stops the flat grey field reading as a fill — the
    portrait is photographic and the field it was shot against has grain the padding does not. */

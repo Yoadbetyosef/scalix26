@@ -206,6 +206,49 @@ describe('the portrait left the canvas', () => {
   })
 })
 
+describe('the readouts are chrome, and sit above the veil', () => {
+  it('they have their own layer, over the darkening rather than under it', () => {
+    // At z-5 with the veil at 9, the gradient fell across them and the lower card was dimmed more
+    // than the upper one — which on an acid card reads as a shadow.
+    expect(css).toContain('.v2 .v2-scan-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }')
+    expect(css).toContain('.v2 .v2-scan-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }')
+    expect(css).toContain('.v2 .v2-scan-veil {')
+    // The scan itself stays under the veil. That is the half of this that must NOT move.
+    const veilZ = /\.v2 \.v2-scan-veil \{[^}]*z-index: 9;/
+    expect(css).toMatch(veilZ)
+  })
+
+  it('and not one coordinate was recomputed to get them there', () => {
+    // Both canvases take their size from the same measurement in the same function, so W and H are
+    // identical and every card position is the arithmetic it always was.
+    expect(body).toContain('canvas!.width = W; canvas!.height = H')
+    expect(body).toContain('cardsCanvas!.width = W; cardsCanvas!.height = H')
+    // Still the reference's geometry, unchanged by the move.
+    expect(body).toContain('const y = H * ceiling - hh')
+    expect(body).toContain('const x = i === 0 ? margin : W - margin - cd.w')
+    expect(body).toContain('const margin = W * 0.056')
+    expect(body).toContain('rr(x, y + rise + drop, cd.w, hh, W * 0.013)')
+  })
+
+  it('the widths are measured on the layer that draws them', () => {
+    // ctx.measureText depends on the context's font state; measuring on one canvas and drawing on
+    // another is two sources for one number.
+    expect(body).toContain('cctx!.font = kf; const kw = cctx!.measureText(s[0]).width')
+    // Negative-matched with a boundary: `cctx!.measureText` contains `ctx!.measureText` as a
+    // substring, so a plain not.toContain would fail on the correct code.
+    expect(body).not.toMatch(/(?<!c)ctx!\.measureText/)
+  })
+
+  it('and the layer is cleared on the same frame as the scan', () => {
+    // Including before the speaking early-return: a layer holding its last frame would leave two
+    // readouts hanging over her while she talks.
+    const from = body.indexOf('ctx!.clearRect(0, 0, W, H)')
+    const ret = body.indexOf('if (scanA <= 0)')
+    expect(body.indexOf('cctx!.clearRect(0, 0, W, H)')).toBeGreaterThan(from)
+    expect(body.indexOf('cctx!.clearRect(0, 0, W, H)')).toBeLessThan(ret)
+  })
+})
+
 describe('a scan is what she does while waiting', () => {
   it('speaking stops it, and the clock keeps running underneath', () => {
     // So it resumes mid-stride rather than restarting at the centre line.

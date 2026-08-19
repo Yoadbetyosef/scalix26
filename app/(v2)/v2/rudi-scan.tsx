@@ -90,6 +90,7 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
   const VIDEO = p.video
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const cardsRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const phaseNoRef = useRef<HTMLSpanElement>(null)
   const phaseNameRef = useRef<HTMLSpanElement>(null)
@@ -161,9 +162,24 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
   // ── The scan ────────────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const cardsCanvas = cardsRef.current
+    if (!canvas || !cardsCanvas) return
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    // ── WHY THE READOUTS GET THEIR OWN CANVAS ─────────────────────────────────────────────────────
+    //
+    // They were painted onto the scan's canvas at z-index 5, and the veil that darkens the foot of
+    // the frame sits at 9 — so the gradient fell ACROSS them, and the lower a card sat the more it
+    // was dimmed. On an acid card that reads as a shadow, and they are the one element on this screen
+    // that has to stay legible.
+    //
+    // They are chrome, not part of the sequence. The scan belongs under the veil and stays there.
+    //
+    // A second canvas rather than DOM, because DOM would mean re-deriving every position: the card
+    // widths come from ctx.measureText on canvas-pixel fonts, and x, y, the corner radius and the
+    // drop are all fractions of the backing store. This canvas shares the parent box and the same DPR
+    // expression, so W and H are identical to the scan's and not one coordinate changes.
+    const cctx = cardsCanvas.getContext('2d')
+    if (!ctx || !cctx) return
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -210,20 +226,23 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       if (!w || !h || (w === W && h === H)) return
       W = w; H = h
       canvas!.width = W; canvas!.height = H
+      // Same dimensions from the same measurement — the two layers cannot disagree about the frame.
+      cardsCanvas!.width = W; cardsCanvas!.height = H
       measureCeiling()
     }
 
     const seg = (a: number, b: number) => Math.max(0, Math.min(1, (t - a) / (b - a)))
     const eo = (k: number) => 1 - Math.pow(1 - k, 3)
 
+    /** Used by the readouts only, so it draws into their context rather than the scan's. */
     function rr(x: number, y: number, w: number, h: number, r: number) {
-      ctx!.beginPath()
-      ctx!.moveTo(x + r, y)
-      ctx!.arcTo(x + w, y, x + w, y + h, r)
-      ctx!.arcTo(x + w, y + h, x, y + h, r)
-      ctx!.arcTo(x, y + h, x, y, r)
-      ctx!.arcTo(x, y, x + w, y, r)
-      ctx!.closePath()
+      cctx!.beginPath()
+      cctx!.moveTo(x + r, y)
+      cctx!.arcTo(x + w, y, x + w, y + h, r)
+      cctx!.arcTo(x + w, y + h, x, y + h, r)
+      cctx!.arcTo(x, y + h, x, y, r)
+      cctx!.arcTo(x, y, x + w, y, r)
+      cctx!.closePath()
     }
 
     // ── The readouts ──────────────────────────────────────────────────────────────────────────────
@@ -245,8 +264,8 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       const vf = `500 ${W * 0.068}px "Inter Tight", system-ui, sans-serif`
       const padX = W * 0.028, padY = H * 0.012, lead = H * 0.030
       const cs = set.map((s) => {
-        ctx!.font = kf; const kw = ctx!.measureText(s[0]).width
-        ctx!.font = vf; const vw = ctx!.measureText(s[1]).width
+        cctx!.font = kf; const kw = cctx!.measureText(s[0]).width
+        cctx!.font = vf; const vw = cctx!.measureText(s[1]).width
         return { k: s[0], v: s[1], w: Math.max(kw, vw) + padX * 2 }
       })
       const hh = padY * 2 + lead + W * 0.040
@@ -256,12 +275,12 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       cs.forEach((cd, i) => {
         const x = i === 0 ? margin : W - margin - cd.w
         const drop = i === 1 ? H * CARD_DROP : 0
-        ctx!.fillStyle = `rgba(217,242,36,${a * 0.92})`
-        rr(x, y + rise + drop, cd.w, hh, W * 0.013); ctx!.fill()
-        ctx!.fillStyle = `rgba(65,73,10,${a * 0.78})`; ctx!.font = kf
-        ctx!.fillText(cd.k, x + padX, y + rise + drop + padY + W * 0.016)
-        ctx!.fillStyle = `rgba(24,28,4,${a})`; ctx!.font = vf
-        ctx!.fillText(cd.v, x + padX, y + rise + drop + padY + lead + W * 0.040)
+        cctx!.fillStyle = `rgba(217,242,36,${a * 0.92})`
+        rr(x, y + rise + drop, cd.w, hh, W * 0.013); cctx!.fill()
+        cctx!.fillStyle = `rgba(65,73,10,${a * 0.78})`; cctx!.font = kf
+        cctx!.fillText(cd.k, x + padX, y + rise + drop + padY + W * 0.016)
+        cctx!.fillStyle = `rgba(24,28,4,${a})`; cctx!.font = vf
+        cctx!.fillText(cd.v, x + padX, y + rise + drop + padY + lead + W * 0.040)
       })
     }
 
@@ -284,6 +303,9 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       t = (t + dt / CYCLE) % 1
       ct = (ct + dt / CARD_CYCLE) % 1
       ctx!.clearRect(0, 0, W, H)
+      // Cleared on the same frame as the scan, and before the early return below — a layer that kept
+      // its last frame would leave two readouts hanging over her while she speaks.
+      cctx!.clearRect(0, 0, W, H)
 
       if (scanA <= 0) { raf = requestAnimationFrame(frame); return }
 
@@ -516,6 +538,10 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       <canvas ref={canvasRef} className="v2-scan-canvas" aria-hidden />
       <div className="v2-scan-grain" aria-hidden />
       <div className="v2-scan-veil" aria-hidden />
+      {/* ABOVE the veil, unlike the scan. The readouts are chrome and have to stay legible; the
+          sequence is part of the picture and belongs under the darkening. Same box, same size, same
+          coordinates — see the note beside its context. */}
+      <canvas ref={cardsRef} className="v2-scan-cards" aria-hidden />
       {/* The phase readout belongs to the SCAN, not to the screen's chrome — it is meaningless when
           the sequence is not running, so it goes quiet with it rather than sitting there naming a
           phase nothing is in. */}
