@@ -132,6 +132,55 @@ describe('the sequence is the reference’s, number for number', () => {
   })
 })
 
+describe('the Talk button is a button, not a bar', () => {
+  // Its values come from the same reference the scan does — docs/miles/rudi-scan-v26.html — so both
+  // sides are pinned here rather than trusted to stay in step.
+  const mob = css.slice(css.indexOf('THE TALK BUTTON HUGS ITS CONTENT'), css.indexOf('There is no collapsed state below 720px'))
+
+  it('hugs its content and centres, rather than filling the width', () => {
+    // At 100% it stops being a button. Centred by auto margins between left:0 and right:0, because
+    // justify-content centres content INSIDE a full-width box and the box is the thing that must not
+    // be full width.
+    expect(ref).toContain('margin-left:auto;margin-right:auto')
+    expect(mob).toContain('left: 0; right: 0; width: fit-content; margin-inline: auto;')
+  })
+
+  it('the asymmetric padding, which is the whole shape', () => {
+    // 8px left so the mic nearly fills the height, 26px right for the label.
+    expect(ref).toContain('height:54px;padding:0 26px 0 8px')
+    expect(mob).toContain('height: 54px; padding: 0 26px 0 8px; gap: 13px;')
+    // The symmetric padding that flattened it is gone as a DECLARATION, not merely overridden further
+    // down. Matched as a rule rather than as a string, because the comment above names it too.
+    expect(mob).not.toMatch(/\.v2-talk \{[^}]*padding: 0 24px;/)
+  })
+
+  it('the mic is a 38px circle, which is the height less both 8s', () => {
+    expect(ref).toContain('width:38px;height:38px')
+    expect(mob).toContain('width: 38px; height: 38px; background: rgba(255, 255, 255, 0.22);')
+  })
+
+  it('the label and the shadow are the reference’s', () => {
+    expect(ref).toContain('font-size:16px')
+    expect(mob).toContain('font-size: 16px;')
+    expect(ref).toContain('box-shadow:0 10px 30px -10px rgba(139,92,246,.8)')
+    expect(mob).toContain('box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.8);')
+  })
+
+  it('and the press tightens the shadow as well as shrinking it', () => {
+    // A scale on its own reads as the button moving away from the finger rather than being pushed.
+    expect(ref).toContain('transform:scale(.955);box-shadow:0 6px 20px -8px')
+    expect(mob).toContain('transform: scale(0.955);')
+    expect(mob).toContain('box-shadow: 0 6px 20px -8px rgba(139, 92, 246, 0.8);')
+  })
+
+  it('the text field it stacks with is untouched', () => {
+    // .v2-tin carries its own right:0 further up, so it stays full width — and it keeps the centred
+    // contents, which is right for a box that IS full width.
+    expect(css).toContain('.v2-tin { right: 0;')
+    expect(mob).toContain('.v2 .v2-overlay .v2-tin { justify-content: center; }')
+  })
+})
+
 describe('the portrait left the canvas', () => {
   it('nothing draws the still any more — the browser composites it', () => {
     // The old loop's drawImage of the portrait, its breath and its video sampling are all gone here.

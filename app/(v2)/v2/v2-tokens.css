@@ -988,15 +988,47 @@
     z-index: 5;
   }
   .v2 .v2-grab { bottom: calc(92px - var(--v2-bottom-drop)); }
-  .v2 .v2-overlay .v2-composer { max-width: none; margin-top: 18px; }
+  .v2 .v2-overlay .v2-composer { max-width: none; margin-top: 18px; height: 54px; }
   .v2 .v2-overlay .v2-ctl { right: 0; }
 
-  /* THE BUTTON'S CONTENTS SIT CENTRED. The hoist dropped the mobile composer's `full` prop along with
-     the second component, and `full` was what centred the group and hid the SPACE badge — so a
-     full-width pill kept a left-aligned layout meant for an auto-width one, with a keyboard hint on a
-     device that has no keyboard. Restored here as a rule rather than by reintroducing the prop. */
-  .v2 .v2-overlay .v2-ctl { justify-content: center; }
-  .v2 .v2-overlay .v2-talk { padding: 0 24px; }
+  /* ── THE TALK BUTTON HUGS ITS CONTENT ─────────────────────────────────────────────────────────
+     `.v2-ctl` above stretches every face to the full width, which is right for the text field and
+     wrong for the pill: at 100% it stops being a button and becomes a bar.
+
+     THE ASYMMETRIC PADDING IS THE POINT. 8px on the left so the 38px mic circle nearly fills the
+     54px height, 26px on the right for the label — a shape that only exists at the width its own
+     contents ask for. Centred by auto margins between left:0 and right:0 rather than by
+     justify-content, because that centres content INSIDE a full-width box and the box is the thing
+     that must not be full width.
+
+     `.v2-tin` keeps its own `right: 0` further up, so the field this stacks with is untouched. */
+  .v2 .v2-overlay .v2-talk {
+    left: 0; right: 0; width: fit-content; margin-inline: auto;
+    height: 54px; padding: 0 26px 0 8px; gap: 13px;
+    font-size: 16px;
+    box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.8);
+  }
+  .v2 .v2-overlay .v2-talk:hover {
+    box-shadow: 0 14px 38px -10px rgba(139, 92, 246, 0.95);
+  }
+  /* The press tightens the shadow as well as shrinking the button — a scale on its own reads as the
+     button moving away from the finger rather than being pushed down. */
+  .v2 .v2-overlay .v2-talk:active {
+    transform: scale(0.955);
+    box-shadow: 0 6px 20px -8px rgba(139, 92, 246, 0.8);
+  }
+  .v2 .v2-overlay .v2-talk .v2-mic {
+    width: 38px; height: 38px; background: rgba(255, 255, 255, 0.22);
+  }
+
+  /* The keyboard hint, on a device with no keyboard. The `full` prop used to hide it and the hoist
+     dropped the prop with the second component; this is that, as a rule.
+
+     `justify-content: center` stays for the TEXT FIELD, which is full width and does want its
+     contents centred. It is off the pill deliberately — the pill is now only as wide as its own
+     contents, so there is no spare room to centre anything in, and the symmetric `padding: 0 24px`
+     that used to sit here is what flattened it into a bar. See the block above. */
+  .v2 .v2-overlay .v2-tin { justify-content: center; }
   .v2 .v2-overlay .v2-talk .v2-kbd { display: none; }
 }
 
