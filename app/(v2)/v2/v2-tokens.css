@@ -310,7 +310,28 @@
 .v2 .v2-scan-veil {
   position: absolute; left: 0; right: 0; bottom: 0; height: 44%; z-index: 9; pointer-events: none;
   background: linear-gradient(180deg, rgba(8, 10, 12, 0), rgba(8, 10, 12, 0.55) 34%, rgba(8, 10, 12, 0.95));
+  transition: height 0.4s var(--v2-ease);
 }
+/* SHE RECEDES WHILE THE MIC IS OPEN. 44% → 56%: the same gradient reaching further up, so she sinks
+   into it rather than being covered by something new. It is the only thing on the screen that moves
+   when listening begins, and it moves once. */
+.v2 .v2-face[data-state="listening"] .v2-scan-veil,
+.v2 .v2-face[data-state="armed"] .v2-scan-veil { height: 56%; }
+
+/* The chip. Replaces the phase readout while the mic is open — there is no sequence to name. */
+.v2 .v2-scan-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  letter-spacing: 0.14em; color: var(--v2-cyan);
+}
+.v2 .v2-scan-chip s {
+  width: 6px; height: 6px; border-radius: 50%; flex: none;
+  background: var(--v2-cyan); box-shadow: 0 0 8px var(--v2-cyan);
+  animation: v2-scan-blink 1.15s steps(1, end) infinite;
+}
+@keyframes v2-scan-blink { 0%, 55% { opacity: 1 } 56%, 100% { opacity: 0.15 } }
+/* On a screen whose whole argument is that nothing moves, the one moving thing has to be allowed to
+   stop when somebody has asked for less motion. */
+@media (prefers-reduced-motion: reduce) { .v2 .v2-scan-chip s { animation: none; } }
 
 /* The phase readout. Belongs to the sequence, so it fades with it rather than naming a phase nothing
    is in. */
@@ -442,7 +463,25 @@
 
 /* Listening / speaking ONLY: the fill drops to ink and a ring pulses out. The reference does this
    too — it is the inversion, not the resting state. */
-.v2-talk[data-on] { background: var(--v2-ink); color: #fff; box-shadow: 0 6px 26px rgba(255, 46, 147, 0.34); }
+/* ── GLASS WHILE THE MIC IS OPEN ─────────────────────────────────────────────────────────────────
+   Not the resting gradient, and not the ink it used to become. Ink read as broken: a black slab where
+   a coloured pill had been, on a screen that had just gone quiet everywhere else.
+   
+   Glass is the answer option D gives — a translucent surface over her portrait, which only means
+   anything because there IS a portrait behind it. The border is what makes it read as a surface
+   rather than as a hole. `background` is set twice on .v2-talk (a gradient, then a radial), so both
+   are overridden here or the radial survives and the glass is opaque. */
+.v2-talk[data-on] {
+  background: rgba(255, 255, 255, 0.1);
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  box-shadow: none;
+}
+/* The hover brightening belongs to the gradient. On glass it just makes the veil under it lighter. */
+.v2-talk[data-on]:hover { filter: none; box-shadow: none; background: rgba(255, 255, 255, 0.14); }
 .v2-talk::after {
   content: ''; position: absolute; inset: -5px; border-radius: 30px;
   border: 1.5px solid rgba(139, 92, 246, 0.7); opacity: 0; pointer-events: none;

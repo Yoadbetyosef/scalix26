@@ -294,9 +294,22 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       // ResizeObserver below is what answers it, which is where the old loop put it too.
       if (!W || !H) { raf = requestAnimationFrame(frame); return }
 
-      // Speaking is the one state that stops the sequence. The clock keeps running underneath so the
-      // scan resumes mid-stride rather than restarting at the centre line.
-      const wanted = stateRef.current === 'speaking' ? 0 : 1
+      // ── THE SCAN IS THE RESTING STATE, AND ONLY THE RESTING STATE ─────────────────────────────
+      //
+      // A scan is what she does while WAITING. The moment anything else is happening — the mic is
+      // open, she is answering, it is the caller's turn — the canvas goes quiet: no ticks, no
+      // wireframe, no squares, no markers, no crosshair, and NO READOUTS. See option D in
+      // docs/miles/rudi-listening-ideas.html: nothing is drawn at all, and the stillness is the
+      // signal.
+      //
+      // This used to test for 'speaking' alone, which left the whole sequence — cards included —
+      // running over somebody while they talked to her. The readouts were the visible half of that:
+      // two acid cards animating on their own clock while the screen's entire argument is that it has
+      // stopped to listen.
+      //
+      // The clock keeps running underneath so the scan resumes mid-stride rather than restarting at
+      // the centre line.
+      const wanted = stateRef.current === 'idle' ? 1 : 0
       scanA += (wanted - scanA) * Math.min(1, dt * 8)
       if (scanA < 0.003) scanA = 0
 
@@ -516,10 +529,13 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
   }, [])
 
   const speaking = state === 'speaking'
+  // The mic is open and it is the caller's turn. Armed is the same surface as listening — the
+  // codebase's own rule, and the reason the old loop shared every graphic between them.
+  const hearing = state === 'listening' || state === 'armed'
 
   return (
     <>
-    <div className={className} onClick={onClick} role="img" aria-label={`Rudi, ${state}`} data-scan>
+    <div className={className} onClick={onClick} role="img" aria-label={`Rudi, ${state}`} data-scan data-state={state}>
       {/* object-position 20% down: the reference's framing, and the reason the still is padded to the
           frame's own ratio — cover then neither crops her nor letterboxes the field. */}
       <img className="v2-scan-portrait" src={STILL} alt="" aria-hidden draggable={false} />
@@ -542,9 +558,20 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       {/* The phase readout belongs to the SCAN, not to the screen's chrome — it is meaningless when
           the sequence is not running, so it goes quiet with it rather than sitting there naming a
           phase nothing is in. */}
+      {/* THE READOUT SAYS WHAT THE SURFACE IS DOING, so it changes with the surface rather than
+          persisting through it. Resting, it names the phase of the sequence. With the mic open there
+          is no sequence to name and it becomes the chip: LISTENING, in cyan, with the dot blinking —
+          on a screen where nothing else moves, that dot is the only thing that does. While she
+          speaks it goes altogether: her voice is the signal and a label would be competing with it. */}
       <p className="v2-scan-phase" data-quiet={speaking || undefined} aria-hidden>
-        <span className="v2-scan-n"><b ref={phaseNoRef}>1</b>/5</span>
-        <span className="v2-scan-t" ref={phaseNameRef}>ANALYSIS</span>
+        {hearing ? (
+          <span className="v2-scan-chip"><s />LISTENING</span>
+        ) : (
+          <>
+            <span className="v2-scan-n"><b ref={phaseNoRef}>1</b>/5</span>
+            <span className="v2-scan-t" ref={phaseNameRef}>ANALYSIS</span>
+          </>
+        )}
       </p>
     </div>
 

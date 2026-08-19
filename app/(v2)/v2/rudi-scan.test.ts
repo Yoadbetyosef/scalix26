@@ -262,11 +262,23 @@ describe('the readouts are chrome, and sit above the veil', () => {
 })
 
 describe('a scan is what she does while waiting', () => {
-  it('speaking stops it, and the clock keeps running underneath', () => {
-    // So it resumes mid-stride rather than restarting at the centre line.
-    expect(body).toContain("const wanted = stateRef.current === 'speaking' ? 0 : 1")
+  it('ANYTHING but resting stops it — not just her speaking', () => {
+    // It tested for 'speaking' alone, which left the whole sequence running over somebody while they
+    // talked TO her. The readouts were the visible half: two acid cards animating on their own clock
+    // while the screen's entire argument is that it has stopped to listen.
+    expect(body).toContain("const wanted = stateRef.current === 'idle' ? 1 : 0")
+  })
+
+  it('and the clock keeps running underneath, so it resumes mid-stride', () => {
     expect(body).toContain('t = (t + dt / CYCLE) % 1')
     expect(body.indexOf('const wanted')).toBeLessThan(body.indexOf('t = (t + dt / CYCLE)'))
+  })
+
+  it('the readouts stop with everything else, because they are drawn under the same gate', () => {
+    // The cards are multiplied by the same alpha and skipped at the same threshold, so there is no
+    // path where the sequence is off and they are not.
+    expect(body).toContain('a *= scanA')
+    expect(body).toContain('if (scanA <= 0) { raf = requestAnimationFrame(frame); return }')
   })
 
   it('it is a fade, not a cut', () => {
@@ -288,6 +300,55 @@ describe('a scan is what she does while waiting', () => {
   it('reduced motion gets the portrait and nothing else', () => {
     // The whole sequence is motion; there is no slower version of it that is still the thing.
     expect(body).toContain('if (!reduced) {')
+  })
+})
+
+describe('option D — the listening state', () => {
+  const ideas = read('../../../docs/miles/rudi-listening-ideas.html')
+  const talk = read('./talk-button.tsx')
+
+  it('she recedes: the veil rises from 44% to 56%', () => {
+    expect(ideas).toContain('style="height:56%"')
+    expect(css).toContain('.v2 .v2-face[data-state="armed"] .v2-scan-veil { height: 56%; }')
+    expect(css).toMatch(/\.v2 \.v2-scan-veil \{[^}]*height: 44%;/)
+  })
+
+  it('the chip reads LISTENING in cyan, with the dot blinking', () => {
+    // On a screen where nothing else moves, that dot is the only thing that does.
+    expect(scan).toContain('<span className="v2-scan-chip"><s />LISTENING</span>')
+    expect(css).toContain('color: var(--v2-cyan);')
+    expect(css).toContain('animation: v2-scan-blink 1.15s steps(1, end) infinite;')
+    // And it stops when somebody has asked for less motion.
+    expect(css).toContain('@media (prefers-reduced-motion: reduce) { .v2 .v2-scan-chip s { animation: none; } }')
+  })
+
+  it('the button becomes glass, not ink', () => {
+    // Ink read as broken: a black slab where a coloured pill had been, on a screen that had just gone
+    // quiet everywhere else.
+    //
+    // PROVENANCE: these three values are NOT in the ideas file — its .pill is still the resting
+    // gradient in every option, D included. They were specified separately, so they are pinned here
+    // against the instruction rather than against a file that does not carry them.
+    expect(ideas).toMatch(/\.pill\{[^}]*linear-gradient/)
+    expect(css).toContain('background: rgba(255, 255, 255, 0.1);')
+    expect(css).toContain('border: 1px solid rgba(255, 255, 255, 0.2);')
+    expect(css).toContain('backdrop-filter: blur(14px);')
+    // .v2-talk sets `background` twice — a gradient then a radial — so the image has to go too or
+    // the radial survives and the glass is opaque.
+    expect(css).toContain('background-image: none;')
+    expect(css).not.toMatch(/\.v2-talk\[data-on\] \{ background: var\(--v2-ink\)/)
+  })
+
+  it('and the glyph becomes a rounded square', () => {
+    expect(ideas).toContain('<rect x="7" y="7" width="10" height="10" rx="2.5"')
+    expect(talk).toContain('<rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor" stroke="none" />')
+    expect(talk).toContain("{state === 'idle' ? <MicIcon /> : <StopIcon />}")
+  })
+
+  it('the label says what the press DOES, except where that was already decided', () => {
+    // rudi-line.ts records why armed keeps its own word: nothing is running to stop, it is waiting.
+    expect(talk).toContain("{state === 'listening' || state === 'speaking' ? 'Stop' : rudiState(state)}")
+    expect(read('./rudi-line.ts')).toContain("if (state === 'armed') return 'Your turn'")
   })
 })
 
