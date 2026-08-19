@@ -518,6 +518,7 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
   const speaking = state === 'speaking'
 
   return (
+    <>
     <div className={className} onClick={onClick} role="img" aria-label={`Rudi, ${state}`} data-scan>
       {/* object-position 20% down: the reference's framing, and the reason the still is padded to the
           frame's own ratio — cover then neither crops her nor letterboxes the field. */}
@@ -538,10 +539,6 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
       <canvas ref={canvasRef} className="v2-scan-canvas" aria-hidden />
       <div className="v2-scan-grain" aria-hidden />
       <div className="v2-scan-veil" aria-hidden />
-      {/* ABOVE the veil, unlike the scan. The readouts are chrome and have to stay legible; the
-          sequence is part of the picture and belongs under the darkening. Same box, same size, same
-          coordinates — see the note beside its context. */}
-      <canvas ref={cardsRef} className="v2-scan-cards" aria-hidden />
       {/* The phase readout belongs to the SCAN, not to the screen's chrome — it is meaningless when
           the sequence is not running, so it goes quiet with it rather than sitting there naming a
           phase nothing is in. */}
@@ -550,5 +547,24 @@ export function RudiScan({ handleRef, onStateChange, minimised = false, classNam
         <span className="v2-scan-t" ref={phaseNameRef}>ANALYSIS</span>
       </p>
     </div>
+
+    {/* ── THE READOUTS ARE A SIBLING OF THE FACE, NOT A CHILD OF IT ───────────────────────────────
+        Putting them above the scan's own veil was not enough, and could never have been. `.v2-face`
+        carries `z-index: 1`, which makes it a STACKING CONTEXT — so every layer inside it, however
+        high, is confined to it. `.v2-scrim` is a SIBLING at z-2: 62% of the height, ramping to 88%
+        black, and it paints over the whole face subtree. That is the shadow, and because it is a
+        gradient the lower card was dimmed more than the upper one.
+
+        So they leave the face. Rendered as a fragment, they become a sibling in `.v2-hero` alongside
+        the scrim, and z-3 clears it. Not higher: `.v2-overlay` is also z-3 and comes LATER in the
+        document, so the copy still wins if the two ever meet — the measured ceiling is what keeps
+        them apart, and this is what happens if that measurement is ever wrong.
+
+        `.v2-hero` and `.v2-face` are both `inset: 0` in the same parent, so the box is identical and
+        not one coordinate changes. The exception is the collapsed desktop state, where the face
+        shrinks to a thumbnail and a sibling cannot follow it — see the display:none beside the
+        rule. */}
+    <canvas ref={cardsRef} className="v2-scan-cards" aria-hidden />
+    </>
   )
 }

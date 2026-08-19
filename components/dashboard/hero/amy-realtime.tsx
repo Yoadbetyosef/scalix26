@@ -347,6 +347,17 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
           catch { return { status: 0, token: null } } // network hiccup → the proxy's token check still guards when configured
         })()
 
+        // PROBE — the socket's LIFECYCLE, not only its messages.
+        //
+        // The first version of this only recorded frames, which assumed the socket connects. It did
+        // not, and the result was a silent console and no window.__amyProbe at all — which is
+        // indistinguishable from "the code did not deploy". These four lines make the failure say
+        // WHERE it stopped: no `connect` line means the component never mounted, a `connect` with no
+        // `open` means the proxy is unreachable or the URL is wrong, and a bare localhost URL on an
+        // https page throws before any of it.
+        console.info('%c[amy probe] connect', 'color:#D9F224', PROXY_URL)
+        ;(window as unknown as { __amyProbe?: unknown }).__amyProbe = { url: PROXY_URL, stage: 'connecting', n: 0, counts: {}, samples: [] }
+
         const ws = new WebSocket(PROXY_URL)
         ws.binaryType = 'arraybuffer'
         wsRef.current = ws
@@ -449,6 +460,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
         // When the socket opens, send config (snapshot already fetched in parallel), then
         // FLUSH everything the mic captured during setup and continue live (LAYER 1/2).
         ws.onopen = async () => {
+          probe.stage = 'open'
+          console.info('%c[amy probe] socket open', 'color:#22D3EE')
           connectedRef.current = true
           log('proxy open', Math.round(performance.now() - tapT0), 'ms')
           const [snapshot, auth] = await Promise.all([snapshotPromise, authPromise])
@@ -491,7 +504,7 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
         // console.info rather than log(): DEBUG is `NODE_ENV !== 'production'`, which is false on a
         // deployed preview — and a preview is the only place a real microphone and a real session
         // meet. A probe that prints nothing where it has to run is not a probe.
-        const probe: { n: number; counts: Record<string, number>; samples: unknown[] } = { n: 0, counts: {}, samples: [] }
+        const probe = (window as unknown as { __amyProbe: { url: string; stage: string; n: number; counts: Record<string, number>; samples: unknown[] } }).__amyProbe
         const HANDLED = new Set(['Welcome', 'SettingsApplied', 'UserStartedSpeaking', 'ConversationText',
           'AgentStartedSpeaking', 'AgentAudioDone', 'FunctionCallRequest', 'Error', 'Warning'])
 
@@ -591,10 +604,15 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
               break
           }
         }
-        ws.onerror = () => { if (!connectedRef.current) { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') } }
+        ws.onerror = () => {
+          probe.stage = 'error'
+          console.info('%c[amy probe] socket error', 'color:#FF2E93', 'never opened:', !connectedRef.current)
+          if (!connectedRef.current) { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') }
+        }
         ws.onclose = () => {
           // One line to paste back. See the probe note above; delete with it.
-          console.info('%c[amy probe] SUMMARY', 'color:#D9F224', JSON.stringify(probe.counts), probe.samples)
+          probe.stage = 'closed'
+          console.info('%c[amy probe] SUMMARY', 'color:#D9F224', 'url', probe.url, 'frames', probe.n, JSON.stringify(probe.counts), probe.samples)
           if (!connectedRef.current) { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') }
           else if (!cancelled) setPhase((p) => (p === 'error' ? p : 'live'))
         }

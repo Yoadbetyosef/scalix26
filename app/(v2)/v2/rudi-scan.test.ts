@@ -207,15 +207,27 @@ describe('the portrait left the canvas', () => {
 })
 
 describe('the readouts are chrome, and sit above the veil', () => {
-  it('they have their own layer, over the darkening rather than under it', () => {
-    // At z-5 with the veil at 9, the gradient fell across them and the lower card was dimmed more
-    // than the upper one — which on an acid card reads as a shadow.
+  it('they leave the face entirely, because .v2-face is a stacking context', () => {
+    // The first attempt raised them to z-10 INSIDE .v2-face, which carries z-index:1 and therefore
+    // confines every layer in it. .v2-scrim is a SIBLING at z-2 — 62% tall, ramping to 88% black —
+    // so it went on painting over them, and being a gradient it dimmed the lower card more. Nothing
+    // inside the face could ever have cleared it.
+    expect(scan).toContain('<canvas ref={cardsRef} className="v2-scan-cards" aria-hidden />')
+    // Rendered as a FRAGMENT sibling, after the face's closing tag rather than inside it.
+    expect(scan.indexOf('className="v2-scan-cards"')).toBeGreaterThan(scan.indexOf('</div>'))
+    expect(css).toContain('.v2 .v2-scan-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }')
+    // Above the scrim at 2, and NOT above the copy: .v2-overlay is z-3 and comes later.
+    expect(css).toMatch(/\.v2-scrim \{[^}]*z-index: 2;/)
+    expect(css).toContain('.v2-overlay { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;')
+  })
+
+  it('the scan itself stays under its own veil, which is the half that must not move', () => {
     expect(css).toContain('.v2 .v2-scan-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }')
-    expect(css).toContain('.v2 .v2-scan-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }')
-    expect(css).toContain('.v2 .v2-scan-veil {')
-    // The scan itself stays under the veil. That is the half of this that must NOT move.
-    const veilZ = /\.v2 \.v2-scan-veil \{[^}]*z-index: 9;/
-    expect(css).toMatch(veilZ)
+    expect(css).toMatch(/\.v2 \.v2-scan-veil \{[^}]*z-index: 9;/)
+  })
+
+  it('and they are hidden when the face collapses, because a sibling cannot follow it', () => {
+    expect(css).toContain('.v2 .v2-root[data-min] .v2-scan-cards { display: none; }')
   })
 
   it('and not one coordinate was recomputed to get them there', () => {

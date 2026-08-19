@@ -282,14 +282,22 @@
    cannot show a gap, and if the bytes never arrive the still is simply still there. */
 .v2 video.v2-scan-portrait { transition: opacity 0.28s var(--v2-ease); }
 .v2 .v2-scan-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
-/* The readouts, ABOVE the veil at 9. Identical box to the scan canvas above, so the two layers cannot
-   disagree about where anything is — the only difference between them is what they are painted over.
-
-   z-10 also puts them above the grain at 8, which is unavoidable: to clear the veil they have to
-   clear everything below it. The cost is a tenth of an overlay pass of texture that used to fall
-   across the acid; the alternative was lifting the grain over the veil instead, which would have
-   changed the veil. */
-.v2 .v2-scan-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+/* The readouts. A SIBLING of .v2-face, not a child — see the note in rudi-scan.tsx.
+   
+   .v2-face is `z-index: 1`, which makes it a stacking context, so nothing inside it can ever rise
+   above `.v2-scrim` at z-2 however high its own z-index goes. The scrim is 62% of the height ramping
+   to 88% black, and it was the shadow: a gradient, which is why the lower card was dimmed more.
+   
+   z-3 clears it. NOT higher: `.v2-overlay` is z-3 too and comes later in the document, so the copy
+   wins if the two ever meet. The measured ceiling is what keeps them apart; this is the backstop for
+   the day that measurement is wrong.
+   
+   `inset: 0` in `.v2-hero`, exactly as `.v2-face` is, so the box and every coordinate are identical. */
+.v2 .v2-scan-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+/* Collapsed, the face shrinks to a thumbnail and a sibling cannot follow it. Readouts do not belong
+   on a thumbnail anyway — this is the one state where leaving the face costs something, and hiding
+   them is the answer rather than reproducing the collapse geometry twice. */
+.v2 .v2-root[data-min] .v2-scan-cards { display: none; }
 
 /* Grain, at a tenth, in overlay. It is what stops the flat grey field reading as a fill — the
    portrait is photographic and the field it was shot against has grain the padding does not. */
