@@ -477,10 +477,41 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
           buffered.length = 0
         }
 
+        // ── PROBE — TEMPORARY, AND DELETE IT ONCE THE QUESTION IS ANSWERED ────────────────────────
+        //
+        // THE QUESTION: does this socket ever send PARTIAL user speech, or only the settled turn?
+        //
+        // The listening state being designed shows the owner's own words arriving as they say them.
+        // The only user text this file consumes is ConversationText at the endpoint — one message,
+        // whole utterance, ~700ms after they stop — and the switch below has NO default, so any
+        // other event Deepgram emits has been arriving and being dropped in silence since this was
+        // written. The proxy forwards every frame, so if partials exist they are already reaching
+        // this line.
+        //
+        // console.info rather than log(): DEBUG is `NODE_ENV !== 'production'`, which is false on a
+        // deployed preview — and a preview is the only place a real microphone and a real session
+        // meet. A probe that prints nothing where it has to run is not a probe.
+        const probe: { n: number; counts: Record<string, number>; samples: unknown[] } = { n: 0, counts: {}, samples: [] }
+        const HANDLED = new Set(['Welcome', 'SettingsApplied', 'UserStartedSpeaking', 'ConversationText',
+          'AgentStartedSpeaking', 'AgentAudioDone', 'FunctionCallRequest', 'Error', 'Warning'])
+
         ws.onmessage = (ev) => {
           if (typeof ev.data !== 'string') { mk('firstAudioPacket'); enqueuePcm(new Int16Array(ev.data as ArrayBuffer)); return }
           let msg: { type?: string; role?: string; content?: string; description?: string; functions?: { id: string; name: string; arguments?: string }[] }
           try { msg = JSON.parse(ev.data) } catch { return }
+
+          probe.n++
+          const kind = String(msg.type ?? '(no type)')
+          probe.counts[kind] = (probe.counts[kind] ?? 0) + 1
+          // The first few of each kind, stamped, so the ORDER is readable — a partial would show as
+          // several of one type arriving before the endpoint rather than one after it.
+          if (probe.counts[kind] <= 6) probe.samples.push({ ms: Math.round(performance.now() - tapT0), raw: ev.data.slice(0, 300) })
+          // Everything unhandled, and every ConversationText in full — a partial could equally be a
+          // field on the message this file already reads and ignores (is_final, and friends).
+          if (!HANDLED.has(kind)) console.info('%c[amy probe] UNHANDLED', 'color:#FF2E93', kind, ev.data.slice(0, 400))
+          else if (kind === 'ConversationText') console.info('%c[amy probe] ConversationText', 'color:#22D3EE', ev.data.slice(0, 400))
+          ;(window as unknown as { __amyProbe?: unknown }).__amyProbe = probe
+
           switch (msg.type) {
             case 'Welcome': case 'SettingsApplied':
               setPhase('live'); emit({ type: 'listen' }); armIdle()
@@ -562,6 +593,8 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
         }
         ws.onerror = () => { if (!connectedRef.current) { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') } }
         ws.onclose = () => {
+          // One line to paste back. See the probe note above; delete with it.
+          console.info('%c[amy probe] SUMMARY', 'color:#D9F224', JSON.stringify(probe.counts), probe.samples)
           if (!connectedRef.current) { setErrorMsg('Live voice is unavailable right now.'); setPhase('error') }
           else if (!cancelled) setPhase((p) => (p === 'error' ? p : 'live'))
         }
