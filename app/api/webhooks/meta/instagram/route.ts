@@ -31,7 +31,15 @@ export async function GET(req: NextRequest) {
 }
 
 async function sendInstagramReply(recipientId: string, text: string, accessToken: string) {
-  const token = accessToken || process.env.META_PAGE_ACCESS_TOKEN || ''
+  // NO PLATFORM FALLBACK. This used to end `|| process.env.META_PAGE_ACCESS_TOKEN`, which meant a
+  // tenant whose channel row carried no token had the AI answer their customer from OUR page — the
+  // customer reading our business name, with nobody watching, because this path is unattended.
+  // Refusing to send is the lesser failure: the inbound message is still recorded.
+  const token = accessToken || ''
+  if (!token) {
+    console.error('[meta] instagram reply NOT sent — the channel has no page access token. Reconnect the page.')
+    return
+  }
   const res = await fetch(`https://graph.facebook.com/v21.0/me/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,7 +56,12 @@ async function sendInstagramReply(recipientId: string, text: string, accessToken
 }
 
 async function sendFacebookReply(recipientId: string, text: string, accessToken: string) {
-  const token = accessToken || process.env.META_PAGE_ACCESS_TOKEN || ''
+  // Same refusal as sendInstagramReply above, for the same reason.
+  const token = accessToken || ''
+  if (!token) {
+    console.error('[meta] facebook reply NOT sent — the channel has no page access token. Reconnect the page.')
+    return
+  }
   const res = await fetch(`https://graph.facebook.com/v21.0/me/messages`, {
     method: 'POST',
     headers: {

@@ -7,6 +7,7 @@ import { sendEmailReply } from '@/lib/email/send'
 import { getProvider } from '@/lib/mailbox'
 import { getValidAccount, type AccountRow } from '@/lib/mailbox/account'
 import { assertPartnerActive } from '@/lib/billing/gate'
+import { metaPageChannel } from '@/lib/meta/page-token'
 
 const ACCOUNT_COLS = 'id, tenant_id, ai_employee_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, history_id, status, created_at'
 
@@ -97,10 +98,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     } else if (channel === 'instagram' || channel === 'facebook') {
       // The Meta recipient id is stored in the contact phone field.
-      const { data: ch } = await service
-        .from('channels').select('credentials')
-        .eq('tenant_id', conv.tenant_id).eq('type', channel).limit(1).maybeSingle()
-      const token = (ch?.credentials as Record<string, string>)?.access_token || process.env.META_PAGE_ACCESS_TOKEN || ''
+      // No platform-token fallback, and the channel must be connected — see lib/meta/page-token.
+      const page = await metaPageChannel(service, { tenantId: conv.tenant_id, type: channel, agentId: conv.ai_employee_id })
+      const token = page?.token ?? ''
       if (contactPhone && token) {
         const res = await fetch('https://graph.facebook.com/v21.0/me/messages', {
           method: 'POST',
@@ -109,8 +109,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         })
         if (res.ok) delivered = true
         else note = `${channel} send failed: ${res.status} ${(await res.text()).slice(0, 200)}`
+      } else if (!contactPhone) {
+        note = 'No Instagram/Facebook recipient on file — saved to the thread but not delivered.'
       } else {
-        note = 'Missing recipient or access token — saved to the thread but not delivered.'
+        // Named precisely, because "missing token" and "channel disconnected" send the owner to two
+        // different places and the old message covered both.
+        note = `This ${channel} page is not connected — reconnect it to reply. Saved to the thread but not delivered.`
       }
     } else if (channel === 'email') {
       if (!contactEmail) {

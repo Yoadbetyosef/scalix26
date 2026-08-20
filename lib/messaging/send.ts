@@ -3,6 +3,7 @@ import { sendSMS } from '@/lib/twilio/client'
 import { sendEmailReply } from '@/lib/email/send'
 import { getProvider } from '@/lib/mailbox'
 import { getValidAccount, type AccountRow } from '@/lib/mailbox/account'
+import { metaPageChannel } from '@/lib/meta/page-token'
 
 const ACCOUNT_COLS = 'id, tenant_id, ai_employee_id, provider, email_address, access_token, refresh_token, token_expiry, scopes, history_id, status, created_at'
 
@@ -40,9 +41,11 @@ export async function deliverToConversation(tenantId: string, conversationId: st
       const res = await sendSMS(`whatsapp:${contactPhone}`, text, ch?.twilio_number ? `whatsapp:${ch.twilio_number}` : undefined)
       externalId = (res as { sid?: string })?.sid
     } else if (channel === 'instagram' || channel === 'facebook') {
-      const { data: ch } = await db.from('channels').select('credentials').eq('tenant_id', tenantId).eq('type', channel).limit(1).maybeSingle()
-      const token = (ch?.credentials as Record<string, string>)?.access_token || process.env.META_PAGE_ACCESS_TOKEN || ''
-      if (!contactPhone || !token) return { delivered: false, error: `${channel} is not fully connected (missing recipient or access token).` }
+      // No platform-token fallback, and the channel must be connected — see lib/meta/page-token.
+      const page = await metaPageChannel(db, { tenantId, type: channel, agentId: conv.ai_employee_id })
+      const token = page?.token ?? ''
+      if (!contactPhone) return { delivered: false, error: `No ${channel} recipient on file for this customer.` }
+      if (!token) return { delivered: false, error: `This ${channel} page is not connected — reconnect it to reply.` }
       const res = await fetch('https://graph.facebook.com/v21.0/me/messages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         // HUMAN_AGENT tag: a human (the owner) is replying — extends the standard 24h window to
