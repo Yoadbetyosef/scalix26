@@ -5,8 +5,14 @@ import type { ReactNode } from 'react'
 // BUILT IN MARKUP, NOT AS A BACKGROUND IMAGE. A raster header is soft the moment it is printed, it
 // carries its own idea of the page size, and it appears exactly once — so a document that runs to a
 // second page loses its letterhead on every page but the first. These bands are boxes and type, so
-// they are sharp at any DPI and, under @media print, they repeat on every sheet: the @page margins
-// below reserve the space and the bands are fixed into it.
+// they are sharp at any DPI and they repeat on every sheet.
+//
+// A TABLE, AND NOT AN ARBITRARY ONE. Repeating a printed header is the one job thead was invented for,
+// and browsers have done it for twenty years. The obvious modern answer — position:fixed bands dropped
+// into reserved @page margins — was tried first and measured: Chrome printed the header on pages one
+// and two of a three-page quote and not on the third, and doubled the footer on two of them. thead and
+// tfoot were then measured the same way and put both bands on every sheet. The wrapper is a table
+// because that is what makes the letterhead true on page ten; the document inside it is untouched.
 //
 // The only artwork is the diamond glyph in the footer, and even that is drawn as an SVG path rather
 // than shipped as a file.
@@ -84,7 +90,7 @@ const PhoneIcon = () => (
 // A brilliant cut seen face on: girdle, table, and the four crown facets that make it read as a stone
 // rather than a lozenge.
 const DiamondGlyph = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" aria-hidden className="shrink-0">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" aria-hidden className="shrink-0">
     <path d="M12 21 2.5 9.2 6.2 4h11.6l3.7 5.2z" />
     <path d="M2.5 9.2h19" />
     <path d="M6.2 4 8.6 9.2 12 21 15.4 9.2 17.8 4" />
@@ -98,7 +104,8 @@ export function Letterhead({ data, children }: { data: LetterheadData; children:
   const hairline = `rgba(${rgbOf(color)}, 0.22)`
   // printColorAdjust, or the browser's print default of dropping backgrounds sends her letterhead out
   // as two empty rectangles.
-  const band = { background: color, WebkitPrintColorAdjust: 'exact' as const, printColorAdjust: 'exact' as const }
+  const ink = { WebkitPrintColorAdjust: 'exact' as const, printColorAdjust: 'exact' as const }
+  const band = { background: color, ...ink }
 
   const contacts: Array<{ icon: ReactNode; text: string }> = []
   if (data.website) contacts.push({ icon: <GlobeIcon />, text: letterheadWebsite(data.website) })
@@ -107,61 +114,70 @@ export function Letterhead({ data, children }: { data: LetterheadData; children:
   if (data.phone) contacts.push({ icon: <PhoneIcon />, text: letterheadPhone(data.phone) })
 
   return (
-    <div className="lh-paper mx-auto max-w-3xl" style={{ background: PAPER, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+    <table className="lh-paper mx-auto w-full max-w-3xl border-separate" style={{ background: PAPER, borderSpacing: 0, ...ink }}>
       <style>{`
-        @page { size: letter; margin: ${HEADER_IN}in ${PAGE_SIDE_IN}in ${FOOTER_IN}in; }
+        /* On screen the bands hold the artwork's proportions at whatever width the document is shown
+           at; on paper they are the measurement itself. Set here rather than inline because an inline
+           aspect-ratio would outrank the print rule that has to replace it. */
+        .lh-band-inner-head { aspect-ratio: 8.5 / ${HEADER_IN}; }
+        .lh-band-inner-foot { aspect-ratio: 8.5 / ${FOOTER_IN}; }
+        /* No page margin: the bands run to the paper's edge, and the body cell carries the inset
+           instead — a margin would leave a white frame around a letterhead that is meant to bleed. */
+        @page { size: letter; margin: 0; }
         @media print {
-          /* Out of the flow and into the margins the @page rule just reserved, which is what makes the
-             bands appear on the second sheet and the tenth as well as the first. The negative offsets
-             are the margins themselves: fixed elements are laid out against the page area, and the
-             letterhead has to bleed past it to the paper edge. */
-          .lh-paper { max-width: none; margin: 0; }
-          .lh-band { position: fixed; height: auto; aspect-ratio: auto;
-                     left: -${PAGE_SIDE_IN}in; right: -${PAGE_SIDE_IN}in; }
-          .lh-band-head { top: -${HEADER_IN}in; height: ${HEADER_IN}in; }
-          .lh-band-foot { bottom: -${FOOTER_IN}in; height: ${FOOTER_IN}in; }
-          .lh-rule { display: none; }
+          .lh-paper { max-width: none; width: 100%; margin: 0; }
+          .lh-band-inner-head { aspect-ratio: auto; height: ${HEADER_IN}in; }
+          .lh-band-inner-foot { aspect-ratio: auto; height: ${FOOTER_IN}in; }
+          .lh-body { padding-left: ${PAGE_SIDE_IN}in; padding-right: ${PAGE_SIDE_IN}in; }
         }
       `}</style>
 
-      <header className="lh-band lh-band-head flex flex-col items-center justify-center gap-4 text-white" style={{ ...band, aspectRatio: `8.5 / ${HEADER_IN}` }}>
-        <div className="text-[2.05rem] font-light uppercase leading-none" style={{ letterSpacing: '0.3em', textIndent: '0.3em' }}>
-          {data.businessName}
-        </div>
-        {contacts.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center">
-            {contacts.map((c, i) => (
-              <span key={i} className="flex items-center">
-                {/* The thin vertical rules from the artwork — between the items, never on the ends. */}
-                {i > 0 && <span aria-hidden className="mx-3 inline-block h-3 w-px bg-white/35" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />}
-                <span className="flex items-center gap-1.5 whitespace-nowrap text-[0.6rem] uppercase" style={{ letterSpacing: '0.14em' }}>
-                  {c.icon}{c.text}
-                </span>
-              </span>
-            ))}
+      {/* thead, so it prints again at the top of every sheet. */}
+      <thead>
+        <tr><td className="p-0">
+          <div className="lh-band-inner-head flex flex-col items-center justify-center gap-4 text-white" style={band}>
+            <div className="text-[2.05rem] font-light uppercase leading-none" style={{ letterSpacing: '0.3em', textIndent: '0.3em' }}>
+              {data.businessName}
+            </div>
+            {contacts.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center">
+                {contacts.map((c, i) => (
+                  <span key={i} className="flex items-center">
+                    {/* The thin vertical rules from the artwork — between the items, never on the ends. */}
+                    {i > 0 && <span aria-hidden className="mx-3 inline-block h-3 w-px bg-white/35" style={ink} />}
+                    <span className="flex items-center gap-1.5 whitespace-nowrap text-[0.6rem] uppercase" style={{ letterSpacing: '0.14em' }}>
+                      {c.icon}{c.text}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </header>
+          {/* The hairline directly under the header, and its twin above the footer. */}
+          <div className="h-px w-full" style={{ background: hairline, ...ink }} />
+        </td></tr>
+      </thead>
 
-      {/* Hairline directly under the header and directly above the footer. Print drops them: on paper
-          the bands sit in the page margins and these would rule across the middle of the text. */}
-      <div className="lh-rule h-px w-full" style={{ background: hairline, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
+      <tbody>
+        <tr><td className="lh-body p-0 align-top">{children}</td></tr>
+      </tbody>
 
-      {children}
-
-      <div className="lh-rule h-px w-full" style={{ background: hairline, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
-
-      <footer className="lh-band lh-band-foot flex items-center justify-center text-white" style={{ ...band, aspectRatio: `8.5 / ${FOOTER_IN}` }}>
-        <div className="flex items-center gap-3">
-          <DiamondGlyph />
-          <span aria-hidden className="inline-block h-px w-8 bg-white/40" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
-          {data.tagline && (
-            <span className="whitespace-nowrap text-[0.62rem] uppercase" style={{ letterSpacing: '0.22em' }}>{data.tagline}</span>
-          )}
-          <span aria-hidden className="inline-block h-px w-8 bg-white/40" style={{ WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />
-          <DiamondGlyph />
-        </div>
-      </footer>
-    </div>
+      <tfoot>
+        <tr><td className="p-0">
+          <div className="h-px w-full" style={{ background: hairline, ...ink }} />
+          <div className="lh-band-inner-foot flex items-center justify-center text-white" style={band}>
+            <div className="flex items-center gap-3">
+              <DiamondGlyph />
+              <span aria-hidden className="inline-block h-px w-8 bg-white/40" style={ink} />
+              {data.tagline && (
+                <span className="whitespace-nowrap text-[0.62rem] uppercase" style={{ letterSpacing: '0.22em' }}>{data.tagline}</span>
+              )}
+              <span aria-hidden className="inline-block h-px w-8 bg-white/40" style={ink} />
+              <DiamondGlyph />
+            </div>
+          </div>
+        </td></tr>
+      </tfoot>
+    </table>
   )
 }

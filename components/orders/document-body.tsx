@@ -67,7 +67,9 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
       {/* Above the paper, not on it. The toolbar is the app's, not the document's. */}
       {toolbar && <div className="mx-auto mb-6 flex max-w-3xl items-center justify-end gap-2 px-6 pt-10 print:hidden">{toolbar}</div>}
       <Letterhead data={letterhead}>
-        <main className={`mx-auto min-h-screen max-w-3xl px-6 py-10 text-neutral-900 print:py-4 ${letterhead.enabled ? 'print:px-0' : 'bg-white'}`}>
+        {/* min-h-screen fills the window on an unbranded document. Under a letterhead it would push the
+            footer band a whole viewport below a short quote, so the paper ends where the document does. */}
+        <main className={`mx-auto max-w-3xl px-6 py-10 text-neutral-900 print:py-4 ${letterhead.enabled ? 'print:px-0' : 'min-h-screen bg-white'}`}>
 
           {/* printColorAdjust so the brand bar survives the browser's print default of dropping backgrounds.
               Suppressed under a letterhead: the plum band above IS the brand bar, and two of them is one. */}

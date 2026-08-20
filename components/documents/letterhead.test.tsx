@@ -60,12 +60,24 @@ describe('the letterhead frame', () => {
     expect(html()).toContain('print-color-adjust:exact')
   })
 
-  // A raster header appears once. These bands are fixed into the @page margins, which is what puts
-  // them on the second sheet and the tenth as well as the first.
-  it('reserves the page margins so the bands repeat on every sheet', () => {
+  // A raster header appears once. thead and tfoot are what put these bands on the second sheet and the
+  // tenth as well as the first — verified against a printed three-page PDF, where the position:fixed
+  // version this replaced lost its header on page three.
+  it('puts the bands in thead and tfoot, which is what makes them repeat', () => {
     const out = html()
-    expect(out).toContain('@page { size: letter; margin: 2.31in 0.6in 1.21in; }')
-    expect(out).toContain('position: fixed')
+    expect(out).toMatch(/<thead>[\s\S]*TG JEWELLERS[\s\S]*<\/thead>/)
+    expect(out).toMatch(/<tfoot>[\s\S]*Custom rings[\s\S]*<\/tfoot>/)
+    // The body sits between them, so it paginates and they repeat around it.
+    expect(out).toMatch(/<tbody>[\s\S]*<p>THE BODY<\/p>[\s\S]*<\/tbody>/)
+  })
+
+  it('prints the bands to the paper edge at the artwork\'s proportions', () => {
+    const out = html()
+    expect(out).toContain('@page { size: letter; margin: 0; }')
+    expect(out).toContain('aspect-ratio: 8.5 / 2.31')   // header — 21% of an 11in page
+    expect(out).toContain('aspect-ratio: 8.5 / 1.21')   // footer — 11%
+    expect(out).toContain('height: 2.31in')
+    expect(out).toContain('height: 1.21in')
   })
 
   it('drops a contact she has not given rather than printing an empty slot', () => {
