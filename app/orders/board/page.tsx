@@ -2,13 +2,18 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders } from '@/lib/orders/store'
-import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, type OrderStage } from '@/lib/orders/stages'
+import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, isTerminalStage, type OrderStage } from '@/lib/orders/stages'
+import { stageColor, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-colors'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 
 // Kanban view. Columns are the workflow stages; approval columns are marked (their cards move only via the
 // order's workflow actions, not free drag). Cards link to the order for actions.
+//
+// Each column carries its own hue (lib/orders/stage-colors) — a rule across the top and a tinted header —
+// so thirteen stages are told apart at a glance instead of reading as one wall. The column bodies stay
+// neutral so the cards, not the chrome, are what you look at.
 export default async function OrdersBoardPage() {
   const a = await requireOrdersAccess()
   if (!a) notFound()
@@ -27,24 +32,32 @@ export default async function OrdersBoardPage() {
       <div className="flex gap-3 overflow-x-auto pb-4">
         {/* Terminal stages get no column — a board column that only ever accumulates is a list, not a
             stage of work. 'finished' joins 'cancelled' here; both are still on /orders. */}
-        {ORDER_STAGES.filter((s) => s !== 'cancelled' && s !== 'finished').map((s) => (
-          <div key={s} className="w-64 shrink-0 rounded-xl border border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between border-b border-gray-200 px-3 py-2">
-              <span className="text-xs font-semibold text-gray-700">{STAGE_LABELS[s]}</span>
-              <span className="flex items-center gap-1 text-[10px] text-gray-400">{byStage(s).length}{isProtectedStage(s) && <span title="Approval stage — moves via workflow actions only">🔒</span>}</span>
+        {ORDER_STAGES.filter((s) => s !== 'cancelled' && s !== 'finished').map((s) => {
+          const c = stageColor(s)
+          return (
+            <div key={s} className={`${STAGE_COLUMN_WIDTH} shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50`}>
+              <div className="h-[3px]" style={{ background: c.bar }} />
+              <div className="flex items-center justify-between gap-2 border-b px-3 py-2" style={{ background: c.bg, borderColor: c.border }}>
+                {/* nowrap, because the column is sized to the longest label and a wrapped header would
+                    mean that measurement was wrong rather than that the name was too long. */}
+                <span className="whitespace-nowrap text-xs font-semibold" style={{ color: c.text }}>{STAGE_LABELS[s]}</span>
+                <span className="flex shrink-0 items-center gap-1 text-[10px]" style={{ color: c.text, opacity: isTerminalStage(s) ? 0.65 : 0.75 }}>
+                  {byStage(s).length}{isProtectedStage(s) && <span title="Approval stage — moves via workflow actions only">🔒</span>}
+                </span>
+              </div>
+              <div className="space-y-2 p-2">
+                {byStage(s).map((o) => (
+                  <Link key={o.id} href={`/orders/${o.id}`} className="block rounded-lg border border-gray-200 bg-white p-2.5 hover:border-gray-300">
+                    <div className="font-mono text-[11px] text-gray-500">{o.orderNumber}</div>
+                    <div className="text-sm font-medium text-gray-900">{o.customerName ?? 'No customer'}</div>
+                    <div className="mt-0.5 text-xs text-gray-500">{money(o.subtotalCents)}{o.factoryName ? ` · ${o.factoryName}` : ''}</div>
+                  </Link>
+                ))}
+                {byStage(s).length === 0 && <div className="px-1 py-2 text-[11px] text-gray-400">—</div>}
+              </div>
             </div>
-            <div className="space-y-2 p-2">
-              {byStage(s).map((o) => (
-                <Link key={o.id} href={`/orders/${o.id}`} className="block rounded-lg border border-gray-200 bg-white p-2.5 hover:border-gray-300">
-                  <div className="font-mono text-[11px] text-gray-500">{o.orderNumber}</div>
-                  <div className="text-sm font-medium text-gray-900">{o.customerName ?? 'No customer'}</div>
-                  <div className="mt-0.5 text-xs text-gray-500">{money(o.subtotalCents)}{o.factoryName ? ` · ${o.factoryName}` : ''}</div>
-                </Link>
-              ))}
-              {byStage(s).length === 0 && <div className="px-1 py-2 text-[11px] text-gray-400">—</div>}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
