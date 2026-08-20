@@ -37,6 +37,7 @@ const order = (over: Partial<OrderWithDetails> = {}): OrderWithDetails => ({
   ...over,
 })
 
+const NO_LETTERHEAD = { enabled: false, tagline: null, email: null, instagram: null }
 const IMAGES = [{ id: 'a1', url: 'https://storage.example/signed/ring.webp?token=abc', fileName: 'ring.webp' }]
 const TAX = taxOn(600_000, rateFor('ON', CA_RATES_FALLBACK))
 
@@ -45,7 +46,7 @@ const render = (over: Partial<Parameters<typeof OrderDocumentBody>[0]> = {}) =>
     <OrderDocumentBody
       order={order()}
       type="quote"
-      branding={{ logoUrl: null, accent: null, terms: null, validityDays: 30 }}
+      branding={{ logoUrl: null, accent: null, terms: null, validityDays: 30, letterhead: NO_LETTERHEAD }}
       business={{ businessName: 'TG jewellers', email: null, phone: null, website: null, address: null, city: null, state: null, zip: null }}
       images={IMAGES}
       tax={TAX}
@@ -106,7 +107,7 @@ describe('parity: the same props render the same document', () => {
     const owner = render({ toolbar: <button>Send to customer</button> })
     const customer = render({ toolbar: <button>Print</button> })
     // [\s\S] rather than the /s flag: /s needs an es2018 target and tsc rejects it here.
-    const strip = (h: string) => h.replace(/<div class="mb-6 flex items-center justify-end gap-2 print:hidden">[\s\S]*?<\/div>/, '')
+    const strip = (h: string) => h.replace(/<div class="[^"]*print:hidden">[\s\S]*?<\/div>/, '')
     expect(strip(owner)).toBe(strip(customer))
   })
 

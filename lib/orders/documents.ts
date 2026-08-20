@@ -22,7 +22,11 @@ export const ORDER_DOC_META: Record<OrderDocType, { title: string; blurb: string
   invoice: { title: 'Invoice', blurb: 'Amount due for the piece(s) described below.' },
 }
 
-export interface DocBranding { logoUrl: string | null; accent: string | null; terms: string | null; validityDays: number }
+export interface DocBranding {
+  logoUrl: string | null; accent: string | null; terms: string | null; validityDays: number
+  /** The printed bands. Off unless the tenant has set a letterhead up — see components/documents/letterhead. */
+  letterhead: { enabled: boolean; tagline: string | null; email: string | null; instagram: string | null }
+}
 export interface DocBusiness {
   businessName: string | null; email: string | null; phone: string | null; website: string | null
   address: string | null; city: string | null; state: string | null; zip: string | null
@@ -33,7 +37,10 @@ export interface DocBusiness {
 export async function loadDocContext(tenantId: string): Promise<{ branding: DocBranding; business: DocBusiness }> {
   const db = createAdminClient()
   const [{ data: s }, { data: t }] = await Promise.all([
-    db.from('studio_doc_settings').select('logo_url, accent_color, terms, validity_days').eq('tenant_id', tenantId).maybeSingle(),
+    // '*' rather than a named list: the letterhead columns arrived after this code shipped, and a
+    // named select for a column that is not there yet fails the whole row rather than one field. The
+    // document renders unbranded on an unmigrated database instead of 500ing.
+    db.from('studio_doc_settings').select('*').eq('tenant_id', tenantId).maybeSingle(),
     db.from('tenants').select('business_name, email, phone, website, address, city, state, zip').eq('id', tenantId).maybeSingle(),
   ])
   return {
@@ -42,6 +49,14 @@ export async function loadDocContext(tenantId: string): Promise<{ branding: DocB
       accent: hexColor(s?.accent_color),
       terms: (s?.terms as string) ?? null,
       validityDays: Number(s?.validity_days ?? 30) || 30,
+      letterhead: {
+        enabled: s?.letterhead_enabled === true,
+        tagline: (s?.letterhead_tagline as string) ?? null,
+        // Her stationery address, falling back to the account's — a shop signs documents sales@,
+        // not from the owner's own inbox, but a tenant who has not said so gets the one we know.
+        email: (s?.letterhead_email as string) ?? (t?.email as string) ?? null,
+        instagram: (s?.instagram_handle as string) ?? null,
+      },
     },
     business: {
       businessName: (t?.business_name as string) ?? null, email: (t?.email as string) ?? null,

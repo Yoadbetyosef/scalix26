@@ -110,6 +110,9 @@ export function applyTemplate(
       accent: t.accentColor ?? branding.accent,
       terms: t.terms ?? branding.terms,
       validityDays: t.validityDays ?? branding.validityDays,
+      // A template restyles the document. It does not restyle the shop: the letterhead is the
+      // tenant's stationery and carries through whichever template is applied.
+      letterhead: branding.letterhead,
     },
     business: {
       businessName: t.companyName ?? business.businessName,

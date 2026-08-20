@@ -35,6 +35,12 @@ export function DocSettingsModal({
   const [accent, setAccent] = useState<string | null>(null)
   const [terms, setTerms] = useState('')
   const [days, setDays] = useState('30')
+  // The printed letterhead. Off until she turns it on, because an unbranded document is a fine
+  // document and a half-filled band is not.
+  const [lhOn, setLhOn] = useState(false)
+  const [lhTagline, setLhTagline] = useState('')
+  const [lhEmail, setLhEmail] = useState('')
+  const [instagram, setInstagram] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -47,6 +53,8 @@ export function DocSettingsModal({
       const s = d.settings || {}
       setLogo(s.logo_url || ''); setAccent(s.accent_color || null)
       setTerms(s.terms || ''); setDays(String(s.validity_days || 30))
+      setLhOn(s.letterhead_enabled === true); setLhTagline(s.letterhead_tagline || '')
+      setLhEmail(s.letterhead_email || ''); setInstagram(s.instagram_handle || '')
     }).finally(() => setLoaded(true))
   }, [settingsEndpoint])
 
@@ -72,7 +80,11 @@ export function DocSettingsModal({
     try {
       const res = await fetch(settingsEndpoint, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logo_url: logo, accent_color: accent, terms, validity_days: Number(days) || 30 }),
+        body: JSON.stringify({
+          logo_url: logo, accent_color: accent, terms, validity_days: Number(days) || 30,
+          letterhead_enabled: lhOn, letterhead_tagline: lhTagline, letterhead_email: lhEmail,
+          instagram_handle: instagram,
+        }),
       })
       if (!res.ok) throw new Error((await res.json()).error || 'Failed')
       onSaved?.(); onClose()
@@ -138,6 +150,37 @@ export function DocSettingsModal({
                   Custom
                 </label>
               </div>
+            </div>
+
+            <div className="rounded-lg border border-hairline-strong p-3">
+              <label className="flex cursor-pointer items-start gap-2.5">
+                <input type="checkbox" checked={lhOn} onChange={(e) => setLhOn(e.target.checked)} className="mt-0.5 h-4 w-4 accent-ink" />
+                <span>
+                  <span className="block text-sm font-medium text-ink">Print on your letterhead</span>
+                  <span className="block text-xs text-subtle">
+                    A band in your document colour across the top and bottom of every page — your name, your
+                    contact row, your tagline. Your website and phone come from Settings, so changing them
+                    there changes them here.
+                  </span>
+                </span>
+              </label>
+              {lhOn && (
+                <div className="mt-3 space-y-3 border-t border-hairline pt-3">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Footer tagline</span>
+                    <input className={input} value={lhTagline} onChange={(e) => setLhTagline(e.target.value)} placeholder="e.g. Custom rings &amp; fine jewellery" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Instagram</span>
+                    <input className={input} value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="e.g. tgjewellers" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Email shown on documents</span>
+                    <input className={input} type="email" value={lhEmail} onChange={(e) => setLhEmail(e.target.value)} placeholder="e.g. sales@yourbusiness.com" />
+                    <span className="mt-1 block text-xs text-subtle">Leave empty to use your account email.</span>
+                  </label>
+                </div>
+              )}
             </div>
 
             <label className="block">
