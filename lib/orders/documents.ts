@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { hexColor } from '@/lib/studio/types'
+import { letterheadContextOf, readLetterheadProfiles } from '@/lib/documents/doc-settings'
+import type { LetterheadContext } from '@/lib/documents/letterhead-resolve'
 import type { OrderLineItem, OrderWithDetails } from './types'
 
 // Estimates and Quotes generated from an order. Both are printed to PDF in the browser (the same route
@@ -24,8 +26,13 @@ export const ORDER_DOC_META: Record<OrderDocType, { title: string; blurb: string
 
 export interface DocBranding {
   logoUrl: string | null; accent: string | null; terms: string | null; validityDays: number
-  /** The printed bands. Off unless the tenant has set a letterhead up — see components/documents/letterhead. */
-  letterhead: { enabled: boolean; tagline: string | null; email: string | null; instagram: string | null }
+  /**
+   * Her stationery: the switch, which of the two designs is her default, the strip, and each design's
+   * own contact set. Deliberately NOT resolved down to one letterhead here — which design a given
+   * document goes out on depends on the ORDER, and this loader is per tenant. The body resolves it,
+   * with lib/documents/letterhead-resolve.
+   */
+  letterhead: LetterheadContext
 }
 export interface DocBusiness {
   businessName: string | null; email: string | null; phone: string | null; website: string | null
@@ -36,12 +43,15 @@ export interface DocBusiness {
 // up everywhere. Falls back to an unbranded but complete document.
 export async function loadDocContext(tenantId: string): Promise<{ branding: DocBranding; business: DocBusiness }> {
   const db = createAdminClient()
-  const [{ data: s }, { data: t }] = await Promise.all([
+  const [{ data: s }, { data: t }, profiles] = await Promise.all([
     // '*' rather than a named list: the letterhead columns arrived after this code shipped, and a
     // named select for a column that is not there yet fails the whole row rather than one field. The
     // document renders unbranded on an unmigrated database instead of 500ing.
     db.from('studio_doc_settings').select('*').eq('tenant_id', tenantId).maybeSingle(),
     db.from('tenants').select('business_name, email, phone, website, address, city, state, zip').eq('id', tenantId).maybeSingle(),
+    // Empty on a database where add_letterhead_designs.sql has not been run — the same defence, one
+    // table further out.
+    readLetterheadProfiles(tenantId),
   ])
   return {
     branding: {
@@ -49,14 +59,10 @@ export async function loadDocContext(tenantId: string): Promise<{ branding: DocB
       accent: hexColor(s?.accent_color),
       terms: (s?.terms as string) ?? null,
       validityDays: Number(s?.validity_days ?? 30) || 30,
-      letterhead: {
-        enabled: s?.letterhead_enabled === true,
-        tagline: (s?.letterhead_tagline as string) ?? null,
-        // Her stationery address, falling back to the account's — a shop signs documents sales@,
-        // not from the owner's own inbox, but a tenant who has not said so gets the one we know.
-        email: (s?.letterhead_email as string) ?? (t?.email as string) ?? null,
-        instagram: (s?.instagram_handle as string) ?? null,
-      },
+      // Her stationery address falls back to the account's at RESOLVE time, not here — a shop signs
+      // documents sales@, not from the owner's own inbox, but a tenant who has not said so gets the
+      // one we know, and the second design may say something different again.
+      letterhead: letterheadContextOf(s as Record<string, unknown> | null, profiles),
     },
     business: {
       businessName: (t?.business_name as string) ?? null, email: (t?.email as string) ?? null,

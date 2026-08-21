@@ -39,6 +39,15 @@ export interface Order {
   /** The ONE attachment printed on the invoice. Null = no image, which beats the wrong image. */
   invoiceImageId?: string | null
   documentTemplateId?: string | null
+  /**
+   * WHICH LETTERHEAD this order's documents print on — 'band' or 'rule'. Null means her default from
+   * Branding, so changing the default moves every order that never said otherwise.
+   *
+   * Per ORDER and not per document type on purpose: an estimate and the invoice that follows it are
+   * the same business quoting the same customer for the same piece, and stationery that changed
+   * between them would read as two companies.
+   */
+  letterheadStyle?: string | null
   invoicedAt?: string | null
   archivedAt?: string | null
 
@@ -79,6 +88,7 @@ export interface LineItemInput extends Partial<JewelrySpec> {
 }
 export interface OrderInput {
   deliveryProvince?: string | null
+  letterheadStyle?: string | null
   /** An id from TAX_CHOICES. The server resolves province, label and rate from it — never the client. */
   taxChoiceId?: string | null
   invoiceImageId?: string | null

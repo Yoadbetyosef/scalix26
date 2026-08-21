@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOrdersAccess } from '@/lib/orders/guard'
-import { readDocSettings, writeDocSettings } from '@/lib/documents/doc-settings'
+import { readDocBranding, writeDocBranding } from '@/lib/documents/doc-settings'
 
 // Document branding (logo, colour, letterhead, terms, quote validity) for Estimates, Quotes and
 // Invoices generated from orders.
@@ -13,7 +13,7 @@ import { readDocSettings, writeDocSettings } from '@/lib/documents/doc-settings'
 export async function GET() {
   const a = await requireOrdersAccess()
   if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ settings: await readDocSettings(a.tenantId) })
+  return NextResponse.json(await readDocBranding(a.tenantId))
 }
 
 export async function PUT(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function PUT(req: NextRequest) {
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
 
-  const { data, error } = await writeDocSettings(a.tenantId, body)
+  const { data, error } = await writeDocBranding(a.tenantId, body)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ settings: data })
 }

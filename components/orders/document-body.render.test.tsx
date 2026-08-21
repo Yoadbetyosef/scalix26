@@ -37,7 +37,10 @@ const order = (over: Partial<OrderWithDetails> = {}): OrderWithDetails => ({
   ...over,
 })
 
-const NO_LETTERHEAD = { enabled: false, tagline: null, email: null, instagram: null }
+const NO_LETTERHEAD = {
+  enabled: false, defaultStyle: 'band' as const, stripUrl: null,
+  tagline: null, email: null, instagram: null, profiles: {},
+}
 const IMAGES = [{ id: 'a1', url: 'https://storage.example/signed/ring.webp?token=abc', fileName: 'ring.webp' }]
 const TAX = taxOn(600_000, rateFor('ON', CA_RATES_FALLBACK))
 

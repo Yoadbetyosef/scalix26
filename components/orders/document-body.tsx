@@ -4,6 +4,7 @@ import { taxLabel, type TaxLine } from '@/lib/tax/canada'
 import type { DocumentImage } from '@/lib/orders/attachments'
 import type { OrderWithDetails } from '@/lib/orders/types'
 import { Letterhead } from '@/components/documents/letterhead'
+import { letterheadStyleFor, resolveLetterhead } from '@/lib/documents/letterhead-resolve'
 
 // ONE document body, two entry points.
 //
@@ -53,14 +54,13 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
   // The letterhead is a FRAME. Nothing below this line knows it is there: the body renders exactly the
   // layout it rendered before, and Letterhead puts the bands around it (and returns the body untouched
   // for every tenant who has not set one up).
+  //
+  // WHICH letterhead is decided here rather than in the loader, because it is a fact about the ORDER —
+  // her default from Branding unless this order says otherwise. Both copies of the document read it
+  // from the same order row, so the customer's copy can never come out on different stationery from
+  // the one the owner printed.
   const lh = branding.letterhead
-  const letterhead = {
-    enabled: lh.enabled && Boolean(accent),
-    color: accent ?? '#000000',
-    businessName: business.businessName ?? '',
-    website: business.website, instagram: lh.instagram, email: lh.email, phone: business.phone,
-    tagline: lh.tagline,
-  }
+  const letterhead = resolveLetterhead(lh, letterheadStyleFor(o.letterheadStyle, lh), business, accent)
 
   return (
     <>

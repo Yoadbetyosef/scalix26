@@ -47,6 +47,10 @@ const orderFields = {
   invoiceImageId: z.string().uuid().nullable().optional(),
   // Which company's letterhead this order's documents use. Null = the tenant's default.
   documentTemplateId: z.string().uuid().nullable().optional(),
+  // Which of the two letterhead DESIGNS. Not an enum on the wire even though it is one in the code:
+  // asLetterheadStyle folds anything unrecognised back to the original design at render time, and a
+  // 400 on a value we can draw around would be a document page that refuses to save.
+  letterheadStyle: z.string().max(16).nullable().optional(),
   lineItems: z.array(lineItemSchema).max(200).optional(),
 }
 

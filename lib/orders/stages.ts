@@ -73,7 +73,7 @@ export const canEditDocumentFacts = (s: OrderStage): boolean => s !== 'cancelled
  * `taxChoiceId` carries the destination province with it: the server resolves province, kind, label
  * and rate from the one id, so there is no separate delivery-province field to keep open.
  */
-export const DOCUMENT_FACT_FIELDS = ['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId'] as const
+export const DOCUMENT_FACT_FIELDS = ['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId', 'letterheadStyle'] as const
 
 /**
  * Which of the offered keys this stage refuses. Pure, so the decision is testable rather than

@@ -5,6 +5,9 @@ import { isOrderDocType, loadDocContext } from '@/lib/orders/documents'
 import { PrintButton } from '@/components/studio/print-button'
 import { DocumentBranding } from '@/components/orders/document-branding'
 import { SendDocument } from '@/components/orders/send-document'
+import { LetterheadChoice } from '@/components/orders/letterhead-choice'
+import { LETTERHEAD_STYLES } from '@/lib/documents/letterhead-styles'
+import { letterheadName } from '@/lib/documents/letterhead-resolve'
 import { OrderDocumentBody } from '@/components/orders/document-body'
 import { loadOrderDocument } from '@/lib/orders/document-data'
 
@@ -40,6 +43,17 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
   const data = await loadOrderDocument(a.tenantId, id, type)
   if (!data) notFound()
 
+  const lh = data.branding.letterhead
+  const letterheadOptions = lh.enabled
+    ? LETTERHEAD_STYLES
+        .filter((style) => style === lh.defaultStyle || lh.profiles[style])
+        .map((style) => ({
+          style,
+          label: letterheadName(lh, style, data.business.businessName),
+          isDefault: style === lh.defaultStyle,
+        }))
+    : []
+
   return (
     <OrderDocumentBody
       order={data.order}
@@ -61,6 +75,13 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
             </span>
           )}
           {data.templateName && <span className="mr-1 text-xs text-neutral-400">{data.templateName}</span>}
+          {/* A CHOICE ONLY WHERE THERE IS ONE. A design she has not given an identity to is not a
+              second letterhead — it would print the same business twice under two labels — so the
+              picker offers her default plus whichever designs have a profile, and disappears when
+              that comes to one. Which is also what every tenant but TG sees. */}
+          {letterheadOptions.length > 1 && (
+            <LetterheadChoice orderId={id} value={data.order.letterheadStyle ?? null} options={letterheadOptions} />
+          )}
           <SendDocument
             orderId={id}
             docType={type}

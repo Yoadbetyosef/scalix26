@@ -136,8 +136,11 @@ describe('what a terminal order still accepts', () => {
     expect(canEditDocumentFacts('cancelled')).toBe(false)
   })
 
-  it('the allowed keys are exactly tax and the photo — no price among them', () => {
-    expect([...DOCUMENT_FACT_FIELDS]).toEqual(['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId'])
+  it('the allowed keys are exactly tax, the photo and the stationery — no price among them', () => {
+    // letterheadStyle joined them because it is the same kind of fact: which paper a document that
+    // already exists is printed on. Re-issuing a finished invoice on the right company's letterhead
+    // changes nothing anybody agreed to; re-pricing it does.
+    expect([...DOCUMENT_FACT_FIELDS]).toEqual(['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId', 'letterheadStyle'])
     for (const priced of ['lineItems', 'depositCents', 'currency', 'orderNumber', 'contactId', 'customerName']) {
       expect(DOCUMENT_FACT_FIELDS as readonly string[], priced).not.toContain(priced)
     }
