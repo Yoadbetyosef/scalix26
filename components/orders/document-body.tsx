@@ -75,17 +75,27 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
               Suppressed under a letterhead: the plum band above IS the brand bar, and two of them is one. */}
           {accent && !letterhead.enabled && <div className="mb-6 h-1.5 w-full rounded-full print:mb-4" style={{ background: accent, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }} />}
 
-          <header className="mb-6 flex items-start justify-between gap-4">
-            <div>
-              {/* The wordmark renders ONCE. A logo IS the name; the alt text carries it for anyone who
-                  cannot see the image. */}
-              {branding.logoUrl
-                // eslint-disable-next-line @next/next/no-img-element -- tenant-uploaded logo, not a static asset
-                ? <img src={branding.logoUrl} alt={business.businessName ?? ''} className="mb-2 h-14 w-auto max-w-[200px] object-contain" />
-                : <h1 className="text-2xl font-bold tracking-tight">{business.businessName ?? 'Our business'}</h1>}
-              {addr.map((l, i) => <p key={i} className="text-sm text-neutral-500">{l}</p>)}
-              <p className="text-sm text-neutral-500">{[business.email, business.phone, business.website].filter(Boolean).join(' · ')}</p>
-            </div>
+          {/* ── THE SENDER BLOCK IS THE LETTERHEAD'S JOB, OR THE BODY'S. NEVER BOTH. ──────────────────
+              This printed the TENANT record — name, street, email, phone, website — directly under a
+              header that had already said who the sender was. On the plum design that was one identity
+              stated twice. On T.G. Designs it was two DIFFERENT businesses on one page: the header
+              said T.G. DESIGNS on tg-designs.com, and four lines below it, in larger type, the body
+              said TG jewellers on tgjewellers.com. The wrong name in the bigger font.
+              Under a letterhead the header is the identity, so the body says nothing about who sent
+              it — including the logo, which is the wordmark a second time. */}
+          <header className={`mb-6 flex items-start gap-4 ${letterhead.enabled ? 'justify-end' : 'justify-between'}`}>
+            {!letterhead.enabled && (
+              <div>
+                {/* The wordmark renders ONCE. A logo IS the name; the alt text carries it for anyone who
+                    cannot see the image. */}
+                {branding.logoUrl
+                  // eslint-disable-next-line @next/next/no-img-element -- tenant-uploaded logo, not a static asset
+                  ? <img src={branding.logoUrl} alt={business.businessName ?? ''} className="mb-2 h-14 w-auto max-w-[200px] object-contain" />
+                  : <h1 className="text-2xl font-bold tracking-tight">{business.businessName ?? 'Our business'}</h1>}
+                {addr.map((l, i) => <p key={i} className="text-sm text-neutral-500">{l}</p>)}
+                <p className="text-sm text-neutral-500">{[business.email, business.phone, business.website].filter(Boolean).join(' · ')}</p>
+              </div>
+            )}
             <div className="text-right">
               <p className="text-lg font-semibold uppercase tracking-wide" style={accent ? { color: accent } : undefined}>{meta.title}</p>
               <p className="text-sm text-neutral-500">#{orderDocNumber(type, o.orderNumber)}</p>

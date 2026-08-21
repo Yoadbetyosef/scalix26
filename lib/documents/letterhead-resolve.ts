@@ -7,16 +7,29 @@ import type { LetterheadData } from '@/components/documents/letterhead'
 // reads, and it runs in the browser. Nothing here touches a database; lib/documents/doc-settings.ts
 // does the reading and hands the result in.
 //
-// ── A PROFILE IS AN OVERRIDE WHERE IT HAS A VALUE, AND TRANSPARENT WHERE IT DOES NOT ────────────────
+// ── A PROFILE IS THE WHOLE IDENTITY, OR THERE IS NO PROFILE ─────────────────────────────────────────
 //
-// The same fold document_templates already uses, and for the same reason: a design that only sets a
-// name and a domain still inherits her phone number rather than printing a blank. It is also what lets
-// the original design keep working with NO profile row at all — every field falls through to the
-// tenant record, which is exactly where it came from before a second letterhead existed.
+// This started as the fold document_templates uses — override where you have a value, transparent
+// where you do not — and that was WRONG, in a way that reached a customer.
 //
-// The one thing that never falls through is the NAME. "T.G. Designs" beside "TG Jewellers" is how she
-// tells two pieces of stationery apart in a picker, and inheriting the other one's name would defeat
-// the picker entirely.
+// The T.G. Designs profile leaves `instagram` null, because the artwork prints the marks without
+// usernames. Under a fold, null means "inherit", so the trade letterhead quietly picked up the RETAIL
+// Instagram handle off studio_doc_settings and drew the mark. An Instagram icon on a T.G. Designs page
+// pointing at TG Jewellers is not a blank field; it is a claim about a different company.
+//
+// So: WHEN A STYLE HAS A PROFILE, THAT PROFILE IS THE ONLY SOURCE OF ITS IDENTITY. Null means absent,
+// not inherited. A design she has given its own name, domain and address must not be able to borrow
+// one field from the business next door, and there is no field where borrowing is safe — an address
+// is a place, a phone is a number somebody answers, a social handle is an account.
+//
+// The fold survives in exactly one place, and only because a style with NO profile has no identity of
+// its own to speak of: 'band' falls through to the tenant record, which is where it came from before
+// a second letterhead existed, and that is what keeps it working untouched for every tenant.
+//
+// THE COLOUR IS THE ONE EXCEPTION, deliberately. It still falls back to the document accent even in
+// strict mode, because a hex is not a claim: nobody reads a colour as a business name, and the
+// alternative — a letterhead that switches itself off when she clears the swatch — drops the document
+// back to an unbranded layout printing the OTHER identity, which is the bug this note is about.
 
 export interface LetterheadProfile {
   style: LetterheadStyle
@@ -89,22 +102,30 @@ export function resolveLetterhead(
   const p = ctx.profiles[style]
   const color = clean(p?.accentColor) ?? accent
 
+  // Its own identity, or the tenant's — never a mixture. See the note above; the mixture is what put
+  // one business's Instagram mark on another business's letterhead.
+  const own = <T>(fromProfile: string | null | undefined, fromTenant: T): string | T =>
+    p ? (clean(fromProfile) as string | T) : (clean(fromProfile) ?? fromTenant)
+
   return {
     // No colour, no letterhead. A band drawn in a default black is not her stationery, and the
     // original build made the same call.
     enabled: ctx.enabled && Boolean(color),
     style,
     color: color ?? '#000000',
-    businessName: clean(p?.businessName) ?? business.businessName ?? '',
-    website: clean(p?.website) ?? business.website,
-    email: clean(p?.email) ?? ctx.email ?? business.email,
-    phone: clean(p?.phone) ?? business.phone,
-    instagram: clean(p?.instagram) ?? ctx.instagram,
-    tagline: clean(p?.tagline) ?? ctx.tagline,
-    address: clean(p?.address) ?? oneLineAddress(business),
+    businessName: own(p?.businessName, business.businessName) ?? '',
+    website: own(p?.website, business.website),
+    email: own(p?.email, ctx.email ?? business.email),
+    phone: own(p?.phone, business.phone),
+    instagram: own(p?.instagram, ctx.instagram),
+    tagline: own(p?.tagline, ctx.tagline),
+    address: own(p?.address, oneLineAddress(business)),
+    // Already profile-only before strict mode: the tenant record has nowhere to keep them.
     tollFree: clean(p?.tollFree),
     facebook: clean(p?.facebook),
     youtube: clean(p?.youtube),
+    // The strip is the TENANT's, on purpose, and is the one thing both designs share — she asked for
+    // the same band of photography on each. It carries no name, no number and no address.
     stripUrl: clean(ctx.stripUrl),
   }
 }

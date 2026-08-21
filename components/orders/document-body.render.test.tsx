@@ -119,3 +119,134 @@ describe('parity: the same props render the same document', () => {
     expect(render({ images: [] })).not.toContain('<img')
   })
 })
+
+// ── TWO IDENTITIES MUST NEVER MEET ON ONE PAGE ──────────────────────────────────────────────────────
+//
+// The bug this exists to catch, found on a real estimate rather than by this suite: the header
+// correctly printed T.G. DESIGNS on tg-designs.com, and directly beneath it the BODY printed the
+// tenant record — "TG jewellers", the Granville street address as she typed it, tatiana@tgjewellers.com,
+// 6044468438, https://tgjewellers.com. Two contradictory businesses on one page, with the wrong name
+// in the larger type.
+//
+// There WAS a test asserting the retail domain could not appear on a rule document. It passed, because
+// it only ever looked at the letterhead component's own output. The document is what the customer
+// holds, so the assertion belongs here, and it covers every field rather than the domain alone.
+
+const TENANT = {
+  businessName: 'TG jewellers', email: 'tatiana@tgjewellers.com', phone: '6044468438',
+  website: 'https://tgjewellers.com/', address: '622 736 Granville street ',
+  city: 'vancouver ', state: 'bc', zip: null,
+}
+
+// Exactly the row in the database, read back from it — not the seed the migration wrote, which is a
+// different claim. See the verification in this session.
+const DESIGNS_PROFILE = {
+  style: 'rule' as const, name: 'T.G. Designs', businessName: 'T.G. DESIGNS',
+  website: 'www.tgdiamondsjewellery.com', email: 'info@tg-designs.com', phone: '+1.604.683.5633',
+  address: '#622-736 Granville, Vancouver, BC V6Z 1G3, Canada',
+  tagline: null, instagram: null, facebook: null, youtube: null,
+  tollFree: '+1800 337 0041', accentColor: '#cb0b24',
+}
+
+// What studio_doc_settings holds for her, all of it retail — the fallback that leaked.
+const LETTERHEAD_ON = {
+  enabled: true, stripUrl: '/letterhead/ring-strip.jpg',
+  tagline: 'Custom rings & fine jewellery', email: 'sales@tgjewellers.com', instagram: 'TG Jewellers',
+}
+
+const onDesigns = (over: Partial<Parameters<typeof OrderDocumentBody>[0]> = {}) =>
+  render({
+    branding: {
+      logoUrl: 'https://storage.example/logo.png', accent: '#350f76', terms: null, validityDays: 30,
+      letterhead: { ...LETTERHEAD_ON, defaultStyle: 'rule' as const, profiles: { rule: DESIGNS_PROFILE } },
+    },
+    business: TENANT,
+    ...over,
+  })
+
+describe('a T.G. Designs document is T.G. Designs all the way down', () => {
+  const html = onDesigns()
+
+  // Field by field, and the whole page each time — header, body, footer.
+  const RETAIL: Array<[string, string]> = [
+    ['the business name', 'TG jewellers'],
+    ['the retail domain', 'tgjewellers.com'],
+    ['the retail email', 'tatiana@tgjewellers.com'],
+    ['the stationery email', 'sales@tgjewellers.com'],
+    ['the retail phone', '6044468438'],
+    ['the formatted retail phone', '604.446.8438'],
+    ['the street as she typed it', '622 736 Granville street'],
+    ['the retail Instagram handle', 'TG JEWELLERS'],
+    ['the retail tagline', 'Custom rings'],
+  ]
+  for (const [what, needle] of RETAIL) {
+    it(`prints none of ${what}`, () => {
+      expect(html).not.toContain(needle)
+    })
+  }
+
+  it('prints the trade identity, from the profile row and nowhere else', () => {
+    // The wordmark is not one string — the stone is set into the gap the name already has, so it
+    // renders as "T.G." · svg · "DESIGNS".
+    expect(html).toContain('>T.G.<svg')
+    expect(html).toContain('>DESIGNS</div>')
+    expect(html).toContain('info@tg-designs.com')
+    expect(html).toContain('www.tgdiamondsjewellery.com')
+    expect(html).toContain('#622-736 Granville, Vancouver, BC V6Z 1G3, Canada')
+    expect(html).toContain('+1.604.683.5633')
+    expect(html).toContain('+1800 337 0041')
+  })
+
+  it('drops the body sender block entirely — the identity is stated ONCE', () => {
+    // Not "states the right one twice". Twice is the shape of the bug even when both agree.
+    expect(html.match(/>DESIGNS<\/div>/g)?.length).toBe(1)
+    // The logo is the wordmark a second time, so it goes with the rest of the block.
+    expect(html).not.toContain('storage.example/logo.png')
+  })
+
+  it('shows a social mark only where the PROFILE has a handle', () => {
+    // All three are null on her row, and the tenant's "TG Jewellers" handle must not stand in for
+    // them — an Instagram mark on a T.G. Designs page pointing at the other company is a claim, not
+    // a blank. This is why exactly one icon was showing on the real estimate.
+    expect(html).not.toContain('#1877F2')      // Facebook
+    expect(html).not.toContain('url(#lh-ig)')  // Instagram
+    expect(html).not.toContain('#FF0000')      // YouTube
+
+    const withSocials = onDesigns({
+      branding: {
+        logoUrl: null, accent: '#350f76', terms: null, validityDays: 30,
+        letterhead: {
+          ...LETTERHEAD_ON, defaultStyle: 'rule' as const,
+          profiles: { rule: { ...DESIGNS_PROFILE, facebook: 'tgdesigns', instagram: 'tgdesigns', youtube: 'tgdesigns' } },
+        },
+      },
+    })
+    expect(withSocials).toContain('#1877F2')
+    expect(withSocials).toContain('url(#lh-ig)')
+    expect(withSocials).toContain('#FF0000')
+  })
+})
+
+describe('the plum letterhead keeps the tenant identity, and still states it once', () => {
+  // No profile row for 'band', so it falls through to the tenant record exactly as it did before
+  // profiles existed. That fold is the only one left, and this is what protects it.
+  const html = render({
+    branding: {
+      logoUrl: null, accent: '#350f76', terms: null, validityDays: 30,
+      letterhead: { ...LETTERHEAD_ON, defaultStyle: 'band' as const, profiles: {} },
+    },
+    business: TENANT,
+  })
+
+  it('prints the tenant details, because that IS its identity', () => {
+    expect(html).toContain('TG JEWELLERS')                 // the band sets the wordmark in caps
+    expect(html).toContain('SALES@TGJEWELLERS.COM')
+    expect(html).toContain('604.446.8438')
+  })
+
+  it('states them in the band and not again in the body', () => {
+    expect(html).not.toContain('622 736 Granville street')
+    expect(html).not.toContain('tatiana@tgjewellers.com')
+    expect(html.match(/TG JEWELLERS/g)?.length).toBe(1)
+  })
+})

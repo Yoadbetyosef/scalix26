@@ -64,11 +64,15 @@ describe('whose details are printed', () => {
     expect(JSON.stringify(d)).not.toContain('tgjewellers.com')
   })
 
-  it('is transparent where a profile says nothing, rather than printing a blank', () => {
+  // This used to assert the opposite — that a profile was transparent where it said nothing, and
+  // inherited the tenant's phone and address. That fold is what put one business's Instagram mark on
+  // another business's letterhead, so it is gone; see the block at the foot of this file for the rule
+  // that replaced it.
+  it('does NOT inherit the tenant details into a design that has its own identity', () => {
     const thin: LetterheadProfile = { ...DESIGNS, phone: null, address: null, accentColor: null }
     const d = resolveLetterhead(ctx({ profiles: { rule: thin } }), 'rule', TG, '#7C3AED')
-    expect(d.phone).toBe('6044468438')
-    expect(d.address).toBe('622 736 Granville street, vancouver bc')
+    expect(d.phone).toBeNull()
+    expect(d.address).toBeNull()
     expect(d.color).toBe('#7C3AED')
   })
 
@@ -103,5 +107,50 @@ describe('the tenant address on one line', () => {
   })
   it('is nothing at all rather than a line of commas when she has given nothing', () => {
     expect(oneLineAddress({ ...TG, address: null, city: null, state: null, zip: null })).toBeNull()
+  })
+})
+
+describe('a profile is the whole identity, or there is no profile', () => {
+  // The fold that shipped first — override where you have a value, transparent where you do not —
+  // is what put the RETAIL Instagram handle on the TRADE letterhead: the profile leaves it null
+  // because the artwork prints the mark without a username, and null meant "inherit".
+  const thin: LetterheadProfile = {
+    ...DESIGNS, phone: null, email: null, website: null, address: null, instagram: null, tagline: null,
+    accentColor: null,
+  }
+  const d = resolveLetterhead(ctx({ profiles: { rule: thin } }), 'rule', TG, '#7C3AED')
+
+  it('leaves a field the profile does not fill EMPTY, never inherited', () => {
+    expect(d.phone).toBeNull()
+    expect(d.email).toBeNull()
+    expect(d.website).toBeNull()
+    expect(d.address).toBeNull()
+    expect(d.tagline).toBeNull()
+  })
+
+  it('will not borrow the other business\'s social handle', () => {
+    // ctx.instagram is 'tgjewellers'. An Instagram mark on a T.G. Designs page pointing at TG
+    // Jewellers is not a blank field; it is a claim about a different company.
+    expect(d.instagram).toBeNull()
+  })
+
+  it('keeps the name, which is the one thing a profile must always state', () => {
+    expect(d.businessName).toBe('T.G. DESIGNS')
+  })
+
+  it('still takes the document colour, because a hex is not a claim', () => {
+    // The exception, and the reason for it: a letterhead that switched itself off when she cleared
+    // the swatch would drop the document back to an unbranded layout printing the OTHER identity.
+    expect(d.color).toBe('#7C3AED')
+    expect(d.enabled).toBe(true)
+  })
+
+  it('leaves the fold intact for a style with NO profile at all', () => {
+    // 'band' has no identity of its own to speak of, so it falls through to the tenant record —
+    // which is where it came from before a second letterhead existed.
+    const band = resolveLetterhead(ctx(), 'band', TG, '#7C3AED')
+    expect(band.phone).toBe('6044468438')
+    expect(band.email).toBe('sales@tgjewellers.com')
+    expect(band.instagram).toBe('tgjewellers')
   })
 })
