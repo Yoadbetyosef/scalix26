@@ -106,6 +106,7 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
 
   /** The spec for one variable field, or null when this piece does not have it AND it is empty. */
   const spec = (f: VariableField, value: string) => fieldFor(typeKey, f, value.trim() !== '')
+  const typeOptions = opts(PRODUCT_TYPE_LIST_KEY)
   const lengthOpts = opts(LENGTH_LIST_KEY)
 
   return (
@@ -113,11 +114,17 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
       <div className="grid gap-2 sm:grid-cols-4">
         <label className="block text-xs text-gray-500">Product<input value={line.productName} onChange={(e) => onChange('productName', e.target.value)} className={inp} /></label>
         {/* The type list is HERS — she adds "Anklet" in Settings and it appears here, showing every
-            field until somebody describes what an anklet needs. */}
-        <div>
-          <OptionSelect label="Piece type" value={line.productType} options={opts(PRODUCT_TYPE_LIST_KEY)} onChange={(v) => onChange('productType', v)} />
-          {readAs && <p className="mt-0.5 text-[11px] text-gray-400">Read as {readAs} from the name. Pick one to be sure.</p>}
-        </div>
+            field until somebody describes what an anklet needs.
+            AND IT ONLY RENDERS IF SHE HAS ONE. A tenant who has not taken the jewellery starter, or
+            whose database has not had add_order_product_types run yet, would otherwise get a "Piece
+            type" dropdown whose only entry is the empty one — a control that cannot be used, offered
+            to everybody, for as long as a hand-run migration takes. */}
+        {typeOptions.length > 0 && (
+          <div>
+            <OptionSelect label="Piece type" value={line.productType} options={typeOptions} onChange={(v) => onChange('productType', v)} />
+            {readAs && <p className="mt-0.5 text-[11px] text-gray-400">Read as {readAs} from the name. Pick one to be sure.</p>}
+          </div>
+        )}
         <label className="block text-xs text-gray-500">SKU<input value={line.sku} onChange={(e) => onChange('sku', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Qty<input value={line.quantity} onChange={(e) => onChange('quantity', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Unit price ({currencySymbol})<input value={line.unitPrice} onChange={(e) => onChange('unitPrice', e.target.value)} placeholder="0" className={inp} /></label>

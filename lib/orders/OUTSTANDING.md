@@ -103,7 +103,10 @@ lot of screen for a question that has not been asked.
 
 ## 5. NOT YET EXERCISED BY A PERSON
 
-- **No piece type has ever been picked.** The migration is unrun; the dropdown has never been opened.
+- **No piece type has ever been picked.** The migration is unrun, so the dropdown does not render at
+  all: it is hidden unless the tenant actually has a `product_type` list, because a select whose only
+  entry is the empty one is a control nobody can use. The field labels still follow what the product
+  NAME says in the meantime, which is why her tennis rows read "Total weight" before the SQL is run.
 - **The Length dropdown has never been used**, and the fallback matters: with no `length` list the
   field stays the free-text box it is today. Every tenant except TG is in that state.
 - **The hidden-but-filled rule** — a field the type does not offer still renders when the line already
