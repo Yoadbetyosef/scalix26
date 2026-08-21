@@ -20,6 +20,7 @@ import {
   Handshake,
   Shield,
   ClipboardList,
+  Ship,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -39,6 +40,13 @@ const navItems = [
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/orders', icon: ClipboardList, label: 'Orders' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
+  // Beside Catalog, because that is what it fills. The page has existed since landed cost shipped and
+  // was reachable only by typing the URL — so the tenant it was built for could upload a supplier
+  // invoice, and had no way to find the screen that does it. moduleForNav resolves /landed-cost to
+  // `landed_cost`, so this line is invisible to every business without the module and needs no gate
+  // of its own. Deliberately absent from OPERATOR_SAFE_LABELS below: a supplier invoice IS the
+  // business's cost structure line by line, and lib/invoices/store.ts already refuses an operator.
+  { href: '/landed-cost', icon: Ship, label: 'Supplier bills' },
   { href: '/ai-employees', icon: Bot, label: 'AI Employees' },
   { href: '/test-ai', icon: FlaskConical, label: 'Test AI' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
