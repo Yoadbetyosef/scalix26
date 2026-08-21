@@ -17,6 +17,9 @@ export const lineItemSchema = z.object({
   internalCostCents: z.number().int().min(0).nullable().optional(),
   measurements: z.string().max(500).nullable().optional(), color: z.string().max(200).nullable().optional(), material: z.string().max(200).nullable().optional(),
   customSpec: z.string().max(2000).nullable().optional(), productRef: z.string().uuid().nullable().optional(),
+  // Her own list's label, like every other dropdown value on a line — never validated against a fixed
+  // enum, because she renames and adds types without a deploy and the server must not out-vote her.
+  productType: optionLabel,
   stoneQuality: optionLabel, stoneColor: optionLabel, stoneOrigin: optionLabel, stoneType: optionLabel,
   centerStoneShape: optionLabel, sideStoneShape: optionLabel, metalKarat: optionLabel,
   certificateLab: optionLabel, ringSize: optionLabel,

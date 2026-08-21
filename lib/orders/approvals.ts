@@ -184,6 +184,9 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     lineItems: ((lines as Array<Record<string, unknown>>) ?? []).map((l) => ({
       productName: l.product_name as string, description: (l.description as string) ?? null, quantity: Number(l.quantity ?? 1),
       measurements: (l.measurements as string) ?? null, color: (l.color as string) ?? null, material: (l.material as string) ?? null, customSpec: (l.custom_spec as string) ?? null,
+      // The factory is told WHAT it is making. Read off the row rather than selected by name, so a
+      // database without add_order_product_types renders the approval exactly as it did before.
+      productType: (l.product_type as string) ?? null,
       stoneQuality: (l.stone_quality as string) ?? null, stoneColor: (l.stone_color as string) ?? null, stoneOrigin: (l.stone_origin as string) ?? null, stoneType: (l.stone_type as string) ?? null,
       centerStoneShape: (l.center_stone_shape as string) ?? null, sideStoneShape: (l.side_stone_shape as string) ?? null,
       centerStoneCarat: l.center_stone_carat == null ? null : Number(l.center_stone_carat),
