@@ -6,12 +6,15 @@
 //
 // Adding a trade = adding an entry here. Nothing in the schema, the API or the UI knows what a diamond is.
 
+import { PRODUCT_TYPE_OPTIONS } from './product-types'
+
 export interface OptionTemplateList { key: string; label: string; options: string[] }
 export interface OptionTemplate { id: string; name: string; description: string; lists: OptionTemplateList[] }
 
 // Keys used by the jewelry line-item fields (components/orders/line-item-fields.tsx). They only mean
 // anything to that form — any other list a tenant creates is theirs to name freely.
 export const JEWELRY_LIST_KEYS = [
+  'product_type', 'length',
   'stone_quality', 'stone_color', 'stone_origin', 'stone_type',
   'center_stone_shape', 'side_stone_shape', 'metal_karat',
   'certificate_lab', 'ring_size',
@@ -30,6 +33,14 @@ export const OPTION_TEMPLATES: OptionTemplate[] = [
     name: 'Jewelry',
     description: 'Stone quality and colour, natural vs lab grown, stone types, shapes, and gold karats.',
     lists: [
+      // WHAT THE PIECE IS, first, because it decides which of the rest are even asked for. The list is
+      // hers from the moment it is created: she adds "Anklet" in Settings and it appears on the form,
+      // showing every field until somebody describes what an anklet needs.
+      { key: 'product_type', label: 'Piece type', options: [...PRODUCT_TYPE_OPTIONS] },
+      // Necklace and bracelet lengths. TG had already built this list herself and named it after a
+      // product ("Timeless Dreams Riviera Diamond Necklace") — the right instinct with nowhere to go,
+      // because the form only rendered the keys it knew. Now it is one of them.
+      { key: 'length', label: 'Length', options: ["14''", "16''", "17''", "18''", "20''", "22''", "24''", "6.5''", "7''", "7.5''", "8''"] },
       { key: 'stone_quality', label: 'Stone quality', options: ['FL', 'IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1', 'I2', 'I3'] },
       { key: 'stone_color', label: 'Stone colour', options: ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'Fancy Yellow', 'Fancy Pink', 'Fancy Blue'] },
       { key: 'stone_origin', label: 'Natural or Lab Grown', options: ['Natural', 'Lab Grown'] },

@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { hexColor } from '@/lib/studio/types'
 import { letterheadContextOf, readLetterheadProfiles } from '@/lib/documents/doc-settings'
 import type { LetterheadContext } from '@/lib/documents/letterhead-resolve'
+import { effectiveProductType, fieldFor, type VariableField } from './product-types'
 import type { OrderLineItem, OrderWithDetails } from './types'
 
 // Estimates and Quotes generated from an order. Both are printed to PDF in the browser (the same route
@@ -84,19 +85,30 @@ export const orderDocNumber = (type: OrderDocType, orderNumber: string): string 
 // Attribute rows for one line item — the itemised description an insurer expects, with the empty
 // attributes dropped rather than printed as blanks.
 export function specRows(l: OrderLineItem): Array<[string, string]> {
+  // NAMED FOR THE PIECE, and named the same way the form names it — one table of labels, read by both,
+  // so the number she typed under "Total weight" is not printed to a customer as "Center weight".
+  //
+  // The type is the one she picked, else the one her product name says. The FALLBACK renames fields;
+  // it does not print a type. Putting "Tennis necklace" on a document because we guessed it from a
+  // name would be the document asserting something nobody said — the row below appears only when she
+  // has actually chosen one.
+  const type = effectiveProductType(l)
+  const label = (f: VariableField): string => fieldFor(type, f, true)?.docLabel ?? ''
+
   const rows: Array<[string, string | null]> = [
+    ['Type', l.productType],
     ['Stone', l.stoneType],
     ['Origin', l.stoneOrigin],
     ['Quality', l.stoneQuality],
     ['Colour', l.stoneColor],
-    ['Center shape', l.centerStoneShape],
-    ['Center weight', l.centerStoneCarat != null ? `${l.centerStoneCarat} ct` : null],
-    ['Side shape', l.sideStoneShape],
-    ['Side weight (total)', l.sideStoneCaratTotal != null ? `${l.sideStoneCaratTotal} ct` : null],
+    [label('centerStoneShape'), l.centerStoneShape],
+    [label('centerStoneCarat'), l.centerStoneCarat != null ? `${l.centerStoneCarat} ct` : null],
+    [label('sideStoneShape'), l.sideStoneShape],
+    [label('sideStoneCaratTotal'), l.sideStoneCaratTotal != null ? `${l.sideStoneCaratTotal} ct` : null],
     ['Certificate', l.certificateLab],
     ['Metal', l.metalKarat ?? l.material],
-    ['Ring size', l.ringSize],
-    ['Measurements', l.measurements],
+    [label('ringSize'), l.ringSize],
+    [label('measurements'), l.measurements],
     ['Finish', l.color],
     ['SKU', l.sku],
     ['Notes', l.customSpec],

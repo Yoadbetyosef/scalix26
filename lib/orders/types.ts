@@ -3,6 +3,16 @@ import type { OrderStage } from './stages'
 // Jewelry attributes chosen from the tenant-managed dropdowns (lib/orders/options.ts). Stored as the
 // option's label text — a line item is a snapshot, so retiring an option never alters a past order.
 export interface JewelrySpec {
+  /**
+   * WHAT THE PIECE IS — 'Ring', 'Tennis necklace', or anything else she has put in her own
+   * `product_type` list. Null on every line raised before the field existed, and read from the
+   * product name in that case rather than backfilled; see lib/orders/product-types.ts.
+   *
+   * It decides which jewellery fields are offered and what they are called, on the form and on the
+   * printed document alike — the same 17ct that reads "Center weight" on a ring reads "Total weight"
+   * on a tennis necklace, without moving.
+   */
+  productType: string | null
   stoneQuality: string | null; stoneColor: string | null; stoneOrigin: string | null; stoneType: string | null
   centerStoneShape: string | null; sideStoneShape: string | null
   centerStoneCarat: number | null; sideStoneCaratTotal: number | null; metalKarat: string | null

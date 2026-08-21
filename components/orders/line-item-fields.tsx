@@ -1,12 +1,21 @@
 'use client'
 
 import type { OrderOptionList } from '@/lib/orders/options'
+import {
+  LENGTH_LIST_KEY, PRODUCT_TYPE_LABEL, PRODUCT_TYPE_LIST_KEY,
+  effectiveProductType, fieldFor, type VariableField,
+} from '@/lib/orders/product-types'
 
 // The line-item editor, shared by the create form and the edit dialog so the two can never drift.
 // Jewelry attributes come from the tenant's own dropdown lists; carats are free numeric entry.
+//
+// WHICH FIELDS, AND WHAT THEY ARE CALLED, DEPEND ON THE PIECE. A pair of earrings has no ring size and
+// no centre stone; a tennis necklace has a length and one total weight. The decision lives in
+// lib/orders/product-types.ts so the printed document says the same words — see the note there about
+// why the centre-weight column is re-labelled rather than replaced.
 
 export interface LineDraft {
-  productName: string; description: string; sku: string; quantity: string; unitPrice: string; internalCost: string
+  productType: string; productName: string; description: string; sku: string; quantity: string; unitPrice: string; internalCost: string
   measurements: string; color: string; material: string; customSpec: string
   stoneType: string; stoneOrigin: string; stoneQuality: string; stoneColor: string
   centerStoneShape: string; sideStoneShape: string; metalKarat: string
@@ -15,7 +24,7 @@ export interface LineDraft {
 }
 
 export const emptyLine = (): LineDraft => ({
-  productName: '', description: '', sku: '', quantity: '1', unitPrice: '', internalCost: '',
+  productType: '', productName: '', description: '', sku: '', quantity: '1', unitPrice: '', internalCost: '',
   measurements: '', color: '', material: '', customSpec: '',
   stoneType: '', stoneOrigin: '', stoneQuality: '', stoneColor: '',
   centerStoneShape: '', sideStoneShape: '', metalKarat: '',
@@ -25,6 +34,9 @@ export const emptyLine = (): LineDraft => ({
 
 // Turn the on-screen strings into the API payload. Blank means "not specified", never 0 or "".
 export const lineToPayload = (l: LineDraft) => ({
+  // Blank stays blank. What the form READ off the product name is never written back as though she
+  // had picked it — the inference is a way of showing an old line correctly, not a claim about it.
+  productType: l.productType || null,
   productName: l.productName, description: l.description || null, sku: l.sku || null,
   quantity: parseFloat(l.quantity) || 1, unitPriceCents: Math.round((parseFloat(l.unitPrice) || 0) * 100),
   // Empty stays NULL — "not recorded" — rather than becoming 0, which would claim the line was free.
@@ -39,7 +51,7 @@ export const lineToPayload = (l: LineDraft) => ({
 
 // Rehydrate a saved line item back into the form.
 export const lineFromSaved = (l: {
-  productName: string; description: string | null; sku: string | null; quantity: number; unitPriceCents: number
+  productType?: string | null; productName: string; description: string | null; sku: string | null; quantity: number; unitPriceCents: number
   internalCostCents?: number | null
   measurements: string | null; color: string | null; material: string | null; customSpec: string | null
   stoneType?: string | null; stoneOrigin?: string | null; stoneQuality?: string | null; stoneColor?: string | null
@@ -47,7 +59,7 @@ export const lineFromSaved = (l: {
   centerStoneCarat?: number | null; sideStoneCaratTotal?: number | null
   certificateLab?: string | null; ringSize?: string | null
 }): LineDraft => ({
-  productName: l.productName, description: l.description ?? '', sku: l.sku ?? '',
+  productType: l.productType ?? '', productName: l.productName, description: l.description ?? '', sku: l.sku ?? '',
   quantity: String(l.quantity), unitPrice: l.unitPriceCents ? (l.unitPriceCents / 100).toString() : '',
   internalCost: l.internalCostCents === null || l.internalCostCents === undefined ? '' : (l.internalCostCents / 100).toString(),
   measurements: l.measurements ?? '', color: l.color ?? '', material: l.material ?? '', customSpec: l.customSpec ?? '',
@@ -84,10 +96,28 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
   // Empty array when a list hasn't loaded yet — the field still renders, just with no choices.
   const opts = (key: string) => lists.find((l) => l.key === key)?.options.map((o) => o.label) ?? []
 
+  // WHAT THIS LINE READS AS. Her pick if she has made one, else what the name says — so the eighteen
+  // lines that predate the field are laid out correctly the first time she opens one, instead of
+  // showing a tennis necklace's total under "Center weight" until somebody re-picks all of them.
+  const typeKey = effectiveProductType({ productType: line.productType, productName: line.productName })
+  // Said out loud, and only when it was actually read rather than chosen. A form that quietly
+  // rearranged itself would be worse than one that asks.
+  const readAs = !line.productType.trim() && typeKey !== 'unspecified' ? PRODUCT_TYPE_LABEL[typeKey] : null
+
+  /** The spec for one variable field, or null when this piece does not have it AND it is empty. */
+  const spec = (f: VariableField, value: string) => fieldFor(typeKey, f, value.trim() !== '')
+  const lengthOpts = opts(LENGTH_LIST_KEY)
+
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-4">
         <label className="block text-xs text-gray-500">Product<input value={line.productName} onChange={(e) => onChange('productName', e.target.value)} className={inp} /></label>
+        {/* The type list is HERS — she adds "Anklet" in Settings and it appears here, showing every
+            field until somebody describes what an anklet needs. */}
+        <div>
+          <OptionSelect label="Piece type" value={line.productType} options={opts(PRODUCT_TYPE_LIST_KEY)} onChange={(v) => onChange('productType', v)} />
+          {readAs && <p className="mt-0.5 text-[11px] text-gray-400">Read as {readAs} from the name. Pick one to be sure.</p>}
+        </div>
         <label className="block text-xs text-gray-500">SKU<input value={line.sku} onChange={(e) => onChange('sku', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Qty<input value={line.quantity} onChange={(e) => onChange('quantity', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Unit price ({currencySymbol})<input value={line.unitPrice} onChange={(e) => onChange('unitPrice', e.target.value)} placeholder="0" className={inp} /></label>
@@ -108,10 +138,22 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
           <OptionSelect label="Natural / Lab Grown" value={line.stoneOrigin} options={opts('stone_origin')} onChange={(v) => onChange('stoneOrigin', v)} />
           <OptionSelect label="Quality" value={line.stoneQuality} options={opts('stone_quality')} onChange={(v) => onChange('stoneQuality', v)} />
           <OptionSelect label="Colour" value={line.stoneColor} options={opts('stone_color')} onChange={(v) => onChange('stoneColor', v)} />
-          <OptionSelect label="Center shape" value={line.centerStoneShape} options={opts('center_stone_shape')} onChange={(v) => onChange('centerStoneShape', v)} />
-          <label className="block text-xs text-gray-500">Center weight (ct)<input value={line.centerStoneCarat} onChange={(e) => onChange('centerStoneCarat', e.target.value)} inputMode="decimal" placeholder="e.g. 1.25" className={inp} /></label>
-          <OptionSelect label="Side shape" value={line.sideStoneShape} options={opts('side_stone_shape')} onChange={(v) => onChange('sideStoneShape', v)} />
-          <label className="block text-xs text-gray-500">Side total weight (ct)<input value={line.sideStoneCaratTotal} onChange={(e) => onChange('sideStoneCaratTotal', e.target.value)} inputMode="decimal" placeholder="e.g. 0.50" className={inp} /></label>
+          {/* Named for the piece: "Center weight" on a ring, "Total weight" on a tennis necklace, and
+              the same column underneath both — so her 17ct never moves. A field this piece does not
+              have but the line already holds a value in comes back anyway, under its plain name,
+              because nothing she typed may disappear off the screen while staying in the database. */}
+          {(() => { const f = spec('centerStoneShape', line.centerStoneShape); return f && (
+            <OptionSelect label={f.label} value={line.centerStoneShape} options={opts('center_stone_shape')} onChange={(v) => onChange('centerStoneShape', v)} />
+          ) })()}
+          {(() => { const f = spec('centerStoneCarat', line.centerStoneCarat); return f && (
+            <label className="block text-xs text-gray-500">{f.label}<input value={line.centerStoneCarat} onChange={(e) => onChange('centerStoneCarat', e.target.value)} inputMode="decimal" placeholder="e.g. 1.25" className={inp} /></label>
+          ) })()}
+          {(() => { const f = spec('sideStoneShape', line.sideStoneShape); return f && (
+            <OptionSelect label={f.label} value={line.sideStoneShape} options={opts('side_stone_shape')} onChange={(v) => onChange('sideStoneShape', v)} />
+          ) })()}
+          {(() => { const f = spec('sideStoneCaratTotal', line.sideStoneCaratTotal); return f && (
+            <label className="block text-xs text-gray-500">{f.label}<input value={line.sideStoneCaratTotal} onChange={(e) => onChange('sideStoneCaratTotal', e.target.value)} inputMode="decimal" placeholder="e.g. 0.50" className={inp} /></label>
+          ) })()}
           {/* The lab that graded the stone — it belongs with the stone, not with the metal. */}
           <OptionSelect label="Certificate lab" value={line.certificateLab} options={opts('certificate_lab')} onChange={(v) => onChange('certificateLab', v)} />
         </div>
@@ -119,10 +161,22 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
 
       <div className="grid gap-2 sm:grid-cols-4">
         <OptionSelect label="Gold karat / metal" value={line.metalKarat} options={opts('metal_karat')} onChange={(v) => onChange('metalKarat', v)} />
-        {/* Ring size is its own field, not free text: a mistyped size is a remake. Measurements stays
-            for everything that isn't a ring — chain length, pendant dimensions. */}
-        <OptionSelect label="Ring size" value={line.ringSize} options={opts('ring_size')} onChange={(v) => onChange('ringSize', v)} />
-        <label className="block text-xs text-gray-500">Measurements / size<input value={line.measurements} onChange={(e) => onChange('measurements', e.target.value)} className={inp} /></label>
+        {/* Ring size is its own field, not free text: a mistyped size is a remake. It is offered on the
+            things worn on a finger, and on anything else only if a value is already sitting in it. */}
+        {(() => { const f = spec('ringSize', line.ringSize); return f && (
+          <OptionSelect label={f.label} value={line.ringSize} options={opts('ring_size')} onChange={(v) => onChange('ringSize', v)} />
+        ) })()}
+        {/* ONE column, three quantities — her own rows prove it: stone dimensions (10X7.5X4), band
+            width (2.00mm) and length (16''). So it is named for the piece, and on a necklace or a
+            bracelet it becomes a dropdown off her Length list rather than free text, for the same
+            reason ring size is one. No list yet, and it stays exactly the text box it was. */}
+        {(() => {
+          const f = spec('measurements', line.measurements)
+          if (!f) return null
+          return f.list === LENGTH_LIST_KEY && lengthOpts.length > 0
+            ? <OptionSelect label={f.label} value={line.measurements} options={lengthOpts} onChange={(v) => onChange('measurements', v)} />
+            : <label className="block text-xs text-gray-500">{f.label}<input value={line.measurements} onChange={(e) => onChange('measurements', e.target.value)} className={inp} /></label>
+        })()}
         <label className="block text-xs text-gray-500">Finish / colour note<input value={line.color} onChange={(e) => onChange('color', e.target.value)} className={inp} /></label>
         <label className="block text-xs text-gray-500">Custom spec<input value={line.customSpec} onChange={(e) => onChange('customSpec', e.target.value)} className={inp} /></label>
       </div>
