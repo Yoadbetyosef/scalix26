@@ -38,6 +38,30 @@ export interface Persona {
   video: string | null
   /** The mesh, in the still's own pixel space. Null until there is a still to derive it from. */
   nodes: string | null
+  /**
+   * The pixel size of `still` and `video`, which the canvas cover-fits against.
+   *
+   * These were two module constants in rudi-canvas — 680 x 907 — shared by both employees, which was
+   * true only because both portraits happened to be shot to the same frame. The moment one of them
+   * stops being a head-and-shoulders it is false, and silently: the cover fit still produces a
+   * picture, just the wrong crop of it.
+   */
+  width: number
+  height: number
+  /**
+   * WHERE THE SCAN HAPPENS, in the still's own space — x and r as fractions of the image WIDTH, y as a
+   * fraction of its HEIGHT.
+   *
+   * Image space, not canvas space, and that is the whole point. In the reference prototype the phone
+   * and the source share an aspect ratio exactly, so a fraction of one is a fraction of the other and
+   * the distinction never surfaces. In the app the canvas is any shape — a phone, a laptop column, a
+   * 172x230 chip — and a canvas-space fraction would slide across the subject at every breakpoint.
+   * The canvas maps these through its own DX/DY/S.
+   *
+   * Present means the scan is RINGS leaving this point. Absent means the older sweep-and-mesh, which
+   * is what an employee whose portrait is a face still gets.
+   */
+  dome?: { x: number; y: number; r: number }
   /** The stage the portrait sits on. Matches --v2-stage for Rudi; the canvas cannot read a custom
    *  property, so the literal and the token have to move together. */
   ground: string
@@ -77,9 +101,22 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     owns: 'the phone',
     voice: 'aura-2-asteria-en',
     avatar: '/avatars/asteria.png',
-    still: '/v2/rudi-still.webp',
-    video: '/v2/rudi-speaking.mp4',
-    nodes: '/v2/rudi-nodes.json',
+    // THE ROBOT. Extracted byte-identically from docs/miles/robot-scan-C.html — the still and the clip
+    // are aligned to each other to within a pixel and share one robot-free plate, and a re-encode is
+    // what would spend that. Verified rather than assumed: 1.0px across, 0.5px down between the still
+    // and the clip's first frame, and three background strips differing by half a grey level.
+    still: '/v2/rudi-robot-still.jpg',
+    video: '/v2/rudi-robot-speaking.mp4',
+    // NO MESH. The wireframe, the grid, the blooms, the markers, the crosshair and the tick ring were
+    // all things drawn ACROSS a face. Nothing is drawn across the machine now — the only thing that
+    // moves is the part of him that is already a display.
+    nodes: null,
+    width: 784,
+    height: 1660,
+    // Measured off the dome including its rim, which is what the rings have to sit outside of. A
+    // measurement of the dark glass core alone comes out at 0.672 / 0.336 / 0.096 — inside this in
+    // every direction, which is the rim.
+    dome: { x: 0.684, y: 0.349, r: 0.108 },
     ground: '#0d0d10',
     accent: '#FF2E93',
     wash: '#FFEDF6',
@@ -98,6 +135,11 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     // 900 points, generated from the portrait by weighting each pixel by its distance from the
     // photograph's own background — so the mesh sits on him and never on the ground behind him.
     nodes: '/v2/miles-nodes.json',
+    // Still a photograph of a person, still on the sweep-and-mesh loop, and deliberately so: he will
+    // need a character from the same family as the robot eventually, and one is not derived from a
+    // robot arm. No `dome`, so the canvas gives him the scan he already had.
+    width: 680,
+    height: 907,
     // MEASURED FROM THE FILE, not taken from the brief. The portrait was shot against acid, and the
     // stage has to be that exact acid or there is a visible seam where the image ends. #D5FB48 is
     // what the corners of the photograph actually are; #D9F224 below is his ACCENT, which is a

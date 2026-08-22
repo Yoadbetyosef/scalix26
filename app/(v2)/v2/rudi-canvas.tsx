@@ -90,8 +90,65 @@ interface Node { x: number; y: number }
 // second "effect running" is a genuine remount, and that is a diagnostic worth keeping), so switching
 // persona on a live canvas would not re-initialise it. Callers give the element a `key` of the
 // persona instead, which remounts it — honest, because every asset it holds is different.
-const IW = 680
-const IH = 907
+// ── THE SCAN, WHEN THE SUBJECT IS A MACHINE ─────────────────────────────────────────────────────────
+//
+// Four rings leaving the dome of his face and fading outward, and a halo on the glass breathing under
+// them. Five things drawn, and nothing else — no wireframe, no grid, no heat blooms, no coded markers,
+// no crosshair, no tick ring, and above all no sweep displacing slices of him. Every one of those was
+// something drawn ACROSS a photograph of a person, and across a machine they read as the machine being
+// examined rather than as the machine thinking. The only thing that moves is the part of him that is
+// already a display.
+const RINGS = 4
+/** The ring cycle, from the reference prototype. Its own clock, not the sweep's 3600ms — that period
+ *  belonged to a band which no longer exists. */
+const RING_CYCLE_MS = 4400
+/** The halo's breath. The prototype writes sin(t * 10) against a 4.4s cycle, which is this in rad/s;
+ *  stated as a rate so it survives the cycle length changing. */
+const HALO_RAD_PER_S = 10 / 4.4
+/** How far a ring travels before it is gone: r grows to 2.5x the dome and fades linearly. */
+const RING_REACH = 1.5
+/** Stroke width as a fraction of the dome radius — the prototype's W*.006 against its fr of W*.115. */
+const RING_STROKE = 0.052
+
+export interface Dome { x: number; y: number; r: number }
+export interface Fit { s: number; dx: number; dy: number; dw: number; dh: number }
+
+/**
+ * Cover-fit a source into a canvas, anchored on the dome when there is one.
+ *
+ * PURE, and exported, because this is the arithmetic the whole change turns on and asserting it
+ * through a rendered canvas would be asserting a picture. The fractions and this mapping are what the
+ * test pins; the canvas-space product is an output, not a fact.
+ *
+ * With no dome the crop keeps the 0.54 downward bias the portrait loop has always used. With one, the
+ * dome is placed at its own fraction of the canvas height at every width — clamped so the anchor can
+ * never pull the image off its own edge and expose the stage behind it.
+ */
+export function coverFit(cw: number, ch: number, iw: number, ih: number, dome: Dome | null): Fit {
+  const s = Math.max(cw / iw, ch / ih)
+  const dw = iw * s
+  const dh = ih * s
+  const dx = (cw - dw) / 2
+  const dy = dome
+    ? Math.min(0, Math.max(ch - dh, dome.y * ch - dome.y * ih * s))
+    : (ch - dh) * 0.54
+  return { s, dx, dy, dw, dh }
+}
+
+/** Where the dome lands on the canvas: image-space fractions through the fit, never canvas fractions. */
+export const domeInCanvas = (f: Fit, iw: number, ih: number, d: Dome) => ({
+  x: f.dx + d.x * iw * f.s,
+  y: f.dy + d.y * ih * f.s,
+  r: d.r * iw * f.s,
+})
+
+/** The three stages the readout names, keyed to the ring cycle. */
+export const SCAN_PHASES: [number, string][] = [[0, 'ANALYSIS'], [0.4, 'READING'], [0.75, 'ON DUTY']]
+export const phaseAt = (t: number): string => {
+  let label = SCAN_PHASES[0][1]
+  for (const [at, name] of SCAN_PHASES) if (t >= at) label = name
+  return label
+}
 
 interface Paint {
   still: string
@@ -103,6 +160,12 @@ interface Paint {
    *  was shot against, measured from the file rather than guessed, so there is no seam at its edge. */
   bg: string
   stops: [number, [number, number, number]][]
+  /** The source's own pixel size. Was two module constants shared by both employees — see lib/persona. */
+  iw: number
+  ih: number
+  /** Present = rings from here; absent = the sweep and the mesh. Fractions of the SOURCE, not the canvas. */
+  dome: { x: number; y: number; r: number } | null
+  name: string
 }
 
 function paintFor(key: PersonaKey): Paint {
@@ -114,6 +177,10 @@ function paintFor(key: PersonaKey): Paint {
     nodes: p.nodes,
     bg: p.ground,
     stops: ramp.map((hex, i, all) => [i / (all.length - 1), hexToRgb(hex)]),
+    iw: p.width,
+    ih: p.height,
+    dome: p.dome ?? null,
+    name: p.name,
   }
 }
 
@@ -135,10 +202,19 @@ const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},$
 export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick, persona = 'rudi' }: Props) {
   // Read once. See paintFor: a persona change means a remount, keyed by the caller.
   const paint = useRef(paintFor(persona)).current
-  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS } = paint
+  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, dome: DOME, name: NAME } = paint
+  const IW = paint.iw
+  const IH = paint.ih
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setStateRaw] = useState<RudiState>('idle')
+  // WHAT THE SCAN IS DOING, in a word. The prototype prints it in a row of its own at the top of the
+  // frame; the app has no such row and this change does not add one — the readout cards, the ceiling
+  // and the phase line are furniture that does not exist here, and building them means the canvas
+  // taking layout the DOM owns. So the phase goes where it costs nothing and is not decoration: the
+  // accessible name, which otherwise says only 'idle' for the whole of a scan.
+  const [phase, setPhase] = useState<string>(SCAN_PHASES[0][1])
+  const phaseRef = useRef(phase)
 
   // Everything the render loop touches lives in refs. The loop must not re-subscribe when a number
   // changes — re-creating the rAF chain on every level update would stutter the animation.
@@ -250,11 +326,15 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       CW = w; CH = h
       canvas!.width = CW; canvas!.height = CH
       sweep.width = CW; sweep.height = CH
-      S = Math.max(CW / IW, CH / IH)
-      DW = IW * S; DH = IH * S
-      DX = (CW - DW) / 2
-      // 0.54 rather than 0.5: the reference biases the crop downward so the face sits high.
-      DY = (CH - DH) * 0.54
+      // ── THE CROP IS ANCHORED ON THE THING THE SCAN IS DRAWN AROUND ────────────────────────────
+      //
+      // It used to be `(CH - DH) * 0.54` for everybody — 0.54 rather than 0.5 so a face sat high in
+      // the frame. That is a number tuned to a 680x907 head-and-shoulders, and against the robot's
+      // 784x1660 it is actively wrong: the cover fit turns width-driven far sooner, and at a 1200x800
+      // hero — an ordinary laptop — it put his face 53px ABOVE the top of the frame. A crop that
+      // removes the subject is not a crop. See coverFit, which is where the arithmetic and its test are.
+      const f = coverFit(CW, CH, IW, IH, DOME)
+      S = f.s; DW = f.dw; DH = f.dh; DX = f.dx; DY = f.dy
     }
 
     // Built ONCE per canvas size and memoised on it. The points live in canvas space so a genuine
@@ -345,6 +425,50 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       }
     }
 
+    /**
+     * Four rings leaving the dome, and the halo under them. The scan, for a subject that is a machine.
+     *
+     * `amount` is the same scanA the sweep takes, so the rings vanish on the frame listening begins
+     * and ease back when idle returns — one rule for both scans.
+     */
+    function drawRings(now: number, amount: number) {
+      if (!DOME || amount < 0.02) return
+      // IMAGE SPACE THROUGH THE FIT, never a fraction of the canvas. The prototype can use canvas
+      // fractions because its phone and its source share an aspect exactly; here the canvas is a
+      // phone, a laptop column or a 172x230 chip, and the same fraction would slide across him.
+      const { x: fx, y: fy, r: fr } = domeInCanvas({ s: S, dx: DX, dy: DY, dw: DW, dh: DH }, IW, IH, DOME)
+      // Relative to the last tap, so touching him starts a ring from the dome rather than joining one
+      // already halfway out. Zero until something taps, which reduces to `now % cycle`.
+      const t = ((now - scanAtRef.current) % RING_CYCLE_MS) / RING_CYCLE_MS
+      const near = hue(STOPS, 0)
+      const far = hue(STOPS, 0.5)
+
+      for (let i = 0; i < RINGS; i++) {
+        const p = (t + i / RINGS) % 1
+        const r = fr * (1 + p * RING_REACH)
+        const a = (1 - p) * 0.34 * amount
+        if (a < 0.004) continue
+        const g = ctx!.createRadialGradient(fx, fy, r * 0.86, fx, fy, r)
+        g.addColorStop(0, rgba(near, 0))
+        g.addColorStop(0.6, rgba(near, Number(a.toFixed(3))))
+        g.addColorStop(1, rgba(far, 0))
+        ctx!.strokeStyle = g
+        ctx!.lineWidth = fr * RING_STROKE
+        ctx!.beginPath(); ctx!.arc(fx, fy, r, 0, Math.PI * 2); ctx!.stroke()
+      }
+
+      // The fifth thing: a soft halo on the glass, breathing.
+      const breath = 0.10 + 0.06 * Math.sin((now / 1000) * HALO_RAD_PER_S)
+      const glow = ctx!.createRadialGradient(fx, fy, 0, fx, fy, fr * 1.5)
+      glow.addColorStop(0, rgba(near, Number((breath * amount).toFixed(3))))
+      glow.addColorStop(1, rgba(near, 0))
+      ctx!.fillStyle = glow
+      ctx!.beginPath(); ctx!.arc(fx, fy, fr * 1.5, 0, Math.PI * 2); ctx!.fill()
+
+      const label = phaseAt(t)
+      if (label !== phaseRef.current) { phaseRef.current = label; setPhase(label) }
+    }
+
     function draw(now: number) {
       if (disposed) return
       // A missing still must not KILL the loop. Returning without re-requesting a frame ended it
@@ -366,6 +490,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         const v = videoRef.current
         if (v && !v.paused) v.pause()
         if (!reduced) {
+          // A machine gets the same rings the full engine draws — they cost four strokes and a
+          // gradient, which is well inside what the collapsed path is allowed to spend.
+          if (DOME) { drawRings(now, 1); raf = requestAnimationFrame(draw); return }
           // The idle rate from the main path — 3600ms — so a phone and a desktop sweep in step.
           const prog = (now % 3600) / 3600
           drawSweep(now, prog * CH, 1, 1)
@@ -409,9 +536,16 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       ctx!.fillStyle = g
       ctx!.fillRect(0, 0, CW, CH)
 
-      // A breath: ±1% scale on a 3.2s cycle, so the still never looks frozen.
-      const br = 1 + 0.01 * Math.sin(now / 3200)
-      ctx!.drawImage(img, DX - (DW * (br - 1)) / 2, DY - (DH * (br - 1)) / 2, DW * br, DH * br)
+      // ── NO BREATH. THIS IS A FIX, NOT A PRECAUTION. ─────────────────────────────────────────────
+      //
+      // There was a ±1% scale on a 3.2s cycle here "so the still never looks frozen". The video below
+      // is drawn at DX, DY, DW, DH — unscaled — so the two layers were up to 1% apart in size at the
+      // exact moment they cross-fade into one another, which on a phone is about eight pixels of
+      // vertical slide over the thirteen frames the fade takes. That has been shipping on the live
+      // portrait; it is not a hazard introduced by the robot, it is one the robot made visible.
+      //
+      // A still that holds position does not look frozen when something else on it is moving.
+      ctx!.drawImage(img, DX, DY, DW, DH)
 
       // ── The state transitions ───────────────────────────────────────────────────────────────────
       // scanA snaps to 0 the moment we leave idle — on the SAME frame, not eased — and eases back in
@@ -463,8 +597,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         }
       }
 
-      // ── Scan sweep: 18 displaced slices of the portrait, brightest at the band. ─────────────────
-      drawSweep(now, band, scanA, (st === 'idle' ? 1 : 2.2) + burst * 1.8)
+      // ── The scan. Rings from the dome for a machine; the sweep for a face. ─────────────────────
+      if (DOME) drawRings(now, scanA)
+      else drawSweep(now, band, scanA, (st === 'idle' ? 1 : 2.2) + burst * 1.8)
 
       // ── Listening: white veil + monochrome level meter. ────────────────────────────────────────
       if (micA > 0.01) {
@@ -516,6 +651,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
 
       // Speaking (and the tail of listening) draws no network and no band at all.
       if (scanA < 0.02) { raf = requestAnimationFrame(draw); return }
+      // A machine's scan is the rings and the halo and nothing else. The node network and the sweep
+      // band below belong to the portrait loop, and drawing either across him is the thing this
+      // change exists to stop.
+      if (DOME) { raf = requestAnimationFrame(draw); return }
 
       // ── The node network, banded into three hue groups by height. ──────────────────────────────
       ctx!.globalCompositeOperation = 'lighter'
@@ -788,7 +927,13 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         className={className}
         onClick={onClick}
         role="img"
-        aria-label={`Rudi, ${state}`}
+        // NAME, not the literal "Rudi". Miles's canvas has been announcing itself as Rudi since the
+        // engine learned to paint two employees — invisible unless you listen to the page, which is
+        // exactly the class of bug nobody goes looking for.
+        //
+        // While she is idle the state word is "idle", which describes nothing; the scan's own phase
+        // is what is actually happening, and it is the only place this change surfaces it.
+        aria-label={`${NAME}, ${state === 'idle' && DOME ? phase.toLowerCase() : state}`}
       />
     </>
   )
