@@ -220,7 +220,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
   // changes — re-creating the rAF chain on every level update would stutter the animation.
   const stateRef = useRef<RudiState>('idle')
   const levelRef = useRef<number | null>(null)
-  const smoothedRef = useRef(0)
   const speakEndRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minRef = useRef(minimised)
@@ -277,6 +276,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       levelledRef.current = false
       setState('idle')
     },
+    // Recorded, and no longer painted: option D took the meter away. The call stays because the
+    // voice layer makes it and the handle is its contract, and because the number's provenance was
+    // never this component's business — see the note at the top.
     level(v: number) { levelledRef.current = true; levelRef.current = Math.min(1, Math.max(0, v)) },
     state() { return stateRef.current },
   }), [setState])
@@ -302,9 +304,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     let edges: number[] = []
     let raw: [number, number][] = []
     let scanA = 1
-    let micA = 0
     let vidA = 0
-    const LV = new Float32Array(72)
 
     // A second canvas for the sweep band, composited with 'lighter' — the reference's approach, and
     // the reason the band glows through the portrait instead of sitting on top of it.
@@ -380,22 +380,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         near.sort((x, y) => x[0] - y[0])
         for (let n = 0; n < Math.min(2, near.length); n++) edges.push(i, near[n][1])
       }
-    }
-
-    /** The meter's envelope. Real level when the voice layer supplies one; the reference's synthetic
-     *  wobble when it does not, because a flat meter reads as broken rather than as silent. */
-    function envelope(now: number): number {
-      // Armed: present, and deliberately still. A meter that idles with movement would read as
-      // hearing something; a meter that is gone would read as closed. Flat says "open, waiting".
-      if (stateRef.current === 'armed') return 0
-      const real = levelRef.current
-      if (real === null) {
-        return 0.26 + 0.74 * Math.pow(Math.abs(Math.sin(now / 300)), 0.8) * (0.55 + 0.45 * Math.abs(Math.sin(now / 97)))
-      }
-      // Same attack/decay as the reference's mic smoothing: fast up, slow down.
-      const s = smoothedRef.current
-      smoothedRef.current = s + (real - s) * (real > s ? 0.55 : 0.14)
-      return 0.04 + smoothedRef.current * 1.15
     }
 
     /**
@@ -519,7 +503,11 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       // any graphic belonging to one and not the other makes it read as a separate screen rather than
       // a moment inside a conversation.
       const open = st === 'listening' || st === 'armed'
-      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150) : open ? 1.22 : 1
+      // THE BLOOM DOES NOT REACT TO THE MIC. It used to brighten 22% while listening, which is the
+      // canvas answering back at the moment option D says it should go quiet — the veil rising is the
+      // only thing that moves when listening begins, and it moves once. Speaking still pulses,
+      // because then she IS the thing happening.
+      const pulse = st === 'speaking' ? 1 + 0.12 * Math.sin(now / 150) : 1
       const period = open ? 1300 : 3600
       // Relative to the last tap, so a tap starts a scan from the top rather than joining one
       // already halfway down. Zero until something taps, and `now % period` is what that reduces to.
@@ -552,9 +540,6 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       // over ~20 frames when idle returns. That asymmetry is the design: attention is instant,
       // relaxation is gradual.
       scanA = st === 'idle' ? scanA + (1 - scanA) * 0.05 : 0
-      // Armed keeps the veil and the meter: the mic is still open, so the surface must still look
-      // open. What changes is that the bars sit flat — see envelope().
-      micA += ((st === 'listening' || st === 'armed' ? 1 : 0) - micA) * 0.22
       // Only SHE gets the video. Armed is my turn, and showing her mouth moving through it would say
       // the opposite of what the state means.
       const vTarget = st === 'speaking' ? 1 : 0
@@ -601,53 +586,21 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       if (DOME) drawRings(now, scanA)
       else drawSweep(now, band, scanA, (st === 'idle' ? 1 : 2.2) + burst * 1.8)
 
-      // ── Listening: white veil + monochrome level meter. ────────────────────────────────────────
-      if (micA > 0.01) {
-        ctx!.fillStyle = `rgba(250,250,252,${(0.6 * micA).toFixed(3)})`
-        ctx!.fillRect(0, 0, CW, CH)
-
-        const wN = 52
-        const wW = CW * 0.56
-        const wX = (CW - wW) / 2
-        // BELOW the mouth, not across it. Her lips are the one part worth seeing while she talks, and
-        // a rule drawn through them is the first thing the eye goes to.
-        const wY = CH * 0.64
-        const gap = wW / wN
-        const env = envelope(now)
-
-        // ── PRESENCE RISES WITH LEVEL ────────────────────────────────────────────────────────────
-        //
-        // At rest this was a solid dark rule with end ticks — an object in its own right, drawn
-        // across her face, at a moment when nothing is happening. It should be almost nothing when
-        // silent and gather weight only as sound arrives, so the meter reads as a property of the
-        // sound rather than as furniture.
-        const energy = Math.min(1, Math.max(0, env))
-        ctx!.strokeStyle = `rgba(14,14,17,${(micA * (0.09 + 0.34 * energy)).toFixed(3)})`
-        ctx!.lineWidth = 1 + 0.6 * energy
-        ctx!.beginPath()
-        ctx!.moveTo(wX, wY)
-        ctx!.lineTo(wX + wW, wY)
-        ctx!.stroke()
-
-        for (let wi = 0; wi < wN; wi++) {
-          const edge = Math.pow(Math.sin((wi / (wN - 1)) * Math.PI), 0.45)
-          const tgt = env * edge * (0.2 + 0.8 * Math.pow(Math.abs(Math.sin(wi * 3.1 + now / 62)), 1.5))
-          LV[wi] += (tgt - LV[wi]) * (tgt > LV[wi] ? 0.6 : 0.22)
-          // NO minimum height. It used to be Math.max(1.5, …), which at zero amplitude drew 52
-          // bars three pixels tall and thirteen apart — a dotted rule, and the single thing that made
-          // the waiting state look like a different screen. Bars now grow out of the baseline and
-          // return into it, so silence is a flat line and speech is the same line with amplitude.
-          const hgt = LV[wi] * CH * 0.105 * micA
-          if (hgt < 0.4) continue
-          ctx!.fillStyle = `rgba(14,14,17,${(0.78 * micA).toFixed(3)})`
-          ctx!.fillRect(wX + wi * gap, wY - hgt, 2.2, hgt * 2)
-        }
-        // NO LABEL. The state is on her face and in the meter's own weight; a word stamped across
-        // her portrait to name what the portrait is already showing was the last thing making the
-        // listening state look like a different screen. Whether level() has ever been supplied is
-        // still tracked in levelledRef for the console — it just no longer writes DEMO over her.
-        ctx!.textAlign = 'left'
-      }
+      // ── LISTENING: THE CANVAS DRAWS NOTHING AT ALL. ─────────────────────────────────────────────
+      //
+      // There was a white veil and a 52-bar level meter here — a rule drawn across her with bars
+      // growing out of it. Option D is that the surface goes QUIET while the mic is open: the scan
+      // stops, the veil rises so he recedes, and the canvas paints the picture and nothing else. A
+      // meter is a second thing claiming to be the signal at the moment the person talking IS the
+      // signal, and on a robot it is one more graphic drawn across the machine.
+      //
+      // The veil that does the receding is the DOM scrim, not a fill painted here — it already sits
+      // over the canvas, it can transition its own height, and a canvas fill cannot cross-fade with
+      // the composer above it. See .v2-scrim, bound to the state on .v2-root.
+      //
+      // level() stays on the handle and the voice layer still calls it. It drives nothing now, and
+      // that is the honest state: the component was never the right owner of an audio level, and
+      // removing the meter is what makes that visible rather than a thing it happens to render.
 
       // Speaking (and the tail of listening) draws no network and no band at all.
       if (scanA < 0.02) { raf = requestAnimationFrame(draw); return }

@@ -94,6 +94,10 @@
 
   /* Timings, so the collapse and the sheet share one curve with the reference. */
   --v2-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  /* HOW FAR DOWN THE BOTTOM BLOCK SITS. Zero here so desktop is untouched; the mobile block raises
+     it, and everything pinned to the bottom subtracts the same one number so the group moves without
+     changing shape. */
+  --v2-bottom-drop: 0px;
   --v2-collapse: 0.5s;
 }
 
@@ -259,10 +263,42 @@
    portrait is lit from below, so without this the text sits on a bright shoulder and disappears. */
 .v2-scrim {
   position: absolute; left: 0; right: 0; bottom: 0; height: 62%; z-index: 2; pointer-events: none;
+  transition: height 0.4s var(--v2-ease);
   background: linear-gradient(180deg, rgba(10, 10, 13, 0), rgba(10, 10, 13, 0.42) 44%, rgba(10, 10, 13, 0.88));
   transition: opacity 0.35s;
 }
 .v2-overlay { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 46px 42px; transition: opacity 0.35s; }
+/* ── HE RECEDES WHILE THE MIC IS OPEN ────────────────────────────────────────────────────────────
+   The same gradient reaching further up, so he sinks into it rather than being covered by something
+   new. +12 points, which is the move option D makes against its own 44% base. It is the only thing
+   on the screen that moves when listening begins, and it moves once — the canvas itself has gone
+   completely quiet by then. */
+.v2-root[data-state="listening"] .v2-scrim,
+.v2-root[data-state="armed"] .v2-scrim { height: 74%; }
+
+/* ── THE TRANSCRIPT TAKES THE RESTING SENTENCE'S PLACE, AT ITS SIZE ──────────────────────────────
+   `.v2-you` is a 10px mono label, which is right when it sits ABOVE a caption as an echo of what was
+   typed. While the mic is open there is no caption — the override is empty — so the echo is the only
+   sentence on the screen, and a 10px line where a 23px one just was reads as the screen having lost
+   its voice rather than changed it. Same size, same weight, same place.
+
+   The "You ·" prefix goes with it: nobody needs telling whose words they are while they are saying
+   them, and the prefix is what made it read as a log entry. */
+.v2 .v2-root[data-state="listening"] .v2-you,
+.v2 .v2-root[data-state="armed"] .v2-you {
+  /* IT WRAPS. The base rule is `white-space: nowrap … ellipsis`, with a comment saying ONE mono line
+     and never a scrolling transcript — correct for an echo of something typed, and wrong for the
+     thing being said right now, which arrived truncated to "upload an invoice for …". */
+  white-space: normal; overflow: visible; text-overflow: clip;
+  /* .v2-cap's own values, not an approximation of them: 31/1.22/600/-0.03em with the same shadow,
+     because the scrim carries most of the contrast and the portrait has bright shoulders. */
+  font-family: var(--v2-sans); font-size: 31px; line-height: 1.22; font-weight: 600;
+  letter-spacing: -0.03em; text-transform: none; color: #fff; margin-bottom: 0;
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.45);
+}
+.v2 .v2-root[data-state="listening"] .v2-you .v2-you-who,
+.v2 .v2-root[data-state="armed"] .v2-you .v2-you-who { display: none; }
+
 .v2-tag {
   font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
   color: rgba(255, 255, 255, 0.5); margin-bottom: 16px;
@@ -377,14 +413,34 @@
 .v2-talk[data-pop="true"] { animation: v2-pop 0.52s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes v2-pop { 0% { transform: scale(0.952) } 55% { transform: scale(1.03) } 100% { transform: scale(1) } }
 
-/* Listening / speaking ONLY: the fill drops to ink and a ring pulses out. The reference does this
-   too — it is the inversion, not the resting state. */
-.v2-talk[data-on] { background: var(--v2-ink); color: #fff; box-shadow: 0 6px 26px rgba(255, 46, 147, 0.34); }
+/* ── GLASS WHILE THE MIC IS OPEN ─────────────────────────────────────────────────────────────────
+   Not the resting gradient, and not the ink it used to become. Ink read as broken: a black slab where
+   a coloured pill had been, on a screen that had just gone quiet everywhere else.
+
+   Glass is the answer option D gives — a translucent surface over his portrait, which only means
+   anything because there IS a portrait behind it. The border is what makes it read as a surface
+   rather than as a hole. `background` is set TWICE on .v2-talk (a gradient, then a radial), so
+   background-image is cleared here too or the radial survives and the glass is opaque. */
+.v2-talk[data-on] {
+  background: rgba(255, 255, 255, 0.1);
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #fff;
+  box-shadow: none;
+}
+.v2-talk[data-on]:hover { background: rgba(255, 255, 255, 0.14); box-shadow: none; filter: none; }
+/* The mic circle is a lighter square of the same glass, not the resting pill's white wash. */
+.v2-talk[data-on] .v2-mic { background: rgba(255, 255, 255, 0.16); }
 .v2-talk::after {
   content: ''; position: absolute; inset: -5px; border-radius: 30px;
   border: 1.5px solid rgba(139, 92, 246, 0.7); opacity: 0; pointer-events: none;
 }
-.v2-talk[data-on]::after { opacity: 1; animation: v2-ring 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+/* NO RING WHILE THE MIC IS OPEN. It pulsed a violet hoop out of the button every 1.7s, forever —
+   which was of a piece with the ink slab it used to sit on and is the loudest thing on a screen whose
+   whole argument is that it has gone quiet to listen. The glass border is the edge now. */
+.v2-talk[data-on]::after { opacity: 0; animation: none; }
 @keyframes v2-ring { 0% { transform: scale(1); opacity: 0.75 } 100% { transform: scale(1.24); opacity: 0 } }
 
 .v2-mic {
@@ -643,7 +699,8 @@
 .v2-ov .v2-tag { margin-bottom: 12px; }
 
 .v2-grab {
-  position: absolute; left: 0; right: 0; bottom: 92px; z-index: 5;
+  /* Moves with the rest of the block — see --v2-bottom-drop. Zero on desktop, so this is 92px there. */
+  position: absolute; left: 0; right: 0; bottom: calc(92px - var(--v2-bottom-drop)); z-index: 5;
   display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
 }
 .v2-grab s { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.34); }
@@ -925,8 +982,14 @@
      SWIPE UP label, and the composer was landing on the same rows — two things in one place, which is
      the one arrangement that reads as broken rather than dense. The padding puts the button above the
      handle with real clearance; nothing moves on desktop, where .v2-grab does not exist. */
+  /* ── HOW FAR DOWN THE BOTTOM BLOCK SITS ─────────────────────────────────────────────────────
+     ONE number for the whole group — the sentence, the button, the handle and SWIPE UP — because
+     they are elements pinned to the bottom at different offsets and the spacing between them IS the
+     difference between those offsets. Move one and the group changes shape; move both by the same
+     amount and it only changes position. */
+  .v2 { --v2-bottom-drop: 56px; }
   .v2 .v2-overlay {
-    padding: 0 16px calc(132px + env(safe-area-inset-bottom));
+    padding: 0 16px calc(132px - var(--v2-bottom-drop) + env(safe-area-inset-bottom));
     z-index: 5;
   }
   .v2 .v2-overlay .v2-composer { max-width: none; margin-top: 18px; }
@@ -937,7 +1000,34 @@
      full-width pill kept a left-aligned layout meant for an auto-width one, with a keyboard hint on a
      device that has no keyboard. Restored here as a rule rather than by reintroducing the prop. */
   .v2 .v2-overlay .v2-ctl { justify-content: center; }
-  .v2 .v2-overlay .v2-talk { padding: 0 24px; }
+  /* ── THE TALK BUTTON HUGS ITS CONTENT ───────────────────────────────────────────────────────
+     `.v2-ctl` stretches every face to the full width, which is right for the text field and wrong
+     for the pill: at 100% it stops being a button and becomes a bar.
+
+     THE ASYMMETRIC PADDING IS THE POINT. 8px on the left so the 38px mic circle nearly fills the
+     54px height — 54 − 8 − 8 = 38 — and 26px on the right for the label. A shape that only exists
+     at the width its own contents ask for, which is why it cannot be width:100%. Centred by auto
+     margins between left:0 and right:0 rather than by justify-content, because that centres content
+     INSIDE a full-width box and the box is the thing that must not be full width. */
+  .v2 .v2-overlay .v2-talk {
+    left: 0; right: 0; width: fit-content; margin-inline: auto;
+    height: 54px; padding: 0 26px 0 8px; gap: 13px;
+    font-size: 16px;
+    box-shadow: 0 10px 30px -10px rgba(139, 92, 246, 0.8);
+  }
+  .v2 .v2-overlay .v2-talk:hover { box-shadow: 0 14px 38px -10px rgba(139, 92, 246, 0.95); }
+  /* The press tightens the shadow as well as shrinking the button — a scale on its own reads as the
+     button moving away from the finger rather than being pushed down. */
+  .v2 .v2-overlay .v2-talk:active {
+    transform: scale(0.955);
+    box-shadow: 0 6px 20px -8px rgba(139, 92, 246, 0.8);
+  }
+  .v2 .v2-overlay .v2-talk .v2-mic { width: 38px; height: 38px; background: rgba(255, 255, 255, 0.22); }
+  /* Glass has no coloured shadow to tighten; the scale is the whole of the press. */
+  .v2 .v2-overlay .v2-talk[data-on],
+  .v2 .v2-overlay .v2-talk[data-on]:hover { box-shadow: none; }
+  .v2 .v2-overlay .v2-talk[data-on]:active { box-shadow: none; }
+  .v2 .v2-overlay .v2-composer { height: 54px; }
   .v2 .v2-overlay .v2-talk .v2-kbd { display: none; }
 }
 

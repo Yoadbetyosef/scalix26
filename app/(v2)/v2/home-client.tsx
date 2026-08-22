@@ -232,13 +232,19 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const mode = isMobile === null ? 'pending' : isMobile ? 'mobile' : 'desktop'
 
   return (
-    <div className="v2-root" data-mode={mode} data-min={minimised || undefined}>
+    /* data-state so the DOM chrome can answer the conversation: the scrim rises while the mic is
+       open, and the transcript takes the resting sentence's size. The canvas is told the same thing
+       through its handle — this is the same fact, on the other side of the boundary. */
+    <div className="v2-root" data-mode={mode} data-min={minimised || undefined} data-state={state}>
       <div className="v2-hero">
         {hero}
         {amyLayer}
       <div className="v2-overlay">
         {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
-        {said && <p className="v2-you">You · {said}</p>}
+        {/* The prefix is a span so it can leave while the mic is open: nobody needs telling whose
+            words they are while they are saying them, and "You ·" is what made the line read as a log
+            entry rather than as the sentence the screen is currently listening to. */}
+        {said && <p className="v2-you"><span className="v2-you-who">You · </span>{said}</p>}
         {caption}
         {hairline}
         <Composer

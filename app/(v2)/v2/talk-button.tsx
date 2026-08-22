@@ -36,6 +36,19 @@ const MicIcon = () => (
   </svg>
 )
 
+/**
+ * The glyph while the mic is open: a rounded square, filled.
+ *
+ * A microphone says what the control IS; a stop square says what pressing it DOES, and once the
+ * session is running those are different sentences. Filled rather than stroked because it is the one
+ * solid shape on a surface that has otherwise gone quiet — see option D.
+ */
+const StopIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 export function TalkButton({ state, onTalk, hidden, hint = true, buttonRef, variant = 'bar' }: TalkButtonProps) {
   return (
     <button
@@ -50,8 +63,11 @@ export function TalkButton({ state, onTalk, hidden, hint = true, buttonRef, vari
       aria-hidden={hidden}
       tabIndex={hidden ? -1 : 0}
     >
-      <span className="v2-mic"><MicIcon /></span>
-      <span className="v2-lab">{rudiState(state)}</span>
+      <span className="v2-mic">{state === 'idle' ? <MicIcon /> : <StopIcon />}</span>
+      {/* "End" while she is hearing or answering, because that is what the press does. ARMED keeps
+          its own word: rudi-line.ts records why — nothing is running to stop, it is waiting for you,
+          and that decision predates this screen. */}
+      <span className="v2-lab">{state === 'listening' || state === 'speaking' ? 'End' : rudiState(state)}</span>
       {hint && <span className="v2-kbd">{state === 'idle' ? 'SPACE' : 'END'}</span>}
       <span className="v2-shine" aria-hidden><i /></span>
     </button>
