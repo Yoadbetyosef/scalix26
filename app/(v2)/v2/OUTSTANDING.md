@@ -901,3 +901,30 @@ re-typed every time.
 how an order is created — a separate design decision, and one that has to answer
 what happens to the 12 orders already carrying free text that may not match any
 contact.
+
+## §20 — the cascade sweep stops at the rule boundary
+
+`scripts/find-css-duplicates.mjs` and `app/css-duplicates.test.ts` now guard one
+failure: the same property declared twice **inside one rule**, where the second
+silently wins. That is the shape the `.v2-scrim` `transition` bug had — height
+never animated for months because `transition: opacity 0.35s` sat two lines
+below it — and the sweep that followed found exactly one other instance, the
+dead `linear-gradient` fallback on `.v2-talk`, removed in the same commit. Both
+files are clean and the test fails on reintroduction.
+
+**What it does not cover** is the same fault one level out: two *different*
+selectors of equal specificity both matching one element, where source order
+alone decides the winner. `.v2-root[data-state="listening"] .v2-scrim` and
+`.v2-root[data-state="armed"] .v2-scrim` are the benign version — deliberate,
+mutually exclusive. The dangerous version looks identical in the text and can
+only be told apart by knowing which elements actually exist in which state.
+
+**Why it is not built.** It cannot be done by parsing text. It needs the rendered
+DOM: enumerate the elements /v2 really produces in each state, ask the browser
+which declarations won, and flag every property where a losing declaration came
+from a rule of equal specificity. The headless harness could do it. The reason to
+wait is the signal-to-noise ratio — most equal-specificity pairs are intentional,
+so a first run would be mostly false positives, and triaging those is a day's
+work that belongs after the visual pass, not in the middle of it.
+
+Deferred deliberately, 2026-08-23, not forgotten.

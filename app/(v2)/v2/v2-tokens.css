@@ -443,15 +443,14 @@
 
 /* ── Voice face ────────────────────────────────────────────────────────────────────────────────── */
 /* A FILLED gradient with white text, an inset white top highlight and a coloured drop shadow — the
-   reference's .talk, exactly. The base fill is the linear gradient; the radial below is the same
-   three colours re-centred on the pointer by the magnet, so the fill never disappears when --gx/--gy
-   are unset.
+   reference's .talk, exactly. The fill is ONE radial gradient, re-centred on the pointer by the
+   magnet through --gx/--gy. Its own 50% defaults hold the centre until the magnet first writes them,
+   so there is nothing to fall back to — no second `background` here, and none wanted.
    
    No overflow:hidden here — the pulsing ring is an ::after at inset:-5px and would be clipped by it.
    Only .v2-shine clips, which is what it is for. */
 .v2-talk {
   padding: 0 24px 0 16px; color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.01em;
-  background: linear-gradient(100deg, #ff2e93, #8b5cf6 56%, #22d3ee);
   background: radial-gradient(135% 190% at var(--gx, 50%) var(--gy, 50%), #ff2e93 0%, #8b5cf6 46%, #22d3ee 100%);
   box-shadow: 0 6px 26px rgba(139, 92, 246, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
   will-change: transform;
@@ -473,11 +472,10 @@
 
    Glass is the answer option D gives — a translucent surface over his portrait, which only means
    anything because there IS a portrait behind it. The border is what makes it read as a surface
-   rather than as a hole. `background` is set TWICE on .v2-talk (a gradient, then a radial), so
-   background-image is cleared here too or the radial survives and the glass is opaque. */
+   rather than as a hole. The `background` shorthand below clears the resting radial by itself — a
+   shorthand resets background-image to none — so no separate background-image is needed. */
 .v2-talk[data-on] {
   background: rgba(255, 255, 255, 0.1);
-  background-image: none;
   border: 1px solid rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);

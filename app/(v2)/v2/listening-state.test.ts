@@ -122,9 +122,11 @@ describe('the button', () => {
     expect(glass).toMatch(/background: rgba\(255, 255, 255, 0\.1\)/)
     expect(glass).toMatch(/border: 1px solid rgba\(255, 255, 255, 0\.2\)/)
     expect(glass).toMatch(/backdrop-filter: blur\(14px\)/)
-    // .v2-talk sets `background` TWICE — a gradient then a radial — so background-image has to be
-    // cleared too or the radial survives and the glass is opaque.
-    expect(glass).toMatch(/background-image: none/)
+    // The `background` shorthand above clears .v2-talk's radial by itself, so there is no separate
+    // background-image here. There was one, for as long as .v2-talk declared `background` twice and the
+    // shorthand's own reset could not be relied on to be the last word. See app/css-duplicates.test.ts.
+    expect(glass).not.toMatch(/background-image/)
+    expect(css.slice(css.indexOf('.v2-talk {'), css.indexOf('.v2-talk:active'))).not.toMatch(/linear-gradient/)
     expect(css).not.toMatch(/\.v2-talk\[data-on\] \{ background: var\(--v2-ink\)/)
   })
 
