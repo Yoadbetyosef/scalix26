@@ -38,8 +38,12 @@ const strip = (sql: string) => sql
 function declared(): Set<string> {
   const out = new Set<string>()
   const dir = join(ROOT, 'supabase/migrations')
-  for (const f of readdirSync(dir).filter((n) => n.endsWith('.sql'))) {
-    const sql = strip(readFileSync(join(dir, f), 'utf8'))
+  // supabase/schema.sql declares too — the hand-written founding schema, and where tenants, contacts,
+  // conversations and six others come from. Reading only the folder reported those nine as created by
+  // nothing, which was this check's own first false positive.
+  const files = [...readdirSync(dir).filter((f) => f.endsWith('.sql')).map((f) => join(dir, f)), join(ROOT, 'supabase/schema.sql')]
+  for (const f of files) {
+    const sql = strip(readFileSync(f, 'utf8'))
     for (const m of sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_0-9]+)/gi)) out.add(m[1])
     for (const m of sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+([a-z_0-9]+)/gi)) out.add(m[1])
   }
@@ -68,8 +72,9 @@ describe('the migrations folder against the recorded database', () => {
     // Main's add_document_freeze.sql puts trg_lines_only_on_draft on this table, and no migration in
     // this folder creates it. That is the sharpest edge of the drift.
     expect(o.has('sales_document_lines')).toBe(true)
-    // The founding tables, which predate the folder entirely.
-    for (const t of ['tenants', 'contacts', 'conversations', 'ai_employees']) expect(o.has(t)).toBe(true)
+    // NOT the founding tables — supabase/schema.sql declares those, and reading only the migrations
+    // folder is what wrongly reported nine of them as created by nothing.
+    for (const t of ['tenants', 'contacts', 'conversations', 'ai_employees']) expect(o.has(t)).toBe(false)
     // The commerce module, whose own migration says "Depends on migrations 1–7" — migrations nobody
     // in this repository can read.
     expect(inventory.declaredNowhere.filter((t) => t.startsWith('commerce_')).length).toBeGreaterThan(20)

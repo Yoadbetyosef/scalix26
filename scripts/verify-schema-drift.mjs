@@ -29,6 +29,13 @@ const KEY = env.SUPABASE_SERVICE_ROLE_KEY
 if (!SB || !KEY) { console.error('Need NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local'); process.exit(1) }
 
 const MIG = new URL('../supabase/migrations/', import.meta.url)
+/**
+ * THE FOUNDING SCHEMA IS A DECLARING FILE TOO, and missing it is how nine tables were reported as
+ * created by nothing. supabase/schema.sql is the hand-written original — "Run this in Supabase SQL
+ * Editor" — and it is where tenants, contacts, conversations and six others actually come from. The
+ * folder is not the whole of the declaration; this file is the rest of it.
+ */
+const SCHEMA_SQL = new URL('../supabase/schema.sql', import.meta.url)
 const INVENTORY = new URL('../supabase/schema-inventory.json', import.meta.url)
 
 /** Every relation PostgREST exposes on the public schema. Views included — it does not distinguish. */
@@ -54,8 +61,9 @@ const strip = (sql) => sql
 
 function declared() {
   const tables = new Set(); const views = new Set()
-  for (const f of readdirSync(MIG).filter((n) => n.endsWith('.sql'))) {
-    const sql = strip(readFileSync(new URL(f, MIG), 'utf8'))
+  const sources = [...readdirSync(MIG).filter((n) => n.endsWith('.sql')).map((n) => new URL(n, MIG)), SCHEMA_SQL]
+  for (const url of sources) {
+    const sql = strip(readFileSync(url, 'utf8'))
     for (const m of sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z_0-9]+)/gi)) tables.add(m[1])
     for (const m of sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+([a-z_0-9]+)/gi)) views.add(m[1])
   }
@@ -79,7 +87,7 @@ const orphans = live.filter((t) => !declaredAll.has(t))          // exists, noth
 const missing = [...declaredAll].filter((t) => !liveSet.has(t) && !NOT_PUBLISHED.has(t))
 
 console.log(`live relations        ${live.length}`)
-console.log(`declared by the folder ${declaredAll.size}  (${tables.length} tables, ${views.length} views)`)
+console.log(`declared by the repo   ${declaredAll.size}  (${tables.length} tables, ${views.length} views)`)
 console.log(`\nIN THE DATABASE, DECLARED NOWHERE — ${orphans.length}`)
 for (const t of orphans) console.log(`  ${t}`)
 console.log(`\nDECLARED, NOT IN THE DATABASE — ${missing.length}`)
