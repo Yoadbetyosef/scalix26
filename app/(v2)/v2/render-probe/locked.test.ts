@@ -37,9 +37,11 @@ describe('the render probe is unreachable in production', () => {
 })
 
 describe('the bare probe, outside the (v2) group, is locked the same way', () => {
-  // It exists to render v1 components in a v1 page's CSS environment — no v2-tokens.css — which is
-  // the only way to know whether something that works in the preview also works on the dashboard.
-  const bare = read('app/render-probe/orb/page.tsx')
+  // It renders the REAL DashboardHero with stub inputs, in a v1 page. It exists because of a bug it
+  // would have caught: every render that approved the robot was of the orb on its own, so a headshot
+  // of a different character overlapping him reached two customers. A probe that renders a component
+  // proves the component; only one that renders the screen proves the screen.
+  const bare = read('app/render-probe/dashboard/page.tsx')
 
   it('404s in production from the page itself', () => {
     expect(bare).toMatch(/if \(process\.env\.NODE_ENV === 'production'\) notFound\(\)/)

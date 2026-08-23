@@ -66,7 +66,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (effectiveTab === 'overview' && impactData) {
     // Moved to lib/dashboard/briefing.ts so /v2 can obtain the SAME briefing. Same inputs, same
     // values — see that file's header.
-    const { employeeName, brainAgentId: agentId, briefing, presenceState, stateSentence, idleSentence, figures } =
+    const { employeeName, persona: primaryPersona, brainAgentId: agentId, briefing, presenceState, stateSentence, idleSentence, figures } =
       buildHeroInputs(aiEmployees, impactData, appointments_list, leads_list, stats)
     brainAgentId = agentId
 
@@ -74,6 +74,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <>
       <DashboardHero
         employeeName={employeeName}
+        persona={primaryPersona}
+        phone={tenant.phone_number ?? null}
         briefing={briefing}
         presenceState={presenceState}
         stateSentence={stateSentence}

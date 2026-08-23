@@ -3620,3 +3620,36 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    line already names the count, and thirty amber marks down a column would make the list unreadable
    while telling somebody nothing they could act on row by row. */
 .v2 .v2-xrec[data-none] { color: var(--v2-ink-40); font-size: 13px; }
+
+/* ── THE HERO, EMBEDDED IN A PAGE THAT SCROLLS ──────────────────────────────────────────────────────
+   /v2 is a route that owns the viewport: `.v2` is 100dvh with hidden overflow and `.v2-hero` is
+   absolutely positioned into it. The dashboard is a page — a rail beside it, tabs and tables under
+   it — so the same composition has to become a band with a height instead of a screen with an inset.
+   Everything else about it is unchanged, which is the point: same canvas, same scrim, same caption,
+   same composer, same rules.
+
+   Two things only, and both are about the box rather than about the design:
+   the shell stops claiming the viewport, and the hero gets a height instead of an inset. */
+.v2.v2-embedded {
+  height: auto;
+  overflow: visible;
+  background: transparent;
+}
+/* Full-bleed on a phone — the dashboard's own p-4 is cancelled so the picture reaches both edges,
+   which is what makes it read as a hero rather than as an illustration in a card. It keeps the page's
+   margins from sm: up and becomes a rounded plate there. */
+.v2.v2-embedded .v2-root {
+  position: relative;
+  height: min(78dvh, 720px);
+  min-height: 460px;
+  margin: 0 -16px;
+  overflow: hidden;
+}
+.v2.v2-embedded .v2-hero { position: absolute; inset: 0; }
+/* The rail and the side column belong to /v2's own chrome; the dashboard has its own sidebar and its
+   own right-hand content, so the hero takes the full width of whatever column it is placed in. */
+.v2.v2-embedded .v2-root[data-mode="desktop"] .v2-hero { left: 0; right: 0; }
+
+@media (min-width: 640px) {
+  .v2.v2-embedded .v2-root { margin: 0; border-radius: 20px; }
+}

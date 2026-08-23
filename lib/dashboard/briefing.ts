@@ -1,3 +1,4 @@
+import type { AgentPersona } from '@/types'
 import type { PresenceState } from '@/components/dashboard/hero/dashboard-hero'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 import type { getImpactData } from './impact'
@@ -27,6 +28,14 @@ type Impact = Awaited<ReturnType<typeof getImpactData>>
 
 export interface HeroInputs {
   employeeName: string
+  /**
+   * Which character the hero paints, from the primary employee's own row.
+   *
+   * Not assumed. The dashboard draws a portrait now, and painting Rudi for a tenant whose employee
+   * is Miles shows them the wrong colleague. Absent on rows written before add_miles_persona.sql,
+   * which the column's type already documents as meaning Rudi.
+   */
+  persona: AgentPersona
   employeeVoice: string | null
   brainAgentId: string | undefined
   briefing: AmyBriefing
@@ -48,6 +57,8 @@ export function buildHeroInputs(
   // is a coin toss, and it decides this hero's name, voice, portrait and which brain it loads.
   const primaryEmployee = primaryOf(employeesTyped)
   const employeeName = primaryEmployee?.name || 'Your AI'
+  const persona: AgentPersona =
+    (primaryEmployee as { persona?: AgentPersona } | undefined)?.persona === 'miles' ? 'miles' : 'rudi'
   const employeeVoice = primaryEmployee?.voice ?? null
   const brainAgentId = primaryEmployee?.id
 
@@ -96,5 +107,5 @@ export function buildHeroInputs(
     { value: answered, suffix: '%', label: 'Answered' },
   ]
 
-  return { employeeName, employeeVoice, brainAgentId, briefing, presenceState, stateSentence, idleSentence, figures }
+  return { employeeName, persona, employeeVoice, brainAgentId, briefing, presenceState, stateSentence, idleSentence, figures }
 }
