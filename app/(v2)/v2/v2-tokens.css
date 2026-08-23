@@ -359,25 +359,15 @@
      the wide 22px pass darkens the field it sits on. A single 18px blur at .45 did neither well
      enough to measure. */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 22px rgba(0, 0, 0, 0.75);
-  position: relative;
 }
-/* ── A LOCAL BACKDROP, RAMPED AGAINST THE SCRIM ────────────────────────────────────────────────────
-   The shadow alone left the block uneven, and measurably: line one at 2.92:1 and line three at
-   4.61:1, because a text-shadow is a halo per glyph — it scales with the glyph, not with how dark the
-   field already is, so it cannot flatten a gradient underneath it.
-   This can. The scrim ramps from about 0.07 at the first line to 0.30 at the third, so this ramps the
-   other way and the sum comes out flat. Blurred and inset past the text on every side so it has no
-   edge of its own; z-index -1 keeps it behind the words and, because .v2-cap sets no z-index of its
-   own, still inside .v2-overlay's stacking context and above the scrim. */
-.v2-cap::before {
-  content: ''; position: absolute; inset: -30px -20px -10px; z-index: -1; pointer-events: none;
-  background: linear-gradient(180deg,
-    rgba(10, 10, 13, 0) 0%,
-    rgba(10, 10, 13, 0.66) 25%,
-    rgba(10, 10, 13, 0.66) 85%,
-    rgba(10, 10, 13, 0.03) 100%);
-  filter: blur(20px);
-}
+/* NO BACKDROP BEHIND THE HEADLINE, AND THAT IS A CHOICE MADE AGAINST THE NUMBERS.
+   There was one — a blurred box ramped to sit behind the three lines — and it worked: floor 6.79:1,
+   spread 0.11, measured on the dev server. It came out because with no veil at rest it was the only
+   dark thing on a light plate, so it stopped reading as the bottom of a gradient and started reading
+   as a grey object laid on the photograph.
+   The text is softer for it and does not meet AA. Deliberately: see OUTSTANDING §22 for the measured
+   figures and the reasoning, so the next person finds a decision rather than an oversight. Anything
+   put back here has to answer the shape problem first, not just the contrast one. */
 .v2-cap b {
   font-weight: 600; background: var(--v2-grad);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;

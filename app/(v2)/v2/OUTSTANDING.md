@@ -945,3 +945,40 @@ one piece of the composition that is working.
 **What would change the answer** is a real report of somebody unable to read it,
 or a decision to hold /v2 to AA across the board rather than where it matters. The
 number is here so the next person finds a decision rather than an oversight.
+
+## §22 — the /v2 caption does not meet AA at rest, on purpose
+
+Measured on the dev server at 390×844, idle, with no veil and no backdrop:
+
+| line | ground luma | vs white |
+|---|---|---|
+| 1 — "3 new people today, 1" | 163 | **2.52:1** |
+| 2 — "handled. One thing needs" | 148 | 3.03:1 |
+| 3 — "you." | 145 | 3.15:1 |
+
+Floor 2.52:1 against the 4.5 that 31px/600 text needs. Lines 2 and 3 are painted
+with the accent gradient rather than white, so their figures are the ground's
+contribution and not their true contrast; line 1 is white and its 2.52 is real.
+
+**What was tried.** A local backdrop behind the caption — a blurred box ramped to
+sit under the three lines — reached floor 6.79:1 and spread 0.11, and it is in the
+history at `ac4a604` if the numbers are ever wanted again. It was removed because
+with no veil at rest it was the only dark thing on a light plate: it stopped
+reading as the bottom of a gradient and started reading as a grey object laid on
+the photograph. Before that, a full-width scrim carried the caption and produced a
+visible horizontal edge under the readouts that three separate attempts failed to
+soften — the frame has to be bright where the robot is and dark where the copy is,
+with 43px between them, and that bands at any ramp.
+
+**The decision, taken by Yoad on 2026-08-23:** the text is softer and the picture
+is clean. Prominence is the reason the character became a robot, and a grey cloud
+in the middle of the screen costs more than the contrast buys.
+
+**Listening is unaffected and is fine** — the veil gives floor 8.06:1, spread 0.26.
+The failure is idle only.
+
+**What would change the answer** is anyone reporting they cannot read it on a real
+phone in real light — this is measured on a synthetic render of one asset, and a
+photograph with a darker lower third would score differently. Anything proposed
+here has to answer the SHAPE problem first, not just the contrast one: a full-width
+gradient bands, and a local box reads as an object.

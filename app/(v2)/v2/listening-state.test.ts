@@ -95,37 +95,28 @@ describe('he recedes into the veil', () => {
     expect(css).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
   })
 
-  it('and a local backdrop that is now the only thing making the caption readable', () => {
-    // With no veil at rest this element carries the caption alone, so it was re-swept from scratch
-    // against the bare plate. Two things changed and the second was the one that mattered.
+  it('has NO backdrop behind it, which is a choice taken against the numbers', () => {
+    // There was one, and it worked: a blurred box ramped behind the three lines, floor 6.79:1 and
+    // spread 0.11 measured on the dev server. It came out because with no veil at rest it was the
+    // only dark thing on a light plate — it stopped reading as the bottom of a gradient and started
+    // reading as a grey object laid on the photograph.
     //
-    // The shape went from a ramp to a plateau: it used to ramp DOWN the frame to counteract a scrim
-    // getting stronger underneath it, and there is no scrim underneath it now.
-    //
-    // And the box starts 30px above the caption rather than 3. Alpha alone could not fix line one —
-    // a flat 0.84 still only reached 4.35:1 — because line one sits in the top of the box where the
-    // 20px blur has ramped the alpha most of the way down. Where the box STARTS was the limit, not
-    // how dark it goes. Measured on the dev server: 6.90 / 10.53 / 6.79, floor 6.79, spread 0.11.
-    //
-    // -30/0.66 over -25/0.80, which scored marginally better at 7.57 and 0.00: the sharpest row on
-    // the top edge is 1.92 against 2.14, and the edge is the thing this whole exercise was about.
-    // The robot pays nothing either way — band 157, base 145, all of it below his feet at 505.
-    const rule = css.slice(css.indexOf('.v2-cap::before {'), css.indexOf('}', css.indexOf('.v2-cap::before {')))
-    expect(rule).toMatch(/inset: -30px -20px -10px/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\) 0%/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.66\) 25%/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.66\) 85%/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.03\) 100%/)
-    expect(rule).toMatch(/z-index: -1/)
-    // The top stop must stay at zero. A non-zero first stop is a step at the box edge, and blur turns
-    // a step into precisely the soft band this was written to remove.
-    expect(rule).not.toMatch(/rgba\(10, 10, 13, 0\.[1-9][0-9]?\) 0%/)
-    // .v2-cap must stay position:relative and set NO z-index, or the pseudo-element leaves
-    // .v2-overlay's stacking context and falls behind the scrim.
+    // So the caption is white on the plate with a text-shadow and nothing else, and it does not meet
+    // AA. That is recorded in OUTSTANDING §22 with the figures. This test exists so the element
+    // cannot come back quietly: anything put here has to answer the shape problem, not just the
+    // contrast one, and re-adding it should be a decision someone makes on purpose.
+    expect(css).not.toMatch(/\.v2-cap::before/)
+
+    // position:relative went with it. It was there to contain the pseudo-element and nothing else —
+    // .v2-cap's only child is the loading skeleton, which is in normal flow.
     const cap = css.slice(css.indexOf('.v2-cap {'), css.indexOf('}', css.indexOf('.v2-cap {')))
-    expect(cap).toMatch(/position: relative/)
+    expect(cap).not.toMatch(/position: relative/)
     expect(cap).not.toMatch(/z-index/)
+    // The shadow stays. It is a halo per glyph rather than a shape on the picture, which is the whole
+    // distinction the backdrop failed on.
+    expect(cap).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
   })
+
   it('is told the state by the root, which is where the DOM chrome can read it', () => {
     expect(home).toMatch(/data-state=\{state\}/)
   })
