@@ -277,6 +277,11 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
         handleRef={rudi}
         onStateChange={setState}
         minimised={minimised}
+        // The acid readouts are mobile-only, and that is a decision rather than a breakpoint quirk:
+        // the approved desktop composition carries the same figures as static tiles in the right-hand
+        // column, so animating a second copy of them over the robot would be the same numbers twice —
+        // and the right-hand card would sit under the sidebar.
+        readouts={isMobile === true}
         className="v2-face"
         onClick={() => (minimised ? wake() : toggleTalk())}
       />
@@ -326,7 +331,10 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
       <div className="v2-hero">
         {hero}
         {amyLayer}
-      <div className="v2-overlay">
+      {/* data-bottom-block is READ BY THE CANVAS. The readouts have to stay above whatever this
+          grows to, and it grows upward when the sentence wraps — so the ceiling is measured off it
+          rather than guessed as a fraction. See measureCeiling in rudi-canvas. */}
+      <div className="v2-overlay" data-bottom-block>
         {shell.phone && <p className="v2-tag">Rudi · listening on {shell.phone}</p>}
         {/* The prefix is a span so it can leave while the mic is open: nobody needs telling whose
             words they are while they are saying them, and "You ·" is what made the line read as a log

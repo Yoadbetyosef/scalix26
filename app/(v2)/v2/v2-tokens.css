@@ -261,6 +261,16 @@
 }
 /* The scrim. 62% of the height, three stops, transparent at the top — the caption is white and the
    portrait is lit from below, so without this the text sits on a bright shoulder and disappears. */
+/* ── THE ACID READOUTS' OWN LAYER ────────────────────────────────────────────────────────────────
+   Above the scrim (z 2), below the copy (z 3, later in source). Painted on their own canvas because
+   on the scan's they sit UNDER the scrim, and the lower a card sits the more the gradient dims it —
+   on an acid card that reads as a shadow, and they are the one thing here that has to stay legible.
+   Same box as the face, so the two backing stores share a coordinate system exactly. */
+.v2 .v2-cards { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; }
+/* Collapsed, the face shrinks to a thumbnail and a sibling cannot follow it. Readouts do not belong
+   on a thumbnail anyway, so they go rather than being reproduced at a second geometry. */
+.v2 .v2-root[data-min] .v2-cards { display: none; }
+
 .v2-scrim {
   position: absolute; left: 0; right: 0; bottom: 0; height: 62%; z-index: 2; pointer-events: none;
   transition: height 0.4s var(--v2-ease);

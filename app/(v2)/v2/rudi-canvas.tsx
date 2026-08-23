@@ -74,6 +74,13 @@ interface Props {
   onStateChange?: (s: RudiState) => void
   /** Collapsed (idle > 60s): still frame, slow band, no network, no video. */
   minimised?: boolean
+  /**
+   * Draw the acid readouts over the portrait. MOBILE ONLY, and decided rather than configurable:
+   * the approved desktop composition puts the same figures in the right-hand column as static tiles,
+   * so a second, animated copy of them over the robot would be the same numbers twice — and the
+   * right-hand card would sit under the sidebar. Off unless the caller says otherwise.
+   */
+  readouts?: boolean
   className?: string
   onClick?: () => void
 }
@@ -142,6 +149,37 @@ export const domeInCanvas = (f: Fit, iw: number, ih: number, d: Dome) => ({
   r: d.r * iw * f.s,
 })
 
+// ── THE ACID READOUTS ───────────────────────────────────────────────────────────────────────────────
+//
+// Two cards, on their OWN clock against the scan's, so the pairs drift rather than arriving with it.
+// They never made it across when Rudi became a robot; this is them, from rudi-scan-v26.
+const CARD_CYCLE_MS = 5250
+const CARDS: Array<Array<[string, string]>> = [
+  [['CALLS TODAY', '3'], ['ANSWERED', '100%']],
+  [['WAITING ON YOU', '1'], ['BOOKED', '1']],
+  [['AFTER HOURS', '6'], ['AVG CALL', '1m 21s']],
+]
+/**
+ * The fraction of height the readouts must not pass, so the copy underneath is never covered.
+ *
+ * 0.660 IS THE FALLBACK, NOT THE RULE. It was measured against one sentence at one width. On a real
+ * phone the caption is whatever Rudi has to say, and a two-line sentence grows the block upward past
+ * any fixed fraction — which is how CALLS TODAY ended up sitting on the copy. The ceiling is measured
+ * off the element the cards have to clear; this is only what it falls back to when there is nothing
+ * to measure.
+ */
+const CEILING_FALLBACK = 0.66
+/**
+ * How far the right-hand card hangs below the left one, as a fraction of height.
+ *
+ * Shared by the drawing and the ceiling deliberately: the LOWER card is the one that has to clear the
+ * copy, so a ceiling computed without it leaves exactly one of the two overlapping — the half-fixed
+ * version of the bug, and harder to see than the whole one.
+ */
+const CARD_DROP = 0.055
+/** Clear air between the lowest card and the top of the block. */
+const CARD_GAP = 0.02
+
 /** The three stages the readout names, keyed to the ring cycle. */
 export const SCAN_PHASES: [number, string][] = [[0, 'ANALYSIS'], [0.4, 'READING'], [0.75, 'ON DUTY']]
 export const phaseAt = (t: number): string => {
@@ -199,13 +237,25 @@ function hue(stops: Paint['stops'], t: number): [number, number, number] {
 
 const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, className, onClick, persona = 'rudi' }: Props) {
+/** A rounded rectangle path. roundRect() is not in every engine this ships to, so it is drawn. */
+function rr(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: number, r: number) {
+  x.beginPath()
+  x.moveTo(px + r, py)
+  x.arcTo(px + w, py, px + w, py + h, r)
+  x.arcTo(px + w, py + h, px, py + h, r)
+  x.arcTo(px, py + h, px, py, r)
+  x.arcTo(px, py, px + w, py, r)
+  x.closePath()
+}
+
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, className, onClick, persona = 'rudi' }: Props) {
   // Read once. See paintFor: a persona change means a remount, keyed by the caller.
   const paint = useRef(paintFor(persona)).current
   const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, dome: DOME, name: NAME } = paint
   const IW = paint.iw
   const IH = paint.ih
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const cardsRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [state, setStateRaw] = useState<RudiState>('idle')
   // WHAT THE SCAN IS DOING, in a word. The prototype prints it in a row of its own at the top of the
@@ -305,11 +355,47 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     let raw: [number, number][] = []
     let scanA = 1
     let vidA = 0
+    // ── WHY THE READOUTS GET THEIR OWN CANVAS ────────────────────────────────────────────────────
+    //
+    // Painted onto the scan's canvas they sit under the scrim, and the lower a card sits the more the
+    // gradient dims it — on an acid card that reads as a shadow, and they are the one element here
+    // that has to stay legible. They are chrome, not part of the scan; the scan belongs under the
+    // veil and stays there.
+    //
+    // A second canvas rather than DOM, because DOM would mean re-deriving every position: the widths
+    // come from measureText on canvas-pixel fonts, and x, y, the corner radius and the drop are all
+    // fractions of the backing store. This canvas shares the parent box and the same DPR expression,
+    // so W and H are identical and not one coordinate changes.
+    const cardsCanvas = cardsRef.current
+    const cctx = cardsCanvas?.getContext('2d') ?? null
+    let ct = 0
+    // Recomputed on layout, never per frame — getBoundingClientRect is a layout read, and sixty a
+    // second to answer a question that changes when the text wraps is what makes a canvas expensive.
+    let ceiling = CEILING_FALLBACK
 
     // A second canvas for the sweep band, composited with 'lighter' — the reference's approach, and
     // the reason the band glows through the portrait instead of sitting on top of it.
     const sweep = document.createElement('canvas')
     const sctx = sweep.getContext('2d')
+
+    /**
+     * Measure the block the readouts must stay above.
+     *
+     * Both rects come from the same viewport, so the subtraction is in CSS pixels and the ratio holds
+     * in canvas pixels — no DPR term, and none wanted: a fraction is a fraction.
+     */
+    function measureCeiling() {
+      if (!cctx) return
+      const block = canvas!.closest('.v2-hero')?.querySelector('[data-bottom-block]')
+      if (!block) { ceiling = CEILING_FALLBACK; return }
+      const cr = canvas!.getBoundingClientRect()
+      const br = block.getBoundingClientRect()
+      if (!cr.height || !br.height) return
+      const want = (br.top - cr.top) / cr.height - CARD_DROP - CARD_GAP
+      // Never above the top third: a ceiling that high means the copy has eaten the screen, and cards
+      // floating by his dome is a worse answer than cards that are simply not shown.
+      ceiling = Math.max(0.30, Math.min(CEILING_FALLBACK, want))
+    }
 
     function fit() {
       const r = canvas!.getBoundingClientRect()
@@ -325,6 +411,8 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       if (w === CW && h === CH) return
       CW = w; CH = h
       canvas!.width = CW; canvas!.height = CH
+      // The same numbers from the same measurement — the two layers cannot disagree about the frame.
+      if (cardsCanvas) { cardsCanvas.width = CW; cardsCanvas.height = CH }
       sweep.width = CW; sweep.height = CH
       // ── THE CROP IS ANCHORED ON THE THING THE SCAN IS DRAWN AROUND ────────────────────────────
       //
@@ -453,8 +541,55 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       if (label !== phaseRef.current) { phaseRef.current = label; setPhase(label) }
     }
 
+    /**
+     * Two acid cards, each measuring its own width from its own text.
+     *
+     * In over 0.09 of its slot, held for 0.68, out over 0.23 — long enough to read twice. Multiplied
+     * by scanA, so they leave with the scan the moment the mic opens rather than animating over
+     * somebody who is talking.
+     */
+    function drawCards(dt: number) {
+      if (!cctx || !cardsCanvas) return
+      ct = (ct + dt / (CARD_CYCLE_MS / 1000)) % 1
+      cctx.setTransform(1, 0, 0, 1, 0, 0)
+      cctx.clearRect(0, 0, CW, CH)
+
+      const per = 1 / CARDS.length
+      const local = (ct % per) / per
+      const a = (local < 0.09 ? local / 0.09 : local < 0.77 ? 1 : 1 - (local - 0.77) / 0.23) * scanA
+      if (a <= 0.01) return
+
+      const set = CARDS[Math.floor(ct / per) % CARDS.length]
+      const kf = `500 ${CW * 0.019}px "JetBrains Mono", ui-monospace, monospace`
+      const vf = `500 ${CW * 0.068}px "Inter Tight", system-ui, sans-serif`
+      const padX = CW * 0.028, padY = CH * 0.012, lead = CH * 0.030
+      const cs = set.map((c) => {
+        cctx.font = kf; const kw = cctx.measureText(c[0]).width
+        cctx.font = vf; const vw = cctx.measureText(c[1]).width
+        return { k: c[0], v: c[1], w: Math.max(kw, vw) + padX * 2 }
+      })
+      const hh = padY * 2 + lead + CW * 0.040
+      const y = CH * ceiling - hh
+      const rise = (1 - a) * CH * 0.012
+      const margin = CW * 0.056
+
+      cs.forEach((cd, i) => {
+        const x = i === 0 ? margin : CW - margin - cd.w
+        const drop = i === 1 ? CH * CARD_DROP : 0
+        cctx.fillStyle = `rgba(217,242,36,${a * 0.92})`
+        rr(cctx, x, y + rise + drop, cd.w, hh, CW * 0.013); cctx.fill()
+        cctx.fillStyle = `rgba(65,73,10,${a * 0.78})`; cctx.font = kf
+        cctx.fillText(cd.k, x + padX, y + rise + drop + padY + CW * 0.016)
+        cctx.fillStyle = `rgba(24,28,4,${a})`; cctx.font = vf
+        cctx.fillText(cd.v, x + padX, y + rise + drop + padY + lead + CW * 0.040)
+      })
+    }
+
+    let lastFrame = 0
     function draw(now: number) {
       if (disposed) return
+      const dt = lastFrame ? Math.min(0.05, (now - lastFrame) / 1000) : 0
+      lastFrame = now
       // A missing still must not KILL the loop. Returning without re-requesting a frame ended it
       // permanently, so anything that cleared the canvas before the image was ready left it black
       // with nothing scheduled to repaint it.
@@ -470,6 +605,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       // It runs the SAME sweep the full engine does now, at the same rate, and still pays for none of
       // the rest: no mesh, no bloom, no video, no meter. Alive without the whole engine.
       if (minRef.current) {
+        // Readouts do not belong on a thumbnail, and a sibling canvas cannot follow the face as it
+        // shrinks. Cleared rather than reproduced at another geometry.
+        if (cctx) cctx.clearRect(0, 0, CW, CH)
         ctx!.drawImage(img, DX, DY, DW, DH)
         const v = videoRef.current
         if (v && !v.paused) v.pause()
@@ -581,6 +719,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
           }
         }
       }
+
+      // Chrome, above the scrim, on its own clock and its own layer.
+      drawCards(dt)
 
       // ── The scan. Rings from the dome for a machine; the sweep for a face. ─────────────────────
       if (DOME) drawRings(now, scanA)
@@ -748,6 +889,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // now reports its own size, so the mesh is built the moment there is something to build it across.
     const ro = new ResizeObserver(() => {
       fit()
+      measureCeiling()
       ensureNet()
       if (!running) drawStill()
     })
@@ -772,6 +914,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
       KICK_EVENTS.forEach((e) => window.removeEventListener(e, kick, { capture: true }))
       if (disposed) return
       fit()
+      measureCeiling()
       ensureNet()
       sync()
       // If the loop is not running after this — reduced motion, or off-screen — the still is what
@@ -785,7 +928,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
     // needing to know which element any particular screen scrolls.
     KICK_EVENTS.forEach((e) => window.addEventListener(e, kick, { passive: true, capture: true }))
 
-    const onResize = () => { fit(); ensureNet(); if (!running) drawStill() }
+    const onResize = () => { fit(); measureCeiling(); ensureNet(); if (!running) drawStill() }
     window.addEventListener('resize', onResize)
 
     // ── FIRST PAINT ──────────────────────────────────────────────────────────────────────────────
@@ -875,6 +1018,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, classN
         aria-hidden
         style={{ position: 'absolute', width: 2, height: 2, opacity: 0, pointerEvents: 'none', top: 0, left: 0 }}
       />
+      {/* MOBILE ONLY — see the `readouts` prop. Rendered as a sibling of the face so the scrim cannot
+          shade it, and given the same box by CSS so its backing store matches the scan's exactly. */}
+      {readouts && <canvas ref={cardsRef} className="v2-cards" aria-hidden />}
       <canvas
         ref={canvasRef}
         className={className}
