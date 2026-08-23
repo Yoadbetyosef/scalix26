@@ -17,6 +17,8 @@ import { rudiState } from './rudi-line'
 // caller's turn in both.
 
 export interface TalkButtonProps {
+  /** The employee's own name. Defaulted downstream to Rudi — see rudiState. */
+  name?: string
   state: RudiState
   onTalk: () => void
   /** Composer hides it while the field is open; nothing else does. */
@@ -49,7 +51,7 @@ const StopIcon = () => (
   </svg>
 )
 
-export function TalkButton({ state, onTalk, hidden, hint = true, buttonRef, variant = 'bar' }: TalkButtonProps) {
+export function TalkButton({ state, onTalk, hidden, hint = true, buttonRef, variant = 'bar', name }: TalkButtonProps) {
   return (
     <button
       ref={buttonRef as RefObject<HTMLButtonElement | null>}
@@ -67,7 +69,7 @@ export function TalkButton({ state, onTalk, hidden, hint = true, buttonRef, vari
       {/* "End" while she is hearing or answering, because that is what the press does. ARMED keeps
           its own word: rudi-line.ts records why — nothing is running to stop, it is waiting for you,
           and that decision predates this screen. */}
-      <span className="v2-lab">{state === 'listening' || state === 'speaking' ? 'End' : rudiState(state)}</span>
+      <span className="v2-lab">{state === 'listening' || state === 'speaking' ? 'End' : rudiState(state, name)}</span>
       {hint && <span className="v2-kbd">{state === 'idle' ? 'SPACE' : 'END'}</span>}
       <span className="v2-shine" aria-hidden><i /></span>
     </button>

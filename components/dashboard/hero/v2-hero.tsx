@@ -11,6 +11,7 @@ import { AskAmyText } from './ask-amy-text'
 import type { AmyBriefing } from './ask-amy-shared'
 import { useAmySession } from './use-amy-session'
 import { usePresenceScan } from './use-presence-scan'
+import type { RudiSegment } from '@/app/(v2)/v2/rudi-line'
 import type { PersonaKey } from '@/lib/persona'
 import '@/app/(v2)/v2/v2-tokens.css'
 
@@ -37,17 +38,23 @@ export interface V2HeroProps {
   /** Which employee to paint. From the ai_employees row — NOT assumed to be Rudi. */
   persona: PersonaKey
   employeeName: string
-  /** The line over the portrait. v1's own sentence, from buildHeroInputs. */
-  sentence: string
+  /**
+   * The line over the portrait, in segments.
+   *
+   * Segments and not a string because the closing clause is painted with the accent gradient, and
+   * that gradient is a large part of what the caption IS. Built by /v2's own rudiLine from v1's
+   * counts — same generator, different source.
+   */
+  sentence: RudiSegment[]
   /** Three pairs, cycled over the picture. v1's counts — see the note on RudiCanvas.cards. */
   readouts: Array<Array<[string, string]>>
-  /** The number the agent answers on, if there is one. */
-  phone?: string | null
   /** What the agent is told about the business. v1 builds this already, in buildHeroInputs. */
   briefing: AmyBriefing
+  /** Desktop only: what goes in /v2's right-hand column. v1's figures, in /v2's place for them. */
+  aside?: React.ReactNode
 }
 
-export function V2Hero({ persona, employeeName, sentence, readouts, phone, briefing }: V2HeroProps) {
+export function V2Hero({ persona, employeeName, sentence, readouts, briefing, aside }: V2HeroProps) {
   const rudi = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [said, setSaid] = useState<string | null>(null)
@@ -59,28 +66,35 @@ export function V2Hero({ persona, employeeName, sentence, readouts, phone, brief
 
   // The reveal, as /v2 does it: the transcript lands whole and is shown a word at a time, and her
   // turn is held until the last one. Same sequencer, no React in it — see reveal.ts.
+  //
+  // BUILT IN AN EFFECT, not during render. /v2's home-client fills a ref in the render body and
+  // eslint's react-hooks/refs flags it — that is the "1 Issue" badge on the dev overlay. Neither a
+  // lazy useState initialiser nor a useCallback satisfies the rule, and it is right not to: this
+  // thing owns interval timers, so constructing it is a side effect and an effect is where side
+  // effects go. Everything that drives it runs after mount anyway — the session mounts later still.
   const revealRef = useRef<Reveal | null>(null)
-  if (!revealRef.current) {
-    revealRef.current = createReveal({
+  useEffect(() => {
+    const r = createReveal({
       show: (text) => setSaid(text),
       arm: () => rudi.current?.arm(),
       reduced: () => typeof window !== 'undefined'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     })
-  }
-  const reveal = revealRef.current
-  useEffect(() => () => reveal.settle(), [reveal])
+    revealRef.current = r
+    return () => r.settle()
+  }, [])
 
   const onMoment = useCallback((m: AmyMoment) => {
     const r = rudi.current
-    if (!r) return
+    const reveal = revealRef.current
+    if (!r || !reveal) return
     if (m.type === 'listen') { reveal.settle(); r.listen() }
     else if (m.type === 'level') r.level(m.value)
     else if (m.type === 'speak') { reveal.settle(); r.speak(m.text, m.ms) }
     else if (m.type === 'stopSpeaking') r.stopSpeaking()
     else if (m.type === 'arm') reveal.arm()
     else if (m.type === 'said') reveal.say(m.text)
-  }, [reveal])
+  }, [])
 
   const toggleTalk = useCallback(() => {
     if (amy.mode !== 'idle') { amy.close(); rudi.current?.endSession(); return }
@@ -88,10 +102,10 @@ export function V2Hero({ persona, employeeName, sentence, readouts, phone, brief
   }, [amy])
 
   const onSubmit = useCallback((text: string) => {
-    reveal.settle()
+    revealRef.current?.settle()
     setSaid(text)
     amy.goText()
-  }, [amy, reveal])
+  }, [amy])
 
   // null until measured — see use-breakpoint. Rendering nothing for one frame beats rendering the
   // wrong tree and jumping, and the canvas is keyed so crossing 720px genuinely remounts it.
@@ -116,10 +130,17 @@ export function V2Hero({ persona, employeeName, sentence, readouts, phone, brief
           {/* data-bottom-block is READ BY THE CANVAS — the readouts are placed off whatever this
               grows to, so a longer sentence pushes them up rather than being covered by them. */}
           <div className="v2-overlay" data-bottom-block>
-            {phone && <p className="v2-tag">{employeeName} · listening on {phone}</p>}
+            {/* /v2 printed "listening on <number>" here. It belonged to a screen that was only a
+                phone presence; on the dashboard it was illegible white over the picture and said
+                nothing the page does not say elsewhere. Dropped rather than restyled. */}
             {said && <p className="v2-you"><span className="v2-you-who">You · </span>{said}</p>}
-            <p className="v2-cap">{sentence}</p>
+            <p className="v2-cap">
+              {sentence.map((seg, i) => (seg.accent
+                ? <b key={i}>{seg.text}</b>
+                : <span key={i}>{seg.text}</span>))}
+            </p>
             <Composer
+              name={employeeName}
               state={state}
               onTalk={toggleTalk}
               onSubmit={onSubmit}
@@ -127,6 +148,11 @@ export function V2Hero({ persona, employeeName, sentence, readouts, phone, brief
             />
           </div>
         </div>
+        {/* The right-hand column, on desktop, the way /v2 composes it — and holding the same thing
+            /v2 holds there: the day's figures as static tiles. It is why the readouts are drawn on
+            the portrait on mobile only; two animated copies of one number beside each other was
+            never the design. */}
+        {isMobile === false && aside && <aside className="v2-side" data-scroll>{aside}</aside>}
       </div>
       {/* The session's own UI, exactly as /v2 mounts it — AmyRealtime while live, the text sheet
           while typing, nothing at rest. This is v1's component either way; /v2 never had its own. */}

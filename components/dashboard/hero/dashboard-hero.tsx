@@ -5,6 +5,7 @@ import { V2Hero } from './v2-hero'
 import { TodayWork, type WorkFigure } from './today-work'
 import { type AmyBriefing } from './ask-amy'
 import { AttentionPill } from '@/components/dashboard/attention'
+import { rudiLine } from '@/app/(v2)/v2/rudi-line'
 import type { PersonaKey } from '@/lib/persona'
 
 export type PresenceState = 'ready' | 'working' | 'attention'
@@ -14,10 +15,7 @@ export interface DashboardHeroProps {
   /** Which employee to paint. From the ai_employees row — never assumed. */
   persona: PersonaKey
   presenceState: PresenceState
-  stateSentence: string
-  idleSentence: string
   businessName: string
-  phone?: string | null
   figures: WorkFigure[]
   briefing: AmyBriefing
   tenantId?: string
@@ -42,10 +40,7 @@ export function DashboardHero({
   employeeName,
   persona,
   presenceState,
-  stateSentence,
-  idleSentence,
   businessName,
-  phone,
   figures,
   briefing,
   tenantId,
@@ -53,6 +48,19 @@ export function DashboardHero({
   // The readouts, from figures the page already has. CARDS in readout-cards.ts is a literal — the
   // same six numbers for every tenant — which is fine in a design preview and not fine here.
   const pct = briefing.coverage === null ? '—' : `${Math.round(briefing.coverage)}%`
+  // The caption, from /v2's own generator on v1's counts. Same function, same phrasing, same accent
+  // clause — the closing segment is what carries the gradient.
+  //
+  // ONE CLAUSE IS MISSING and that is deliberate: rudiLine can also say "N new people today", which
+  // needs the inbox's arrivals grouping, and reading it here would mean a query the dashboard does
+  // not currently make. Omitted rather than approximated from a count that means something else.
+  const sentence = rudiLine({
+    jobsToday: briefing.appointmentsToday,
+    newToday: 0,
+    newHandled: 0,
+    waiting: briefing.attention.length,
+  })
+
   const readouts: Array<Array<[string, string]>> = [
     [['CALLS ANSWERED', String(briefing.callsAnswered)], ['ANSWERED', pct]],
     [['WAITING ON YOU', String(briefing.waitingOnYou ?? briefing.leadsAwaiting)], ['BOOKED', String(briefing.booked)]],
@@ -61,11 +69,29 @@ export function DashboardHero({
 
   return (
     <RudiPresenceProvider tenantId={tenantId}>
-      <section className="relative sx-animate-in">
-        <div className="absolute right-0 top-0 z-10 hidden md:block">
+      {/* THE HERO IS THE FIRST SCREEN, exactly as it is on /v2 — full-bleed, full viewport, nothing
+          above it. What used to sit here (the mobile "Dashboard" heading, the business name, the
+          on-duty pill, the attention banner) has moved below the fold: /v2 carries identity in the
+          portrait and status in the sentence, and stacking v1's chrome on top of that was what made
+          this read as the pieces rearranged rather than the screen brought across. */}
+      <V2Hero
+        persona={persona}
+        employeeName={employeeName}
+        sentence={sentence}
+        readouts={readouts}
+        briefing={briefing}
+        aside={<TodayWork figures={figures} />}
+      />
+
+      <section className="relative mx-auto max-w-5xl pt-4 sm:pt-6 sx-animate-in">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-ink md:text-xl md:font-light">Dashboard</h1>
+            {businessName && <p className="mt-0.5 truncate text-sm text-muted">{businessName}</p>}
+          </div>
           <Link
             href="/ai-employees/new"
-            className="inline-flex items-center gap-1.5 rounded-button px-2 py-1 text-sm text-subtle transition-colors hover:text-ink"
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-button px-2 py-1 text-sm text-subtle transition-colors hover:text-ink"
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">New AI Employee</span>
@@ -73,35 +99,14 @@ export function DashboardHero({
           </Link>
         </div>
 
-        <div className="mx-auto max-w-5xl">
-          <div className="mb-4 flex items-start justify-between pr-12 md:hidden">
-            <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight text-ink">Dashboard</h1>
-              {businessName && <p className="mt-0.5 truncate text-sm text-muted">{businessName}</p>}
-            </div>
-            <span className="ml-3 inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[13px] font-medium text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              {employeeName} on duty
-            </span>
-          </div>
+        <AttentionPill initialVisible={presenceState === 'attention'} />
 
-          <AttentionPill initialVisible={presenceState === 'attention'} />
-
-          <V2Hero
-            persona={persona}
-            employeeName={employeeName}
-            sentence={presenceState === 'attention' ? stateSentence : idleSentence}
-            readouts={readouts}
-            phone={phone}
-            briefing={briefing}
-          />
-
-          {/* The day's numbers stay. They are the same figures the readouts sample, at rest and in
-              full, for the person who wants to read rather than watch. */}
-          <div className="relative mt-6">
-            <GlassToasts />
-            <TodayWork figures={figures} />
-          </div>
+        {/* The figures again, below the fold — on MOBILE only. On desktop they are in the hero's
+            right-hand column, where /v2 puts them, and printing them twice on one screen was the
+            thing this change exists to stop. */}
+        <div className="relative md:hidden">
+          <GlassToasts />
+          <TodayWork figures={figures} />
         </div>
       </section>
     </RudiPresenceProvider>

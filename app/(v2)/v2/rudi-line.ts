@@ -84,12 +84,18 @@ export function rudiLine(input: RudiLineInput): RudiSegment[] {
 
 export type LabelState = 'idle' | 'listening' | 'speaking' | 'armed'
 
-/** The button's label. It names the STATE — whose turn it is, and what is happening. */
-export function rudiState(state: LabelState): string {
+/**
+ * The button's label. It names the STATE — whose turn it is, and what is happening.
+ *
+ * The name is an argument. It was the literal "Rudi", which was true while one route had one
+ * character; on the dashboard the employee is whatever the customer called her, and the button told
+ * an employee named Amy to talk to Rudi. Defaulted so /v2's own callers are unchanged.
+ */
+export function rudiState(state: LabelState, name = 'Rudi'): string {
   if (state === 'listening') return 'Listening'
-  if (state === 'speaking') return 'Rudi is speaking'
+  if (state === 'speaking') return `${name} is speaking`
   if (state === 'armed') return 'Your turn'
-  return 'Talk to Rudi'
+  return `Talk to ${name}`
 }
 
 /**

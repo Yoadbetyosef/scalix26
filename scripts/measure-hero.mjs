@@ -188,9 +188,13 @@ export function lumaStrip(px, fromY, toY, x0 = 0, x1 = VIEWPORT.w) {
   return rows
 }
 
-export async function measure({ port, state, outDir }) {
+export async function measure({ port, state, outDir, ...opts }) {
   mkdirSync(outDir, { recursive: true })
-  const url = `http://localhost:${port}/v2/render-probe${state === 'listening' ? '?state=listening' : ''}`
+  // --url lets the same instrument measure any page that mounts ProbeReport, which is how /v2 and
+  // /dashboard get compared by one tool instead of by two descriptions.
+  const url = opts.url
+    ? `http://localhost:${port}${opts.url}${state === 'listening' ? (opts.url.includes('?') ? '&' : '?') + 'state=listening' : ''}`
+    : `http://localhost:${port}/v2/render-probe${state === 'listening' ? '?state=listening' : ''}`
   const report = domReport(url)
 
   // Capture across the fade cycle and keep the frame with the most card coverage.
@@ -242,7 +246,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const results = []
   for (const state of states) {
     try {
-      const r = await measure({ port, state, outDir })
+      const r = await measure({ port, state, outDir, url: arg('url') })
       results.push(r)
       if (!flag('json')) {
         console.log(`\n── ${state.toUpperCase()}   ${r.png}   (peak phase ${r.budget}ms, ${r.acid} card px)`)

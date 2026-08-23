@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
+import { ProbeReport } from '@/app/(v2)/v2/render-probe/probe-report'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 
 // The REAL DashboardHero, with stub inputs, in a v1 page.
@@ -21,12 +22,19 @@ const BRIEFING: AmyBriefing = {
   booked: 3,
   recovered: 2,
   coverage: 92,
-  attention: [{ label: '1 lead has not been answered', href: '/inbox' }],
+  // Three, so rudiLine produces a caption the same length as /v2's probe stub — the caption box
+  // is bottom-anchored, so an unequal sentence shows up as an unequal top edge and reads as a
+  // layout difference when it is only a data one.
+  attention: [
+    { label: '1 lead has not been answered', href: '/inbox' },
+    { label: 'A quote is waiting on you', href: '/orders' },
+    { label: 'An invoice is overdue', href: '/invoices' },
+  ],
   leadsAwaiting: 1,
   waitingOnYou: 1,
   callsAnswered: 3,
   textsHandled: 4,
-  appointmentsToday: 1,
+  appointmentsToday: 12,
 }
 
 export default function DashboardProbe() {
@@ -36,10 +44,7 @@ export default function DashboardProbe() {
       <DashboardHero
         employeeName="Amy"
         persona="rudi"
-        phone="+1 416 555 0134"
         presenceState="attention"
-        stateSentence="3 new people today, 1 handled. One thing needs you."
-        idleSentence="Nothing needs you right now."
         businessName="T.G. Jewellers"
         figures={[
           { label: 'Recovered', value: 2 },
@@ -55,6 +60,10 @@ export default function DashboardProbe() {
         <span className="inline-block px-4 py-2.5 text-sm font-medium text-muted">Appointments</span>
       </div>
       <div className="rounded-xl border border-hairline p-6 text-sm text-muted">The tables below the tabs sit here.</div>
+      {/* The SAME reporter /v2's probe uses, so the two screens are measured by one instrument
+          rather than by two descriptions. It queries the DOM by class and cares nothing for
+          which route it is on. */}
+      <ProbeReport force="idle" />
     </div>
   )
 }

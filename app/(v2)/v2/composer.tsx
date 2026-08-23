@@ -26,6 +26,8 @@ const MicIcon = () => (
 
 export interface ComposerProps {
   state: RudiState
+  /** The employee's own name, for the button's label. */
+  name?: string
   onTalk: () => void
   /** Mobile stretches the control across the sticky bar. */
   full?: boolean
@@ -37,7 +39,7 @@ export interface ComposerProps {
   buttonRef?: (el: HTMLButtonElement | null) => void
 }
 
-export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange, buttonRef }: ComposerProps) {
+export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange, buttonRef, name }: ComposerProps) {
   const [typing, setTyping] = useState(false)
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -81,6 +83,7 @@ export function Composer({ state, onTalk, full = false, onSubmit, onTypingChange
           The button itself lives in talk-button.tsx now: the messages panel renders the SAME control,
           and a copied one would drift the moment either screen changed. */}
       <TalkButton
+        name={name}
         state={state}
         onTalk={onTalk}
         hidden={typing}
