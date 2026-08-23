@@ -66,10 +66,19 @@ describe('he recedes into the veil', () => {
     expect((rule.match(/transition:/g) ?? []).length).toBe(1)
   })
 
-  it('falls off steeply enough to leave the robot alone', () => {
-    // Nothing meaningful in the first third: 0.10 at 30%, and the deep end arrives under the button.
+  it('carries the caption itself, because it starts below the robot', () => {
+    // The first third was 0.10, on the reasoning that a thin start leaves the robot alone. It does —
+    // but the scrim's top edge is y 540 and the robot's base ends at y 501, so the whole gradient is
+    // already below him and a thin start bought nothing. What it cost was the caption: the scrim
+    // reached alpha 0.047 by the first line, so a local backdrop had to make up the difference, and
+    // that backdrop's blurred top edge is what read as a horizontal line under the cards.
+    //
+    // 0.56 at 30% moves that work into the scrim, whose ramp is 91px rather than the backdrop's ~30,
+    // and which begins below anything we want bright. Measured on the dev server: robot band 157 and
+    // base band 146, both unchanged; the sharpest row at the scrim's top edge falls 2.31 -> 1.78,
+    // against 1.35 for the photograph on its own.
     const rule = css.slice(css.indexOf('.v2-scrim {'), css.indexOf('}', css.indexOf('.v2-scrim {')))
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.10\) 30%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.56\) 30%/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.62\) 70%/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.92\) 100%/)
   })
@@ -79,22 +88,27 @@ describe('he recedes into the veil', () => {
     expect(css).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
   })
 
-  it('and a local backdrop ramped AGAINST the scrim, which is what flattens it', () => {
-    // The shadow alone left 2.92:1 on line one and 4.61:1 on line three, because a text-shadow is a
-    // halo per glyph and cannot flatten a gradient underneath it. This ramps the other way — heavy
-    // where the scrim is thin, gone where the scrim has arrived — and the sum comes out level.
-    // Measured on the rendered pixels afterwards: 7.46 / 7.46 / 7.34, spread 0.12, floor 7.34:1.
+  it('and a local backdrop that never reaches above the scrim it sits on', () => {
+    // This element flattens the caption, and its blurred top edge was ALSO the horizontal line under
+    // the readout cards. Isolated by rendering the page with it switched off: at the old inset it was
+    // already removing 1.7 luma at y 530 and 5.4 at y 540 — above the scrim's own top, over open
+    // frame, which is exactly where an edge has nothing to hide behind.
     //
-    // The top stop is 0.58 and not the 0.50 first shipped. 0.50 was tuned against a fixture that still
-    // had a debug overlay in it; on a clean render the same CSS measures a spread of 0.65, over target.
-    // Swept on clean pixels: 0.50→0.65, 0.54→0.23, 0.58→0.12, 0.62→0.60, 0.66→0.98. It is a minimum,
-    // not a plateau — line one keeps brightening past 0.58 while lines two and three have already
-    // bottomed out on the scrim, so moving this either way widens the spread again.
+    // The box now begins 3px above the caption instead of 16, and ramps from zero. Measured against
+    // the same page with no backdrop at all, it adds 0.00 at every row above y 540 and first appears
+    // at 545. The cost is a lighter first line — 4.95:1 where the old arrangement bought 6.90 — which
+    // is the trade taken deliberately: the robot's prominence is the reason he replaced a portrait,
+    // and 43px of frame cannot go from bright to dark without banding.
     const rule = css.slice(css.indexOf('.v2-cap::before {'), css.indexOf('}', css.indexOf('.v2-cap::before {')))
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.58\) 0%/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.44\) 60%/)
+    expect(rule).toMatch(/inset: -3px -20px -10px/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\) 0%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.44\) 40%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.52\) 75%/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.03\) 100%/)
     expect(rule).toMatch(/z-index: -1/)
+    // The top stop must stay at zero. A non-zero first stop is a step at the box edge, and blur turns
+    // a step into precisely the soft band this was written to remove.
+    expect(rule).not.toMatch(/rgba\(10, 10, 13, 0\.[1-9][0-9]?\) 0%/)
     // .v2-cap must stay position:relative and set NO z-index, or the pseudo-element leaves
     // .v2-overlay's stacking context and falls behind the scrim.
     const cap = css.slice(css.indexOf('.v2-cap {'), css.indexOf('}', css.indexOf('.v2-cap {')))

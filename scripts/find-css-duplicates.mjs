@@ -12,8 +12,24 @@
 // supports draws both, so the first line is dead weight that later rules then have to work around —
 // the radial fallback on .v2-talk is why `.v2-talk[data-on]` once needed `background-image: none`.
 // If you genuinely need a capability fallback, write @supports; it says so out loud and it is testable.
+//
+// ── WHY POSTCSS AND NOT A BRACE COUNTER ─────────────────────────────────────────────────────────────
+//
+// The first version of this walked the file character by character, tracking `{`, `}` and `;`. It
+// worked, and it was the fourth hand-rolled parser in a week to be wrong about something: a comment
+// stripper that ate an array because `next/*` inside a `//` line looked like a block comment opening;
+// a SQL scan that read the word "would" as a table name; a `sed` that cut a script block in half.
+// Every one of them guessed at a grammar instead of parsing it.
+//
+// postcss is already how this project's CSS is built, so it is the same reader the stylesheet is
+// compiled by — a brace counter can disagree with the build about what a rule is, and this cannot.
+// It also removes the failure modes the hand-rolled version had no answer for: a brace or semicolon
+// inside a string or a url(), a declaration with no trailing semicolon before `}`, and rules nested
+// inside @media, which the very first pass skipped entirely — 175 of v2-tokens' 1,197 rules, every
+// one of them behind a breakpoint, where a duplicate is hardest to spot by eye.
 
 import { readFileSync } from 'node:fs'
+import postcss from 'postcss'
 
 export const CSS_FILES = [
   'app/(v2)/v2/v2-tokens.css',
@@ -23,52 +39,45 @@ export const CSS_FILES = [
 ]
 
 /**
- * Every rule in a stylesheet, nested ones included.
+ * Every style rule in a stylesheet, nested ones included.
  *
- * Brace-tracked rather than regex-matched: rules inside `@media` are nested one level deeper, and a
- * flat scan reports them as part of the media block and never looks inside. A first pass at this
- * missed 175 of v2-tokens' 1,197 rules that way — every one behind a breakpoint.
+ * At-rules are containers, not rules — their children are walked in their own right, so a duplicate
+ * inside `@media` is reported against the selector that carries it rather than against the query.
  */
-export function parseRules(css) {
-  const src = css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+export function parseRules(css, from = 'input.css') {
+  const root = postcss.parse(css, { from })
   const rules = []
-  const stack = []
-  let token = ''
-  let line = 1
-  const flush = () => {
-    const top = stack[stack.length - 1]
-    if (top && token.trim()) top.decls.push({ line, text: token.trim() })
-    token = ''
-  }
-  for (const ch of src) {
-    if (ch === '\n') line++
-    if (ch === '{') {
-      stack.push({ selector: token.trim().replace(/\s+/g, ' '), line, decls: [] })
-      token = ''
-    } else if (ch === '}') {
-      flush()
-      const rule = stack.pop()
-      // @media / @supports / @keyframes are containers, not rules; their children are already pushed.
-      if (rule && !rule.selector.startsWith('@')) rules.push(rule)
-    } else if (ch === ';') {
-      flush()
-    } else {
-      token += ch
-    }
-  }
+  root.walkRules((rule) => {
+    rules.push({
+      selector: rule.selector.replace(/\s+/g, ' ').trim(),
+      line: rule.source?.start?.line ?? 0,
+      decls: rule.nodes
+        .filter((n) => n.type === 'decl')
+        .map((d) => ({
+          prop: d.prop,
+          line: d.source?.start?.line ?? 0,
+          text: `${d.prop}: ${d.value}${d.important ? ' !important' : ''}`,
+        })),
+    })
+  })
   return rules
 }
 
-/** Properties declared more than once in the same rule, with every occurrence. */
-export function findDuplicates(css) {
+/**
+ * Properties declared more than once in the same rule, with every occurrence.
+ *
+ * Compared case-insensitively on the property name, since CSS is, and a `COLOR:` shadowing a
+ * `color:` is the same bug wearing a hat. Custom properties (`--x`) are compared exactly: those ARE
+ * case-sensitive, and two that differ only in case are two different properties.
+ */
+export function findDuplicates(css, from = 'input.css') {
   const found = []
-  for (const rule of parseRules(css)) {
+  for (const rule of parseRules(css, from)) {
     const byProp = new Map()
     for (const decl of rule.decls) {
-      const name = decl.text.match(/^([-a-zA-Z]+)\s*:/)?.[1]
-      if (!name) continue
-      if (!byProp.has(name)) byProp.set(name, [])
-      byProp.get(name).push(decl)
+      const key = decl.prop.startsWith('--') ? decl.prop : decl.prop.toLowerCase()
+      if (!byProp.has(key)) byProp.set(key, [])
+      byProp.get(key).push(decl)
     }
     for (const [property, occurrences] of byProp) {
       if (occurrences.length > 1) found.push({ selector: rule.selector, line: rule.line, property, occurrences })
@@ -81,9 +90,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let total = 0
   for (const file of CSS_FILES) {
     const css = readFileSync(file, 'utf8')
-    const dupes = findDuplicates(css)
+    let dupes
+    try {
+      dupes = findDuplicates(css, file)
+    } catch (e) {
+      // A stylesheet postcss cannot read is a failure, not a pass. The brace counter this replaced
+      // would have carried on and reported zero.
+      console.log(`! ${file}  unparseable: ${e.message}`)
+      total++
+      continue
+    }
     total += dupes.length
-    console.log(`${dupes.length ? '✗' : '✓'} ${file}  (${parseRules(css).length} rules)  ${dupes.length} duplicate${dupes.length === 1 ? '' : 's'}`)
+    console.log(`${dupes.length ? 'x' : 'ok'} ${file}  (${parseRules(css, file).length} rules)  ${dupes.length} duplicate${dupes.length === 1 ? '' : 's'}`)
     for (const d of dupes) {
       console.log(`    ${d.selector}  —  "${d.property}" declared ${d.occurrences.length} times`)
       for (const o of d.occurrences) console.log(`        L${o.line}  ${o.text}`)

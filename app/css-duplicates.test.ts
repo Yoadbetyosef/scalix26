@@ -79,6 +79,40 @@ describe('the parser, proved against the bug it was written for', () => {
     expect(findDuplicates(`.a { background: red; background-image: none; }`)).toEqual([])
   })
 
+  // ── The cases the hand-rolled brace counter had no answer for ────────────────────────────────
+  // It tracked `{`, `}` and `;` by hand. Each of these would have confused it, and every one of them
+  // occurs in real stylesheets. They are the reason this reads through postcss now.
+
+  it('is not fooled by a brace or a semicolon inside a string', () => {
+    expect(findDuplicates(`.a { content: "}"; color: red; }`)).toEqual([])
+    expect(findDuplicates(`.a { content: "{;"; color: red; color: blue; }`)).toHaveLength(1)
+  })
+
+  it('is not fooled by a semicolon inside url()', () => {
+    const svg = `.a { background-image: url("data:image/svg+xml;utf8,<svg/>"); background-image: none; }`
+    const [dupe] = findDuplicates(svg)
+    expect(dupe.property).toBe('background-image')
+    expect(dupe.occurrences).toHaveLength(2)
+  })
+
+  it('treats property names case-insensitively, as CSS does', () => {
+    expect(findDuplicates(`.a { color: red; COLOR: blue; }`)).toHaveLength(1)
+    // Custom properties are genuinely case-SENSITIVE, so these are two different properties.
+    expect(findDuplicates(`.a { --x: 1; --X: 2; }`)).toEqual([])
+  })
+
+  it('reports a nested duplicate against the rule, not the query it sits in', () => {
+    const [dupe] = findDuplicates(`@media (max-width: 700px) { @supports (color: red) { .a { gap: 1px; gap: 2px } } }`)
+    expect(dupe.selector).toBe('.a')
+    expect(dupe.property).toBe('gap')
+  })
+
+  it('throws on a stylesheet it cannot read, rather than reporting it clean', () => {
+    // The counter this replaced would have walked off the end and returned zero duplicates, which
+    // reads exactly like a pass.
+    expect(() => findDuplicates(`.a { color: red;`)).toThrow()
+  })
+
   it('does not trip over a declaration inside a comment, or a missing final semicolon', () => {
     expect(findDuplicates(`.a { color: red; /* color: blue; */ }`)).toEqual([])
     expect(findDuplicates(`.a { color: red; color: blue }`)).toHaveLength(1)

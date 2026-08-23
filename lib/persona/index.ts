@@ -69,6 +69,20 @@ export interface AssetSet {
   height: number
   /** Present = the scan is rings from here. Absent = the older sweep-and-mesh, for a portrait. */
   scan?: DomeScan
+  /**
+   * Where the subject stops, as a fraction of the image HEIGHT — its feet, its plinth, whatever the
+   * lowest thing is that reads as part of it rather than as backdrop.
+   *
+   * The readouts need it. Their placement used to know only about the copy underneath, so the lower
+   * card was hung a fixed fraction below the upper one and landed flush against the robot's base:
+   * measured on the dev server, the card's top edge was 504.5 and his structure ran to 505. Nothing
+   * in the layout knew the picture had a bottom.
+   *
+   * Image space, like the dome, and for the same reason — the canvas is a phone or a laptop column or
+   * a chip, and a canvas-space fraction would slide up and down the subject at every width. Absent
+   * means the subject imposes no floor and the cards fall back to clearing the copy alone.
+   */
+  base?: number
 }
 
 export interface Persona {
@@ -158,6 +172,11 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
           ink: [34, 211, 238], inkFar: [139, 92, 246],
           halo: { inner: 0, outer: 1.5, ink: [34, 211, 238], alpha: 0.1, swing: 0.06, radPerS: 10 / 4.4 },
         },
+        // 0.597 in the source, where the contact shadow under the plinth stops. Measured twice by
+        // different routes that agree: straight off the JPEG, and back-projected through the
+        // cover-fit from a 390x844 render. The columns the right-hand readout occupies give 0.5976,
+        // so this is the whole subject's floor rather than the deepest point of it.
+        base: 0.598,
       },
       // THE DESKTOP HERO, from docs/miles/rudi-desktop-scan.html. Built at the hero's own aspect —
       // 1130/1210 = 0.934 against 710/760 = 0.934 — so cover-fit is a 1:1 fit and nothing is cropped.

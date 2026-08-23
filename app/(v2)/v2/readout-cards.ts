@@ -37,6 +37,15 @@ export const CARD_DROP = 0.055
 /** Clear air between the lowest card and the top of the block. */
 export const CARD_GAP = 0.02
 
+/**
+ * The band the LOWER card has to sit inside: below the subject, above the copy. Canvas pixels.
+ *
+ * `top` is the subject's floor — see AssetSet.base. `bottom` is the top of the block the cards must
+ * clear. Both are absolute rather than fractions because the caller has already resolved the picture
+ * through its cover-fit, and re-deriving that here would put the same maths in two places.
+ */
+export interface LowerSlot { top: number; bottom: number }
+
 /** One card, placed. Pure, and exported so a render check draws the real geometry, not a copy. */
 export interface CardBox { x: number; y: number; w: number; h: number; r: number; k: string; v: string; keyY: number; valY: number }
 
@@ -57,6 +66,14 @@ export function cardLayout(
   W: number, H: number, ceiling: number, a: number,
   set: Array<[string, string]>,
   measure: (text: string, font: string) => number,
+  /**
+   * Where the lower card may sit. Omitted = the old behaviour, hung CARD_DROP below the upper one.
+   *
+   * Tuning CARD_DROP cannot fix an overlap with the picture, which is why this exists rather than a
+   * bigger fraction: the ceiling subtracts the same CARD_DROP it adds, so raising it lifts the UPPER
+   * card by exactly what it adds and leaves the lower one where it was.
+   */
+  lowerSlot: LowerSlot | null = null,
 ): { boxes: CardBox[]; keyFont: string; valFont: string } {
   const keyFont = `500 ${W * 0.019}px "JetBrains Mono", ui-monospace, monospace`
   const valFont = `500 ${W * 0.068}px "Inter Tight", system-ui, sans-serif`
@@ -67,7 +84,15 @@ export function cardLayout(
   const margin = W * 0.056
   const boxes = set.map(([k, v], i) => {
     const w = Math.max(measure(k, keyFont), measure(v, valFont)) + padX * 2
-    const top = y + rise + (i === 1 ? H * CARD_DROP : 0)
+    let top = y + rise + (i === 1 ? H * CARD_DROP : 0)
+    if (i === 1 && lowerSlot) {
+      const room = lowerSlot.bottom - lowerSlot.top
+      // Centred in the gap, so the separation is real on both sides rather than a fraction that
+      // happens to land clear. When the gap is too small to hold the card, the copy still wins and
+      // the card keeps its old place against the block: text that cannot be read is a worse failure
+      // than a card touching a photograph.
+      top = (room >= hh ? lowerSlot.top + (room - hh) / 2 : lowerSlot.bottom - hh) + rise
+    }
     return {
       x: i === 0 ? margin : W - margin - w, y: top, w, h: hh, r: W * 0.013,
       k, v, keyY: top + padY + W * 0.016, valY: top + padY + lead + W * 0.040,

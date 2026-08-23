@@ -167,6 +167,8 @@ interface Paint {
   ih: number
   /** Present = rings from here; absent = the sweep and the mesh. Fractions of the SOURCE, not the canvas. */
   scan: DomeScan | null
+  /** Where the subject's feet stop, as a fraction of the SOURCE height. Null = it imposes no floor. */
+  base: number | null
   name: string
 }
 
@@ -192,6 +194,7 @@ function paintFor(key: PersonaKey, at: Breakpoint): Paint {
     iw: a.width,
     ih: a.height,
     scan: a.scan ?? null,
+    base: a.base ?? null,
     name: p.name,
   }
 }
@@ -225,7 +228,7 @@ function rr(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: n
 export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, className, onClick, persona = 'rudi', breakpoint = 'mobile' }: Props) {
   // Read once. See paintFor: a persona OR breakpoint change means a remount, keyed by the caller.
   const paint = useRef(paintFor(persona, breakpoint)).current
-  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, scan: SCAN, name: NAME } = paint
+  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, scan: SCAN, base: BASE, name: NAME } = paint
   const DOME = SCAN
   const IW = paint.iw
   const IH = paint.ih
@@ -352,6 +355,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
     // Recomputed on layout, never per frame — getBoundingClientRect is a layout read, and sixty a
     // second to answer a question that changes when the text wraps is what makes a canvas expensive.
     let ceiling = CEILING_FALLBACK
+    // The top of the block the cards clear, in canvas pixels. Null until measured, and null forever
+    // if there is nothing to measure — in which case the lower card keeps its fraction.
+    let blockTopPx: number | null = null
 
     // A second canvas for the sweep band, composited with 'lighter' — the reference's approach, and
     // the reason the band glows through the portrait instead of sitting on top of it.
@@ -367,10 +373,13 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
     function measureCeiling() {
       if (!cctx) return
       const block = canvas!.closest('.v2-hero')?.querySelector('[data-bottom-block]')
-      if (!block) { ceiling = CEILING_FALLBACK; return }
+      if (!block) { ceiling = CEILING_FALLBACK; blockTopPx = null; return }
       const cr = canvas!.getBoundingClientRect()
       const br = block.getBoundingClientRect()
       if (!cr.height || !br.height) return
+      // Canvas pixels, for the lower card's slot. The ceiling below stays a fraction because that is
+      // what cardLayout multiplies by; this is the same edge expressed the way the slot needs it.
+      blockTopPx = ((br.top - cr.top) / cr.height) * CH
       const want = (br.top - cr.top) / cr.height - CARD_DROP - CARD_GAP
       // Never above the top third: a ceiling that high means the copy has eaten the screen, and cards
       // floating by his dome is a worse answer than cards that are simply not shown.
@@ -539,8 +548,13 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
       const a = cardAlpha(ct) * scanA
       if (a <= 0.01) return
       const set = CARDS[Math.floor(ct / (1 / CARDS.length)) % CARDS.length]
+      // Where the subject stops, image space through the same cover-fit the portrait is drawn with —
+      // never a canvas fraction, or the floor slides up and down him as the frame changes shape.
+      const floorPx = BASE == null ? null : DY + BASE * IH * S
+      const lowerSlot = floorPx != null && blockTopPx != null ? { top: floorPx, bottom: blockTopPx } : null
+
       const { boxes, keyFont, valFont } = cardLayout(CW, CH, ceiling, a, set,
-        (text, font) => { cctx.font = font; return cctx.measureText(text).width })
+        (text, font) => { cctx.font = font; return cctx.measureText(text).width }, lowerSlot)
 
       for (const b of boxes) {
         cctx.fillStyle = `rgba(217,242,36,${a * 0.92})`

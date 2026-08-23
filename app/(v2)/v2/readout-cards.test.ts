@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cardAlpha, cardLayout } from './readout-cards'
+import { CARD_DROP, cardAlpha, cardLayout } from './readout-cards'
 
 // Measuring text needs a canvas. A stub of a fixed width per character is enough to assert placement,
 // which is what these are about — the real widths come from the browser and are checked by eye.
@@ -94,7 +94,9 @@ describe('the ceiling is measured, not guessed', () => {
   it('falls back only when there is nothing to measure', () => {
     expect(geom).toMatch(/const CEILING_FALLBACK = 0\.66/)
     const m = src.slice(src.indexOf('function measureCeiling'), src.indexOf('function fit()'))
-    expect(m).toMatch(/if \(!block\) \{ ceiling = CEILING_FALLBACK; return \}/)
+    // blockTopPx goes with it: the lower card's slot is measured off the same element, so a frame
+    // with nothing to measure must not leave a stale edge behind for the card to be placed against.
+    expect(m).toMatch(/if \(!block\) \{ ceiling = CEILING_FALLBACK; blockTopPx = null; return \}/)
     // Never above the top third — cards by his dome is worse than no cards.
     expect(m).toMatch(/Math\.max\(0\.30, Math\.min\(CEILING_FALLBACK, want\)\)/)
   })
@@ -138,5 +140,45 @@ describe('mobile only, and decided rather than defaulted', () => {
     // The approved desktop composition carries the same figures as static tiles in the right-hand
     // column; a second animated copy over the robot would be the same numbers twice.
     expect(home).toMatch(/readouts=\{isMobile === true\}/)
+  })
+})
+
+describe('the lower card clears the subject, not just the copy', () => {
+  // The right-hand readout sat flush against the robot: measured on the dev server, its top edge was
+  // 504.5 and his structure ran to 505. Tuning CARD_DROP cannot fix that — measureCeiling subtracts
+  // the same CARD_DROP that cardLayout adds, so raising it lifts the UPPER card by exactly what it
+  // adds and leaves the lower one where it was. The lower card needed a constraint of its own.
+  const W = 780, H = 1688
+  const set: Array<[string, string]> = [['CALLS TODAY', '3'], ['ANSWERED', '100%']]
+  const measure = (t: string) => t.length * 10
+  const layout = (slot: { top: number; bottom: number } | null) =>
+    cardLayout(W, H, 0.6157, 1, set, measure, slot)
+
+  it('centres it in the gap, so the separation is real on both sides', () => {
+    const { boxes } = layout({ top: 1009, bottom: 1166 })
+    const lower = boxes[1]
+    const above = lower.y - 1009
+    const below = 1166 - (lower.y + lower.h)
+    expect(above).toBeGreaterThan(8)
+    expect(Math.abs(above - below)).toBeLessThan(1)
+  })
+
+  it('leaves the upper card exactly where it was', () => {
+    const withSlot = layout({ top: 1009, bottom: 1166 })
+    const without = layout(null)
+    expect(withSlot.boxes[0].y).toBe(without.boxes[0].y)
+    expect(withSlot.boxes[0].x).toBe(without.boxes[0].x)
+  })
+
+  it('gives the copy the gap when the subject leaves too little room for both', () => {
+    // A slot shorter than the card. The copy wins: unreadable text is a worse failure than a card
+    // touching a photograph, so it keeps its old place hard against the block.
+    const { boxes } = layout({ top: 1120, bottom: 1166 })
+    expect(boxes[1].y + boxes[1].h).toBeCloseTo(1166, 0)
+  })
+
+  it('falls back to the fraction when the persona declares no floor', () => {
+    const { boxes } = layout(null)
+    expect(boxes[1].y - boxes[0].y).toBeCloseTo(H * CARD_DROP, 5)
   })
 })

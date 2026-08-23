@@ -124,7 +124,18 @@ export function ProbeReport({ force }: { force: ProbeState }) {
 
   useEffect(() => {
     const root = document.querySelector('.v2-root') as HTMLElement | null
-    if (root && force !== 'idle') root.dataset.state = force
+    if (root && force !== 'idle') {
+      // The veil's height is a 0.4s transition, and a headless capture runs on virtual time, which
+      // advances timers but does NOT drive CSS transitions. Forcing the attribute alone therefore
+      // photographs the idle height for ever — it reported the listening veil as 36% when it is 48%.
+      // Suppress the transition so the attribute lands on its end state immediately. This changes
+      // when the height arrives, never what it arrives at.
+      const freeze = document.createElement('style')
+      freeze.id = 'probe-freeze'
+      freeze.textContent = '.v2-scrim { transition: none !important; }'
+      document.head.appendChild(freeze)
+      root.dataset.state = force
+    }
 
     const write = () => {
       const hero = document.querySelector('.v2-hero')
@@ -152,6 +163,7 @@ export function ProbeReport({ force }: { force: ProbeState }) {
         scrim: rect(scrim),
         scrimPct: heroBox && scrimBox ? +((scrimBox.height / heroBox.height) * 100).toFixed(2) : null,
         scrimBackground: scrim ? getComputedStyle(scrim).backgroundImage : null,
+        scrimTransition: scrim ? getComputedStyle(scrim).transitionProperty : null,
         caption: rect(cap),
         captionLines: captionLines(cap),
         capBefore: before
