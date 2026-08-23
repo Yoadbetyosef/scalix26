@@ -8,6 +8,7 @@ import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, t
 import { ProductForm } from '@/components/catalog/product-form'
 import { StudioSections } from '@/components/studio/studio-sections'
 import type { FabricValue } from '@/components/studio/fabric-picker'
+import { PartsManager } from '@/components/catalog/parts-manager'
 import { useToast } from '@/components/admin/toast'
 
 const badge: Record<AvailabilityStatus, string> = {
@@ -45,6 +46,7 @@ export default function ProductDetailPage() {
       setProduct(d.product); setMovements(d.movements || []); setQr(d.qr); setFabric(d.fabric || null)
     } catch (e) { show((e as Error).message, 'err') } finally { setLoading(false) }
   }, [id, show])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- load-on-mount
   useEffect(() => { load() }, [load])
 
   async function saveEdit(payload: Record<string, unknown>) {
@@ -121,6 +123,12 @@ export default function ProductDetailPage() {
           </p>
         )}
         {product.description && <p className="mt-3 text-sm text-muted">{product.description}</p>}
+        {(product.measurements || product.fabric) && (
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            {product.measurements && <div><span className="text-subtle">Measurements: </span><span className="text-ink">{product.measurements}</span></div>}
+            {product.fabric && <div><span className="text-subtle">Fabric: </span><span className="text-ink">{product.fabric}</span></div>}
+          </div>
+        )}
       </div>
 
       {/* Studio experience — production/quote/invoice actions, sub-products, documents, customer page */}
@@ -196,6 +204,9 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Parts / pieces of this product */}
+      <PartsManager productId={id} />
     </div>
   )
 }

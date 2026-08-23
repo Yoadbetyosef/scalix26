@@ -12,6 +12,8 @@ export function sanitizeProduct(body: Record<string, unknown>) {
     category: str(body.category),
     brand: str(body.brand),
     description: str(body.description),
+    measurements: str(body.measurements),
+    fabric: str(body.fabric),
     price: num(body.price),
     status: (PRODUCT_STATUSES as readonly string[]).includes(String(body.status)) ? (body.status as ProductStatus) : 'active',
     availability_status: isAvailabilityStatus(body.availability_status) ? body.availability_status : 'in_stock',

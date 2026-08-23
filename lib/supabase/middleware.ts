@@ -40,7 +40,11 @@ export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-passw
     // enforcing anyway — it was breaking the route, not protecting it. The exposure is identical to
     // /api/catalog/lookup and /api/appointments/book, which the same token already reaches.
     '/api/stripe/connect/payment-link',
-    '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/', '/privacy', '/terms',
+    '/api/reviews/process', '/api/reviews/send', '/api/tts', '/f/',
+  // The public product page behind a QR code. Same rule as /f/: the token is the credential, the
+  // audience is the tenant's customer, and there is no session to have. Carried over from
+  // catalog-parts, whose own copy of this list predated PUBLIC_ROUTES existing.
+  '/q/', '/privacy', '/terms',
     // Partner OS public surface: referral redirect + click tracking, partner signup/login,
     // public demo pages + their data, and the public partner marketplace directory.
     '/r/', '/l/', '/api/partner/auth/', '/api/demos/', '/demo/', '/marketplace', '/partner/signup', '/partner/login',
