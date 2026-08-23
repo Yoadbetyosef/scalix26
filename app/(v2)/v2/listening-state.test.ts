@@ -136,3 +136,27 @@ describe('the bottom block sits lower, as one group', () => {
     expect(css).toMatch(/bottom: calc\(92px - var\(--v2-bottom-drop\)\)/)
   })
 })
+
+describe('desktop behaves the same, because none of it is behind a breakpoint', () => {
+  it('raises the scrim and restyles the transcript at every width', () => {
+    // The rules key off [data-state] on .v2-root, not on a media query. The only mobile-gated part of
+    // this screen is the button's geometry, which is a layout question rather than a state one.
+    const mobileOnly = css.slice(css.indexOf('@media (max-width: 719.98px)'))
+    expect(mobileOnly).not.toMatch(/\.v2-scrim \{ height: 74%/)
+    expect(mobileOnly).not.toMatch(/data-state="listening"\] \.v2-you/)
+  })
+
+  it('gives the glass button and its End label to both', () => {
+    // .v2-talk[data-on] is declared outside every media query, and the label lives in the component.
+    const glassAt = css.indexOf('.v2-talk[data-on] {')
+    expect(glassAt).toBeGreaterThan(-1)
+    expect(glassAt).toBeLessThan(css.indexOf('@media (max-width: 719.98px)'))
+    expect(button).toMatch(/'End'/)
+  })
+
+  it('keeps the breath off on both, because it is one code path and not a per-asset choice', () => {
+    const canvas = readFileSync(join(process.cwd(), 'app/(v2)/v2/rudi-canvas.tsx'), 'utf8')
+    expect(canvas).not.toMatch(/0\.01 \* Math\.sin\(now \/ 3200\)/)
+    expect(canvas).not.toMatch(/DW \* br/)
+  })
+})

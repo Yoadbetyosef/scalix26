@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { mark } from './timing'
-import { PERSONAS, portraitOf, hexToRgb, type PersonaKey } from '@/lib/persona'
+import { PERSONAS, assetsFor, hexToRgb, type Breakpoint, type DomeScan, type PersonaKey } from '@/lib/persona'
 
 // Rudi's face. A reproduction of the reference's canvas engine.
 //
@@ -70,6 +70,8 @@ export interface RudiHandle {
 interface Props {
   /** Which employee this canvas paints. Remount (via `key`) to change it — every asset differs. */
   persona?: PersonaKey
+  /** Which asset set to paint. Also remount-on-change, and for the same reason. */
+  breakpoint?: Breakpoint
   handleRef?: RefObject<RudiHandle | null>
   onStateChange?: (s: RudiState) => void
   /** Collapsed (idle > 60s): still frame, slow band, no network, no video. */
@@ -105,17 +107,9 @@ interface Node { x: number; y: number }
 // something drawn ACROSS a photograph of a person, and across a machine they read as the machine being
 // examined rather than as the machine thinking. The only thing that moves is the part of him that is
 // already a display.
-const RINGS = 4
-/** The ring cycle, from the reference prototype. Its own clock, not the sweep's 3600ms — that period
- *  belonged to a band which no longer exists. */
+/** The ring cycle. Its own clock, not the sweep's 3600ms — that period belonged to a band which no
+ *  longer exists. The only scan number that is NOT per asset: it is a tempo, not a measurement. */
 const RING_CYCLE_MS = 4400
-/** The halo's breath. The prototype writes sin(t * 10) against a 4.4s cycle, which is this in rad/s;
- *  stated as a rate so it survives the cycle length changing. */
-const HALO_RAD_PER_S = 10 / 4.4
-/** How far a ring travels before it is gone: r grows to 2.5x the dome and fades linearly. */
-const RING_REACH = 1.5
-/** Stroke width as a fraction of the dome radius — the prototype's W*.006 against its fr of W*.115. */
-const RING_STROKE = 0.052
 
 export interface Dome { x: number; y: number; r: number }
 export interface Fit { s: number; dx: number; dy: number; dw: number; dh: number }
@@ -198,26 +192,36 @@ interface Paint {
    *  was shot against, measured from the file rather than guessed, so there is no seam at its edge. */
   bg: string
   stops: [number, [number, number, number]][]
-  /** The source's own pixel size. Was two module constants shared by both employees — see lib/persona. */
+  /** THIS ASSET's own pixel size. Per persona AND per breakpoint — see lib/persona. */
   iw: number
   ih: number
   /** Present = rings from here; absent = the sweep and the mesh. Fractions of the SOURCE, not the canvas. */
-  dome: { x: number; y: number; r: number } | null
+  scan: DomeScan | null
   name: string
 }
 
-function paintFor(key: PersonaKey): Paint {
+/**
+ * Everything the loop paints, resolved for ONE persona at ONE breakpoint.
+ *
+ * The breakpoint is an argument rather than something the loop watches, because the loop's effect has
+ * `[]` deps on purpose (OUTSTANDING §1 — a second "effect running" is a diagnostic worth keeping).
+ * Crossing 720px therefore has to REMOUNT the canvas, and home-client keys it so. That costs one
+ * still decode and one video load on a resize almost nobody performs twice, and it is honest: every
+ * texture the component holds is a different file on the other side of that line.
+ */
+function paintFor(key: PersonaKey, at: Breakpoint): Paint {
   const p = PERSONAS[key]
+  const a = assetsFor(p, at)
   const ramp = p.ramp ?? PERSONAS.rudi.ramp!
   return {
-    still: portraitOf(p),
-    video: p.video,
+    still: a.still || p.avatar,
+    video: a.video,
     nodes: p.nodes,
     bg: p.ground,
     stops: ramp.map((hex, i, all) => [i / (all.length - 1), hexToRgb(hex)]),
-    iw: p.width,
-    ih: p.height,
-    dome: p.dome ?? null,
+    iw: a.width,
+    ih: a.height,
+    scan: a.scan ?? null,
     name: p.name,
   }
 }
@@ -248,10 +252,11 @@ function rr(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: n
   x.closePath()
 }
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, className, onClick, persona = 'rudi' }: Props) {
-  // Read once. See paintFor: a persona change means a remount, keyed by the caller.
-  const paint = useRef(paintFor(persona)).current
-  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, dome: DOME, name: NAME } = paint
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, className, onClick, persona = 'rudi', breakpoint = 'mobile' }: Props) {
+  // Read once. See paintFor: a persona OR breakpoint change means a remount, keyed by the caller.
+  const paint = useRef(paintFor(persona, breakpoint)).current
+  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, scan: SCAN, name: NAME } = paint
+  const DOME = SCAN
   const IW = paint.iw
   const IH = paint.ih
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -504,38 +509,39 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
      * and ease back when idle returns — one rule for both scans.
      */
     function drawRings(now: number, amount: number) {
-      if (!DOME || amount < 0.02) return
+      if (!SCAN || amount < 0.02) return
       // IMAGE SPACE THROUGH THE FIT, never a fraction of the canvas. The prototype can use canvas
-      // fractions because its phone and its source share an aspect exactly; here the canvas is a
+      // fractions because its frame and its source share an aspect exactly; here the canvas is a
       // phone, a laptop column or a 172x230 chip, and the same fraction would slide across him.
-      const { x: fx, y: fy, r: fr } = domeInCanvas({ s: S, dx: DX, dy: DY, dw: DW, dh: DH }, IW, IH, DOME)
+      const { x: fx, y: fy, r: fr } = domeInCanvas({ s: S, dx: DX, dy: DY, dw: DW, dh: DH }, IW, IH, SCAN)
       // Relative to the last tap, so touching him starts a ring from the dome rather than joining one
       // already halfway out. Zero until something taps, which reduces to `now % cycle`.
       const t = ((now - scanAtRef.current) % RING_CYCLE_MS) / RING_CYCLE_MS
-      const near = hue(STOPS, 0)
-      const far = hue(STOPS, 0.5)
+      const near = SCAN.ink
+      const far = SCAN.inkFar
 
-      for (let i = 0; i < RINGS; i++) {
-        const p = (t + i / RINGS) % 1
-        const r = fr * (1 + p * RING_REACH)
-        const a = (1 - p) * 0.34 * amount
+      for (let i = 0; i < SCAN.rings; i++) {
+        const p = (t + i / SCAN.rings) % 1
+        const r = fr * (SCAN.from + p * SCAN.reach)
+        const a = Math.pow(1 - p, SCAN.falloff) * SCAN.alpha * amount
         if (a < 0.004) continue
-        const g = ctx!.createRadialGradient(fx, fy, r * 0.86, fx, fy, r)
+        const g = ctx!.createRadialGradient(fx, fy, r * SCAN.inner, fx, fy, r * SCAN.outer)
         g.addColorStop(0, rgba(near, 0))
-        g.addColorStop(0.6, rgba(near, Number(a.toFixed(3))))
+        g.addColorStop(0.5, rgba(near, Number(a.toFixed(3))))
         g.addColorStop(1, rgba(far, 0))
         ctx!.strokeStyle = g
-        ctx!.lineWidth = fr * RING_STROKE
+        ctx!.lineWidth = fr * SCAN.stroke
         ctx!.beginPath(); ctx!.arc(fx, fy, r, 0, Math.PI * 2); ctx!.stroke()
       }
 
-      // The fifth thing: a soft halo on the glass, breathing.
-      const breath = 0.10 + 0.06 * Math.sin((now / 1000) * HALO_RAD_PER_S)
-      const glow = ctx!.createRadialGradient(fx, fy, 0, fx, fy, fr * 1.5)
-      glow.addColorStop(0, rgba(near, Number((breath * amount).toFixed(3))))
-      glow.addColorStop(1, rgba(near, 0))
+      // The fifth thing on the phone, the fourth here: a bloom on the glass, breathing.
+      const h = SCAN.halo
+      const breath = h.alpha + h.swing * Math.sin((now / 1000) * h.radPerS)
+      const glow = ctx!.createRadialGradient(fx, fy, fr * h.inner, fx, fy, fr * h.outer)
+      glow.addColorStop(0, rgba(h.ink, Number((breath * amount).toFixed(3))))
+      glow.addColorStop(1, rgba(h.ink, 0))
       ctx!.fillStyle = glow
-      ctx!.beginPath(); ctx!.arc(fx, fy, fr * 1.5, 0, Math.PI * 2); ctx!.fill()
+      ctx!.beginPath(); ctx!.arc(fx, fy, fr * h.outer, 0, Math.PI * 2); ctx!.fill()
 
       const label = phaseAt(t)
       if (label !== phaseRef.current) { phaseRef.current = label; setPhase(label) }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PERSONAS, personaOf, nameOf, portraitOf, hexToRgb } from './index'
+import { PERSONAS, assetsFor, personaOf, nameOf, portraitOf, hexToRgb } from './index'
 
 describe('the ramp the canvas used to hold as literals', () => {
   // rudi-canvas.tsx carried these three RGB triples by hand. Moving them into the persona means the
@@ -32,8 +32,8 @@ describe('Miles’s tokens', () => {
   })
 
   it('paints from the supplied assets', () => {
-    expect(PERSONAS.miles.still).toBe('/v2/miles-still.webp')
-    expect(PERSONAS.miles.video).toBe('/v2/miles-speaking.mp4')
+    expect(assetsFor(PERSONAS.miles, 'mobile').still).toBe('/v2/miles-still.webp')
+    expect(assetsFor(PERSONAS.miles, 'mobile').video).toBe('/v2/miles-speaking.mp4')
     expect(PERSONAS.miles.nodes).toBe('/v2/miles-nodes.json')
     expect(portraitOf(PERSONAS.miles)).toBe('/v2/miles-still.webp')
   })
@@ -45,7 +45,8 @@ describe('Miles’s tokens', () => {
   })
 
   it('falls back to the avatar for an employee with no portrait', () => {
-    expect(portraitOf({ ...PERSONAS.miles, still: null })).toBe('/avatars/arcas.png')
+    const noPortrait = { ...PERSONAS.miles, assets: { mobile: { ...assetsFor(PERSONAS.miles, 'mobile'), still: '' } } }
+    expect(portraitOf(noPortrait)).toBe('/avatars/arcas.png')
   })
 })
 

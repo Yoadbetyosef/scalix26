@@ -274,6 +274,12 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   const hero = (
     <>
       <RudiCanvas
+        // REMOUNT ON THE BREAKPOINT. The loop's effect has [] deps on purpose, so a live canvas would
+        // keep the phone asset after crossing 720px. `pending` shares mobile's key: the phone pair is
+        // what the pre-breakpoint tree already shows full-bleed, so resolving to mobile costs nothing
+        // and only resolving to desktop remounts.
+        key={isMobile === false ? 'desktop' : 'mobile'}
+        breakpoint={isMobile === false ? 'desktop' : 'mobile'}
         handleRef={rudi}
         onStateChange={setState}
         minimised={minimised}

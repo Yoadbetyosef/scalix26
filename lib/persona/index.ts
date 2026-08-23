@@ -19,6 +19,58 @@ import type { AgentPersona } from '@/types'
 /** The same union the row carries — declared once, in types, so the column and the map cannot drift. */
 export type PersonaKey = AgentPersona
 
+/**
+ * WHERE THE SCAN HAPPENS AND WHAT IT LOOKS LIKE, for one asset.
+ *
+ * x and r are fractions of the image WIDTH, y a fraction of its HEIGHT — image space, not canvas
+ * space, and that is the whole point. In a prototype the frame and the source share an aspect exactly
+ * and the distinction never surfaces; in the app the canvas is a phone, a laptop column or a 172x230
+ * chip, and a canvas-space fraction would slide across the subject at every width.
+ *
+ * Every other number here is a multiple of the DOME RADIUS rather than of the viewport, for the same
+ * reason: the scan is drawn around a thing in a photograph, and it has to keep its proportions to
+ * that thing however the photograph is cropped.
+ */
+export interface DomeScan {
+  x: number; y: number; r: number
+  rings: number
+  /** Where a ring starts, and how far it travels, as multiples of the dome radius. */
+  from: number
+  reach: number
+  /** Alpha falloff exponent over a ring's life. 1 is linear; 2 fades early and lingers faint. */
+  falloff: number
+  /** Peak stroke alpha. */
+  alpha: number
+  /** Stroke width as a fraction of the dome radius. */
+  stroke: number
+  /** The stroke's gradient stops, as multiples of the ring radius. */
+  inner: number
+  outer: number
+  /** The ring, at the near and far ends of its gradient. Equal makes a single-colour ring. */
+  ink: [number, number, number]
+  inkFar: [number, number, number]
+  /** The bloom ON the glass — not a halo around it. Radii are multiples of the dome radius. */
+  halo: { inner: number; outer: number; ink: [number, number, number]; alpha: number; swing: number; radPerS: number }
+}
+
+/**
+ * One still, one clip, and everything measured off them.
+ *
+ * GROUPED ON PURPOSE. A width without its own dome is exactly how the phone's 0.684 / 0.349 came to
+ * be applied to a desktop asset that wants 0.5845 / 0.3322 — six per cent low and two per cent left,
+ * on a picture nobody had measured. These move together or they are wrong together.
+ */
+export interface AssetSet {
+  still: string
+  /** Null when this employee has no speaking loop at this size. A missing video costs a texture. */
+  video: string | null
+  /** The source's own pixel size, which the canvas cover-fits against. */
+  width: number
+  height: number
+  /** Present = the scan is rings from here. Absent = the older sweep-and-mesh, for a portrait. */
+  scan?: DomeScan
+}
+
 export interface Persona {
   key: PersonaKey
   /**
@@ -32,36 +84,19 @@ export interface Persona {
   voice: string
   /** The `/avatars` still. Also the canvas's fallback when there is no portrait yet. */
   avatar: string
-  /** Portrait for the hero canvas. Null = no portrait supplied yet; the canvas falls back to `avatar`. */
-  still: string | null
-  /** Speaking loop. Always optional — a missing video costs a texture, never a frame. */
-  video: string | null
   /** The mesh, in the still's own pixel space. Null until there is a still to derive it from. */
   nodes: string | null
   /**
-   * The pixel size of `still` and `video`, which the canvas cover-fits against.
+   * THE ASSETS, KEYED BY BREAKPOINT — and everything measured off each one, with it.
    *
-   * These were two module constants in rudi-canvas — 680 x 907 — shared by both employees, which was
-   * true only because both portraits happened to be shot to the same frame. The moment one of them
-   * stops being a head-and-shoulders it is false, and silently: the cover fit still produces a
-   * picture, just the wrong crop of it.
+   * A persona is WHO the employee is: name, voice, accent, the wash their messages sit on. A
+   * breakpoint is not a second employee, so this is a record inside the persona rather than a second
+   * row in PERSONAS.
+   *
+   * `desktop` is optional and falls back to `mobile`, so an employee with one photograph carries one
+   * set and nothing about them changes.
    */
-  width: number
-  height: number
-  /**
-   * WHERE THE SCAN HAPPENS, in the still's own space — x and r as fractions of the image WIDTH, y as a
-   * fraction of its HEIGHT.
-   *
-   * Image space, not canvas space, and that is the whole point. In the reference prototype the phone
-   * and the source share an aspect ratio exactly, so a fraction of one is a fraction of the other and
-   * the distinction never surfaces. In the app the canvas is any shape — a phone, a laptop column, a
-   * 172x230 chip — and a canvas-space fraction would slide across the subject at every breakpoint.
-   * The canvas maps these through its own DX/DY/S.
-   *
-   * Present means the scan is RINGS leaving this point. Absent means the older sweep-and-mesh, which
-   * is what an employee whose portrait is a face still gets.
-   */
-  dome?: { x: number; y: number; r: number }
+  assets: { mobile: AssetSet; desktop?: AssetSet }
   /** The stage the portrait sits on. Matches --v2-stage for Rudi; the canvas cannot read a custom
    *  property, so the literal and the token have to move together. */
   ground: string
@@ -101,22 +136,55 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     owns: 'the phone',
     voice: 'aura-2-asteria-en',
     avatar: '/avatars/asteria.png',
-    // THE ROBOT. Extracted byte-identically from docs/miles/robot-scan-C.html — the still and the clip
-    // are aligned to each other to within a pixel and share one robot-free plate, and a re-encode is
-    // what would spend that. Verified rather than assumed: 1.0px across, 0.5px down between the still
-    // and the clip's first frame, and three background strips differing by half a grey level.
-    still: '/v2/rudi-robot-still.jpg',
-    video: '/v2/rudi-robot-speaking.mp4',
     // NO MESH. The wireframe, the grid, the blooms, the markers, the crosshair and the tick ring were
     // all things drawn ACROSS a face. Nothing is drawn across the machine now — the only thing that
     // moves is the part of him that is already a display.
     nodes: null,
-    width: 784,
-    height: 1660,
-    // Measured off the dome including its rim, which is what the rings have to sit outside of. A
-    // measurement of the dark glass core alone comes out at 0.672 / 0.336 / 0.096 — inside this in
-    // every direction, which is the rim.
-    dome: { x: 0.684, y: 0.349, r: 0.108 },
+    assets: {
+      // THE PHONE. From docs/miles/robot-scan-C.html, extracted byte-identically — still and clip
+      // aligned to within a pixel and sharing one robot-free plate, and a re-encode is what would
+      // spend that.
+      mobile: {
+        still: '/v2/rudi-robot-still.jpg',
+        video: '/v2/rudi-robot-speaking.mp4',
+        width: 784,
+        height: 1660,
+        scan: {
+          // The dome INCLUDING its rim, which is what the rings sit outside of. The dark glass core
+          // alone measures 0.672 / 0.336 / 0.096 — inside this in every direction, which is the rim.
+          x: 0.684, y: 0.349, r: 0.108,
+          rings: 4, from: 1, reach: 1.5, falloff: 1, alpha: 0.34, stroke: 0.052,
+          inner: 0.86, outer: 1,
+          ink: [34, 211, 238], inkFar: [139, 92, 246],
+          halo: { inner: 0, outer: 1.5, ink: [34, 211, 238], alpha: 0.1, swing: 0.06, radPerS: 10 / 4.4 },
+        },
+      },
+      // THE DESKTOP HERO, from docs/miles/rudi-desktop-scan.html. Built at the hero's own aspect —
+      // 1130/1210 = 0.934 against 710/760 = 0.934 — so cover-fit is a 1:1 fit and nothing is cropped.
+      // The phone pair in a 710x760 box threw the sides away and scaled up what was left, which is
+      // why the arm was cut off and the rest looked soft.
+      desktop: {
+        still: '/v2/rudi-robot-desktop-still.jpg',
+        video: '/v2/rudi-robot-desktop-speaking.mp4',
+        width: 1130,
+        height: 1210,
+        scan: {
+          // MEASURED OFF THIS ASSET, not carried over: the phone's numbers put the dome 6% low and
+          // 2% left of where it actually is here.
+          x: 0.5845, y: 0.3322, r: 0.0978,
+          // Three rings, thinner, stopping just outside the rim rather than travelling a dome and a
+          // half out, and mostly white with a cyan cast rather than cyan itself.
+          rings: 3, from: 1.03, reach: 0.62, falloff: 2, alpha: 0.55,
+          // W*0.0022 in the reference, over a dome radius of 0.0978W — the same number, expressed
+          // against the thing it is drawn around rather than against the viewport.
+          stroke: 0.0225,
+          inner: 0.955, outer: 1.02,
+          ink: [190, 235, 245], inkFar: [190, 235, 245],
+          // A bloom ON the glass rather than a ring of light around his head, and breathing slower.
+          halo: { inner: 0.55, outer: 1.22, ink: [34, 211, 238], alpha: 0.05, swing: 0.04, radPerS: 7 / 4.4 },
+        },
+      },
+    },
     ground: '#0d0d10',
     accent: '#FF2E93',
     wash: '#FFEDF6',
@@ -130,16 +198,20 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     owns: 'inbound messages',
     voice: 'aura-2-arcas-en',
     avatar: '/avatars/arcas.png',
-    still: '/v2/miles-still.webp',      // 680x907, same framing as Rudi's
-    video: '/v2/miles-speaking.mp4',    // 612x816, same as Rudi's
+    // ONE SET, so nothing about him changed: `desktop` is absent and falls back to this.
+    assets: {
+      mobile: {
+        still: '/v2/miles-still.webp',
+        video: '/v2/miles-speaking.mp4',
+        width: 680,
+        height: 907,
+        // No scan block, so the canvas gives him the sweep and the mesh he already had. He will need
+        // a character from the same family as the robot eventually; one is not derived from a robot arm.
+      },
+    },
     // 900 points, generated from the portrait by weighting each pixel by its distance from the
     // photograph's own background — so the mesh sits on him and never on the ground behind him.
     nodes: '/v2/miles-nodes.json',
-    // Still a photograph of a person, still on the sweep-and-mesh loop, and deliberately so: he will
-    // need a character from the same family as the robot eventually, and one is not derived from a
-    // robot arm. No `dome`, so the canvas gives him the scan he already had.
-    width: 680,
-    height: 907,
     // MEASURED FROM THE FILE, not taken from the brief. The portrait was shot against acid, and the
     // stage has to be that exact acid or there is a visible seam where the image ends. #D5FB48 is
     // what the corners of the photograph actually are; #D9F224 below is his ACCENT, which is a
@@ -156,8 +228,12 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
   },
 }
 
+/** Which breakpoint's assets to paint. `desktop` falls back to `mobile` for an employee with one set. */
+export type Breakpoint = 'mobile' | 'desktop'
+export const assetsFor = (p: Persona, at: Breakpoint): AssetSet => p.assets[at] ?? p.assets.mobile
+
 /** The canvas needs something to paint. The portrait when there is one, the avatar until then. */
-export const portraitOf = (p: Persona): string => p.still ?? p.avatar
+export const portraitOf = (p: Persona, at: Breakpoint = 'mobile'): string => assetsFor(p, at).still || p.avatar
 
 /** `#22D3EE` → `[34, 211, 238]`. The canvas interpolates in RGB; the map is written in hex like the
  *  rest of the design language, and one of the two has to convert. */

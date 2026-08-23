@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { coverFit, domeInCanvas, phaseAt, SCAN_PHASES } from './rudi-canvas'
-import { PERSONAS } from '@/lib/persona'
+import { PERSONAS, assetsFor } from '@/lib/persona'
 
 // Rudi is a robot. The scan is four rings leaving the dome of his face and a halo on the glass —
 // five things drawn, and nothing else. Everything the portrait loop drew ACROSS a face is gone.
@@ -10,14 +10,15 @@ import { PERSONAS } from '@/lib/persona'
 const src = readFileSync(join(process.cwd(), 'app/(v2)/v2/rudi-canvas.tsx'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
 
-const RUDI = PERSONAS.rudi
-const DOME = RUDI.dome!
+const RUDI = assetsFor(PERSONAS.rudi, 'mobile')
+const DESK = assetsFor(PERSONAS.rudi, 'desktop')
+const DOME = RUDI.scan!
 
 describe('the three numbers the whole thing rests on', () => {
   // Measured off the dome INCLUDING its rim, which is what the rings sit outside of. A measurement of
   // the dark glass core alone comes out at 0.672 / 0.336 / 0.096 — inside this in every direction.
   it('pins the dome to the plate it was measured off', () => {
-    expect(DOME).toEqual({ x: 0.684, y: 0.349, r: 0.108 })
+    expect([DOME.x, DOME.y, DOME.r]).toEqual([0.684, 0.349, 0.108])
   })
 
   it('pins the source the fractions are fractions OF', () => {
@@ -29,15 +30,49 @@ describe('the three numbers the whole thing rests on', () => {
   })
 
   it('leaves Miles on his own dimensions and his own loop', () => {
-    expect([PERSONAS.miles.width, PERSONAS.miles.height]).toEqual([680, 907])
-    // No dome, so the engine gives him the sweep and the mesh he already had. He will need a
+    const m = assetsFor(PERSONAS.miles, 'mobile')
+    expect([m.width, m.height]).toEqual([680, 907])
+    // No scan block, so the engine gives him the sweep and the mesh he already had. He will need a
     // character from the same family eventually; it is not derived from a robot arm.
-    expect(PERSONAS.miles.dome).toBeUndefined()
+    expect(m.scan).toBeUndefined()
     expect(PERSONAS.miles.nodes).toBe('/v2/miles-nodes.json')
+    // One set, so desktop resolves to the same object rather than to a second photograph.
+    expect(assetsFor(PERSONAS.miles, 'desktop')).toBe(m)
   })
 
   it('takes the mesh away from the robot, because nothing is drawn across the machine', () => {
-    expect(RUDI.nodes).toBeNull()
+    expect(PERSONAS.rudi.nodes).toBeNull()
+  })
+
+  it('gives the desktop hero its OWN asset, at the hero\'s own aspect', () => {
+    // 1130/1210 = 0.934 against the hero's 710/760 = 0.934. Cover-fit is then a 1:1 fit — the phone
+    // pair in that box threw the sides away and scaled up what was left.
+    expect([DESK.width, DESK.height]).toEqual([1130, 1210])
+    expect(DESK.still).toBe('/v2/rudi-robot-desktop-still.jpg')
+    expect(DESK.video).toBe('/v2/rudi-robot-desktop-speaking.mp4')
+  })
+
+  it('measures the desktop dome off the desktop asset, not off the phone', () => {
+    // Carried over, the phone's numbers put it 6% low and 2% left of where it actually is here.
+    expect([DESK.scan!.x, DESK.scan!.y, DESK.scan!.r]).toEqual([0.5845, 0.3322, 0.0978])
+  })
+
+  it('gives each asset its OWN rings and its own halo, not only its own dome', () => {
+    expect(RUDI.scan!.rings).toBe(4)
+    expect(DESK.scan!.rings).toBe(3)
+    // Three rings stopping just outside the rim, not four travelling a dome and a half out.
+    expect(RUDI.scan!.from + RUDI.scan!.reach).toBeCloseTo(2.5, 5)
+    expect(DESK.scan!.from + DESK.scan!.reach).toBeCloseTo(1.65, 5)
+    // A stroke less than half as thick, and a pale blue-white rather than cyan.
+    expect(DESK.scan!.stroke).toBeLessThan(RUDI.scan!.stroke / 2)
+    expect(DESK.scan!.ink).toEqual([190, 235, 245])
+    expect(DESK.scan!.ink).toEqual(DESK.scan!.inkFar)
+    // A bloom ON the glass rather than a ring around his head, and breathing slower. If two sets of
+    // numbers is the rule it applies to all of them, not only the ones that obviously differ.
+    expect(DESK.scan!.halo.outer).toBe(1.22)
+    expect(DESK.scan!.halo.alpha).toBe(0.05)
+    expect(DESK.scan!.halo.radPerS).toBeCloseTo(7 / 4.4, 6)
+    expect(RUDI.scan!.halo.radPerS).toBeCloseTo(10 / 4.4, 6)
   })
 })
 
@@ -85,8 +120,38 @@ describe('the mapping — image space through the fit, never a fraction of the c
     expect(a).toBeCloseTo(DOME.r * RUDI.width * Math.max(800 / RUDI.width, 900 / RUDI.height), 5)
   })
 
+  it('makes the desktop anchor a NO-OP, and that is not luck', () => {
+    // The hero is 710x760 between the 236px rail and the 312px sidebar. The asset is built at that
+    // aspect on purpose, so cover-fit is a 1:1 fit and the dome anchor has nothing to correct — dy
+    // comes out at zero because there is no spare height to slide.
+    //
+    // PINNED BECAUSE IT LOOKS LIKE LUCK. If the asset's aspect ever drifts from the hero's, the crop
+    // starts moving and the anchor starts doing real work, and this is the test that says why the
+    // composition changed rather than leaving somebody to rediscover it from a screenshot.
+    const asset = DESK.width / DESK.height
+    const hero = 710 / 760
+    expect(asset).toBeCloseTo(hero, 3)
+
+    const f = coverFit(710, 760, DESK.width, DESK.height, DESK.scan!)
+    expect(Math.abs(f.dy)).toBeLessThan(1)
+    expect(Math.abs(f.dx)).toBeLessThan(1)
+    // Nothing cropped: the drawn box is the hero box, to within a pixel.
+    expect(f.dw).toBeCloseTo(710, 0)
+    expect(f.dh).toBeCloseTo(760, 0)
+    // And the dome lands where the asset says it does, not where the anchor would have put it.
+    const d = domeInCanvas(f, DESK.width, DESK.height, DESK.scan!)
+    expect(d.y / 760).toBeCloseTo(DESK.scan!.y, 3)
+  })
+
+  it('still anchors on the PHONE, where the aspects do not match', () => {
+    // The same code doing real work, so the no-op above is demonstrably a property of the asset
+    // rather than of the function.
+    const f = coverFit(1200, 800, RUDI.width, RUDI.height, DOME)
+    expect(f.dy).toBeLessThan(-1)
+  })
+
   it('leaves the portrait crop exactly as it was for an employee with no dome', () => {
-    const m = PERSONAS.miles
+    const m = assetsFor(PERSONAS.miles, 'mobile')
     const f = coverFit(1200, 800, m.width, m.height, null)
     expect(f.dy).toBeCloseTo((800 - m.height * f.s) * 0.54, 6)
   })
@@ -95,16 +160,15 @@ describe('the mapping — image space through the fit, never a fraction of the c
 describe('five things are drawn, and they are these five', () => {
   const rings = src.slice(src.indexOf('function drawRings'), src.indexOf('function draw(now: number)'))
 
-  it('draws four rings', () => {
-    expect(src).toMatch(/const RINGS = 4/)
-    expect(rings).toMatch(/for \(let i = 0; i < RINGS; i\+\+\)/)
+  it('draws as many rings as the asset says, from one loop', () => {
+    // Two sets of numbers, one drawing function — the count is data, not a constant.
+    expect(rings).toMatch(/for \(let i = 0; i < SCAN\.rings; i\+\+\)/)
+    expect(src).not.toMatch(/const RINGS = /)
   })
 
-  it('and one halo, breathing at the rate the prototype actually uses', () => {
-    // 4.4s cycle, sin(t * 10) — which is 10/4.4 rad/s. Stated as a rate so it survives the cycle
-    // length changing, and taken from the file rather than from the brief's description of it.
-    expect(src).toMatch(/const HALO_RAD_PER_S = 10 \/ 4\.4/)
-    expect(rings).toMatch(/Math\.sin\(\(now \/ 1000\) \* HALO_RAD_PER_S\)/)
+  it('and one halo, at the asset\'s own rate', () => {
+    expect(rings).toMatch(/Math\.sin\(\(now \/ 1000\) \* h\.radPerS\)/)
+    expect(src).not.toMatch(/const HALO_RAD_PER_S/)
     expect((rings.match(/createRadialGradient/g) ?? []).length).toBe(2)   // the ring stroke, and the halo
   })
 
@@ -118,7 +182,7 @@ describe('five things are drawn, and they are these five', () => {
 
   it('stops with the rest of the scan the frame listening begins', () => {
     // One rule for both scans: scanA snaps to zero leaving idle and eases back when it returns.
-    expect(rings).toMatch(/if \(!DOME \|\| amount < 0\.02\) return/)
+    expect(rings).toMatch(/if \(!SCAN \|\| amount < 0\.02\) return/)
   })
 })
 

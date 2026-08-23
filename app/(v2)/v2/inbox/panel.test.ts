@@ -41,9 +41,10 @@ describe('one state machine, not two', () => {
 describe('the same engine paints both employees', () => {
   const canvas = strip(read('../rudi-canvas.tsx'))
 
-  it('takes the persona as an argument', () => {
+  it('takes the persona as an argument — and the breakpoint beside it', () => {
     expect(canvas).toContain("persona = 'rudi'")
-    expect(canvas).toContain('paintFor(persona)')
+    // Both are remount-on-change for the same reason: every texture the component holds differs.
+    expect(canvas).toContain('paintFor(persona, breakpoint)')
   })
 
   it('still paints Rudi exactly as it did', () => {
