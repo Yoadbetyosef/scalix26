@@ -271,11 +271,23 @@
    on a thumbnail anyway, so they go rather than being reproduced at a second geometry. */
 .v2 .v2-root[data-min] .v2-cards { display: none; }
 
+/* ── IT CLEARS THE ROBOT, AND THE FALLOFF IS STEEP ─────────────────────────────────────────────────
+   At 62% it started 321px up a 844px frame, and his base is at 519 — so it laid roughly 0.36 black
+   over the bottom 38% of the machine, and he dissolved from the plinth down. 36% starts it at 540,
+   twenty-one pixels clear of him.
+   Measured, not guessed: the bare plate under the caption is luminance 158.8, where white text is
+   2.65:1 and fails. The scrim was solving that by covering a third of the picture. The caption's own
+   shadow solves it locally now, so this only has to carry the button and the handle.
+   TWO `transition` DECLARATIONS WERE HERE and the second silently won, so the height never animated
+   and the listening veil snapped rather than rose. One declaration, both properties. */
 .v2-scrim {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 62%; z-index: 2; pointer-events: none;
-  transition: height 0.4s var(--v2-ease);
-  background: linear-gradient(180deg, rgba(10, 10, 13, 0), rgba(10, 10, 13, 0.42) 44%, rgba(10, 10, 13, 0.88));
-  transition: opacity 0.35s;
+  position: absolute; left: 0; right: 0; bottom: 0; height: 36%; z-index: 2; pointer-events: none;
+  transition: height 0.4s var(--v2-ease), opacity 0.35s;
+  background: linear-gradient(180deg,
+    rgba(10, 10, 13, 0) 0%,
+    rgba(10, 10, 13, 0.10) 30%,
+    rgba(10, 10, 13, 0.62) 70%,
+    rgba(10, 10, 13, 0.92) 100%);
 }
 .v2-overlay { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 46px 42px; transition: opacity 0.35s; }
 /* ── HE RECEDES WHILE THE MIC IS OPEN ────────────────────────────────────────────────────────────
@@ -316,9 +328,13 @@
 .v2-cap {
   max-width: 620px; font-size: 31px; line-height: 1.22; font-weight: 600;
   letter-spacing: -0.03em; color: #fff; min-height: 78px; transition: opacity 0.24s;
-  /* The scrim carries most of the contrast, but the portrait has bright shoulders the gradient can
-     still lose itself against. A shadow costs nothing on the white and rescues the accent clause. */
-  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.45);
+  /* THE HEADLINE CARRIES ITS OWN READABILITY NOW. The scrim used to, by covering a third of the
+     frame; it starts below the robot instead, so the text is over bare plate at luminance 158.8 where
+     white is 2.65:1 and fails.
+     Two layers, because one cannot do both jobs: the tight 2px pass puts a hard edge on the glyph,
+     the wide 22px pass darkens the field it sits on. A single 18px blur at .45 did neither well
+     enough to measure. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 22px rgba(0, 0, 0, 0.75);
 }
 .v2-cap b {
   font-weight: 600; background: var(--v2-grad);

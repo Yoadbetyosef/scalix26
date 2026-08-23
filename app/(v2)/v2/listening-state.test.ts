@@ -50,10 +50,31 @@ describe('the canvas draws nothing while the mic is open', () => {
 describe('he recedes into the veil', () => {
   it('raises the scrim while the mic is open, and only then', () => {
     expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-scrim,\s*\n\.v2-root\[data-state="armed"\] \.v2-scrim \{ height: 74%; \}/)
-    expect(css).toMatch(/\.v2-scrim \{[^}]*height: 62%/)
+    // 36% at rest, not 62%. At 62% the scrim started 321px up an 844px frame and his base is at 519,
+    // so it laid roughly 0.36 black over the bottom 38% of the machine. Measured after the change:
+    // alpha at the base is 0.000 idle, and the rise to 74% still puts it at 0.334 while listening.
+    expect(css).toMatch(/\.v2-scrim \{[^}]*height: 36%/)
   })
-  it('moves it rather than covering him with something new', () => {
-    expect(css).toMatch(/\.v2-scrim \{[^}]*transition: height 0\.4s var\(--v2-ease\)/)
+
+  it('moves it rather than covering him with something new — and the move actually animates', () => {
+    // .v2-scrim declared `transition` TWICE, and the second silently won, so the height never eased
+    // and the listening veil snapped. One declaration, both properties.
+    expect(css).toMatch(/\.v2-scrim \{[^}]*transition: height 0\.4s var\(--v2-ease\), opacity 0\.35s/)
+    const rule = css.slice(css.indexOf('.v2-scrim {'), css.indexOf('}', css.indexOf('.v2-scrim {')))
+    expect((rule.match(/transition:/g) ?? []).length).toBe(1)
+  })
+
+  it('falls off steeply enough to leave the robot alone', () => {
+    // Nothing meaningful in the first third: 0.10 at 30%, and the deep end arrives under the button.
+    const rule = css.slice(css.indexOf('.v2-scrim {'), css.indexOf('}', css.indexOf('.v2-scrim {')))
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.10\) 30%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.62\) 70%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.92\) 100%/)
+  })
+
+  it('gives the headline its own readability rather than a tall veil', () => {
+    // Two layers: a tight 2px pass for the glyph edge, a wide 22px pass for the field it sits on.
+    expect(css).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
   })
   it('is told the state by the root, which is where the DOM chrome can read it', () => {
     expect(home).toMatch(/data-state=\{state\}/)
