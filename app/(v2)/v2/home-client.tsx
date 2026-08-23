@@ -5,9 +5,10 @@ import { RudiCanvas, type RudiHandle, type RudiState } from './rudi-canvas'
 import { Composer } from './composer'
 import { Rail } from './rail'
 import { rudiCursor, type RudiSegment } from './rudi-line'
+import { createReveal, type Reveal } from './reveal'
 import { useIsMobile } from './use-breakpoint'
 import { Cursor, Palette, useMagnet, usePalette } from './interactions'
-import type { AmyMoment } from '@/components/dashboard/hero/amy-realtime'
+import { IDLE_END_MS, type AmyMoment } from '@/components/dashboard/hero/amy-realtime'
 import { replyLine } from './reply-line'
 import { PRIMARY, allowed, visibleGroups } from './nav'
 import { usePressState } from './use-press'
@@ -27,33 +28,6 @@ import {
 /** After this long with no interaction the hero collapses and the animation stops. */
 const IDLE_MS = 60_000
 
-/** How long the armed state waits before the session closes. The hairline drains over exactly this. */
-const ARMED_TIMEOUT_MS = 12_000
-
-// ── THE TRANSCRIPT ARRIVES ALL AT ONCE, AND IS REVEALED A WORD AT A TIME ───────────────────────────
-//
-// The agent sends no partial recognition. One ConversationText lands about 700ms after the endpoint
-// carrying the whole sentence, so there is nothing to stream and a second socket would not change
-// that. What there IS is a beat between somebody stopping talking and their words appearing, and a
-// sentence that materialises in one frame after that beat reads as a screenshot rather than as
-// something being heard.
-//
-// So the reveal is presentation, and it lives here rather than in amy-realtime: that layer reports
-// what the socket said and should not also own how long a screen takes to say it.
-const REVEAL_WORD_MS = 45
-/** A twenty-word sentence would hold the turn for nearly a second at 45ms. The cap is what stops the
- *  length of what somebody said deciding how long they wait to see it. */
-const REVEAL_CAP_MS = 700
-
-/**
- * How long one word waits, for a sentence of this many.
- *
- * Pure and exported so the cap is a fact with a test rather than an expression buried in an interval:
- * 45ms each until a sentence is long enough that 45ms each would break the ceiling, and from there
- * the whole reveal takes REVEAL_CAP_MS however many words there are.
- */
-export const revealStepMs = (words: number): number =>
-  Math.min(REVEAL_WORD_MS, REVEAL_CAP_MS / Math.max(1, words))
 
 
 export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; dataPromise: Promise<HomeData>; modules: string[] }) {
@@ -69,11 +43,19 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   // where her answer goes — the big gradient line IS her voice, so a card repeating it over the
   // portrait was showing the same sentence twice and hiding the face to do it.
   const [said, setSaid] = useState<string | null>(null)
-  // Refs, not state: `said` and `arm` arrive in the same synchronous emit, so the arm branch has to
-  // see that a reveal has begun on the very tick the said branch began it.
-  const revealTimer = useRef<ReturnType<typeof setInterval> | null>(null)
-  const revealFull = useRef<string | null>(null)
-  const armPending = useRef(false)
+  // A ref and not state: `said` and `arm` arrive in the same synchronous emit, so the arm branch has
+  // to see that a reveal has begun on the very tick the said branch began it. The sequencer itself
+  // lives in reveal.ts with no React in it, so a test can drive a whole turn on fake timers.
+  const revealRef = useRef<Reveal | null>(null)
+  if (!revealRef.current) {
+    revealRef.current = createReveal({
+      show: (text) => setSaid(text),
+      arm: () => rudi.current?.arm(),
+      reduced: () => typeof window !== 'undefined'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    })
+  }
+  const reveal = revealRef.current
   const [reply, setReply] = useState<string | null>(null)
   const [asked, setAsked] = useState<string | null>(null)
   const [jump, setJump] = useState<number | null>(null)
@@ -180,58 +162,16 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
   // Typing hands off to AskAmyText — the same component "Type instead" opens on /dashboard, with the
   // same briefing. The echo stays: it is what the composer showed before the answer had anywhere to
   // come from, and it still reads as the owner's own line.
-  /**
-   * Stop a reveal in flight and show the whole sentence.
-   *
-   * Called by anything that makes a half-finished sentence wrong: she answered, the caller started
-   * again, the session closed, or the component went away. `armed` is a promise about whose turn it
-   * is, so a pending arm is DROPPED rather than fired — by the time any of those has happened it is
-   * no longer true.
-   */
-  const settleReveal = useCallback(() => {
-    if (revealTimer.current) { clearInterval(revealTimer.current); revealTimer.current = null }
-    armPending.current = false
-    if (revealFull.current !== null) { setSaid(revealFull.current); revealFull.current = null }
-  }, [])
-
-  /** The words, one at a time, and the arm that waits for the last of them. */
-  const revealSaid = useCallback((text: string) => {
-    settleReveal()
-    const arm = () => { armPending.current = false; rudi.current?.arm() }
-    const words = text.trim().split(/\s+/).filter(Boolean)
-    const reduced = typeof window !== 'undefined'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    // Nothing to reveal, or somebody has asked for less motion: the sentence, and the turn, at once.
-    if (words.length < 2 || reduced) { setSaid(text); if (armPending.current) arm(); return }
-
-    revealFull.current = text
-    const step = revealStepMs(words.length)
-    let i = 1
-    setSaid(words[0])
-    revealTimer.current = setInterval(() => {
-      i++
-      setSaid(words.slice(0, i).join(' '))
-      if (i < words.length) return
-      clearInterval(revealTimer.current!)
-      revealTimer.current = null
-      revealFull.current = null
-      // HER TURN BEGINS WHEN THE SENTENCE FINISHES LANDING, not when the socket said so. Listening
-      // outlives the endpoint by exactly the reveal, which is the reading we want — still catching
-      // up — and it is why the veil stays raised and the button still says End until the last word.
-      if (armPending.current) arm()
-    }, step)
-  }, [settleReveal])
-
   // A reveal is a timer on a component that can go away mid-sentence.
-  useEffect(() => settleReveal, [settleReveal])
+  useEffect(() => () => reveal.settle(), [reveal])
 
   // Typed, not spoken: the words were already on screen in the field, so revealing them one at a time
   // would be the screen re-typing what somebody just typed. Straight to the whole sentence, and any
   // reveal still running belongs to a turn that is now over.
   const onSubmit = useCallback((text: string) => {
-    settleReveal(); revealFull.current = null
+    reveal.settle()
     setAsked(text); setSaid(text); amy.goText()
-  }, [amy, settleReveal])
+  }, [amy, reveal])
 
 
   // The portrait, driven by the session's own moments. Every branch calls a method the canvas already
@@ -241,17 +181,17 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
     if (!r) return
     // Both of these make a half-finished sentence wrong: she has answered, or the caller has started
     // again. Either way the words already said should be all of them.
-    if (m.type === 'listen') { settleReveal(); r.listen() }
+    if (m.type === 'listen') { reveal.settle(); r.listen() }
     else if (m.type === 'level') r.level(m.value)
-    else if (m.type === 'speak') { settleReveal(); setReply(m.text || null); r.speak(m.text, m.ms) }
+    else if (m.type === 'speak') { reveal.settle(); setReply(m.text || null); r.speak(m.text, m.ms) }
     else if (m.type === 'stopSpeaking') r.stopSpeaking()
     // HELD, NOT DELAYED. The emit guard in amy-realtime drops an arm that arrives while she is still
     // audible, and a dropped arm never re-fires — so the moment is taken here, on the tick it was
     // sent and past that guard, and only the CALL waits for the last word.
-    else if (m.type === 'arm') { if (revealTimer.current) armPending.current = true; else r.arm() }
-    else if (m.type === 'said') revealSaid(m.text)
+    else if (m.type === 'arm') reveal.arm()
+    else if (m.type === 'said') reveal.say(m.text)
     else if (m.type === 'reply') setReply(m.text)
-  }, [revealSaid, settleReveal])
+  }, [reveal])
 
   // Listening clears the caption; armed KEEPS her last sentence, because it is the thing being
   // answered. Only the resting line needs the numbers, so only that case can suspend.
@@ -295,8 +235,11 @@ export function HomeClient({ shell, dataPromise, modules }: { shell: ShellData; 
     </>
   )
 
+  // The bar drains over the session's OWN idle clock, imported rather than restated. It used to run
+  // on a local 12s while the session hung up at 10, so it never finished — it was at about 83% when
+  // the call ended under it.
   const hairline = state === 'armed' && (
-    <div className="v2-hair" aria-hidden><i style={{ animationDuration: `${ARMED_TIMEOUT_MS}ms` }} /></div>
+    <div className="v2-hair" aria-hidden><i style={{ animationDuration: `${IDLE_END_MS}ms` }} /></div>
   )
 
   // A one-line skeleton rather than an empty block, so the composer does not jump when the line lands.

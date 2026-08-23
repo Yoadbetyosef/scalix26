@@ -35,6 +35,16 @@ export type AmyMoment =
 // the socket, the mic, the noise gate, the drain guard and every moment emitted are identical; only
 // what the agent is told about itself differs. That is the whole of "persona", plus the voice id the
 // briefing already carries.
+/**
+ * How long a session survives with nobody speaking, from either side.
+ *
+ * EXPORTED because the UI draws it. /v2's armed hairline is a bar that drains over the time left,
+ * and it used to drain over a private ARMED_TIMEOUT_MS of 12_000 in home-client — a second number,
+ * describing this one, and wrong. The bar reached about 83% and the call ended under it. A countdown
+ * has to be told by the clock it is counting, not run alongside it.
+ */
+export const IDLE_END_MS = 10_000
+
 export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, surface = 'v1', prompt, snapshotUrl = '/api/ai/amy/snapshot' }: { briefing: AmyBriefing; audioCtx?: AudioContext | null; onClose: () => void; onType: () => void; onMoment?: (m: AmyMoment) => void; surface?: 'v1' | 'v2'; prompt?: string; snapshotUrl?: string | null }) {
   // Held in a ref so emitting never re-subscribes the socket effect below.
   const momentRef = useRef<((m: AmyMoment) => void) | undefined>(onMoment)
@@ -205,7 +215,6 @@ export function AmyRealtime({ briefing, audioCtx, onClose, onType, onMoment, sur
   // The version before this restarted the clock ON speech rather than stopping it, which made it a
   // session-age timer — it expired mid-conversation. The one before that armed only when her turn
   // ended, which left a silent session open forever.
-  const IDLE_END_MS = 10_000
   /** A backgrounded tab holding a mic. Shorter than idle, because nobody is watching. */
   const HIDDEN_END_MS = 30_000
 
