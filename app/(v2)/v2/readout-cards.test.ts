@@ -94,9 +94,11 @@ describe('the ceiling is measured, not guessed', () => {
   it('falls back only when there is nothing to measure', () => {
     expect(geom).toMatch(/const CEILING_FALLBACK = 0\.66/)
     const m = src.slice(src.indexOf('function measureCeiling'), src.indexOf('function fit()'))
-    // blockTopPx goes with it: the lower card's slot is measured off the same element, so a frame
-    // with nothing to measure must not leave a stale edge behind for the card to be placed against.
-    expect(m).toMatch(/if \(!block\) \{ ceiling = CEILING_FALLBACK; blockTopPx = null; return \}/)
+    // With nothing to measure the FRAME is the constraint, not a constant: a band on the dashboard
+    // has no copy inside it, and CEILING_FALLBACK — chosen so cards clear a caption that has eaten
+    // the screen — parks both of them across the middle of the subject instead.
+    expect(m).toMatch(/ceiling = 1 - CARD_DROP - CARD_GAP/)
+    expect(m).toMatch(/blockTopPx = CH/)
     // Never above the top third — cards by his dome is worse than no cards.
     expect(m).toMatch(/Math\.max\(0\.30, Math\.min\(CEILING_FALLBACK, want\)\)/)
   })

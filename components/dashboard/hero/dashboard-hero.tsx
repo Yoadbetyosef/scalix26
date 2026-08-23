@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { RudiPresenceProvider, GlassToasts } from './rudi-presence'
 import { RudiOrb } from './rudi-orb'
+import { RudiBand } from './rudi-band'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
@@ -78,15 +79,23 @@ export function DashboardHero({
         {/* B5 — attention banner, reactive to the single source (mobile only). */}
         <AttentionPill initialVisible={presenceState === 'attention'} />
 
-        {/* The presence centrepiece, standalone and centred. This was AiOrb — a waveform in a glass
-            lens — and it is Rudi himself now: the same canvas the /v2 hero paints, in the slot the
-            orb already had. Only the container is sized; the engine fits whatever box it is given.
-            At 144px his face is 31px across, which reads as a face. See rudi-orb.tsx. */}
-        <div className="flex justify-center md:hidden">
-          <div className="h-36 w-36 flex-shrink-0">
-            <RudiOrb />
-          </div>
+        {/* THE BAND. Mobile only, and where the 144px orb used to be.
+            /v2's hero owns a whole viewport; a dashboard scrolls and cannot spare one, so the band
+            keeps the picture and gives the copy away — the sentence is on paper directly below, which
+            is the move that makes this simple. He is full-bleed here: the page's p-4 is cancelled so
+            he reaches both edges. See rudi-band.tsx for why the height is a clamp. */}
+        <div className="md:hidden">
+          <RudiBand />
         </div>
+
+        {/* The sentence, on paper, under the picture. Mobile had no sentence at all before — just the
+            pill — because the orb said nothing and there was nowhere for words to go. It is the same
+            component the desktop identity row uses, so both surfaces say the same thing from the same
+            source. And it is why nothing here needs a scrim: white text on a photograph is what cost
+            last week, and this is ink on a page. */}
+        <h2 className="mt-4 text-balance text-xl font-light leading-snug tracking-tight text-ink md:hidden">
+          <AttentionSentence initial={stateSentence} idleSentence={idleSentence} />
+        </h2>
 
         {/* Identity — the AI presence + who's on duty (compact). Desktop only; mobile uses the
             compact row above. Smaller here: 96px base, 112px at sm:, which puts his face at 21 and

@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { RudiCanvas, type RudiHandle } from '@/app/(v2)/v2/rudi-canvas'
-import { useRudiPresence } from './rudi-presence'
+import { usePresenceScan } from './use-presence-scan'
 
 // RUDI, IN THE SLOT THE ORB ALREADY HAD.
 //
@@ -24,20 +24,9 @@ import { useRudiPresence } from './rudi-presence'
 // engine moves to components/, this import changes by one line.
 
 export function RudiOrb({ onClick }: { onClick?: () => void }) {
-  const { eventKey } = useRudiPresence()
   const rudi = useRef<RudiHandle | null>(null)
-  const seen = useRef(eventKey)
-
-  // The orb's new-event ripple becomes his scan. Same signal, same meaning — something arrived and
-  // he noticed — and the canvas already has the gesture, so nothing new is drawn for it.
-  //
-  // Skipped on the first render: eventKey is seeded with whatever the context is already holding, and
-  // a scan on mount would say a lead had just landed every time the dashboard opened.
-  useEffect(() => {
-    if (eventKey === seen.current) return
-    seen.current = eventKey
-    rudi.current?.scan()
-  }, [eventKey])
+  // The orb's new-event ripple becomes his scan. Shared with the band — see use-presence-scan.
+  usePresenceScan(rudi)
 
   return (
     // Both canvases are positioned here rather than by the v2 stylesheet. RudiCanvas renders the

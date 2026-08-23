@@ -33,15 +33,16 @@ describe('the orb is the engine, ambient', () => {
   })
 
   it('turns the presence ripple into his scan, using the gesture the canvas already has', () => {
-    expect(orb).toMatch(/useRudiPresence\(\)/)
-    expect(orb).toMatch(/rudi\.current\?\.scan\(\)/)
+    expect(orb).toMatch(/usePresenceScan\(rudi\)/)
   })
 
   it('does not scan on mount, which would claim a lead had just arrived', () => {
     // eventKey is seeded from whatever the context already holds, so the first render must be a
-    // no-op rather than a notification every time the dashboard opens.
-    expect(orb).toMatch(/const seen = useRef\(eventKey\)/)
-    expect(orb).toMatch(/if \(eventKey === seen\.current\) return/)
+    // no-op rather than a notification every time the dashboard opens. Lives in the shared hook now,
+    // because the band wants the same behaviour and a second copy would drift.
+    const hook = read('components/dashboard/hero/use-presence-scan.ts')
+    expect(hook).toMatch(/const seen = useRef\(eventKey\)/)
+    expect(hook).toMatch(/if \(eventKey === seen\.current\) return/)
   })
 
   it('paints the robot, at the asset the hero uses', () => {
@@ -53,9 +54,16 @@ describe('the orb is the engine, ambient', () => {
 describe('the dashboard renders him, not the orb', () => {
   const hero = read('components/dashboard/hero/dashboard-hero.tsx')
 
-  it('has swapped both slots — mobile centrepiece and desktop identity', () => {
+  it('has replaced the waveform everywhere it appeared', () => {
     expect(hero).not.toMatch(/<LiveOrb/)
-    expect((hero.match(/<RudiOrb \/>/g) ?? []).length).toBe(2)
+  })
+
+  it('keeps ONE orb — the desktop identity row; mobile is the band now', () => {
+    // Both slots were the orb when he first landed. The band then took the mobile centrepiece, which
+    // is a bigger version of the same picture, and two of him on one screen is one too many.
+    expect((hero.match(/<RudiOrb \/>/g) ?? []).length).toBe(1)
+    const at = hero.indexOf('<RudiOrb />')
+    expect(hero.slice(0, at)).toMatch(/hidden flex-col[^>]*md:flex/)
   })
 
   it('keeps them inside the presence provider, which is where the ripple comes from', () => {

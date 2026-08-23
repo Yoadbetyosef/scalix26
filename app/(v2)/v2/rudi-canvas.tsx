@@ -375,7 +375,19 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
     function measureCeiling() {
       if (!cctx) return
       const block = canvas!.closest('.v2-hero')?.querySelector('[data-bottom-block]')
-      if (!block) { ceiling = CEILING_FALLBACK; blockTopPx = null; return }
+      if (!block) {
+        // NOTHING TO CLEAR BUT THE FRAME. A hero has copy pinned under it and the cards are placed off
+        // that; a band on the dashboard has none — the sentence lives on paper below the picture — so
+        // the thing they must not fall out of is the canvas itself. The lower card's bottom lands
+        // CARD_GAP above it, which is the same rule with the frame standing in for the copy.
+        //
+        // CEILING_FALLBACK is not used here. It is 0.66, chosen so cards clear a caption that has
+        // eaten the screen, and applying it to a band with no caption parks both cards across the
+        // middle of the subject.
+        ceiling = 1 - CARD_DROP - CARD_GAP
+        blockTopPx = CH
+        return
+      }
       const cr = canvas!.getBoundingClientRect()
       const br = block.getBoundingClientRect()
       if (!cr.height || !br.height) return
