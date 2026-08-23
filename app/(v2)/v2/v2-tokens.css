@@ -359,7 +359,7 @@
 .v2-cap::before {
   content: ''; position: absolute; inset: -16px -20px -10px; z-index: -1; pointer-events: none;
   background: linear-gradient(180deg,
-    rgba(10, 10, 13, 0.50) 0%,
+    rgba(10, 10, 13, 0.58) 0%,
     rgba(10, 10, 13, 0.44) 60%,
     rgba(10, 10, 13, 0.03) 100%);
   filter: blur(20px);

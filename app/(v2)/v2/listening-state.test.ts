@@ -83,9 +83,15 @@ describe('he recedes into the veil', () => {
     // The shadow alone left 2.92:1 on line one and 4.61:1 on line three, because a text-shadow is a
     // halo per glyph and cannot flatten a gradient underneath it. This ramps the other way — heavy
     // where the scrim is thin, gone where the scrim has arrived — and the sum comes out level.
-    // Measured on the rendered pixels afterwards: 6.58 / 7.11 / 7.00, spread 0.42.
+    // Measured on the rendered pixels afterwards: 7.46 / 7.46 / 7.34, spread 0.12, floor 7.34:1.
+    //
+    // The top stop is 0.58 and not the 0.50 first shipped. 0.50 was tuned against a fixture that still
+    // had a debug overlay in it; on a clean render the same CSS measures a spread of 0.65, over target.
+    // Swept on clean pixels: 0.50→0.65, 0.54→0.23, 0.58→0.12, 0.62→0.60, 0.66→0.98. It is a minimum,
+    // not a plateau — line one keeps brightening past 0.58 while lines two and three have already
+    // bottomed out on the scrim, so moving this either way widens the spread again.
     const rule = css.slice(css.indexOf('.v2-cap::before {'), css.indexOf('}', css.indexOf('.v2-cap::before {')))
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.50\) 0%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.58\) 0%/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.44\) 60%/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.03\) 100%/)
     expect(rule).toMatch(/z-index: -1/)
