@@ -176,6 +176,16 @@ export function ProbeReport({ force }: { force: ProbeState }) {
         talk: talk
           ? { ...rect(talk), label: (talk.textContent ?? '').replace(/\s+/g, ' ').trim(), on: talk.hasAttribute('data-on') }
           : null,
+        // The swipe handle and its label. Both are white at low alpha, so what sits behind them is
+        // the whole question once the veil is gone.
+        grab: (() => {
+          const bar = document.querySelector('.v2-grab s')
+          const label = document.querySelector('.v2-grab span')
+          return {
+            bar: bar ? { ...rect(bar), background: getComputedStyle(bar).backgroundColor } : null,
+            label: label ? { ...rect(label), color: getComputedStyle(label).color, text: label.textContent } : null,
+          }
+        })(),
         strayNodes: strayNodes(),
       }
 

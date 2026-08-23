@@ -48,8 +48,15 @@ describe('the canvas draws nothing while the mic is open', () => {
 })
 
 describe('he recedes into the veil', () => {
-  it('raises the scrim while the mic is open, and only then', () => {
-    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-scrim,\s*\n\.v2-root\[data-state="armed"\] \.v2-scrim \{ height: 48%; \}/)
+  it('raises the scrim while the mic is open, and only then — it is not painted at rest', () => {
+    // NOT PAINTED AT REST, and that is the whole shape of the screen now. Softening its top edge was
+    // tried three ways and none worked: the frame has to be bright where the robot is and dark where
+    // the copy is, and 43px of travel between them bands at any ramp anyone can write. So idle has no
+    // veil, the caption carries its own ground, and the scrim is the LISTENING veil and only that.
+    //
+    // Opacity rather than display, or the height transition below has nothing to ease.
+    expect(css).toMatch(/\.v2-scrim \{[^}]*opacity: 0;/)
+    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-scrim,\s*\n\.v2-root\[data-state="armed"\] \.v2-scrim \{ height: 48%; opacity: 1; \}/)
     // 36% at rest, not 62%. At 62% the scrim started 321px up an 844px frame and his base is at 519,
     // so it laid roughly 0.36 black over the bottom 38% of the machine.
     // 48% listening, not 74%: +12 points is the delta the design was specified with and the distance
@@ -88,22 +95,26 @@ describe('he recedes into the veil', () => {
     expect(css).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
   })
 
-  it('and a local backdrop that never reaches above the scrim it sits on', () => {
-    // This element flattens the caption, and its blurred top edge was ALSO the horizontal line under
-    // the readout cards. Isolated by rendering the page with it switched off: at the old inset it was
-    // already removing 1.7 luma at y 530 and 5.4 at y 540 — above the scrim's own top, over open
-    // frame, which is exactly where an edge has nothing to hide behind.
+  it('and a local backdrop that is now the only thing making the caption readable', () => {
+    // With no veil at rest this element carries the caption alone, so it was re-swept from scratch
+    // against the bare plate. Two things changed and the second was the one that mattered.
     //
-    // The box now begins 3px above the caption instead of 16, and ramps from zero. Measured against
-    // the same page with no backdrop at all, it adds 0.00 at every row above y 540 and first appears
-    // at 545. The cost is a lighter first line — 4.95:1 where the old arrangement bought 6.90 — which
-    // is the trade taken deliberately: the robot's prominence is the reason he replaced a portrait,
-    // and 43px of frame cannot go from bright to dark without banding.
+    // The shape went from a ramp to a plateau: it used to ramp DOWN the frame to counteract a scrim
+    // getting stronger underneath it, and there is no scrim underneath it now.
+    //
+    // And the box starts 30px above the caption rather than 3. Alpha alone could not fix line one —
+    // a flat 0.84 still only reached 4.35:1 — because line one sits in the top of the box where the
+    // 20px blur has ramped the alpha most of the way down. Where the box STARTS was the limit, not
+    // how dark it goes. Measured on the dev server: 6.90 / 10.53 / 6.79, floor 6.79, spread 0.11.
+    //
+    // -30/0.66 over -25/0.80, which scored marginally better at 7.57 and 0.00: the sharpest row on
+    // the top edge is 1.92 against 2.14, and the edge is the thing this whole exercise was about.
+    // The robot pays nothing either way — band 157, base 145, all of it below his feet at 505.
     const rule = css.slice(css.indexOf('.v2-cap::before {'), css.indexOf('}', css.indexOf('.v2-cap::before {')))
-    expect(rule).toMatch(/inset: -3px -20px -10px/)
+    expect(rule).toMatch(/inset: -30px -20px -10px/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\) 0%/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.44\) 40%/)
-    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.52\) 75%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.66\) 25%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.66\) 85%/)
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.03\) 100%/)
     expect(rule).toMatch(/z-index: -1/)
     // The top stop must stay at zero. A non-zero first stop is a step at the box edge, and blur turns
@@ -186,6 +197,31 @@ describe('the button', () => {
   it('presses by tightening the shadow as well as shrinking', () => {
     const hug = css.slice(css.indexOf('.v2 .v2-overlay .v2-talk {'))
     expect(hug).toMatch(/:active \{\s*\n\s*transform: scale\(0\.955\);\s*\n\s*box-shadow: 0 6px 20px -8px rgba\(139, 92, 246, 0\.8\)/)
+  })
+})
+
+describe('the swipe handle is inked for whatever is behind it', () => {
+  // Both parts were white at a third of an alpha, drawn when a veil covered the bottom of the frame
+  // at every state. With the veil gone at rest they measured 1.57:1 on the bare plate — present in
+  // the markup and invisible on the screen.
+  //
+  // Measured on the dev server: dark 0.9 gives 5.69:1 on the bar and 5.19:1 on the label at rest;
+  // white 0.6 gives 5.88:1 and 5.80:1 under the veil. The white was 0.34/0.4, which had never met AA
+  // in listening either — 2.99 and 3.41 — and was raised in the same edit rather than left.
+
+  it('is dark at rest, where the plate is light', () => {
+    // Anchored to the start of a line. The state overrides sit ABOVE these in the file and contain
+    // the same selector as a substring, so an unanchored indexOf finds the override and asserts the
+    // wrong rule — it read the listening white and reported the resting ink missing.
+    expect(css).toMatch(/\n\.v2-grab s \{[^}]*background: rgba\(10, 10, 13, 0\.9\)/)
+    expect(css).toMatch(/\n\.v2-grab span \{[^}]*color: rgba\(10, 10, 13, 0\.9\)/)
+  })
+
+  it('goes back to white with the veil, by the selector that raises it', () => {
+    // The same selector, not a second guess at when the plate goes dark. If the veil's condition ever
+    // changes, the ink's condition changes with it.
+    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-grab s,\s*\n\.v2-root\[data-state="armed"\] \.v2-grab s \{ background: rgba\(255, 255, 255, 0\.6\); \}/)
+    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-grab span,\s*\n\.v2-root\[data-state="armed"\] \.v2-grab span \{ color: rgba\(255, 255, 255, 0\.6\); \}/)
   })
 })
 

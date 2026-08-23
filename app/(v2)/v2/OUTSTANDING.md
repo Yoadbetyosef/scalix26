@@ -928,3 +928,20 @@ so a first run would be mostly false positives, and triaging those is a day's
 work that belongs after the visual pass, not in the middle of it.
 
 Deferred deliberately, 2026-08-23, not forgotten.
+
+## §21 — the Talk button's own label is 4.00:1, and always has been
+
+Measured on the dev server at 390×844: the white label against the pill's own
+gradient reads **4.00:1**, under the 4.5 that 14px/600 needs. It is not affected
+by anything the scrim or the caption backdrop do — the pill carries its own
+background, so it measured 4.00 before the veil was removed and 4.00 after.
+
+**Left deliberately, 2026-08-23.** It is the most prominent object on the screen
+by hue: saturated magenta-to-cyan on a neutral plate, with a coloured drop shadow,
+at the one place the eye is being sent. Nobody has ever failed to find it. Raising
+the ratio means darkening the gradient or weighting the label, and both change the
+one piece of the composition that is working.
+
+**What would change the answer** is a real report of somebody unable to read it,
+or a decision to hold /v2 to AA across the board rather than where it matters. The
+number is here so the next person finds a decision rather than an oversight.

@@ -289,8 +289,14 @@
    shadow solves it locally now, so this only has to carry the button and the handle.
    TWO `transition` DECLARATIONS WERE HERE and the second silently won, so the height never animated
    and the listening veil snapped rather than rose. One declaration, both properties. */
+/* NOT PAINTED AT REST. Softening its top edge never worked: the frame has to be undarkened where the
+   robot is and dark where the copy is, and 43px of travel between the two bands at any ramp anyone
+   can write. So at idle there is no veil at all and the caption carries its own ground; the scrim is
+   the LISTENING veil now, and only that. Opacity rather than display, so the rise still animates —
+   the height transition below has nothing to ease if the element is not being painted. */
 .v2-scrim {
   position: absolute; left: 0; right: 0; bottom: 0; height: 36%; z-index: 2; pointer-events: none;
+  opacity: 0;
   transition: height 0.4s var(--v2-ease), opacity 0.35s;
   background: linear-gradient(180deg,
     rgba(10, 10, 13, 0) 0%,
@@ -307,7 +313,14 @@
    on the screen that moves when listening begins, and it moves once — the canvas itself has gone
    completely quiet by then. */
 .v2-root[data-state="listening"] .v2-scrim,
-.v2-root[data-state="armed"] .v2-scrim { height: 48%; }
+.v2-root[data-state="armed"] .v2-scrim { height: 48%; opacity: 1; }
+
+/* With the veil up, the plate under the handle is the darkest part of the frame — so the ink goes
+   back to white, and by the same selector that raises the veil rather than a second guess at when. */
+.v2-root[data-state="listening"] .v2-grab s,
+.v2-root[data-state="armed"] .v2-grab s { background: rgba(255, 255, 255, 0.6); }
+.v2-root[data-state="listening"] .v2-grab span,
+.v2-root[data-state="armed"] .v2-grab span { color: rgba(255, 255, 255, 0.6); }
 
 /* ── THE TRANSCRIPT TAKES THE RESTING SENTENCE'S PLACE, AT ITS SIZE ──────────────────────────────
    `.v2-you` is a 10px mono label, which is right when it sits ABOVE a caption as an echo of what was
@@ -357,11 +370,11 @@
    edge of its own; z-index -1 keeps it behind the words and, because .v2-cap sets no z-index of its
    own, still inside .v2-overlay's stacking context and above the scrim. */
 .v2-cap::before {
-  content: ''; position: absolute; inset: -3px -20px -10px; z-index: -1; pointer-events: none;
+  content: ''; position: absolute; inset: -30px -20px -10px; z-index: -1; pointer-events: none;
   background: linear-gradient(180deg,
     rgba(10, 10, 13, 0) 0%,
-    rgba(10, 10, 13, 0.44) 40%,
-    rgba(10, 10, 13, 0.52) 75%,
+    rgba(10, 10, 13, 0.66) 25%,
+    rgba(10, 10, 13, 0.66) 85%,
     rgba(10, 10, 13, 0.03) 100%);
   filter: blur(20px);
 }
@@ -756,10 +769,14 @@
   position: absolute; left: 0; right: 0; bottom: calc(92px - var(--v2-bottom-drop)); z-index: 5;
   display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
 }
-.v2-grab s { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.34); }
+/* DARK INK AT REST. Both of these were white at a third of an alpha, which was right when a veil
+   covered the bottom of the frame and is wrong now that it does not: on the bare plate they measured
+   1.57:1, near enough invisible. Ink that suits the plate rather than a gradient that is no longer
+   there. The white comes back with the veil, below. */
+.v2-grab s { width: 34px; height: 4px; border-radius: 2px; background: rgba(10, 10, 13, 0.9); }
 .v2-grab span {
   font-family: var(--v2-mono); font-size: 9px; letter-spacing: 0.18em;
-  text-transform: uppercase; color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase; color: rgba(10, 10, 13, 0.9);
 }
 .v2-sticky {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 6;
