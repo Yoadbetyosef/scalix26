@@ -175,7 +175,8 @@ export async function updateSession(request: NextRequest) {
   // HTML fixture. It needs no session because it reads no tenant data. Deliberately NOT added to
   // PUBLIC_ROUTES: that list is the production contract, and this opens only off production. The
   // page itself also calls notFound() in a production build, so this is the second of two locks.
-  const isDevProbe = process.env.NODE_ENV !== 'production' && pathname.startsWith('/v2/render-probe')
+  const isDevProbe = process.env.NODE_ENV !== 'production'
+    && (pathname.startsWith('/v2/render-probe') || pathname.startsWith('/render-probe'))
   const isPublic = isDevProbe || publicRoutes.some(r => pathname.startsWith(r))
 
   if (!user && !isPublic && pathname !== '/') {
