@@ -138,9 +138,18 @@
 }
 
 /* The film grain. Fixed, multiply, non-interactive — straight from the reference. */
+/* ── A GRAIN, NOT A NEUTRAL-DENSITY FILTER ─────────────────────────────────────────────────────────
+   0.3 in multiply over fractal noise is not a texture, it is a darkener, and it was costing white
+   paper ten luminance points on every list screen — measured 255 → 244.6, with the acid readouts
+   dulled 229 → 219.7 alongside. Multiply can only subtract.
+   0.12 in overlay is what a film grain is: measured on the robot's own plate it lands 158 → 160.7
+   with ±4 of texture either side, symmetric rather than one-directional. And it does NOT crush the
+   dark end, which was the thing to check: stage 13.0 → 13.4, near-black 9.0 → 9.0, minima unchanged.
+   The cost, and it is real: over pure white, overlay can only lighten, so paper screens now carry no
+   grain at all. If they want some it has to be a different mode there, not a different opacity. */
 .v2-grain {
   position: fixed; inset: 0; z-index: 60; pointer-events: none;
-  opacity: 0.3; mix-blend-mode: multiply;
+  opacity: 0.12; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
