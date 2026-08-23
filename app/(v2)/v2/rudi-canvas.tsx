@@ -337,6 +337,8 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
     let edges: number[] = []
     let raw: [number, number][] = []
     let scanA = 1
+    // Eased so the lens comes up and goes down rather than switching.
+    let domeLit = 0
     let vidA = 0
     // ── WHY THE READOUTS GET THEIR OWN CANVAS ────────────────────────────────────────────────────
     //
@@ -492,6 +494,61 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
      * `amount` is the same scanA the sweep takes, so the rings vanish on the frame listening begins
      * and ease back when idle returns — one rule for both scans.
      */
+    /**
+     * THE DOME IS A SCREEN, SO IT LIGHTS UP WHEN HE IS LISTENING.
+     *
+     * The alternative was a veil over the lower half of the frame, and it cost this whole week: a
+     * scrim heavy enough to carry the caption put a visible horizontal edge under the readouts, and
+     * no ramp anyone wrote could soften it, because the frame has to be bright where the robot is and
+     * dark where the copy is with 43px in between. It also does not survive the move into v1 — a
+     * 420px band has no lower half to darken.
+     *
+     * This does survive it, because it is drawn on him rather than around him. It is the reason the
+     * character was changed from a photograph of a person in the first place: a face made of glass
+     * can hold a state, and a face made of skin can only be covered up.
+     *
+     * STATE, NOT A METER. The brightness does not track the microphone. level() is on the handle and
+     * the voice layer calls it, and it still drives nothing — a level here would be the same mistake
+     * the 52-bar meter was, a second thing claiming to be the signal while the person talking IS the
+     * signal. The breath is a fixed slow cycle so he reads as awake rather than as measuring.
+     */
+    function drawDomeState(now: number, st: RudiState, dt: number) {
+      if (!SCAN) return
+      // Armed is his turn ending, not his turn — it keeps the light so the screen does not blink
+      // between her finishing and the caller starting.
+      const lit = st === 'listening' || st === 'armed'
+      // Eased against TIME, not frame count. A per-frame constant makes the ramp depend on how fast
+      // the machine happens to be painting — a slow device would take visibly longer to light up than
+      // a fast one for no reason anybody chose. It also made this invisible to the render harness,
+      // which produces a handful of frames rather than sixty a second: the lens measured as unlit and
+      // read as a broken effect rather than an unreachable one.
+      domeLit += ((lit ? 1 : 0) - domeLit) * Math.min(1, dt * 7)
+      if (domeLit < 0.01) return
+
+      const { x: fx, y: fy, r: fr } = domeInCanvas({ s: S, dx: DX, dy: DY, dw: DW, dh: DH }, IW, IH, SCAN)
+      const breath = 0.88 + 0.12 * Math.sin((now / 1000) * 1.9)
+      const a = domeLit * breath
+
+      ctx!.save()
+      // Additive, so it reads as the glass lighting from within rather than as a disc laid over him.
+      ctx!.globalCompositeOperation = 'lighter'
+      // The core of the lens.
+      const core = ctx!.createRadialGradient(fx, fy, 0, fx, fy, fr * 0.94)
+      core.addColorStop(0, rgba(SCAN.ink, 0.30 * a))
+      core.addColorStop(0.62, rgba(SCAN.ink, 0.30 * a))
+      core.addColorStop(1, rgba(SCAN.ink, 0))
+      ctx!.fillStyle = core
+      ctx!.beginPath(); ctx!.arc(fx, fy, fr * 0.94, 0, Math.PI * 2); ctx!.fill()
+      // A short spill past the rim, so the light looks like it is coming out of the glass and not
+      // painted inside a circle.
+      const spill = ctx!.createRadialGradient(fx, fy, fr * 0.9, fx, fy, fr * 1.7)
+      spill.addColorStop(0, rgba(SCAN.ink, 0.22 * a))
+      spill.addColorStop(1, rgba(SCAN.ink, 0))
+      ctx!.fillStyle = spill
+      ctx!.beginPath(); ctx!.arc(fx, fy, fr * 1.7, 0, Math.PI * 2); ctx!.fill()
+      ctx!.restore()
+    }
+
     function drawRings(now: number, amount: number) {
       if (!SCAN || amount < 0.02) return
       // IMAGE SPACE THROUGH THE FIT, never a fraction of the canvas. The prototype can use canvas
@@ -703,6 +760,9 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
 
       // Chrome, above the scrim, on its own clock and its own layer.
       drawCards(dt)
+
+      // ── His face carries the state, instead of a veil over the room. ──────────────────────────
+      if (DOME) drawDomeState(now, st, dt)
 
       // ── The scan. Rings from the dome for a machine; the sweep for a face. ─────────────────────
       if (DOME) drawRings(now, scanA)
