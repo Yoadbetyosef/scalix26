@@ -49,3 +49,22 @@ describe('the orb is the engine, ambient', () => {
     expect(orb).toMatch(/breakpoint="mobile"/)
   })
 })
+
+describe('the dashboard renders him, not the orb', () => {
+  const hero = read('components/dashboard/hero/dashboard-hero.tsx')
+
+  it('has swapped both slots — mobile centrepiece and desktop identity', () => {
+    expect(hero).not.toMatch(/<LiveOrb/)
+    expect((hero.match(/<RudiOrb \/>/g) ?? []).length).toBe(2)
+  })
+
+  it('keeps them inside the presence provider, which is where the ripple comes from', () => {
+    const open = hero.indexOf('<RudiPresenceProvider')
+    const close = hero.indexOf('</RudiPresenceProvider>')
+    expect(open).toBeGreaterThan(-1)
+    for (const at of [...hero.matchAll(/<RudiOrb \/>/g)].map((m) => m.index!)) {
+      expect(at).toBeGreaterThan(open)
+      expect(at).toBeLessThan(close)
+    }
+  })
+})

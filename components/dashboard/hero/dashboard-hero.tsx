@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
-import { RudiPresenceProvider, LiveOrb, GlassToasts } from './rudi-presence'
+import { RudiPresenceProvider, GlassToasts } from './rudi-presence'
+import { RudiOrb } from './rudi-orb'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import type { EmployeeStatus } from '@/lib/employee'
 import { TodayWork, type WorkFigure } from './today-work'
@@ -77,21 +78,22 @@ export function DashboardHero({
         {/* B5 — attention banner, reactive to the single source (mobile only). */}
         <AttentionPill initialVisible={presenceState === 'attention'} />
 
-        {/* B3 orb centerpiece (~112px), standalone and centered. The avatar + pulse rings
-            live in the bottom action row (Talk to Rudi), per the design. Only the orb
-            container is sized — the waveform animation itself is untouched. */}
+        {/* The presence centrepiece, standalone and centred. This was AiOrb — a waveform in a glass
+            lens — and it is Rudi himself now: the same canvas the /v2 hero paints, in the slot the
+            orb already had. Only the container is sized; the engine fits whatever box it is given.
+            At 144px his face is 31px across, which reads as a face. See rudi-orb.tsx. */}
         <div className="flex justify-center md:hidden">
           <div className="h-36 w-36 flex-shrink-0">
-            <LiveOrb />
+            <RudiOrb />
           </div>
         </div>
 
-        {/* Identity — the AI presence + who's on duty (compact). Desktop only; mobile
-            uses the compact row above. Pixel-identical to the original at md:+
-            (only `flex` → `hidden md:flex`; all sm: classes still resolve at md:+). */}
+        {/* Identity — the AI presence + who's on duty (compact). Desktop only; mobile uses the
+            compact row above. Smaller here: 96px base, 112px at sm:, which puts his face at 21 and
+            24px — the silhouette and the lit eyes read, the expression does not. */}
         <div className="hidden flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:gap-5 sm:text-left md:flex">
           <div className="h-24 w-24 flex-shrink-0 sm:h-28 sm:w-28">
-            <LiveOrb />
+            <RudiOrb />
           </div>
           <div className="min-w-0">
             <p className="inline-flex items-center gap-2.5 text-sm text-subtle">
