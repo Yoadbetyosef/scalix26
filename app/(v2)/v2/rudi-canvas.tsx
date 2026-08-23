@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type RefObject } from 'react'
 import { mark } from './timing'
+import { CARDS, CARD_CYCLE_MS, CARD_DROP, CARD_GAP, CEILING_FALLBACK, cardAlpha, cardLayout } from './readout-cards'
 import { PERSONAS, assetsFor, hexToRgb, type Breakpoint, type DomeScan, type PersonaKey } from '@/lib/persona'
 
 // Rudi's face. A reproduction of the reference's canvas engine.
@@ -143,37 +144,6 @@ export const domeInCanvas = (f: Fit, iw: number, ih: number, d: Dome) => ({
   r: d.r * iw * f.s,
 })
 
-// ── THE ACID READOUTS ───────────────────────────────────────────────────────────────────────────────
-//
-// Two cards, on their OWN clock against the scan's, so the pairs drift rather than arriving with it.
-// They never made it across when Rudi became a robot; this is them, from rudi-scan-v26.
-const CARD_CYCLE_MS = 5250
-const CARDS: Array<Array<[string, string]>> = [
-  [['CALLS TODAY', '3'], ['ANSWERED', '100%']],
-  [['WAITING ON YOU', '1'], ['BOOKED', '1']],
-  [['AFTER HOURS', '6'], ['AVG CALL', '1m 21s']],
-]
-/**
- * The fraction of height the readouts must not pass, so the copy underneath is never covered.
- *
- * 0.660 IS THE FALLBACK, NOT THE RULE. It was measured against one sentence at one width. On a real
- * phone the caption is whatever Rudi has to say, and a two-line sentence grows the block upward past
- * any fixed fraction — which is how CALLS TODAY ended up sitting on the copy. The ceiling is measured
- * off the element the cards have to clear; this is only what it falls back to when there is nothing
- * to measure.
- */
-const CEILING_FALLBACK = 0.66
-/**
- * How far the right-hand card hangs below the left one, as a fraction of height.
- *
- * Shared by the drawing and the ceiling deliberately: the LOWER card is the one that has to clear the
- * copy, so a ceiling computed without it leaves exactly one of the two overlapping — the half-fixed
- * version of the bug, and harder to see than the whole one.
- */
-const CARD_DROP = 0.055
-/** Clear air between the lowest card and the top of the block. */
-const CARD_GAP = 0.02
-
 /** The three stages the readout names, keyed to the ring cycle. */
 export const SCAN_PHASES: [number, string][] = [[0, 'ANALYSIS'], [0.4, 'READING'], [0.75, 'ON DUTY']]
 export const phaseAt = (t: number): string => {
@@ -278,6 +248,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
   const speakEndRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minRef = useRef(minimised)
+  // LIVE, not captured. useIsMobile resolves to null first, so `readouts` is false on the frame the
+  // render loop mounts and true a tick later — and the loop's effect has [] deps. Same treatment as
+  // `minimised` above, and for exactly the same reason.
+  const readoutsRef = useRef(readouts)
   // Whether level() has ever been called. The only thing this component can honestly say about the
   // number's provenance: that it was given one, or that it was not.
   const levelledRef = useRef(false)
@@ -285,6 +259,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
   const scanAtRef = useRef(0)
 
   useEffect(() => { minRef.current = minimised }, [minimised])
+  useEffect(() => { readoutsRef.current = readouts }, [readouts])
 
   const setState = useCallback((s: RudiState) => {
     const from = stateRef.current
@@ -556,39 +531,25 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
      */
     function drawCards(dt: number) {
       if (!cctx || !cardsCanvas) return
+      if (!readoutsRef.current) { cctx.clearRect(0, 0, CW, CH); return }
       ct = (ct + dt / (CARD_CYCLE_MS / 1000)) % 1
       cctx.setTransform(1, 0, 0, 1, 0, 0)
       cctx.clearRect(0, 0, CW, CH)
 
-      const per = 1 / CARDS.length
-      const local = (ct % per) / per
-      const a = (local < 0.09 ? local / 0.09 : local < 0.77 ? 1 : 1 - (local - 0.77) / 0.23) * scanA
+      const a = cardAlpha(ct) * scanA
       if (a <= 0.01) return
+      const set = CARDS[Math.floor(ct / (1 / CARDS.length)) % CARDS.length]
+      const { boxes, keyFont, valFont } = cardLayout(CW, CH, ceiling, a, set,
+        (text, font) => { cctx.font = font; return cctx.measureText(text).width })
 
-      const set = CARDS[Math.floor(ct / per) % CARDS.length]
-      const kf = `500 ${CW * 0.019}px "JetBrains Mono", ui-monospace, monospace`
-      const vf = `500 ${CW * 0.068}px "Inter Tight", system-ui, sans-serif`
-      const padX = CW * 0.028, padY = CH * 0.012, lead = CH * 0.030
-      const cs = set.map((c) => {
-        cctx.font = kf; const kw = cctx.measureText(c[0]).width
-        cctx.font = vf; const vw = cctx.measureText(c[1]).width
-        return { k: c[0], v: c[1], w: Math.max(kw, vw) + padX * 2 }
-      })
-      const hh = padY * 2 + lead + CW * 0.040
-      const y = CH * ceiling - hh
-      const rise = (1 - a) * CH * 0.012
-      const margin = CW * 0.056
-
-      cs.forEach((cd, i) => {
-        const x = i === 0 ? margin : CW - margin - cd.w
-        const drop = i === 1 ? CH * CARD_DROP : 0
+      for (const b of boxes) {
         cctx.fillStyle = `rgba(217,242,36,${a * 0.92})`
-        rr(cctx, x, y + rise + drop, cd.w, hh, CW * 0.013); cctx.fill()
-        cctx.fillStyle = `rgba(65,73,10,${a * 0.78})`; cctx.font = kf
-        cctx.fillText(cd.k, x + padX, y + rise + drop + padY + CW * 0.016)
-        cctx.fillStyle = `rgba(24,28,4,${a})`; cctx.font = vf
-        cctx.fillText(cd.v, x + padX, y + rise + drop + padY + lead + CW * 0.040)
-      })
+        rr(cctx, b.x, b.y, b.w, b.h, b.r); cctx.fill()
+        cctx.fillStyle = `rgba(65,73,10,${a * 0.78})`; cctx.font = keyFont
+        cctx.fillText(b.k, b.x + CW * 0.028, b.keyY)
+        cctx.fillStyle = `rgba(24,28,4,${a})`; cctx.font = valFont
+        cctx.fillText(b.v, b.x + CW * 0.028, b.valY)
+      }
     }
 
     let lastFrame = 0
@@ -1024,9 +985,16 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
         aria-hidden
         style={{ position: 'absolute', width: 2, height: 2, opacity: 0, pointerEvents: 'none', top: 0, left: 0 }}
       />
-      {/* MOBILE ONLY — see the `readouts` prop. Rendered as a sibling of the face so the scrim cannot
-          shade it, and given the same box by CSS so its backing store matches the scan's exactly. */}
-      {readouts && <canvas ref={cardsRef} className="v2-cards" aria-hidden />}
+      {/* ALWAYS MOUNTED, drawn only when `readouts` says so — and the difference is the whole bug.
+          It used to be `{readouts && <canvas …/>}`, which is false on the first render because
+          useIsMobile has not resolved yet. The loop's effect captures cardsRef.current once, at
+          mount, so it captured null; the element appeared a tick later and nothing ever looked again.
+          The cards never drew, on any device.
+
+          A sibling of the face so the scrim cannot shade it, and given the same box by CSS so its
+          backing store matches the scan's exactly. Empty on desktop, which costs one unpainted
+          element and no frames. */}
+      <canvas ref={cardsRef} className="v2-cards" aria-hidden />
       <canvas
         ref={canvasRef}
         className={className}

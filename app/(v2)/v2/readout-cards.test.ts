@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { cardAlpha, cardLayout } from './readout-cards'
+
+// Measuring text needs a canvas. A stub of a fixed width per character is enough to assert placement,
+// which is what these are about — the real widths come from the browser and are checked by eye.
+const measure = (t: string, font: string) => t.length * (font.includes('Mono') ? 6 : 20)
 
 // The two acid cards from rudi-scan-v26. They never made it across when Rudi became a robot.
 
@@ -23,7 +28,14 @@ describe('three pairs, on their own clock', () => {
   })
 
   it('fades in over 0.09, holds 0.68, leaves over 0.23', () => {
-    expect(fn).toMatch(/local < 0\.09 \? local \/ 0\.09 : local < 0\.77 \? 1 : 1 - \(local - 0\.77\) \/ 0\.23/)
+    // Asserted through the function rather than through its source, now that there is one.
+    expect(cardAlpha(0)).toBeCloseTo(0, 6)
+    expect(cardAlpha(1 / 3 * 0.045)).toBeCloseTo(0.5, 6)   // half way in
+    expect(cardAlpha(1 / 3 * 0.09)).toBeCloseTo(1, 6)      // fully in
+    expect(cardAlpha(1 / 3 * 0.5)).toBe(1)                 // held
+    expect(cardAlpha(1 / 3 * 0.77)).toBeCloseTo(1, 6)      // last frame of the hold
+    expect(cardAlpha(1 / 3 * 0.885)).toBeCloseTo(0.5, 6)   // half way out
+    expect(cardAlpha(1 / 3 * 0.9999)).toBeLessThan(0.01)
   })
 
   it('leaves with the scan the moment the mic opens', () => {
@@ -34,15 +46,30 @@ describe('three pairs, on their own clock', () => {
 })
 
 describe('each card measures its own width', () => {
-  it('from its own text, at both sizes', () => {
-    expect(fn).toMatch(/cctx\.measureText\(c\[0\]\)\.width/)
-    expect(fn).toMatch(/cctx\.measureText\(c\[1\]\)\.width/)
-    expect(fn).toMatch(/Math\.max\(kw, vw\) \+ padX \* 2/)
+  it('from its own text, at both sizes — the wider of the two decides', () => {
+    const W = 780, H = 1688
+    const short = cardLayout(W, H, 0.66, 1, [['A', '1'], ['B', '2']], measure)
+    const long = cardLayout(W, H, 0.66, 1, [['WAITING ON YOU', '1'], ['B', '2']], measure)
+    expect(long.boxes[0].w).toBeGreaterThan(short.boxes[0].w)
+    // The VALUE can be the wider one too: "1m 21s" at 68px beats "AVG CALL" at 19px.
+    const byValue = cardLayout(W, H, 0.66, 1, [['A', '1m 21s'], ['B', '2']], measure)
+    expect(byValue.boxes[0].w).toBeGreaterThan(short.boxes[0].w)
   })
+
   it('one at each margin, the right one dropped', () => {
-    expect(fn).toMatch(/i === 0 \? margin : CW - margin - cd\.w/)
-    expect(fn).toMatch(/i === 1 \? CH \* CARD_DROP : 0/)
+    const W = 780, H = 1688
+    const { boxes } = cardLayout(W, H, 0.66, 1, [['CALLS TODAY', '3'], ['ANSWERED', '100%']], measure)
+    expect(boxes[0].x).toBeCloseTo(W * 0.056, 6)                 // left margin
+    expect(boxes[1].x + boxes[1].w).toBeCloseTo(W - W * 0.056, 6) // right margin
+    expect(boxes[1].y - boxes[0].y).toBeCloseTo(H * 0.055, 6)     // the drop
     expect(src).toMatch(/const CARD_DROP = 0\.055/)
+  })
+
+  it('hangs the pair off the ceiling, and the LOWER one is the one that clears it', () => {
+    const W = 780, H = 1688, ceiling = 0.5
+    const { boxes } = cardLayout(W, H, ceiling, 1, [['A', '1'], ['B', '2']], measure)
+    expect(boxes[0].y + boxes[0].h).toBeCloseTo(H * ceiling, 6)
+    expect(boxes[1].y + boxes[1].h).toBeGreaterThan(H * ceiling)  // which is why the ceiling subtracts the drop
   })
 })
 
@@ -88,7 +115,18 @@ describe('they sit above the scrim, on their own canvas', () => {
 describe('mobile only, and decided rather than defaulted', () => {
   it('is off unless the caller asks', () => {
     expect(src).toMatch(/readouts = false/)
-    expect(src).toMatch(/\{readouts && <canvas ref=\{cardsRef\} className="v2-cards" aria-hidden \/>\}/)
+  })
+
+  it('MOUNTS THE CANVAS ALWAYS, and gates only the drawing — the bug that hid them', () => {
+    // `{readouts && <canvas …/>}` is false on the first render, because useIsMobile resolves to null
+    // before it resolves to true. The loop's effect captures cardsRef.current once, at mount, so it
+    // captured null; the element appeared a tick later and nothing looked again. The cards never drew
+    // on any device. The element is unconditional now and the PROP is read through a live ref.
+    expect(src).not.toMatch(/\{readouts && <canvas/)
+    expect(src).toMatch(/<canvas ref=\{cardsRef\} className="v2-cards" aria-hidden \/>/)
+    expect(src).toMatch(/const readoutsRef = useRef\(readouts\)/)
+    expect(src).toMatch(/useEffect\(\(\) => \{ readoutsRef\.current = readouts \}, \[readouts\]\)/)
+    expect(src).toMatch(/if \(!readoutsRef\.current\) \{ cctx\.clearRect\(0, 0, CW, CH\); return \}/)
   })
   it('and the caller asks only on mobile', () => {
     // The approved desktop composition carries the same figures as static tiles in the right-hand
