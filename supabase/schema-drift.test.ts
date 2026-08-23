@@ -31,8 +31,8 @@ const inventory = JSON.parse(readFileSync(join(ROOT, 'supabase/schema-inventory.
 
 /** The same parse the script does. Duplicated deliberately — see the note in the last test. */
 const strip = (sql: string) => sql
-  .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/--[^\n]*/g, ' ')
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/'(?:[^']|'')*'/g, "''")
 
 function declared(): Set<string> {

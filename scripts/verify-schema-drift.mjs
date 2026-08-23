@@ -55,8 +55,8 @@ async function liveRelations() {
  * one nobody runs.
  */
 const strip = (sql) => sql
+  .replace(/--[^\n]*/g, ' ')               // line comments FIRST: a `/*` inside prose would otherwise open one
   .replace(/\/\*[\s\S]*?\*\//g, ' ')     // block comments
-  .replace(/--[^\n]*/g, ' ')               // line comments
   .replace(/'(?:[^']|'')*'/g, "''")        // string literals, including the dynamic SQL in DO blocks
 
 function declared() {

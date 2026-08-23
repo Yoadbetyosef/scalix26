@@ -9,21 +9,27 @@ const measure = (t: string, font: string) => t.length * (font.includes('Mono') ?
 
 // The two acid cards from rudi-scan-v26. They never made it across when Rudi became a robot.
 
-const src = readFileSync(join(process.cwd(), 'app/(v2)/v2/rudi-canvas.tsx'), 'utf8')
-  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
+// LINE COMMENTS FIRST, then block comments — and the order is the whole point. A `//` line in
+// readout-cards.ts mentions `next/*`, which a block-comment regex reads as an opener and then eats
+// everything up to the next `*/`, taking CARD_CYCLE_MS and the CARDS array with it. Prose being
+// parsed as syntax, which is the same fault the migrations drift check had with the word "would".
+const strip = (s: string) => s.replace(/^\s*\/\/.*$/gm, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ')
+const src = strip(readFileSync(join(process.cwd(), 'app/(v2)/v2/rudi-canvas.tsx'), 'utf8'))
+// The geometry and its constants live in their own import-free module — see the header there.
+const geom = strip(readFileSync(join(process.cwd(), 'app/(v2)/v2/readout-cards.ts'), 'utf8'))
 const home = readFileSync(join(process.cwd(), 'app/(v2)/v2/home-client.tsx'), 'utf8')
 const css = readFileSync(join(process.cwd(), 'app/(v2)/v2/v2-tokens.css'), 'utf8')
 const fn = src.slice(src.indexOf('function drawCards'), src.indexOf('function draw(now: number)'))
 
 describe('three pairs, on their own clock', () => {
   it('rotates the three the reference names', () => {
-    expect(src).toMatch(/\['CALLS TODAY', '3'\], \['ANSWERED', '100%'\]/)
-    expect(src).toMatch(/\['WAITING ON YOU', '1'\], \['BOOKED', '1'\]/)
-    expect(src).toMatch(/\['AFTER HOURS', '6'\], \['AVG CALL', '1m 21s'\]/)
+    expect(geom).toMatch(/\['CALLS TODAY', '3'\], \['ANSWERED', '100%'\]/)
+    expect(geom).toMatch(/\['WAITING ON YOU', '1'\], \['BOOKED', '1'\]/)
+    expect(geom).toMatch(/\['AFTER HOURS', '6'\], \['AVG CALL', '1m 21s'\]/)
   })
 
   it('runs at 5.25s against the scan, not with it', () => {
-    expect(src).toMatch(/const CARD_CYCLE_MS = 5250/)
+    expect(geom).toMatch(/const CARD_CYCLE_MS = 5250/)
     expect(fn).toMatch(/ct \+ dt \/ \(CARD_CYCLE_MS \/ 1000\)/)
   })
 
@@ -62,7 +68,7 @@ describe('each card measures its own width', () => {
     expect(boxes[0].x).toBeCloseTo(W * 0.056, 6)                 // left margin
     expect(boxes[1].x + boxes[1].w).toBeCloseTo(W - W * 0.056, 6) // right margin
     expect(boxes[1].y - boxes[0].y).toBeCloseTo(H * 0.055, 6)     // the drop
-    expect(src).toMatch(/const CARD_DROP = 0\.055/)
+    expect(geom).toMatch(/const CARD_DROP = 0\.055/)
   })
 
   it('hangs the pair off the ceiling, and the LOWER one is the one that clears it', () => {
@@ -86,7 +92,7 @@ describe('the ceiling is measured, not guessed', () => {
   })
 
   it('falls back only when there is nothing to measure', () => {
-    expect(src).toMatch(/const CEILING_FALLBACK = 0\.66/)
+    expect(geom).toMatch(/const CEILING_FALLBACK = 0\.66/)
     const m = src.slice(src.indexOf('function measureCeiling'), src.indexOf('function fit()'))
     expect(m).toMatch(/if \(!block\) \{ ceiling = CEILING_FALLBACK; return \}/)
     // Never above the top third — cards by his dome is worse than no cards.
