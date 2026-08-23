@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
-import { LineItemFields, emptyLine, fetchOptionLists, lineToPayload, type LineDraft } from './line-item-fields'
+import { LineItemFields, emptyLine, fetchOptionLists, lineToPayload, namelessError, type LineDraft } from './line-item-fields'
 
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
@@ -29,6 +29,9 @@ export function OrderForm() {
   const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0)
 
   const submit = async () => {
+    // Refused HERE, out loud, rather than dropped on the way to the server. See namelessError.
+    const nameless = namelessError(lines)
+    if (nameless) { setErr(nameless); return }
     setBusy(true); setErr(null)
     try {
       const body = {

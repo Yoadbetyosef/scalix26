@@ -139,7 +139,11 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
   const order = orderRow(data as Record<string, unknown>)
   if (items.length) {
-    await sb.from('order_line_items').insert(items.map((i, idx) => lineInsert(c.tenantId, order.id, i, totals[idx], idx)))
+    const { error: lineErr } = await sb.from('order_line_items')
+      .insert(items.map((i, idx) => lineInsert(c.tenantId, order.id, i, totals[idx], idx)))
+    // An order that saved and lost its items is worse than one that did not save: the person is told
+    // it worked and finds out later. Said out loud, on the same call.
+    if (lineErr) throw new Error(`The order was created but its items could not be saved: ${lineErr.message}`)
   }
   await addEvent(order.id, 'created', { orderNumber })
   return order
@@ -188,8 +192,28 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   if (patch.lineItems) {
     const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0)
     m.subtotal_cents = subtotal; m.balance_cents = subtotal - (patch.depositCents ?? 0)
+    // ── DELETE THEN INSERT, WITH A WAY BACK ───────────────────────────────────────────────────────
+    //
+    // Replacing the set means removing it first, and the insert's error used to be discarded — so a
+    // refused insert left the order with NO items, updated the subtotal to match, and returned 200.
+    // A jeweller hit exactly that and re-entered the same bracelet three times, each attempt wiping
+    // the last, with nothing on screen either time. The client was sending an empty array (see
+    // namelessError in line-item-fields), but the shape of this write is what turned a bad request
+    // into data loss, and that is worth fixing whatever sends it.
+    //
+    // No transaction is available through PostgREST, so the snapshot IS the transaction: if the
+    // insert is refused the old rows go back, ids and all, and the caller is told.
+    const { data: previous } = await sb.from('order_line_items').select('*').eq('order_id', id)
     await sb.from('order_line_items').delete().eq('order_id', id)
-    if (patch.lineItems.length) await sb.from('order_line_items').insert(patch.lineItems.map((i, idx) => lineInsert(c.tenantId, id, i, totals[idx], idx)))
+    if (patch.lineItems.length) {
+      const { error: lineErr } = await sb.from('order_line_items')
+        .insert(patch.lineItems.map((i, idx) => lineInsert(c.tenantId, id, i, totals[idx], idx)))
+      if (lineErr) {
+        const back = (previous as Array<Record<string, unknown>> | null) ?? []
+        if (back.length) await sb.from('order_line_items').insert(back)
+        throw new Error(`The items could not be saved: ${lineErr.message}. The order is unchanged.`)
+      }
+    }
   }
   const { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
   if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)

@@ -72,6 +72,42 @@ export const lineFromSaved = (l: {
 
 const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 
+// ── A LINE WITH SOMETHING IN IT MUST NOT BE THROWN AWAY IN SILENCE ─────────────────────────────────
+//
+// Both forms sent `lines.filter((l) => l.productName.trim())`, which is right about which lines are
+// real and catastrophic about the ones it drops. A line carrying a stone, a quality, a metal and a
+// price but no Product name was discarded on the client, so the PATCH arrived with lineItems: [] —
+// and updateOrder deletes every line before it inserts, so pressing Save wiped the order and
+// returned 200. Nothing was refused, nothing was reported, and the only thing on screen afterwards
+// was an order with no items.
+//
+// That is exactly what a jeweller told us: "it stopped saving the item information, such as the
+// bracelet quality and price, no matter how many times we enter it." Three saves, three silent
+// wipes, no message. It became reachable the day the form grew a Piece type dropdown — with
+// somewhere to say "Bracelet", there was less reason to also type a name.
+//
+// So the filter stays (a genuinely blank row is not an item) and the SILENCE goes.
+
+/** True when somebody has put anything into this row other than its name. */
+export const lineHasContent = (l: LineDraft): boolean => {
+  const blank = emptyLine()
+  return (Object.keys(blank) as (keyof LineDraft)[])
+    .some((k) => k !== 'productName' && l[k].trim() !== blank[k])
+}
+
+/** 1-based positions of rows that would be dropped: filled in, but unnamed. */
+export const namelessLines = (lines: LineDraft[]): number[] =>
+  lines.reduce<number[]>((out, l, i) => (!l.productName.trim() && lineHasContent(l) ? [...out, i + 1] : out), [])
+
+/** What to put on screen instead of saving. Null when there is nothing to say. */
+export const namelessError = (lines: LineDraft[]): string | null => {
+  const rows = namelessLines(lines)
+  if (!rows.length) return null
+  const which = rows.length === 1 ? `Item ${rows[0]} needs` : `Items ${rows.join(', ')} need`
+  return `${which} a product name before this can be saved — everything else on ${rows.length === 1 ? 'that line' : 'those lines'} is filled in, and a line without a name cannot be stored.`
+}
+
+
 // A line item may carry a value that has since been retired from the list — an older order being edited.
 // Keep showing it rather than silently blanking the field.
 function OptionSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
@@ -112,7 +148,12 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
   return (
     <div className="space-y-3">
       <div className="grid gap-2 sm:grid-cols-4">
-        <label className="block text-xs text-gray-500">Product<input value={line.productName} onChange={(e) => onChange('productName', e.target.value)} className={inp} /></label>
+        {/* NAMED AS REQUIRED, because it is: a row without one is dropped, and the only signal used
+            to be the item vanishing after Save. */}
+        <label className="block text-xs text-gray-500">
+          Product <span className="text-red-600" aria-hidden>*</span>
+          <input value={line.productName} onChange={(e) => onChange('productName', e.target.value)} required aria-required className={inp} />
+        </label>
         {/* The type list is HERS — she adds "Anklet" in Settings and it appears here, showing every
             field until somebody describes what an anklet needs.
             AND IT ONLY RENDERS IF SHE HAS ONE. A tenant who has not taken the jewellery starter, or
