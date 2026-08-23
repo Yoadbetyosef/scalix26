@@ -170,7 +170,13 @@ export async function updateSession(request: NextRequest) {
     // can't read). This lets team members with a role reach the panel; non-admins are
     // bounced by the layout.
   }
-  const isPublic = publicRoutes.some(r => pathname.startsWith(r))
+  // The /v2 rendering probe (app/(v2)/v2/render-probe) mounts the real hero with stub data so the
+  // headless contrast and geometry checks measure the shipped components rather than a hand-built
+  // HTML fixture. It needs no session because it reads no tenant data. Deliberately NOT added to
+  // PUBLIC_ROUTES: that list is the production contract, and this opens only off production. The
+  // page itself also calls notFound() in a production build, so this is the second of two locks.
+  const isDevProbe = process.env.NODE_ENV !== 'production' && pathname.startsWith('/v2/render-probe')
+  const isPublic = isDevProbe || publicRoutes.some(r => pathname.startsWith(r))
 
   if (!user && !isPublic && pathname !== '/') {
     const url = request.nextUrl.clone()

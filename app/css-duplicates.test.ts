@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CSS_FILES, findDuplicates, parseRules } from '../scripts/find-css-duplicates.mjs'
 
+// The parser is plain JS so it can be run straight from a shell; these mirror what it returns.
+type Occurrence = { line: number; text: string }
+type Duplicate = { selector: string; line: number; property: string; occurrences: Occurrence[] }
+
 // No stylesheet may declare the same property twice in the same rule.
 //
 // The bug that prompted this: `.v2-scrim` had `transition: height 0.4s var(--v2-ease)` and, two lines
@@ -22,9 +26,9 @@ const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8')
 
 describe('no CSS rule declares the same property twice', () => {
   it.each(CSS_FILES)('%s', (file) => {
-    const dupes = findDuplicates(read(file))
+    const dupes: Duplicate[] = findDuplicates(read(file))
     const report = dupes
-      .map((d) => `${d.selector} — "${d.property}":\n` + d.occurrences.map((o) => `    L${o.line}  ${o.text}`).join('\n'))
+      .map((d: Duplicate) => `${d.selector} — "${d.property}":\n` + d.occurrences.map((o: Occurrence) => `    L${o.line}  ${o.text}`).join('\n'))
       .join('\n')
     expect(report).toBe('')
   })
@@ -53,7 +57,7 @@ describe('the parser, proved against the bug it was written for', () => {
     expect(rest).toEqual([])
     expect(dupe.selector).toBe('.v2-scrim')
     expect(dupe.property).toBe('transition')
-    expect(dupe.occurrences.map((o) => o.text)).toEqual([
+    expect(dupe.occurrences.map((o: Occurrence) => o.text)).toEqual([
       'transition: height 0.4s var(--v2-ease)',
       'transition: opacity 0.35s',
     ])

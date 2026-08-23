@@ -37,6 +37,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Off so the dev overlay is not painted into headless captures. scripts/measure-hero.mjs samples
+  // real pixels from `next dev`, and the indicator sits bottom-left over the frame it measures —
+  // it aborted the harness's sanity check the first time it ran. Dev-only surface; no production effect.
+  devIndicators: false,
   // pdf-parse bundles pdfjs; keep it external so Next doesn't bundle it (avoids
   // worker/bundling issues in the serverless function that runs the website crawler).
   serverExternalPackages: ["pdf-parse"],
