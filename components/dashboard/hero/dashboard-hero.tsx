@@ -3,8 +3,8 @@ import { Plus } from 'lucide-react'
 import { RudiPresenceProvider, GlassToasts } from './rudi-presence'
 import { RudiOrb } from './rudi-orb'
 import { RudiBand } from './rudi-band'
-import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
-import type { EmployeeStatus } from '@/lib/employee'
+import { STATUS_META, type EmployeeStatus } from '@/lib/employee'
+import { cn } from '@/lib/utils'
 import { TodayWork, type WorkFigure } from './today-work'
 import { AskAmy, type AmyBriefing } from './ask-amy'
 import { AttentionSentence, AttentionPill } from '@/components/dashboard/attention'
@@ -13,7 +13,6 @@ export type PresenceState = 'ready' | 'working' | 'attention'
 
 export interface DashboardHeroProps {
   employeeName: string
-  employeeVoice?: string | null
   presenceState: PresenceState
   stateSentence: string
   idleSentence: string
@@ -31,7 +30,6 @@ export interface DashboardHeroProps {
  */
 export function DashboardHero({
   employeeName,
-  employeeVoice,
   presenceState,
   stateSentence,
   idleSentence,
@@ -105,8 +103,19 @@ export function DashboardHero({
             <RudiOrb />
           </div>
           <div className="min-w-0">
-            <p className="inline-flex items-center gap-2.5 text-sm text-subtle">
-              <EmployeeAvatar name={employeeName} voice={employeeVoice} status={status} size="sm" />
+            {/* A DOT, NOT A SECOND FACE. This line used to carry EmployeeAvatar — the headshot of
+                the chosen voice — beside the waveform orb, which was fine while the orb was an
+                abstract lens. It is not fine beside Rudi: two components rendering the same employee
+                and disagreeing about what she looks like, a robot at 112px and a photograph of a
+                woman at 36px overlapping it.
+                The robot carries the identity here. The avatar's other job was the status dot, and
+                that is all this is now — the same colour and label from the same source. */}
+            <p className="inline-flex items-center gap-2 text-sm text-subtle">
+              <span
+                className={cn('h-2 w-2 flex-shrink-0 rounded-full', STATUS_META[status].dot)}
+                title={STATUS_META[status].label}
+                aria-label={STATUS_META[status].label}
+              />
               <span>{eyebrow}</span>
             </p>
             <h1 className="mt-2 max-w-xl text-balance text-xl font-light leading-snug tracking-tight text-ink sm:text-2xl lg:text-[26px]">

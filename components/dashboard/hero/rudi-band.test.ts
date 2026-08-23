@@ -36,7 +36,7 @@ describe('the band', () => {
   })
 
   it('keeps the readouts, which have nothing to collide with inside the band', () => {
-    expect(band).toMatch(/<RudiCanvas[^>]*\breadouts\b/s)
+    expect(band).toMatch(/<RudiCanvas[\s\S]*?\breadouts\b/)
   })
 
   it('paints its own ground rather than reaching for a v2 token', () => {
