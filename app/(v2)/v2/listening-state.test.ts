@@ -49,10 +49,12 @@ describe('the canvas draws nothing while the mic is open', () => {
 
 describe('he recedes into the veil', () => {
   it('raises the scrim while the mic is open, and only then', () => {
-    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-scrim,\s*\n\.v2-root\[data-state="armed"\] \.v2-scrim \{ height: 74%; \}/)
+    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-scrim,\s*\n\.v2-root\[data-state="armed"\] \.v2-scrim \{ height: 48%; \}/)
     // 36% at rest, not 62%. At 62% the scrim started 321px up an 844px frame and his base is at 519,
-    // so it laid roughly 0.36 black over the bottom 38% of the machine. Measured after the change:
-    // alpha at the base is 0.000 idle, and the rise to 74% still puts it at 0.334 while listening.
+    // so it laid roughly 0.36 black over the bottom 38% of the machine.
+    // 48% listening, not 74%: +12 points is the delta the design was specified with and the distance
+    // 0.4s was chosen for — 101px. 74% was never a decision, it was 62+12 left behind when the base
+    // moved, and it made the same 400ms cover 321px.
     expect(css).toMatch(/\.v2-scrim \{[^}]*height: 36%/)
   })
 
@@ -75,6 +77,23 @@ describe('he recedes into the veil', () => {
   it('gives the headline its own readability rather than a tall veil', () => {
     // Two layers: a tight 2px pass for the glyph edge, a wide 22px pass for the field it sits on.
     expect(css).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
+  })
+
+  it('and a local backdrop ramped AGAINST the scrim, which is what flattens it', () => {
+    // The shadow alone left 2.92:1 on line one and 4.61:1 on line three, because a text-shadow is a
+    // halo per glyph and cannot flatten a gradient underneath it. This ramps the other way — heavy
+    // where the scrim is thin, gone where the scrim has arrived — and the sum comes out level.
+    // Measured on the rendered pixels afterwards: 6.58 / 7.11 / 7.00, spread 0.42.
+    const rule = css.slice(css.indexOf('.v2-cap::before {'), css.indexOf('}', css.indexOf('.v2-cap::before {')))
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.50\) 0%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.44\) 60%/)
+    expect(rule).toMatch(/rgba\(10, 10, 13, 0\.03\) 100%/)
+    expect(rule).toMatch(/z-index: -1/)
+    // .v2-cap must stay position:relative and set NO z-index, or the pseudo-element leaves
+    // .v2-overlay's stacking context and falls behind the scrim.
+    const cap = css.slice(css.indexOf('.v2-cap {'), css.indexOf('}', css.indexOf('.v2-cap {')))
+    expect(cap).toMatch(/position: relative/)
+    expect(cap).not.toMatch(/z-index/)
   })
   it('is told the state by the root, which is where the DOM chrome can read it', () => {
     expect(home).toMatch(/data-state=\{state\}/)

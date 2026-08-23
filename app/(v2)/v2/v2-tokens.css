@@ -301,11 +301,13 @@
 .v2-overlay { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 46px 42px; transition: opacity 0.35s; }
 /* ── HE RECEDES WHILE THE MIC IS OPEN ────────────────────────────────────────────────────────────
    The same gradient reaching further up, so he sinks into it rather than being covered by something
-   new. +12 points, which is the move option D makes against its own 44% base. It is the only thing
+   new. +12 points against a 36% base — the delta the design was specified with, and the one 0.4s was
+   chosen for. It briefly became a 38-point move as a side effect of shortening idle from 62%, which
+   was never a decision. It is the only thing
    on the screen that moves when listening begins, and it moves once — the canvas itself has gone
    completely quiet by then. */
 .v2-root[data-state="listening"] .v2-scrim,
-.v2-root[data-state="armed"] .v2-scrim { height: 74%; }
+.v2-root[data-state="armed"] .v2-scrim { height: 48%; }
 
 /* ── THE TRANSCRIPT TAKES THE RESTING SENTENCE'S PLACE, AT ITS SIZE ──────────────────────────────
    `.v2-you` is a 10px mono label, which is right when it sits ABOVE a caption as an echo of what was
@@ -344,6 +346,23 @@
      the wide 22px pass darkens the field it sits on. A single 18px blur at .45 did neither well
      enough to measure. */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 22px rgba(0, 0, 0, 0.75);
+  position: relative;
+}
+/* ── A LOCAL BACKDROP, RAMPED AGAINST THE SCRIM ────────────────────────────────────────────────────
+   The shadow alone left the block uneven, and measurably: line one at 2.92:1 and line three at
+   4.61:1, because a text-shadow is a halo per glyph — it scales with the glyph, not with how dark the
+   field already is, so it cannot flatten a gradient underneath it.
+   This can. The scrim ramps from about 0.07 at the first line to 0.30 at the third, so this ramps the
+   other way and the sum comes out flat. Blurred and inset past the text on every side so it has no
+   edge of its own; z-index -1 keeps it behind the words and, because .v2-cap sets no z-index of its
+   own, still inside .v2-overlay's stacking context and above the scrim. */
+.v2-cap::before {
+  content: ''; position: absolute; inset: -16px -20px -10px; z-index: -1; pointer-events: none;
+  background: linear-gradient(180deg,
+    rgba(10, 10, 13, 0.50) 0%,
+    rgba(10, 10, 13, 0.44) 60%,
+    rgba(10, 10, 13, 0.03) 100%);
+  filter: blur(20px);
 }
 .v2-cap b {
   font-weight: 600; background: var(--v2-grad);
