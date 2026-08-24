@@ -1252,3 +1252,55 @@ the line narrows the type and turns stored data into an unknown key. That is a
 data migration (strip the value from every tenant, then drop the key), and it
 belongs in the same change as the tables. It gated nothing while the feature
 existed, so the cost of leaving it is one dead row in /admin/modules.
+
+## §31 — the modal exists in the kit; §29's gap is proposed, not closed
+
+Built 2026-08-24 as kit pair 10. `components/v2/modal.tsx` + `.v2-modal` in the
+tokens. **Neither /contacts dialog is migrated** — both still carry their own
+inline panel, so this is a proposal beside the thing it would replace.
+
+The shape is the card's edge on the veil: one hairline, no shadow, 16px radius,
+the same paper, over the same `.v2-veil` the drawer uses. Below 560px it becomes
+the drawer's shape — full width, seated on the bottom edge — because a centred
+box on a phone is a card with margins pretending to be a dialog.
+
+What a screenshot cannot show, and what the promotion is actually for — all
+verified with a real keyboard against the dev build:
+
+  focus goes in       to the first focusable inside, never left on the button
+                      behind the veil
+  focus stays in      24 forward Tabs and 24 backward Tabs never leave; the
+                      focusables are re-read on every keypress, because the
+                      import wizard replaces its whole body between steps
+  focus comes back    to whatever opened it, restored in a cleanup so it also
+                      happens on unmount rather than only on a tidy close
+  the page holds      body overflow hidden, released on close
+  escape, veil click  both close; `dismissable={false}` disables both while a
+                      request is in flight
+  role                dialog, aria-modal, aria-labelledby the mono title
+
+**One caveat on the scroll lock.** It replaces the scrollbar's width as body
+padding so the layout does not shift sideways when the dialog opens. Verified as
+"no shift" — but headless Chromium uses overlay scrollbars, so the measured gap
+was 0 and the replacement branch never ran. It is correct by construction and
+unexercised in this environment; the case that would prove it is a desktop
+browser set to always-show scrollbars.
+
+### And a defect the modal work uncovered: THE KIT DID NOT SCROLL
+
+`.v2` is `height: 100dvh; overflow: hidden`, because /v2's screens own the
+viewport. `app/(v2)/v2/layout.tsx` puts that class on the wrapper around every
+page in the tree, including /v2/kit — which is a 5,082px document. Ten pairs,
+one screen of them reachable.
+
+It stayed invisible because an `overflow: hidden` box is still
+*programmatically* scrollable: `element.screenshot()` scrolls it into view
+happily, so every capture of the kit worked perfectly while a person with a
+scroll wheel could not get past pair 1. Every review of this kit so far has been
+of images I scrolled to with code.
+
+Fixed with `.v2:has(> .v2-embedded) { height: auto; min-height: 100dvh; overflow:
+visible }` — a `.v2` wrapper whose page has declared itself embedded is carrying
+a document, not a screen. A child cannot unclip its ancestor, so the ancestor
+asks. Inside the (v2) tree only the kit is `.v2-embedded`; the app's own embedded
+pages are not inside a `.v2` parent, so nothing else is touched.

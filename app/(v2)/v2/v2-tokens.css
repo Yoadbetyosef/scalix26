@@ -117,6 +117,18 @@
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* ── A DOCUMENT INSIDE THE APP-SCREEN WRAPPER ────────────────────────────────────────────────────
+   `.v2` is 100dvh and overflow:hidden because /v2's screens own the viewport and must not scroll.
+   app/(v2)/v2/layout.tsx puts that class on the wrapper around EVERY page in the tree — including
+   /v2/kit, which is a long document.
+   The consequence was invisible for a long time because an overflow:hidden box is still
+   programmatically scrollable: Playwright's element.screenshot() scrolls it into view happily, so
+   every capture of the kit worked while a person with a scroll wheel could not reach past the first
+   screen. Ten pairs, one of them visible.
+   A child cannot unclip its ancestor, so the ancestor asks: a `.v2` wrapper whose page has declared
+   itself embedded is carrying a document, not a screen, and lets it scroll. */
+.v2:has(> .v2-embedded) { height: auto; min-height: 100dvh; overflow: visible; }
 /* ZERO SPECIFICITY, for the same reason the element reset below is: `.v2 *` is (0,1,0), the same
    weight as a Tailwind utility, and this sheet loads last — so every p-6, mt-4 and gap-3 written
    inside a `.v2` wrapper silently lost to `padding: 0`. On /v2 that never showed, because /v2's
@@ -3882,6 +3894,40 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 .v2-drawer > section { padding: 16px 18px; border-bottom: 1px solid var(--v2-line); }
 .v2-drawer > section:last-child { border-bottom: 0; padding-bottom: 30px; }
+
+/* ── MODAL ───────────────────────────────────────────────────────────────────────────────────────
+   THE CARD'S EDGE, ON THE VEIL. Not a new surface: one hairline, no shadow, the same 16px radius
+   and the same paper as .v2-card, over the same dim .v2-veil the drawer uses. A dialog on this
+   stage does not need a shadow to lift off the page — the veil already did that, and a shadow under
+   a hairline box is the two doing the same job twice.
+
+   The drawer is the phone's answer and this is the desktop's; below 560px this becomes the drawer's
+   shape anyway — full width, seated on the bottom edge — because a centred box on a phone is a
+   card with margins pretending to be a dialog.
+
+   Behaviour lives in components/v2/modal.tsx: focus in, trapped, and returned; escape; scroll lock. */
+.v2-modal-wrap { position: fixed; inset: 0; z-index: 60; display: grid; place-items: start center; overflow-y: auto; padding: 4vh 16px; }
+.v2-modal {
+  position: relative; width: 100%; max-width: 520px;
+  background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: 16px;
+  padding: 22px; outline: none;
+}
+.v2-modal[data-wide] { max-width: 720px; }
+.v2-modal:focus-visible { border-color: var(--v2-violet-edge); }
+/* The body scrolls, not the dialog — so the title and the actions stay put while a long form or a
+   forty-column preview table moves under them. */
+.v2-modal-body { max-height: 68vh; overflow-y: auto; overscroll-behavior: contain; }
+.v2-modal-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+
+@media (max-width: 559.98px) {
+  .v2-modal-wrap { place-items: end stretch; padding: 0; }
+  .v2-modal {
+    max-width: none; border-radius: 18px 18px 0 0; border-left: 0; border-right: 0; border-bottom: 0;
+    padding: 18px 18px calc(24px + env(safe-area-inset-bottom));
+  }
+  .v2-modal[data-wide] { max-width: none; }
+  .v2-modal-body { max-height: 62vh; }
+}
 
 /* A round icon button — close, info, back. The chip's tint, no square, which is what tells an
    icon-only control apart from .v2-chip-sq, an icon that labels something. */

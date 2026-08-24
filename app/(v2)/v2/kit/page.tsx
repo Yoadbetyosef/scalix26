@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { MessageSquare, Package, FileText, CreditCard, Info } from 'lucide-react'
 import { RobotAvatar } from '@/components/brand/robot-avatar'
+import { ModalDemo } from './modal-demo'
 import '../v2-tokens.css'
 import './kit.css'
 
@@ -339,6 +340,35 @@ export default async function Kit() {
               <button type="button" className="v2-ico" style={{ marginTop: 14 }} aria-label="Contact info"><Info /></button>
             </div>
           }
+        />
+
+        {/* 10 · MODAL — the §29 gap, proposed */}
+        <Pair
+          title="Modal — proposed, not yet migrated"
+          note="The kit had a bottom drawer and a card and no dialog, so /contacts built two by hand: New contact and the three-step Import wizard. Left is what ships today — the card's edge on the veil, assembled inline. Right is the same shape promoted, and the difference is not in the picture: the promoted one takes focus on open, traps Tab and Shift+Tab at both ends, returns focus to whatever opened it, closes on Escape, and locks the page behind it — replacing the scrollbar's width so the layout does not flinch. It is role=dialog with aria-modal and a label. Below 560px it becomes the drawer's shape rather than a centred box with margins. The two buttons open the real one; the keyboard is the thing to try."
+          v1={
+            <div style={{ position: 'relative', background: 'rgba(10,10,13,0.10)', borderRadius: 12, padding: 22, minHeight: 260 }}>
+              <div style={{ background: 'var(--v2-paper)', border: '1px solid var(--v2-line)', borderRadius: 16, padding: 18 }}>
+                <div className="v2-head" style={{ marginBottom: 12 }}>
+                  <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />New contact</p><s />
+                </div>
+                <p className="v2-hint" style={{ marginBottom: 12 }}>A name, email or phone is enough.</p>
+                <div className="v2-form">
+                  <div className="v2-fld wide"><label>Name</label><input readOnly /></div>
+                  <div className="v2-fld"><label>Email</label><input readOnly /></div>
+                  <div className="v2-fld"><label>Phone</label><input readOnly /></div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                  <span className="v2-act" data-solid>Save contact</span>
+                  <span className="v2-act">Cancel</span>
+                </div>
+              </div>
+              <p className="v2k-note" style={{ marginTop: 12 }}>
+                No focus trap, no escape, no scroll lock, no dialog role. Tab walks out of it onto the page behind.
+              </p>
+            </div>
+          }
+          v2={<ModalDemo contacts={contacts.map((c) => ({ name: c.name ?? null, email: c.email ?? null, phone: c.phone ?? null }))} />}
         />
 
         <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Not yet designed</p><s /></div>
