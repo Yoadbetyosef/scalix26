@@ -194,8 +194,13 @@ describe('the v1 form', () => {
   })
 
   it('the notes card is always there, empty or not', () => {
+    // The guard that matters is unchanged: notes must not be rendered behind `contact.notes &&`,
+    // because an invisible empty card is also an uneditable one. The V2 migration split the empty
+    // sentence across the kit's empty-state card — a bold line for what is not here and a muted one
+    // for what to do — so the copy is asserted in its two halves rather than as one string.
     expect(page).not.toMatch(/\{contact\.notes && \(/)
-    expect(page).toContain('No notes yet. Use Edit above to add some.')
+    expect(page).toContain('<b>No notes yet</b>')
+    expect(page).toContain('Use Edit above to add some.')
   })
 
   it('the route has no /v2 gate on this branch', () => {

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Plus, Upload } from 'lucide-react'
 import { ImportContacts } from './import-contacts'
 
-const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 const empty = { name: '', email: '', phone: '', address: '', currency: '', notes: '' }
 
 // The two ways contacts get into the book by hand: one at a time, or a whole file at once.
@@ -37,44 +36,73 @@ export function ContactActions() {
 
   return (
     <div className="flex items-center gap-2">
-      <ImportContacts trigger={
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken">
-          <Upload className="h-3.5 w-3.5" /> Import file
-        </span>
-      } />
-      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-sm font-medium text-white hover:opacity-90">
-        <Plus className="h-4 w-4" /> New contact
+      <ImportContacts trigger={<span className="v2-act"><Upload className="h-3.5 w-3.5" /> Import file</span>} />
+      {/* New contact is the one verb on this screen you are meant to reach for, so it is the filled
+          pill; Import is the same pill hollow. Two shapes would have been two components. */}
+      <button onClick={() => setOpen(true)} className="v2-act" data-solid>
+        <Plus className="h-3.5 w-3.5" /> New contact
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => !busy && close()}>
-          <div className="my-12 w-full max-w-lg rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900">New contact</h3>
-            <p className="mt-0.5 text-xs text-gray-500">A name, email or phone is enough — the rest can be filled in later.</p>
+        /* A CENTRED MODAL, WHICH THE KIT DOES NOT HAVE — noted rather than smuggled in. The kit has a
+           bottom drawer (.v2-drawer), which is the phone's answer, and a card. This is that card's
+           edge language at dialog size on the same dimmed veil: one hairline border, no shadow, the
+           form's rules inside it. If Yoad wants a real modal pair in the kit, this is the candidate. */
+        <div className="v2 fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" onClick={() => !busy && close()}>
+          <div className="v2-veil" />
+          <div
+            className="relative my-12 w-full max-w-lg"
+            style={{ background: 'var(--v2-paper)', border: '1px solid var(--v2-line)', borderRadius: 16, padding: 22 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="v2-head" style={{ marginBottom: 18 }}>
+              <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />New contact</p>
+              <s />
+            </div>
+            <p className="v2-hint" style={{ marginBottom: 16 }}>A name, email or phone is enough — the rest can be filled in later.</p>
 
-            <div className="mt-4 space-y-3">
-              <label className="block text-xs text-gray-500">Name<input value={f.name} onChange={set('name')} autoFocus className={inp} /></label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs text-gray-500">Email<input value={f.email} onChange={set('email')} type="email" className={inp} /></label>
-                <label className="block text-xs text-gray-500">Phone<input value={f.phone} onChange={set('phone')} className={inp} /></label>
+            <div className="v2-form">
+              <div className="v2-fld wide">
+                <label htmlFor="nc-name">Name</label>
+                <input id="nc-name" value={f.name} onChange={set('name')} autoFocus />
               </div>
-              <label className="block text-xs text-gray-500">Address<input value={f.address} onChange={set('address')} className={inp} /></label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs text-gray-500">
-                  Currency
-                  <select value={f.currency} onChange={set('currency')} className={inp}>
+              <div className="v2-fld">
+                <label htmlFor="nc-email">Email</label>
+                <input id="nc-email" value={f.email} onChange={set('email')} type="email" />
+              </div>
+              <div className="v2-fld">
+                <label htmlFor="nc-phone">Phone</label>
+                <input id="nc-phone" value={f.phone} onChange={set('phone')} />
+              </div>
+              <div className="v2-fld wide">
+                <label htmlFor="nc-address">Address</label>
+                <input id="nc-address" value={f.address} onChange={set('address')} />
+              </div>
+              <div className="v2-fld">
+                <label htmlFor="nc-currency">Currency</label>
+                <span className="v2-sel">
+                  <select id="nc-currency" value={f.currency} onChange={set('currency')}>
                     <option value="">—</option>
                     {['usd', 'cad', 'gbp', 'eur', 'ils'].map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                   </select>
-                </label>
+                </span>
               </div>
-              <label className="block text-xs text-gray-500">Notes<textarea value={f.notes} onChange={set('notes')} rows={3} className={inp} /></label>
+              <div className="v2-fld wide">
+                <label htmlFor="nc-notes">Notes</label>
+                <textarea id="nc-notes" value={f.notes} onChange={set('notes')} rows={3} />
+              </div>
             </div>
 
-            {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
-            <div className="mt-4 flex gap-2">
-              <button onClick={save} disabled={busy} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">{busy ? 'Saving…' : 'Save contact'}</button>
-              <button onClick={close} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button>
+            {/* The kit's alert row, the same one the takeover banner uses — not a red block. */}
+            {err && (
+              <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 16 }}>
+                <p>{err}</p>
+              </div>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button onClick={save} disabled={busy} className="v2-act" data-solid>{busy ? 'Saving…' : 'Save contact'}</button>
+              <button onClick={close} disabled={busy} className="v2-act">Cancel</button>
             </div>
           </div>
         </div>

@@ -3706,9 +3706,13 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    /v2 has no page headers: the rail says where you are, so a 24px bold repeat of the rail's own label
    is the same word twice in two type sizes. What replaces it is a mono micro-label — the same one the
    rail's sections use — with the primary action on the same line. */
-.v2-head { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; }
+/* WRAPS. The header was built on /v2, where it carries one action; /contacts carries two, and at
+   390px the label, the rule and two pills did not fit — "New contact" ran off the right edge. The
+   rule is the part that should give: it shrinks to nothing and the actions drop to a second line
+   rather than the row overflowing. */
+.v2-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 22px; }
 .v2-head .v2-kick { flex: none; }
-.v2-head s { flex: 1; height: 1px; border: 0; background: linear-gradient(90deg, var(--v2-line), transparent); }
+.v2-head s { flex: 1 1 20px; min-width: 0; height: 1px; border: 0; background: linear-gradient(90deg, var(--v2-line), transparent); }
 /* The primary action. A row in the rail is a destination; this is a verb, so it reads as one — the
    chip's tint as a fill, the label in the hue, and no icon square, which is what tells the two apart. */
 .v2-act {
@@ -3842,6 +3846,8 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 @media (min-width: 768px)    { .v2 .md\:hidden     { display: none; } }
 @media (max-width: 1023.98px) { .v2 .max-lg\:hidden { display: none; } }
 @media (min-width: 1024px)   { .v2 .lg\:hidden     { display: none; } }
+@media (max-width: 1279.98px) { .v2 .max-xl\:hidden { display: none; } }
+@media (min-width: 1280px)   { .v2 .xl\:hidden     { display: none; } }
 
 /* ── DRAWER ──────────────────────────────────────────────────────────────────────────────────────
    NOT .v2-sheet — that name is taken by /v2's swipe-up dashboard pane, which is position:absolute,
@@ -3886,11 +3892,17 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    shadow goes here rather than a second card class being invented beside it — one card, everywhere,
    including /v2's own right column. */
 .v2-card { box-shadow: none; display: flex; flex-direction: column; gap: 10px; }
-.v2-card .v2-chip-sq {
-  width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+/* THE CHIP SQUARE IS A COMPONENT, NOT A CARD DETAIL.
+   It only ever had geometry as `.v2-card .v2-chip-sq` and `.v2-notice .v2-chip-sq`, so the first
+   time it was used outside either — as a contact's initial in a list row — it collapsed to an
+   inline span and the letter floated with no tile behind it. The base carries the shape; the two
+   contexts keep only the sizes they had. */
+.v2-chip-sq {
+  display: grid; place-items: center; flex: none;
+  width: 32px; height: 32px; border-radius: 10px;
   background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 10%, transparent);
 }
-.v2-card .v2-chip-sq svg { width: 17px; height: 17px; stroke: var(--ghue, var(--v2-t1)); stroke-width: 2; fill: none; }
+.v2-chip-sq svg { width: 17px; height: 17px; stroke: var(--ghue, var(--v2-t1)); stroke-width: 2; fill: none; }
 .v2-card h4 { margin: 0; font-size: 15px; font-weight: 600; }
 .v2-card p { margin: 0; font-size: 13.5px; color: var(--v2-ink-45); }
 
@@ -3907,8 +3919,8 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   display: flex; align-items: center; gap: 12px;
   border: 1px solid var(--v2-line); border-radius: 12px; padding: 13px 15px;
 }
-.v2-notice .v2-chip-sq { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--ghue, var(--v2-t4)) 12%, transparent); flex: none; }
+.v2-notice .v2-chip-sq { width: 30px; height: 30px; border-radius: 9px;
+  background: color-mix(in srgb, var(--ghue, var(--v2-t4)) 12%, transparent); }
 .v2-notice .v2-chip-sq svg { width: 16px; height: 16px; stroke: var(--ghue, var(--v2-t4)); stroke-width: 2; fill: none; }
 .v2-notice p { margin: 0; flex: 1; font-size: 14px; }
 .v2-notice em {

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Info, X, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
 import { contactIdentifier } from '@/lib/utils'
+import { channelHue } from '@/app/(v2)/v2/channels'
 import Link from 'next/link'
 import type { CustomerProfile } from '@/lib/customer/profile'
 import { ConversationActions } from '@/components/inbox/conversation-actions'
@@ -54,12 +55,9 @@ function typeHue(type: CustomerProfile['customerType']): string {
   }
 }
 
-// Channel and sentiment wear the same chip. The hues are the inbox list's, so a conversation keeps
-// its colour from the row you clicked to the panel you opened.
-export const CHANNEL_HUE: Record<string, string> = {
-  voice: 'var(--v2-t4)', sms: 'var(--v2-t2)', whatsapp: 'var(--v2-t2)',
-  email: 'var(--v2-t3)', instagram: 'var(--v2-t1)', facebook: 'var(--v2-t3)',
-}
+// Channel and sentiment wear the same chip. The channel hue comes from the shared, directive-free
+// table so a conversation keeps its colour from the row you clicked to the panel you opened — and so
+// a Server Component can read it, which it cannot do from this file (see channels.ts).
 const SENTIMENT_HUE: Record<string, string> = {
   positive: 'var(--v2-t2)', neutral: 'var(--v2-ink-45)', negative: 'var(--v2-t4)',
 }
@@ -251,7 +249,7 @@ export function ConversationContactPanel({ contact, profile, conversationId, cur
               <dl className="v2-facts">
                 <div>
                   <dt>Channel</dt>
-                  <dd><Chip value={contact.channel} hue={CHANNEL_HUE[contact.channel] ?? 'var(--v2-t1)'} /></dd>
+                  <dd><Chip value={contact.channel} hue={channelHue(contact.channel)} /></dd>
                 </div>
                 {contact.sentiment && (
                   <div>

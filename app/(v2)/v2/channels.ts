@@ -35,3 +35,32 @@ export const CHANNEL_LABEL: Record<ChannelKey, string> = {
   voice: 'Voice', sms: 'SMS', email: 'Email',
   facebook: 'Facebook', instagram: 'Instagram', web: 'Web chat',
 }
+
+/**
+ * THE HUE A CHANNEL WEARS — the one table in the app that decides it.
+ *
+ * It lived in three places by the time /contacts was migrated: a local const in app/inbox/page.tsx,
+ * another in components/inbox/conversation-contact-panel.tsx, and /contacts importing the second
+ * one. That import is what exposed the duplication, and it did it the way this file's header warns
+ * about: conversation-contact-panel.tsx is a client module, so a Server Component importing a plain
+ * object from it receives a CLIENT REFERENCE PROXY. `CHANNEL_HUE['sms']` was `undefined`, every chip
+ * silently fell back to --v2-t1, and a contacts table where every channel is the same pink is what
+ * it looked like. tsc had nothing to say; the build was green.
+ *
+ * Keyed by ChannelKey rather than by the raw column, so `whatsapp` gets sms's hue and `phone` gets
+ * voice's instead of each caller keeping its own alias list.
+ */
+export const CHANNEL_HUE: Record<ChannelKey, string> = {
+  voice: 'var(--v2-t4)',
+  sms: 'var(--v2-t2)',
+  email: 'var(--v2-t3)',
+  facebook: 'var(--v2-t3)',
+  instagram: 'var(--v2-t1)',
+  web: 'var(--v2-t1)',
+}
+
+/** The hue for whatever a row's source column says. Unknown falls back to the first tint. */
+export const channelHue = (v: string | null | undefined): string => {
+  const k = channelKey(v)
+  return k ? CHANNEL_HUE[k] : 'var(--v2-t1)'
+}

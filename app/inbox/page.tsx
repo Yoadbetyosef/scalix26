@@ -4,16 +4,10 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Search } from 'lucide-react'
 import { RobotAvatar } from '@/components/brand/robot-avatar'
+import { channelHue } from '@/app/(v2)/v2/channels'
 import { formatDateTime, formatDuration, truncate, looksLikeName, formatPhone } from '@/lib/utils'
 import { relativeTime } from '@/lib/format'
 import { getBusinessTimezone } from '@/lib/timezone'
-
-// The channel's own hue, the one table in the app that decides it — see nav-icons/GROUP_HUE for the
-// group equivalent. A row lights in the colour of where the conversation came from.
-const CHANNEL_HUE: Record<string, string> = {
-  voice: 'var(--v2-t4)', sms: 'var(--v2-t2)', whatsapp: 'var(--v2-t2)',
-  email: 'var(--v2-t3)', instagram: 'var(--v2-t1)', facebook: 'var(--v2-t3)',
-}
 
 const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS',
@@ -119,7 +113,7 @@ export default async function InboxPage({
                 className="v2-chip flex-shrink-0"
                 data-on={channel === c || undefined}
               >
-                {c !== 'all' && <i className="v2-gdot" style={{ ['--ghue' as string]: CHANNEL_HUE[c] ?? 'var(--v2-t1)' }} />}
+                {c !== 'all' && <i className="v2-gdot" style={{ ['--ghue' as string]: channelHue(c) }} />}
                 {c === 'all' ? 'All Channels' : CHANNEL_LABELS[c]}
               </Link>
             ))}
@@ -175,7 +169,7 @@ export default async function InboxPage({
                   : 'No summary yet'
               return (
                 <Link key={conv.id} href={`/inbox/${conv.id}`} className="v2-row tap-target" data-click
-                      style={{ ['--chan' as string]: CHANNEL_HUE[conv.channel] ?? 'var(--v2-t1)' }}>
+                      style={{ ['--chan' as string]: channelHue(conv.channel) }}>
                   {/* ONE ROW, BOTH WIDTHS, AND IT IS /v2's OWN. v1 carried two — a flat list on mobile and
                       a shadowed, channel-tinted card on desktop — which is two components to keep in step,
                       and they had already drifted: the mobile one showed a friendly title where the desktop

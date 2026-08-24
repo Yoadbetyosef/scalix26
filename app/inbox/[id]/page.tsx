@@ -1,4 +1,4 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -12,24 +12,26 @@ const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS', voice: 'Voice', whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', email: 'Email',
 }
 import { ConversationActions } from '@/components/inbox/conversation-actions'
-import { ConversationContactPanel, CustomerProfileBlock, Chip, CHANNEL_HUE } from '@/components/inbox/conversation-contact-panel'
+import { ConversationContactPanel, CustomerProfileBlock, Chip } from '@/components/inbox/conversation-contact-panel'
+import { channelHue } from '@/app/(v2)/v2/channels'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
 import { MessageComposer } from '@/components/inbox/message-composer'
 import { AiSummaryCard } from '@/components/inbox/ai-summary-card'
 import { getCustomerProfile } from '@/lib/customer/profile'
 
-export default async function ConversationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
-  // `?from=leads` used to send you back to the Leads tab; the tab is gone, and so is the only
-  // thing that produced the parameter. Back is the inbox.
+export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
+  // `?from=leads` used to send you back to the Leads tab. The tab is gone, and so is the only thing
+  // that produced the parameter, so the searchParams prop went with it. Back is the inbox.
   const backHref = '/inbox'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
-  // server-validated tenantId. The conversation is filtered by tenant_id; messages by its verified id.
-  const service = createAdminClient()
+  // Operator-safe by construction: readConversation opens its own admin client (createServiceClient
+  // would RLS-scope to the partner's own tenant) and filters the conversation by the server-validated
+  // tenantId, the messages by its verified id. A `createAdminClient()` binding sat here unused since
+  // that extraction; it went with its import rather than staying to fail lint.
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/auth/signup')
   // Moved to lib/inbox/conversation-read.ts so /v2's conversation screen reads the same rows. Same
@@ -78,7 +80,7 @@ export default async function ConversationPage({ params, searchParams }: { param
   const STATUS_HUE: Record<string, string> = {
     open: 'var(--v2-t1)', resolved: 'var(--v2-t2)', closed: 'var(--v2-ink-45)',
   }
-  const chanHue = CHANNEL_HUE[conv.channel] ?? 'var(--v2-t1)'
+  const chanHue = channelHue(conv.channel)
 
   return (
     // `v2` for the tokens, `v2-embedded` so the shell's 100dvh does not fight the page's own

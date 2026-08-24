@@ -101,60 +101,63 @@ export function ContactEdit({ contactId, initial }: { contactId: string; initial
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-2.5 py-1.5 text-xs font-medium text-subtle hover:bg-sunken hover:text-ink"
-      >
+      <button onClick={() => setOpen(true)} className="v2-act">
         <Pencil className="h-3.5 w-3.5" /> Edit
       </button>
     )
   }
 
-  const input = 'mt-1 w-full rounded-lg border border-hairline bg-white px-3 py-2 text-sm text-ink outline-none focus:border-hairline-strong'
-
   return (
-    <div className="mt-3 space-y-3">
+    <div className="v2-form mt-3" style={{ gridTemplateColumns: '1fr' }}>
       {/* EVERY FIELD, whether or not it has a value. The detail screen above renders them
-          conditionally, which is correct for reading and is exactly why nothing looked editable. */}
+          conditionally, which is correct for reading and is exactly why nothing looked editable.
+          Rule, not box — the kit's form language, and the reason it suits this screen especially:
+          the panel it sits in is already a stack of unboxed facts, so editing changes the ink and
+          not the shape. */}
       {FIELDS.map((x) => (
-        <label key={x.key} className="block text-xs text-subtle">
-          {x.label}
+        <div key={x.key} className="v2-fld">
+          <label htmlFor={`ce-${x.key}`}>{x.label}</label>
           {x.rows ? (
             <textarea
-              value={f[x.key]} rows={x.rows} disabled={busy}
+              id={`ce-${x.key}`} value={f[x.key]} rows={x.rows} disabled={busy}
               onChange={(e) => setF((p) => ({ ...p, [x.key]: e.target.value }))}
-              className={input}
             />
           ) : (
             <input
-              value={f[x.key]} type={x.type ?? 'text'} disabled={busy}
+              id={`ce-${x.key}`} value={f[x.key]} type={x.type ?? 'text'} disabled={busy}
               onChange={(e) => setF((p) => ({ ...p, [x.key]: e.target.value }))}
-              className={input}
             />
           )}
-          {x.hint && <span className="mt-1 block text-[11px] text-muted">{x.hint}</span>}
-        </label>
+          {x.hint && <span className="v2-hint">{x.hint}</span>}
+        </div>
       ))}
 
-      <p className="text-[11px] text-muted">
+      <p className="v2-hint">
         Clearing a field is remembered as a decision — the AI will not fill it back in from a call.
       </p>
 
+      {/* Both of these were red text. They are the kit's alert row now — the same treatment the
+          amber upgrade panel got: the badge carries the urgency, the sentence carries the fact. */}
       {dupe && (
-        <p className="text-xs text-red-600">
-          That number or address already belongs to{' '}
-          <a href={`/contacts/${dupe.id}`} className="underline">{dupe.name || dupe.email || dupe.phone || 'another contact'}</a>.
-        </p>
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+          <p>
+            That number or address already belongs to{' '}
+            <a href={`/contacts/${dupe.id}`} className="underline">{dupe.name || dupe.email || dupe.phone || 'another contact'}</a>.
+          </p>
+          <em>Duplicate</em>
+        </div>
       )}
-      {err && <p className="text-xs text-red-600">{err}</p>}
+      {err && (
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+          <p>{err}</p>
+        </div>
+      )}
 
       <div className="flex gap-2">
-        <button onClick={() => void save()} disabled={busy} className="rounded-lg bg-ink px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">
+        <button onClick={() => void save()} disabled={busy} className="v2-act" data-solid>
           {busy ? 'Saving…' : 'Save'}
         </button>
-        <button onClick={close} disabled={busy} className="rounded-lg border border-hairline px-3 py-1.5 text-xs font-medium text-subtle hover:bg-sunken">
-          Cancel
-        </button>
+        <button onClick={close} disabled={busy} className="v2-act">Cancel</button>
       </div>
     </div>
   )

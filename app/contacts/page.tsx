@@ -1,21 +1,12 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { listContactsPage } from '@/lib/contacts/page-read'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, Phone, Mail, MessageCircle, ChevronRight, ChevronLeft, Search } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { EmptyState } from '@/components/ui/empty-state'
+import { Phone, MessageCircle, ChevronRight, ChevronLeft, Search } from 'lucide-react'
 import { ContactActions } from '@/components/contacts/new-contact'
 import { formatDate, isSocialChannel } from '@/lib/utils'
-
-// Soft channel tint for contact avatars — a quiet touch of life, the channel color
-// recognizable at a glance without shouting.
-const CHANNEL_TINT: Record<string, string> = {
-  voice: 'bg-cyan-100 text-cyan-700', sms: 'bg-emerald-100 text-emerald-700',
-  email: 'bg-violet-100 text-violet-700', whatsapp: 'bg-green-100 text-green-700',
-  facebook: 'bg-blue-100 text-blue-700', instagram: 'bg-pink-100 text-pink-700',
-}
+import { channelHue } from '@/app/(v2)/v2/channels'
 
 const PAGE_SIZE = 50
 
@@ -39,9 +30,9 @@ export default async function ContactsPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
-  // server-validated tenantId as the sole scope.
-  const serviceSupabase = createAdminClient()
+  // Operator-safe by construction: listContactsPage opens its own admin client and takes the
+  // server-validated tenantId as its sole scope. (A `createAdminClient()` binding sat here unused
+  // before this migration — it went with the import rather than staying to fail lint.)
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/auth/signup')
 
@@ -59,126 +50,134 @@ export default async function ContactsPage({
   const pageHref = (n: number) => `/contacts?${new URLSearchParams({ ...(q ? { q } : {}), ...(n > 1 ? { page: String(n) } : {}) })}`
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Contacts</h1>
-          <p className="text-sm text-muted mt-1">
-            {q
-              ? `${total} ${total === 1 ? 'match' : 'matches'} for “${q}”`
-              : `${total} total contact${total === 1 ? '' : 's'}`}
-          </p>
-        </div>
+    // `v2` carries the tokens every promoted class reads; `v2-embedded` undoes the 100dvh and hidden
+    // overflow that belong to a route owning the viewport, and puts Tailwind's spacing utilities back
+    // in charge inside this subtree.
+    <div className="v2 v2-embedded p-4 sm:p-6">
+      {/* No page title. The rail says Contacts; the micro-label carries the count, which is the one
+          thing the rail cannot say, and the rule runs to the actions. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+          <i />
+          {q
+            ? `${total} ${total === 1 ? 'match' : 'matches'} for “${q}”`
+            : `Address book · ${total}`}
+        </p>
+        <s />
         <ContactActions />
       </div>
 
-      {/* Search — a plain GET form, so a search is a real URL the browser can go back to. */}
-      <form className="relative mb-4">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted pointer-events-none" />
+      {/* Search — a rule, not a box. Same GET form, so a search is still a real URL you can go back to. */}
+      <form className="v2-fld mb-5" style={{ position: 'relative' }}>
+        <label htmlFor="contacts-q">Search</label>
         <input
+          id="contacts-q"
           name="q"
           type="search"
           defaultValue={q}
-          placeholder="Search by name, email, phone, or address..."
-          className="pl-10 h-11 w-full rounded-xl border border-hairline bg-white text-sm text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
+          placeholder="Name, email, phone or address…"
+          style={{ paddingRight: 24 }}
         />
+        <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-ink-45)' }} />
       </form>
 
       {!contacts.length ? (
         q ? (
-          <EmptyState icon={Search} title="No contacts match that search">
-            Nothing here matches <strong>{q}</strong>. Try part of a name, an email address, a phone number, or a city.
-          </EmptyState>
+          <div className="v2-card" data-empty>
+            <b>No contacts match that search</b>
+            <span>Nothing here matches “{q}”. Try part of a name, an email address, a phone number, or a city.</span>
+          </div>
         ) : (
-          <EmptyState icon={Users} title="Your address book builds itself">
-            Every person your AI talks to — across calls, texts, email, and social — is saved here automatically, with their full history.
-            Use <strong>New contact</strong> to add someone by hand, or <strong>Import file</strong> to bring in a whole list at once.
-          </EmptyState>
+          <div className="v2-card" data-empty>
+            <b>Your address book builds itself</b>
+            <span>Every person your AI talks to — across calls, texts, email and social — is saved here automatically, with their full history. Use New contact to add someone by hand, or Import file to bring in a whole list at once.</span>
+          </div>
         )
       ) : (
         <>
-          {/* Mobile compact list rows */}
-          <div className="md:hidden -mx-4 border-t border-hairline">
+          {/* TWO RENDERINGS, ONE ROW SET — and unlike /inbox's two, this is deliberate.
+              A contact genuinely has columns: name, phone, email, channel, conversations, last
+              contact. On a desktop those line up and the table earns them, which is the case the
+              kit's .v2-tbl exists for. At 390px six columns are a sideways scrollbar, so the phone
+              gets .v2-row, the kit's list row, exactly as /inbox does.
+              What made /inbox's pair wrong was that the two had drifted into showing DIFFERENT
+              content — a friendly title on one, a raw initial on the other. Here every value both
+              render comes from the same `contact` object and the same two helpers above, so the
+              phone shows a strict subset of the desktop columns and there is nothing to drift. */}
+          <div className="v2-list md:hidden -mx-4">
             {contacts.map((contact) => (
               <Link
                 key={contact.id}
                 href={`/contacts/${contact.id}`}
-                className="tap-target flex items-center gap-3 min-h-[64px] px-4 border-b border-hairline"
+                className="v2-row tap-target"
+                data-click
+                style={{ ['--chan' as string]: channelHue(contact.channel) }}
               >
-                <div className={`w-[38px] h-[38px] rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium flex-shrink-0 uppercase`}>
+                {/* The initial, in the kit's own chip square rather than v1's tinted circle. A
+                    contact is a customer, not the employee — the one-face rule is about Rudi, and
+                    putting his dome on a customer row would say the opposite of what it means. */}
+                <span className="v2-chip-sq" style={{ ['--ghue' as string]: channelHue(contact.channel), fontFamily: 'var(--v2-mono)', fontSize: 13, textTransform: 'uppercase', color: channelHue(contact.channel) }}>
                   {displayInitial(contact)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-ink truncate">{displayTitle(contact)}</p>
+                </span>
+                <div className="v2-m">
+                  <p className="flex items-center gap-2 min-w-0">
+                    <span className="truncate">{displayTitle(contact)}</span>
+                    {contact.channel && <span className="v2-stat">{contact.channel}</span>}
+                  </p>
                   {contact.total_conversations > 0 && (
-                    <p className="text-xs text-muted truncate mt-0.5">
+                    <span>
                       {contact.total_conversations} conversation{contact.total_conversations !== 1 ? 's' : ''}
-                    </p>
+                      {contact.last_interaction ? ` · last ${formatDate(contact.last_interaction)}` : ''}
+                    </span>
                   )}
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted flex-shrink-0" />
+                <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-ink-45)' }} />
               </Link>
             ))}
           </div>
 
-          {/* Desktop table */}
-          <div className="hidden md:block bg-white rounded-2xl border border-hairline shadow-e1 overflow-hidden">
-            <table className="w-full">
+          {/* The kit's table: mono micro-label headers, a row that lights from the left in its own
+              channel hue, and the channel as a chip in that hue rather than v1's coloured badge. */}
+          <div className="hidden md:block">
+            <table className="v2-tbl">
               <thead>
-                <tr className="border-b border-hairline">
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-subtle uppercase tracking-wide">Name</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-subtle uppercase tracking-wide">Phone</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-subtle uppercase tracking-wide hidden lg:table-cell">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-subtle uppercase tracking-wide">Channel</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-subtle uppercase tracking-wide hidden lg:table-cell">Conversations</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-subtle uppercase tracking-wide hidden xl:table-cell">Last Contact</th>
+                <tr>
+                  <th>Name</th>
+                  <th>Phone</th>
+                  <th className="max-lg:hidden">Email</th>
+                  <th>Channel</th>
+                  <th className="max-lg:hidden">Conversations</th>
+                  <th className="max-xl:hidden">Last contact</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-hairline">
+              <tbody>
                 {contacts.map((contact) => (
-                  <tr key={contact.id} className="hover:bg-sunken transition-colors">
-                    <td className="px-6 py-4">
-                      <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3 group">
-                        <div className={`w-8 h-8 rounded-full ${CHANNEL_TINT[contact.channel || ''] || 'bg-sunken text-subtle'} flex items-center justify-center text-sm font-medium uppercase flex-shrink-0`}>
-                          {displayInitial(contact)}
-                        </div>
-                        <span className="text-sm font-medium text-ink group-hover:text-accent-strong transition-colors">
-                          {displayTitle(contact)}
-                        </span>
+                  <tr key={contact.id} style={{ ['--chan' as string]: channelHue(contact.channel) }}>
+                    <td>
+                      <Link href={`/contacts/${contact.id}`} className="block truncate" style={{ color: 'var(--v2-ink)', fontWeight: 500 }}>
+                        {displayTitle(contact)}
                       </Link>
                     </td>
-                    <td className="px-6 py-4">
+                    <td>
                       {contact.phone ? (
-                        <div className="flex items-center gap-1.5 text-sm text-subtle">
+                        <span className="inline-flex items-center gap-1.5" style={{ color: 'var(--v2-ink-72)' }}>
                           {isSocialChannel(contact.channel)
-                            ? <MessageCircle className="w-3.5 h-3.5 text-muted" />
-                            : <Phone className="w-3.5 h-3.5 text-muted" />}
+                            ? <MessageCircle className="w-3.5 h-3.5" style={{ color: 'var(--v2-ink-45)' }} />
+                            : <Phone className="w-3.5 h-3.5" style={{ color: 'var(--v2-ink-45)' }} />}
                           <span className="break-all">{contact.phone}</span>
-                        </div>
-                      ) : <span className="text-muted">—</span>}
+                        </span>
+                      ) : <span style={{ color: 'var(--v2-ink-45)' }}>—</span>}
                     </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
-                      {contact.email ? (
-                        <div className="flex items-center gap-1.5 text-sm text-subtle">
-                          <Mail className="w-3.5 h-3.5 text-muted" />
-                          {contact.email}
-                        </div>
-                      ) : <span className="text-muted">—</span>}
+                    <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>
+                      {contact.email || <span style={{ color: 'var(--v2-ink-45)' }}>—</span>}
                     </td>
-                    <td className="px-6 py-4">
-                      {contact.channel ? (
-                        <Badge variant={contact.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                          {contact.channel}
-                        </Badge>
-                      ) : <span className="text-muted">—</span>}
+                    <td>
+                      {contact.channel
+                        ? <span className="v2-stat">{contact.channel}</span>
+                        : <span style={{ color: 'var(--v2-ink-45)' }}>—</span>}
                     </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-1.5 text-sm text-subtle">
-                        <MessageCircle className="w-3.5 h-3.5 text-muted" />
-                        {contact.total_conversations}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 hidden xl:table-cell text-sm text-subtle">
+                    <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>{contact.total_conversations}</td>
+                    <td className="max-xl:hidden" style={{ color: 'var(--v2-ink-72)' }}>
                       {contact.last_interaction ? formatDate(contact.last_interaction) : '—'}
                     </td>
                   </tr>
@@ -187,32 +186,20 @@ export default async function ContactsPage({
             </table>
           </div>
 
-          {/* Paging. Hidden when the whole book fits on one page — most businesses never see it. */}
+          {/* Paging. Hidden when the whole book fits on one page — most businesses never see it.
+              The two ends are the same pill as every other verb, disabled rather than swapped for a
+              grey span, so the control does not change shape when it becomes unavailable. */}
           {lastPage > 1 && (
-            <div className="flex items-center justify-between gap-3 mt-4">
-              <p className="text-xs text-muted">
-                Showing {firstShown}–{lastShown} of {total}
-              </p>
+            <div className="flex items-center justify-between gap-3 mt-5">
+              <p className="v2-kick">Showing {firstShown}–{lastShown} of {total}</p>
               <div className="flex items-center gap-2">
-                {page > 1 ? (
-                  <Link href={pageHref(page - 1)} className="tap-target inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline bg-white text-sm text-ink hover:bg-sunken transition-colors">
-                    <ChevronLeft className="w-4 h-4" /> Previous
-                  </Link>
-                ) : (
-                  <span className="inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline text-sm text-muted">
-                    <ChevronLeft className="w-4 h-4" /> Previous
-                  </span>
-                )}
-                <span className="text-xs text-muted tabular-nums px-1">Page {page} of {lastPage}</span>
-                {page < lastPage ? (
-                  <Link href={pageHref(page + 1)} className="tap-target inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline bg-white text-sm text-ink hover:bg-sunken transition-colors">
-                    Next <ChevronRight className="w-4 h-4" />
-                  </Link>
-                ) : (
-                  <span className="inline-flex items-center gap-1 h-10 px-3.5 rounded-xl border border-hairline text-sm text-muted">
-                    Next <ChevronRight className="w-4 h-4" />
-                  </span>
-                )}
+                {page > 1
+                  ? <Link href={pageHref(page - 1)} className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Previous</Link>
+                  : <button className="v2-act" disabled><ChevronLeft className="w-3.5 h-3.5" /> Previous</button>}
+                <span className="v2-kick">Page {page} of {lastPage}</span>
+                {page < lastPage
+                  ? <Link href={pageHref(page + 1)} className="v2-act tap-target">Next <ChevronRight className="w-3.5 h-3.5" /></Link>
+                  : <button className="v2-act" disabled>Next <ChevronRight className="w-3.5 h-3.5" /></button>}
               </div>
             </div>
           )}

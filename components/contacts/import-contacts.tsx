@@ -9,7 +9,6 @@ import type { ImportPreview } from '@/lib/contacts/store'
 // import. The file is read in the browser; only the mapped rows ever leave the page. Nothing is written
 // until the last click, and anyone already in the book is skipped rather than duplicated.
 
-const inp = 'w-full rounded-lg border border-gray-300 px-2 py-1 text-xs'
 type Step = 'choose' | 'map' | 'done'
 
 export function ImportContacts({ trigger }: { trigger: ReactNode }) {
@@ -81,89 +80,129 @@ export function ImportContacts({ trigger }: { trigger: ReactNode }) {
     <>
       <button onClick={() => setOpen(true)}>{trigger}</button>
       {!open ? null : (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => !busy && close()}>
-          <div className="my-12 w-full max-w-2xl rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900">Import contacts</h3>
+        /* Same dialog shell as New contact — the card's edge on the same dimmed veil, at dialog
+           width. Wider, because step two is a spreadsheet. */
+        <div className="v2 fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4" onClick={() => !busy && close()}>
+          <div className="v2-veil" />
+          <div
+            className="relative my-12 w-full max-w-2xl"
+            style={{ background: 'var(--v2-paper)', border: '1px solid var(--v2-line)', borderRadius: 16, padding: 22 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* The header carries the step, so the dialog says where you are in the three of them. */}
+            <div className="v2-head" style={{ marginBottom: 14 }}>
+              <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+                <i />Import contacts{step === 'map' ? ' · check the columns' : step === 'done' ? ' · done' : ''}
+              </p>
+              <s />
+            </div>
 
             {step === 'choose' && (
               <>
-                <p className="mt-0.5 text-xs text-gray-500">Upload a CSV file. In Excel or Google Sheets choose <em>File → Download → CSV</em> first.</p>
+                <p className="v2-hint">Upload a CSV file. In Excel or Google Sheets choose <em>File → Download → CSV</em> first.</p>
+                {/* The drop target keeps its dashed edge — that is what says "put something here" —
+                    but it is the empty card's dashed edge rather than a second grey one. */}
                 <button
                   onClick={() => fileInput.current?.click()}
-                  className="mt-4 flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-300 px-4 py-10 text-sm text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+                  className="v2-card mt-4 w-full"
+                  style={{ alignItems: 'center', gap: 4, borderStyle: 'dashed', padding: '38px 16px', cursor: 'pointer' }}
                 >
-                  <span className="font-medium text-gray-900">Choose a file</span>
-                  <span className="text-xs text-gray-500">CSV, TSV, or a tab-separated copy-paste from Excel</span>
+                  <b style={{ fontSize: 14.5, color: 'var(--v2-ink)' }}>Choose a file</b>
+                  <span>CSV, TSV, or a tab-separated copy-paste from Excel</span>
                 </button>
                 <input ref={fileInput} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-                <p className="mt-3 text-xs text-gray-500">Columns named Name, Email, Phone, Address, Currency or Notes are matched automatically — anything else you can map by hand on the next step.</p>
+                <p className="v2-hint" style={{ marginTop: 12 }}>Columns named Name, Email, Phone, Address, Currency or Notes are matched automatically — anything else you can map by hand on the next step.</p>
+                {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 14 }}><p>{err}</p></div>}
+                <div className="mt-5"><button onClick={close} className="v2-act">Cancel</button></div>
               </>
             )}
 
             {step === 'map' && parsed && (
               <>
-                <p className="mt-0.5 text-xs text-gray-500">{fileName} — {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'}. Check each column is going to the right place.</p>
+                <p className="v2-hint">{fileName} — {parsed.rows.length} row{parsed.rows.length === 1 ? '' : 's'}. Check each column is going to the right place.</p>
 
-                <div className="mt-4 max-h-64 overflow-auto rounded-lg border border-gray-200">
-                  <table className="min-w-full text-xs">
-                    <thead className="sticky top-0 bg-gray-50">
+                {/* The kit's table. Its own scroll container, so a forty-column spreadsheet scrolls
+                    inside the dialog rather than widening it. */}
+                <div className="mt-4 max-h-64 overflow-auto" style={{ border: '1px solid var(--v2-line)', borderRadius: 12 }}>
+                  <table className="v2-tbl" style={{ minWidth: '100%' }}>
+                    <thead>
                       <tr>
                         {parsed.headers.map((h, i) => (
-                          <th key={i} className="border-b border-gray-200 px-2 py-2 text-left align-top">
-                            <div className="mb-1 truncate font-medium text-gray-700" title={h}>{h}</div>
-                            <select value={mapping[i] ?? ''} onChange={(e) => changeMapping(i, (e.target.value || null) as ContactField | null)} className={inp}>
-                              <option value="">Don&apos;t import</option>
-                              {CONTACT_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-                            </select>
+                          <th key={i} style={{ verticalAlign: 'top', padding: '10px 10px 8px' }}>
+                            <div className="mb-1.5 truncate" title={h}>{h}</div>
+                            <span className="v2-sel">
+                              <select value={mapping[i] ?? ''} onChange={(e) => changeMapping(i, (e.target.value || null) as ContactField | null)}
+                                      style={{ fontSize: 12, padding: '5px 22px 5px 0' }}>
+                                <option value="">Don&apos;t import</option>
+                                {CONTACT_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                              </select>
+                            </span>
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody>
                       {parsed.rows.slice(0, 5).map((r, ri) => (
-                        <tr key={ri}>{r.map((c, ci) => <td key={ci} className={`max-w-[10rem] truncate px-2 py-1.5 ${mapping[ci] ? 'text-gray-800' : 'text-gray-300'}`} title={c}>{c || '—'}</td>)}</tr>
+                        <tr key={ri}>{r.map((c, ci) => (
+                          <td key={ci} className="max-w-[10rem] truncate" title={c}
+                              style={{ fontSize: 12.5, padding: '8px 10px', color: mapping[ci] ? 'var(--v2-ink)' : 'var(--v2-ink-45)' }}>
+                            {c || '—'}
+                          </td>
+                        ))}</tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                {parsed.rows.length > 5 && <p className="mt-1 text-xs text-gray-400">Showing the first 5 rows.</p>}
+                {parsed.rows.length > 5 && <p className="v2-hint" style={{ marginTop: 6 }}>Showing the first 5 rows.</p>}
 
+                {/* Three outcomes, three chips in three hues — the same chip the rest of the app
+                    uses for a state, rather than three coloured blocks. */}
                 {preview && (
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-lg bg-emerald-50 px-3 py-2"><div className="text-lg font-semibold text-emerald-800">{preview.toCreate.length}</div><div className="text-xs text-emerald-700">will be added</div></div>
-                    <div className="rounded-lg bg-amber-50 px-3 py-2"><div className="text-lg font-semibold text-amber-800">{preview.duplicates.length}</div><div className="text-xs text-amber-700">already in your contacts</div></div>
-                    <div className="rounded-lg bg-gray-100 px-3 py-2"><div className="text-lg font-semibold text-gray-700">{preview.skipped.length}</div><div className="text-xs text-gray-600">skipped</div></div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {([
+                      ['will be added', preview.toCreate.length, 'var(--v2-t2)'],
+                      ['already in your contacts', preview.duplicates.length, 'var(--v2-t4)'],
+                      ['skipped', preview.skipped.length, 'var(--v2-ink-45)'],
+                    ] as Array<[string, number, string]>).map(([label, n, hue]) => (
+                      <div key={label} className="flex items-baseline gap-2">
+                        <span className="sx-tabular" style={{ fontSize: 20, fontWeight: 300, color: 'var(--v2-ink)' }}>{n}</span>
+                        <span className="v2-stat" style={{ ['--chan' as string]: hue }}>{label}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {preview && preview.duplicates.length > 0 && (
-                  <p className="mt-2 text-xs text-gray-500">
+                  <p className="v2-hint" style={{ marginTop: 10 }}>
                     Matched by email or phone against people already in your book — those rows are left alone, so nothing gets duplicated.
                   </p>
                 )}
-                {!mappedAny && <p className="mt-3 text-xs text-amber-700">Pick at least one column to import.</p>}
+                {!mappedAny && (
+                  <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 14 }}>
+                    <p>Pick at least one column to import.</p>
+                  </div>
+                )}
+                {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 14 }}><p>{err}</p></div>}
 
-                {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
-                <div className="mt-4 flex gap-2">
-                  <button onClick={commit} disabled={busy || !mappedAny || !preview?.toCreate.length} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button onClick={commit} disabled={busy || !mappedAny || !preview?.toCreate.length} className="v2-act" data-solid>
                     {busy ? 'Working…' : `Import ${preview?.toCreate.length ?? 0} contact${preview?.toCreate.length === 1 ? '' : 's'}`}
                   </button>
-                  <button onClick={reset} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Choose a different file</button>
+                  <button onClick={reset} disabled={busy} className="v2-act">Choose a different file</button>
                 </div>
               </>
             )}
 
             {step === 'done' && (
               <>
-                <p className="mt-4 text-sm text-gray-800">Added <span className="font-semibold">{created}</span> contact{created === 1 ? '' : 's'} from {fileName}.</p>
-                <div className="mt-4 flex gap-2">
-                  <button onClick={close} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">Done</button>
-                  <button onClick={reset} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Import another file</button>
+                <p className="text-sm" style={{ color: 'var(--v2-ink)' }}>
+                  Added <span className="font-semibold">{created}</span> contact{created === 1 ? '' : 's'} from {fileName}.
+                </p>
+                <div className="mt-5 flex gap-2">
+                  <button onClick={close} className="v2-act" data-solid>Done</button>
+                  <button onClick={reset} className="v2-act">Import another file</button>
                 </div>
               </>
             )}
-
-            {step === 'choose' && err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
-            {step === 'choose' && <div className="mt-4"><button onClick={close} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button></div>}
           </div>
         </div>
       )}
