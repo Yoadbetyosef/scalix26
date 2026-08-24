@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { UserCog, Bot } from 'lucide-react'
@@ -36,34 +35,25 @@ export function HumanTakeover({ conversationId, active, mobileBar = false }: Pro
     }
   }
 
-  if (mobileBar) {
-    // Primary dark filled, ~60% width (flex-[3] beside Resolve's flex-[2]), 48px tall.
-    return (
-      <Button
-        variant={active ? 'outline' : 'default'}
-        loading={loading}
-        onClick={() => toggle(!active)}
-        className="flex-[3] h-12"
-      >
-        {!loading && (active ? <Bot className="w-4 h-4 mr-1.5" /> : <UserCog className="w-4 h-4 mr-1.5" />)}
-        {active ? 'Return to AI' : 'Take Over'}
-      </Button>
-    )
-  }
+  // The kit's .v2-act. Taking over is the one verb on this screen that changes who is answering, so
+  // in the mobile bar it is the filled pill; everywhere else the hollow one. Handing the conversation
+  // back is never the filled state — the AI answering is the resting condition, not an action to sell.
+  const label = active ? 'Return to AI' : 'Take Over'
+  const Icon = active ? Bot : UserCog
 
-  if (active) {
+  if (mobileBar) {
     return (
-      <Button size="sm" variant="outline" loading={loading} onClick={() => toggle(false)}>
-        {!loading && <Bot className="w-4 h-4 mr-1.5" />}
-        Return to AI
-      </Button>
+      <button className="v2-act" data-wide data-solid={!active || undefined} disabled={loading} onClick={() => toggle(!active)}>
+        <Icon className="w-3.5 h-3.5" />
+        {label}
+      </button>
     )
   }
 
   return (
-    <Button size="sm" variant="outline" loading={loading} onClick={() => toggle(true)}>
-      {!loading && <UserCog className="w-4 h-4 mr-1.5" />}
-      Take Over
-    </Button>
+    <button className="v2-act" disabled={loading} onClick={() => toggle(!active)}>
+      <Icon className="w-3.5 h-3.5" />
+      {label}
+    </button>
   )
 }

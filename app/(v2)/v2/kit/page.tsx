@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
-import { MessageSquare, Package, FileText, CreditCard } from 'lucide-react'
+import { MessageSquare, Package, FileText, CreditCard, Info } from 'lucide-react'
+import { RobotAvatar } from '@/components/brand/robot-avatar'
 import '../v2-tokens.css'
 import './kit.css'
 
@@ -253,6 +254,93 @@ export default async function Kit() {
           }
         />
 
+        {/* 8 · LIST ROW — ADDED AFTER APPROVAL. The approved kit had a table and a card and no third
+            thing, and /inbox needs one: fifty records whose "columns" are a title, a sentence and a
+            time, which a <table> turns into a header that says nothing and a sideways scroll at
+            390px. Rather than invent a language for it, this is the approved table row with the
+            cells taken out — every value (13px rhythm, hairline, hover, the left rule in --chan) is
+            the table's. Flagged rather than slipped in: it is the one component here Yoad has not
+            already signed off. */}
+        <Pair
+          title="List row — /v2’s own, extended"
+          note="Not a new component: .v2-row is the row /v2 already uses for its own lists — the kit simply never paired it, which read as ‘v2 has no row’. Three things are added for a page-wide list of conversations that a 340px dashboard column never needed: the 660px cap lifted, the under-720px card treatment flattened to one hairline per row, and the unread dot taking the row’s channel hue instead of /v2’s pink. The face is the dome crop, per the one-face rule."
+          v1={
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {contacts.slice(0, 3).map((c, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px',
+                  background: ['#f0fdfa', '#eff6ff', '#fff'][i], borderRadius: 16,
+                  boxShadow: '0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.1)',
+                }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#ccfbf1', color: '#0f766e',
+                                display: 'grid', placeItems: 'center', fontWeight: 600, flex: 'none' }}>
+                    {(c.name || c.phone || '?').slice(0, 1).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 15, fontWeight: 600 }}>{c.name || c.phone || 'Unknown'}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999,
+                                     background: '#ccfbf1', color: '#0f766e' }}>{c.channel || 'voice'}</span>
+                    </div>
+                    <p style={{ margin: '3px 0 0', fontSize: 13, color: '#6b7280' }}>No summary yet</p>
+                  </div>
+                  <span style={{ fontSize: 12, color: '#9ca3af' }}>2h ago</span>
+                </div>
+              ))}
+            </div>
+          }
+          v2={
+            <div className="v2-list">
+              {contacts.slice(0, 3).map((c, i) => (
+                <div key={i} className="v2-row" data-click
+                     style={{ ['--chan' as string]: CHAN[c.channel ?? 'voice'] ?? 'var(--v2-t1)' }}>
+                  <RobotAvatar size={38} className="v2-av" />
+                  <div className="v2-m">
+                    <p className="flex items-center gap-2 min-w-0">
+                      <span className="truncate">{c.name || c.phone || 'Unknown'}</span>
+                      {i === 0 && <span className="v2-dot" />}
+                      {i === 0 && <span className="v2-stat">3</span>}
+                      <span className="v2-stat">{c.channel || 'voice'}</span>
+                    </p>
+                    <span>No summary yet</span>
+                  </div>
+                  <div className="v2-meta"><em>open</em><em>2h ago</em></div>
+                </div>
+              ))}
+            </div>
+          }
+        />
+
+        {/* 9 · FACT LIST + ICON BUTTON — ADDED AFTER APPROVAL, same caveat. The contact panel is
+            label-left / value-right rows and two round buttons, and neither existed in the kit. */}
+        <Pair
+          title="Fact list and icon button — /v2’s own, extended"
+          note="Also already /v2’s: .v2-facts is the dt/dd grid on /v2’s detail screens, two columns wide and one on a phone. The only addition is data-narrow, for the 256px contact rail, which is a phone-width column on a desktop page. The round icon button is new — the chip’s tint without the square, which is what tells an icon-only control apart from .v2-chip-sq, an icon that labels something."
+          v1={
+            <div>
+              <h3 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.05em' }}>Details</h3>
+              {[['Channel', 'voice'], ['Sentiment', 'positive'], ['Messages', '4']].map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#6b7280' }}>
+                  <span>{k}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, padding: '2px 10px', borderRadius: 999, background: '#cffafe', color: '#0e7490' }}>{v}</span>
+                </div>
+              ))}
+              <button style={{ marginTop: 14, width: 44, height: 44, borderRadius: '50%', border: 0, background: '#f3f4f6', color: '#6b7280' }}>i</button>
+            </div>
+          }
+          v2={
+            <div>
+              <p className="v2-kick" style={{ marginBottom: 12 }}>Details</p>
+              <dl className="v2-facts" data-narrow>
+                <div><dt>Channel</dt><dd><span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>voice</span></dd></div>
+                <div><dt>Sentiment</dt><dd><span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>positive</span></dd></div>
+                <div><dt>Messages</dt><dd>4</dd></div>
+              </dl>
+              <button type="button" className="v2-ico" style={{ marginTop: 14 }} aria-label="Contact info"><Info /></button>
+            </div>
+          }
+        />
+
         <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Not yet designed</p><s /></div>
         <p className="v2k-note">
           Four component types the detail pages surfaced that are not in this kit, because they need a
@@ -260,6 +348,14 @@ export default async function Kit() {
           timeline</b> on /contacts/[id], the <b>media and QR block</b> on /catalog/[id], and the
           <b> dark panel</b> on /ai-employees/[id]/brain — which is already closer to /v2 than anything
           else in v1 and may be the thing others move toward rather than away from.
+        </p>
+        <p className="v2k-note">
+          Two more are now in the kit above, marked <b>added after approval</b>, because /inbox needed
+          them and neither could be built out of what was approved: the <b>list row</b> and the
+          <b> fact list / icon button</b>. Both are derived from approved components rather than
+          invented — the row is the table row without cells, the fact list is the panel’s two columns.
+          The <b>bottom sheet</b> they sit inside is the same paper and the same hairline as the card,
+          at full width.
         </p>
       </div>
     </div>

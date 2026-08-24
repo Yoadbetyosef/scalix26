@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Info, X, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { contactIdentifier } from '@/lib/utils'
 import Link from 'next/link'
 import type { CustomerProfile } from '@/lib/customer/profile'
@@ -43,14 +42,29 @@ function isDefaultLanguage(lang: string | null): boolean {
   return ['en', 'eng', 'english'].includes(lang.trim().toLowerCase())
 }
 
-function typePillClass(type: CustomerProfile['customerType']): string {
+// The customer-type pill is .v2-stat in a hue — one chip component, four values of one variable,
+// rather than four hand-mixed tint/ink pairs that have to be kept legible independently.
+function typeHue(type: CustomerProfile['customerType']): string {
   switch (type) {
     case 'active':
-    case 'returning': return 'bg-accent/10 text-accent-strong'
-    case 'new': return 'bg-blue-50 text-blue-600'
-    case 'dormant': return 'bg-amber-50 text-amber-700'
-    default: return 'bg-sunken text-subtle'
+    case 'returning': return 'var(--v2-t2)'
+    case 'new': return 'var(--v2-t1)'
+    case 'dormant': return 'var(--v2-t4)'
+    default: return 'var(--v2-ink-45)'
   }
+}
+
+// Channel and sentiment wear the same chip. The hues are the inbox list's, so a conversation keeps
+// its colour from the row you clicked to the panel you opened.
+export const CHANNEL_HUE: Record<string, string> = {
+  voice: 'var(--v2-t4)', sms: 'var(--v2-t2)', whatsapp: 'var(--v2-t2)',
+  email: 'var(--v2-t3)', instagram: 'var(--v2-t1)', facebook: 'var(--v2-t3)',
+}
+const SENTIMENT_HUE: Record<string, string> = {
+  positive: 'var(--v2-t2)', neutral: 'var(--v2-ink-45)', negative: 'var(--v2-t4)',
+}
+export function Chip({ value, hue }: { value: string; hue: string }) {
+  return <span className="v2-stat" style={{ ['--chan' as string]: hue }}>{value}</span>
 }
 
 // "What happened last time?" — one factual sentence.
@@ -121,20 +135,16 @@ export function CustomerProfileBlock({
   const hasContext = !!profile.lastInteractionLabel || !!leadLabel || showLanguage
 
   return (
-    <div className={`border-t border-hairline ${className || ''}`}>
+    <div className={className || ''}>
       {/* Header — customer type badge (business-friendly, no confidence noise) */}
       <div className="flex items-center gap-2 mb-2.5">
-        {profile.customerTypeLabel ? (
-          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${typePillClass(profile.customerType)}`}>
-            {profile.customerTypeLabel}
-          </span>
-        ) : (
-          <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide">Customer</h3>
-        )}
+        {profile.customerTypeLabel
+          ? <Chip value={profile.customerTypeLabel} hue={typeHue(profile.customerType)} />
+          : <p className="v2-kick">Customer</p>}
       </div>
 
       {/* Primary insight — what happened last time */}
-      {insight && <p className="text-sm text-ink leading-snug mb-3">{insight}</p>}
+      {insight && <p className="text-sm leading-snug mb-3" style={{ color: 'var(--v2-ink)' }}>{insight}</p>}
 
       {/* Important context — only non-empty rows */}
       {hasContext && (
@@ -153,20 +163,21 @@ export function CustomerProfileBlock({
 
       {/* Recommended next step — deterministic */}
       {nextStep && (
-        <div className="mb-3 rounded-xl bg-accent/[0.06] border border-accent/15 px-3 py-2.5">
-          <p className="text-[10px] font-semibold text-accent-strong uppercase tracking-wide mb-0.5">Recommended next step</p>
-          <p className="text-sm text-ink leading-snug">{nextStep}</p>
+        <div className="v2-card mb-3" style={{ gap: 4, padding: '11px 13px' }}>
+          <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Recommended next step</p>
+          <p className="text-sm leading-snug" style={{ color: 'var(--v2-ink)' }}>{nextStep}</p>
         </div>
       )}
 
       {/* Timeline preview — last 2–3 events */}
       {timeline.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1.5">Recent activity</p>
+          <p className="v2-kick mb-1.5">Recent activity</p>
           <ul className="space-y-2">
             {timeline.map((t) => (
               <li key={t.key} className="flex items-start gap-2 text-xs">
-                <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${t.kind === 'appointment' ? 'bg-accent' : 'bg-hairline-strong'}`} />
+                <span className="mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ background: t.kind === 'appointment' ? 'var(--v2-t1)' : 'var(--v2-line)' }} />
                 <span className="flex-1 min-w-0 text-subtle">{t.label}</span>
                 {t.dateLabel && <span className="text-muted flex-shrink-0">{t.dateLabel}</span>}
               </li>
@@ -189,7 +200,7 @@ export function ConversationContactPanel({ contact, profile, conversationId, cur
       {/* Trigger — mobile only */}
       <button
         onClick={() => setOpen(true)}
-        className="lg:hidden w-11 h-11 flex items-center justify-center rounded-full bg-sunken text-subtle hover:bg-hairline-strong transition-colors"
+        className="v2-ico lg:hidden"
         aria-label="Contact info"
       >
         <Info className="w-4 h-4" />
@@ -197,20 +208,17 @@ export function ConversationContactPanel({ contact, profile, conversationId, cur
 
       {/* Slide-up drawer */}
       {open && (
-        <div className="lg:hidden fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[70vh] overflow-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
-              <span className="font-semibold text-ink">Contact Info</span>
-              <button
-                onClick={() => setOpen(false)}
-                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-sunken text-subtle"
-              >
-                <X className="w-4 h-4" />
+        <div className="v2 lg:hidden fixed inset-0 z-50">
+          <div className="v2-veil" onClick={() => setOpen(false)} />
+          <div className="v2-drawer">
+            <section className="flex items-center justify-between" style={{ paddingTop: 14, paddingBottom: 14 }}>
+              <p className="v2-kick">Contact</p>
+              <button onClick={() => setOpen(false)} className="v2-ico" aria-label="Close">
+                <X />
               </button>
-            </div>
+            </section>
 
-            <div className="px-5 py-4 space-y-3">
+            <section className="space-y-3">
               {contact.name && (
                 <div className="flex items-center gap-3 text-sm">
                   <User className="w-4 h-4 text-muted flex-shrink-0" />
@@ -236,53 +244,46 @@ export function ConversationContactPanel({ contact, profile, conversationId, cur
                   <span className="text-ink break-all">{contact.email}</span>
                 </div>
               )}
-            </div>
+            </section>
 
-            <div className="px-5 py-4 border-t border-hairline space-y-3">
-              <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide">Details</h3>
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-subtle">Channel</span>
-                <Badge variant={contact.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                  {contact.channel}
-                </Badge>
-              </div>
-              {contact.sentiment && (
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-subtle">Sentiment</span>
-                  <Badge variant={contact.sentiment as 'positive' | 'neutral' | 'negative'}>{contact.sentiment}</Badge>
+            <section>
+              <p className="v2-kick" style={{ marginBottom: 10 }}>Details</p>
+              <dl className="v2-facts">
+                <div>
+                  <dt>Channel</dt>
+                  <dd><Chip value={contact.channel} hue={CHANNEL_HUE[contact.channel] ?? 'var(--v2-t1)'} /></dd>
                 </div>
-              )}
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-subtle">Messages</span>
-                <span className="font-medium text-ink">{contact.messageCount}</span>
-              </div>
-            </div>
+                {contact.sentiment && (
+                  <div>
+                    <dt>Sentiment</dt>
+                    <dd><Chip value={contact.sentiment} hue={SENTIMENT_HUE[contact.sentiment] ?? 'var(--v2-ink-45)'} /></dd>
+                  </div>
+                )}
+                <div><dt>Messages</dt><dd>{contact.messageCount}</dd></div>
+              </dl>
+            </section>
 
-            <CustomerProfileBlock profile={profile} className="px-5 py-4" />
+            <section><CustomerProfileBlock profile={profile} /></section>
 
             {/* Status actions — mobile only. Close moves here from the top bar (C1),
                 using the SAME ConversationActions handler. md:hidden keeps desktop untouched. */}
             {conversationId && currentStatus && (
-              <div className="md:hidden px-5 py-4 border-t border-hairline">
+              <section className="md:hidden">
                 <ConversationActions
                   conversationId={conversationId}
                   currentStatus={currentStatus}
                   place="menu"
                   onAction={() => setOpen(false)}
                 />
-              </div>
+              </section>
             )}
 
             {contact.id && (
-              <div className="px-5 pb-8">
-                <Link
-                  href={`/contacts/${contact.id}`}
-                  className="block text-center text-sm text-ink font-medium py-3 border border-hairline-strong rounded-xl hover:bg-sunken transition-colors"
-                  onClick={() => setOpen(false)}
-                >
-                  View Full Profile →
+              <section>
+                <Link href={`/contacts/${contact.id}`} className="v2-act" data-wide onClick={() => setOpen(false)}>
+                  View full profile →
                 </Link>
-              </div>
+              </section>
             )}
           </div>
         </div>

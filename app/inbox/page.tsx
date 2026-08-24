@@ -2,12 +2,18 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { MessageCircle, Search, Phone, Mail } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { EmptyState } from '@/components/ui/empty-state'
+import { Search } from 'lucide-react'
+import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { formatDateTime, formatDuration, truncate, looksLikeName, formatPhone } from '@/lib/utils'
 import { relativeTime } from '@/lib/format'
 import { getBusinessTimezone } from '@/lib/timezone'
+
+// The channel's own hue, the one table in the app that decides it — see nav-icons/GROUP_HUE for the
+// group equivalent. A row lights in the colour of where the conversation came from.
+const CHANNEL_HUE: Record<string, string> = {
+  voice: 'var(--v2-t4)', sms: 'var(--v2-t2)', whatsapp: 'var(--v2-t2)',
+  email: 'var(--v2-t3)', instagram: 'var(--v2-t1)', facebook: 'var(--v2-t3)',
+}
 
 const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS',
@@ -18,48 +24,6 @@ const CHANNEL_LABELS: Record<string, string> = {
   email: 'Email',
   web: 'Web Chat',
   webchat: 'Web Chat',
-}
-
-// Soft channel palette — the website's color language. Color recognizes the channel
-// before you read a word. Kept soft (50/100 tints), never saturated.
-const CHANNEL_STYLE: Record<string, { tint: string; ring: string; badge: string; avatar: string; dot: string }> = {
-  sms: { tint: 'bg-amber-50', ring: 'ring-amber-100', badge: 'bg-amber-100 text-amber-700', avatar: 'bg-amber-100 text-amber-600', dot: 'bg-amber-400' },
-  email: { tint: 'bg-blue-50', ring: 'ring-blue-100', badge: 'bg-blue-100 text-blue-700', avatar: 'bg-blue-100 text-blue-600', dot: 'bg-blue-400' },
-  instagram: { tint: 'bg-pink-50', ring: 'ring-pink-100', badge: 'bg-pink-100 text-pink-700', avatar: 'bg-pink-100 text-pink-600', dot: 'bg-pink-400' },
-  facebook: { tint: 'bg-purple-50', ring: 'ring-purple-100', badge: 'bg-purple-100 text-purple-700', avatar: 'bg-purple-100 text-purple-600', dot: 'bg-purple-400' },
-  voice: { tint: 'bg-green-50', ring: 'ring-green-100', badge: 'bg-green-100 text-green-700', avatar: 'bg-green-100 text-green-600', dot: 'bg-green-400' },
-  whatsapp: { tint: 'bg-emerald-50', ring: 'ring-emerald-100', badge: 'bg-emerald-100 text-emerald-700', avatar: 'bg-emerald-100 text-emerald-600', dot: 'bg-emerald-400' },
-  web: { tint: 'bg-cyan-50', ring: 'ring-cyan-100', badge: 'bg-cyan-100 text-cyan-700', avatar: 'bg-cyan-100 text-cyan-600', dot: 'bg-cyan-400' },
-  webchat: { tint: 'bg-cyan-50', ring: 'ring-cyan-100', badge: 'bg-cyan-100 text-cyan-700', avatar: 'bg-cyan-100 text-cyan-600', dot: 'bg-cyan-400' },
-}
-const NEUTRAL = { tint: 'bg-white', ring: 'ring-hairline', badge: 'bg-sunken text-subtle', avatar: 'bg-sunken text-subtle', dot: 'bg-muted' }
-
-// Activity → energy. Open conversations wear their channel color; resolved fade to a
-// calm white card (channel still recognizable in the badge); closed go quiet gray.
-function rowStyle(channel: string, status: string | null) {
-  const c = CHANNEL_STYLE[channel] || NEUTRAL
-  if (status === 'open') return { card: `${c.tint} ring-1 ${c.ring}`, badge: c.badge, avatar: c.avatar, dot: c.dot, live: true }
-  if (status === 'resolved') return { card: 'bg-white ring-1 ring-hairline', badge: c.badge, avatar: c.avatar, dot: c.dot, live: false }
-  return { card: 'bg-white ring-1 ring-hairline', badge: 'bg-sunken text-muted', avatar: 'bg-sunken text-muted', dot: 'bg-muted', live: false }
-}
-
-const RECENT_MS = 24 * 60 * 60 * 1000
-
-// Mobile-only (I2): 38px circular channel avatar colors. Instagram=pink, Voice=green,
-// SMS=teal, Email=blue; everything else falls back to a neutral tile.
-const MOBILE_AVATAR: Record<string, string> = {
-  instagram: 'bg-pink-100 text-pink-600',
-  voice: 'bg-green-100 text-green-600',
-  sms: 'bg-teal-100 text-teal-600',
-  email: 'bg-blue-100 text-blue-600',
-}
-const MOBILE_AVATAR_FALLBACK = 'bg-sunken text-subtle'
-
-// Mobile-only (I5): status → colored dot. blue=open, green=resolved, gray=closed.
-function mobileStatusDot(status: string | null): string {
-  if (status === 'open') return 'bg-blue-500'
-  if (status === 'resolved') return 'bg-emerald-500'
-  return 'bg-muted'
 }
 
 export default async function InboxPage({
@@ -155,7 +119,7 @@ export default async function InboxPage({
                 className="v2-chip flex-shrink-0"
                 data-on={channel === c || undefined}
               >
-                {c !== 'all' && <span className={cn('h-1.5 w-1.5 rounded-full', CHANNEL_STYLE[c]?.dot || 'bg-muted')} />}
+                {c !== 'all' && <i className="v2-gdot" style={{ ['--ghue' as string]: CHANNEL_HUE[c] ?? 'var(--v2-t1)' }} />}
                 {c === 'all' ? 'All Channels' : CHANNEL_LABELS[c]}
               </Link>
             ))}
@@ -182,16 +146,10 @@ export default async function InboxPage({
             </div>
           )
         ) : (
-          <div className="max-md:space-y-0 md:space-y-2 max-md:p-0 md:p-4 sx-stagger">
+          <div className="v2-list sx-stagger">
             {filtered.map((conv) => {
               const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
               const channelLabel = CHANNEL_LABELS[conv.channel] || conv.channel
-              // Desktop title (unchanged).
-              const title = looksLikeName(contact?.name)
-                ? contact!.name
-                : contact?.phone
-                  ? `${formatPhone(contact.phone)} · ${channelLabel}`
-                  : contact?.email || 'Unknown'
               // I3 — mobile display-only title: never show raw platform IDs. If no real
               // name, Instagram → "Instagram lead"; Voice/SMS → formatPhone(number);
               // Email → email. Falls back to a friendly channel label, never an ID.
@@ -204,8 +162,6 @@ export default async function InboxPage({
                     : conv.channel === 'email' && contact?.email
                       ? contact.email
                       : contact?.email || `${channelLabel} lead`
-              const s = rowStyle(conv.channel, conv.status)
-              const recent = conv.updated_at ? Date.now() - new Date(conv.updated_at).getTime() < RECENT_MS : false
               // I4 — unread. No dedicated column exists; derive from the live/open signal.
               // If an unread_count is ever added it lights the badge automatically (>1).
               const unreadCount = typeof (conv as { unread_count?: number }).unread_count === 'number'
@@ -218,60 +174,30 @@ export default async function InboxPage({
                   ? (conv.duration_seconds != null ? `Voice call · ${formatDuration(conv.duration_seconds)}` : 'Voice call')
                   : 'No summary yet'
               return (
-                <Link key={conv.id} href={`/inbox/${conv.id}`} className="tap-target block">
-                  {/* MOBILE (I2–I5): flat list row, hairline divider, no card / no unread tint. */}
-                  <div className="md:hidden flex items-center gap-3 border-b border-hairline px-4 min-h-[64px] py-3 transition-colors active:bg-sunken">
-                    <div className={cn('w-[38px] h-[38px] rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0', MOBILE_AVATAR[conv.channel] || MOBILE_AVATAR_FALLBACK)}>
-                      {conv.channel === 'voice'
-                        ? <Phone className="w-4 h-4" />
-                        : conv.channel === 'email'
-                          ? <Mail className="w-4 h-4" />
-                          : (looksLikeName(contact?.name) ? contact!.name![0] : channelLabel[0])}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className={cn('text-[15px] text-ink truncate', isUnread ? 'font-semibold' : 'font-normal')}>{mobileTitle}</p>
-                        {isUnread && <span className="h-2 w-2 rounded-full bg-accent flex-shrink-0" aria-hidden="true" />}
-                        {unreadCount > 1 && (
-                          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[11px] font-semibold flex-shrink-0">{unreadCount}</span>
-                        )}
-                      </div>
-                      <p className="text-[13px] text-subtle truncate min-w-0">{preview}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0 ml-1">
-                      <span className="text-[12px] text-muted whitespace-nowrap">{relativeTime(conv.updated_at)}</span>
-                      <span className={cn('h-2 w-2 rounded-full', mobileStatusDot(conv.status))} aria-hidden="true" title={conv.status ?? undefined} />
-                    </div>
+                <Link key={conv.id} href={`/inbox/${conv.id}`} className="v2-row tap-target" data-click
+                      style={{ ['--chan' as string]: CHANNEL_HUE[conv.channel] ?? 'var(--v2-t1)' }}>
+                  {/* ONE ROW, BOTH WIDTHS, AND IT IS /v2's OWN. v1 carried two — a flat list on mobile and
+                      a shadowed, channel-tinted card on desktop — which is two components to keep in step,
+                      and they had already drifted: the mobile one showed a friendly title where the desktop
+                      one printed a raw contact initial in a coloured circle. .v2-row is the row /v2 already
+                      uses for its lists, so the only additions are the ones a conversation needs and a
+                      dashboard list never did: the one face, a channel chip, and a second trailing value.
+                      The mobile title rule wins because it is the better one; the desktop-only absolute
+                      date survives as the wider screen's extra column. */}
+                  <RobotAvatar size={38} className="v2-av" />
+                  <div className="v2-m">
+                    <p className="flex items-center gap-2 min-w-0">
+                      <span className="truncate">{mobileTitle}</span>
+                      {isUnread && <span className="v2-dot" aria-hidden="true" />}
+                      {unreadCount > 1 && <span className="v2-stat">{unreadCount}</span>}
+                      <span className="v2-stat">{channelLabel}</span>
+                    </p>
+                    <span>{preview}</span>
                   </div>
-
-                  {/* DESKTOP: original card, unchanged. */}
-                  <div className={cn('hidden md:flex items-center gap-3.5 rounded-2xl px-4 py-3.5 transition-all hover:shadow-e2 sm:px-5', s.card)}>
-                    <div className={cn('w-11 h-11 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0', s.avatar)}>
-                      {conv.channel === 'voice'
-                        ? <Phone className="w-4 h-4" />
-                        : conv.channel === 'email'
-                          ? <Mail className="w-4 h-4" />
-                          : (contact?.name?.[0] || contact?.phone?.[0] || contact?.email?.[0] || '?')}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className="text-[15px] font-medium text-ink truncate">{title}</p>
-                        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium', s.badge)}>
-                          {channelLabel}
-                        </span>
-                        {s.live && (
-                          <span className={cn('h-1.5 w-1.5 rounded-full', s.dot, recent && 'animate-pulse')} aria-hidden="true" />
-                        )}
-                        {conv.channel === 'voice' && conv.duration_seconds != null && (
-                          <span className="text-xs text-muted whitespace-nowrap">{formatDuration(conv.duration_seconds)}</span>
-                        )}
-                      </div>
-                      <p className="text-[13px] text-subtle truncate">{preview}</p>
-                    </div>
-                    <div className="text-right flex-shrink-0 ml-2">
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{conv.status}</p>
-                      <p className="mt-1 text-xs text-muted whitespace-nowrap">{formatDateTime(conv.updated_at, tz)}</p>
-                    </div>
+                  <div className="v2-meta">
+                    <em>{conv.status}</em>
+                    <em className="max-md:hidden">{formatDateTime(conv.updated_at, tz)}</em>
+                    <em className="md:hidden">{relativeTime(conv.updated_at)}</em>
                   </div>
                 </Link>
               )

@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -39,19 +37,30 @@ export function MessageComposer({ conversationId }: Props) {
     }
   }
 
+  // RULE, NOT BOX — the kit's form language. The composer was the one field in the app that argued
+  // for a box, on the grounds that it is a thing you type *into* rather than a value you edit. It
+  // isn't: the transcript above it is already a stack of bounded shapes, and a bordered box under
+  // them adds a fourth edge to a screen that has three. The label is the field's own micro-label,
+  // which also says who the message reaches — the thing v1 hid inside a placeholder.
   return (
-    <div className="px-3 sm:px-4 py-3 border-t border-hairline bg-white flex-shrink-0">
-      <form onSubmit={submit} className="flex gap-2">
-        <Input
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          placeholder="Type a message to the customer…"
-          disabled={sending}
-          className="flex-1 h-11"
-        />
-        <Button type="submit" disabled={sending || !value.trim()} loading={sending} className="h-11 w-11 p-0 flex-shrink-0">
-          {!sending && <Send className="w-4 h-4" />}
-        </Button>
+    <div className="px-4 sm:px-6 py-3 border-t border-hairline flex-shrink-0">
+      <form onSubmit={submit} className="flex items-end gap-3">
+        <div className="v2-fld flex-1">
+          <label htmlFor="composer">Reply to the customer</label>
+          <input
+            id="composer"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            placeholder="Type a message…"
+            disabled={sending}
+            autoComplete="off"
+          />
+        </div>
+        <button type="submit" className="v2-act" disabled={sending || !value.trim()}
+                style={{ ['--ghue' as string]: 'var(--v2-t1)', paddingBottom: 9, paddingTop: 9 }}>
+          <Send className="w-3.5 h-3.5" />
+          {sending ? 'Sending' : 'Send'}
+        </button>
       </form>
     </div>
   )
