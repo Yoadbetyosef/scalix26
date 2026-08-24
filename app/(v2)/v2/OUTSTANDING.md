@@ -1355,3 +1355,55 @@ full-width 49px strip, so a list row passes under it mid-scroll. v1's tab bar wa
 60px in the same place and did the same; `main`'s 72px bottom padding still
 clears the end of a list. The check that guards this now distinguishes a row that
 scrolls from a control the page pinned to the edge, and only fails on the second.
+
+## §33 — after /appointments and /orders: what is done, and what is not
+
+Both trees are migrated: zero v1 in page on all nine routes at 1440 and 390,
+and in every state driven through the real UI.
+
+### Three corrections to the brief, all measured
+
+**The board has no drag.** Despite the name, its cards are plain `<Link>`
+elements — no `draggable`, no dnd library, no drop targets. Stage moves happen
+on the detail page through `StageControl`, and the approval stages reject a
+manual move server-side. There was no drag state to drive.
+
+**/appointments did not exist.** The schedule lived only at
+`/dashboard?tab=appointments`, which is why the rail's row had been INERT since
+the shell was reskinned. Deleting the tab strip without giving it a page would
+have deleted the schedule. Same query, same rows; it gained a URL, a live rail
+row and its own `scheduling` gate.
+
+**Five components had no kit equivalent, not three.** The action bar, the
+key-value list and the dropzone were named; the CHECKBOX ROW (hand-spelled in
+four files) and the TYPEAHEAD POPOVER (two of them, both `shadow-lg`) turned up
+during the work. All five are in the kit as pairs. The key-value list turned out
+not to be new at all — `.v2-facts` already existed and /orders was building its
+own.
+
+### Known and deliberately not done
+
+**`.v2-act`'s base ink is 2.94:1.** Measured: `--v2-t1` on its own 12% ground.
+That is the approved pill, shipped on every migrated page, and it is below AA
+for the 10px mono it is set in. The new destructive variant does NOT inherit the
+problem — `--v2-red-ink` is 4.95:1 — because introducing a failing control was
+not acceptable even where an existing one fails. **Fixing the base is a design
+decision about the whole kit, not a migration detail, and it is Yoad's.** The
+same question applies to `.v2-stat`, which uses the same construction.
+
+**/appointments over-fetches.** It calls `getDashboardData`, which runs eight
+queries — analytics events, conversations, leads, AI employees — and uses one of
+them. Shared with the dashboard, which needs all eight, so splitting it is a
+change to that hot path rather than to this one.
+
+**The letterhead tree stays out of scope permanently** (§25). Excluded and
+untouched: `document-body.tsx`, `components/documents/letterhead.tsx`,
+`document-branding.tsx`, `send-document.tsx`, `letterhead-choice.tsx`,
+`print-button.tsx`, `doc-settings-modal.tsx`, and the public `/e/[token]`
+approval copy with `public-approval.tsx` and `factory-delivery.tsx`. Those last
+two are customer-facing pages outside the app shell — a separate decision from
+this migration.
+
+**`/orders/[id]/document/[type]`'s own toolbar** uses the `neutral-` greyscale
+and sits on the excluded page. It is app chrome on a document route; whether it
+follows the app or the document is a decision, not an oversight.
