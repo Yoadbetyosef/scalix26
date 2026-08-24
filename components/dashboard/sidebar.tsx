@@ -162,7 +162,7 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   return (
     <>
       {/* Desktop Sidebar — calm, light, premium */}
-      <aside className="hidden md:flex flex-col w-16 xl:w-56 bg-white border-r border-hairline h-screen fixed left-0 top-0 bottom-0 z-40 overflow-hidden">
+      <aside className="hidden md:flex flex-col w-16 xl:w-[236px] bg-white border-r border-hairline h-screen fixed left-0 top-0 bottom-0 z-40 overflow-hidden" /* 236px, not 224: it is /v2's --v2-rail-w, and the hero is now the same composition, so the left edge has to fall in the same place on both. See app-shell. */>
         {/* Logo — partner brand on their domain, Scalix otherwise. flex-shrink-0: header stays fixed. */}
         <div className="flex flex-shrink-0 items-center gap-2.5 px-4 py-5 border-b border-hairline">
           {pb?.isPartnerBrand && pb.logoUrl

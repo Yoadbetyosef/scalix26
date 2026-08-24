@@ -3,6 +3,7 @@ import { getDashboardData } from '@/lib/dashboard/overview'
 import { getImpactData } from '@/lib/dashboard/impact'
 import { loadArrivals, waitingCount } from '@/lib/inbox/arrivals'
 import { buildHeroInputs } from '@/lib/dashboard/briefing'
+import { buildHomeView } from '@/lib/dashboard/home-view'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 import { rudiLine, type RudiSegment } from './rudi-line'
 import { PRIMARY, allowed, visibleGroups } from './nav'
@@ -71,59 +72,12 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
     (a) => a.slot_date === todayIso && a.status !== 'cancelled',
   )
 
-  const rightNow: NowItem[] = todaysJobs.map((a) => ({
-    title: a.customer_name || 'Appointment',
-    detail: [a.slot_time, a.service_type].filter(Boolean).join(' · ') || 'Booked',
-  }))
-
-  // ── ATTENTION NEEDED IS THE INBOX'S OWN TWO GROUPS ────────────────────────────────────────────
-  //
-  // It used to be two items, and both were wrong in the same direction — reporting handled work as
-  // outstanding:
-  //
-  //   "N leads need an answer"      activeLeads counts new+contacted, and Speed-to-Lead sets
-  //                                 `contacted` at the moment it ANSWERS. Every arrival the AI dealt
-  //                                 with in seconds appeared here as unanswered.
-  //   "N callers asked for a person" impact.humanTakeoverCount is every takeover THIS MONTH,
-  //                                 including the ones long since dealt with — a month-long tally on
-  //                                 a list headed "needs you now". It also double-counted: a
-  //                                 taken-over thread whose customer spoke last is already in
-  //                                 `needs` below.
-  //
-  // Now: the two groups the inbox itself puts in front of a person, which is the only definition of
-  // outstanding this product has. If a row is here, opening the inbox shows the same row.
-  const needsYou: NeedsItem[] = []
-  if (arrivals.drafts > 0) {
-    needsYou.push({
-      title: `${arrivals.drafts} ${arrivals.drafts === 1 ? 'draft is' : 'drafts are'} waiting on you`,
-      detail: 'Written and held for your decision before sending.',
-      action: 'Open inbox',
-    })
-  }
-  if (arrivals.unanswered > 0) {
-    needsYou.push({
-      title: `${arrivals.unanswered} ${arrivals.unanswered === 1 ? 'person is' : 'people are'} waiting for a reply`,
-      detail: 'They wrote last and nothing has answered yet.',
-      action: 'Open inbox',
-    })
-  }
-
-  // getImpactData windows to the CURRENT MONTH and is labelled to match, rather than relabelled to
-  // the design's "This week" — a month figure under a week heading is a wrong number wearing the
-  // right word. Only figures that exist are pushed; the grid reflows around however many that is.
-  const monthStats: { label: string; value: string }[] = [
-    { label: 'Conversations managed', value: String(impact.conversationsManaged.value) },
-    { label: 'Customers helped', value: String(impact.customersHelped.value) },
-  ]
-  if (impact.coveragePct.value !== null) {
-    monthStats.push({ label: 'Answered', value: `${Math.round(impact.coveragePct.value)}%` })
-  }
-  monthStats.push({ label: 'After hours or handover', value: String(impact.opportunities.value) })
-  // Calls moved here from the tile grid — a figure, among figures.
-  if (dash.stats.totalCalls > 0) monthStats.push({ label: 'Calls answered', value: String(dash.stats.totalCalls) })
+  // The derivations moved to lib/dashboard/home-view.ts so /dashboard reads the same ones rather
+  // than a second copy. Same values, same comments, one place.
+  const view = buildHomeView(dash, impact, arrivals, waiting)
 
   return {
-    line: rudiLine({ jobsToday: todaysJobs.length, newToday: arrivals.newToday, newHandled: arrivals.newHandled, waiting }),
+    line: rudiLine(view.line),
     // Built from the data already loaded above — buildHeroInputs adds no query. This is what makes
     // the Talk button possible: the briefing was previously trapped inside the dashboard page.
     // `waitingOnYou` overrides the brief's "Leads awaiting follow-up" line, which read activeLeads —
@@ -138,13 +92,13 @@ export async function loadHomeData(tenantId: string, modules: string[] = []): Pr
       // conversations, so the inbox badge was hidden entirely. A nav badge answers "how many need
       // you", so it is now the inbox's own two groups.
       inbox: waiting || null,
-      appointments: todaysJobs.length || null,
+      appointments: view.line.jobsToday || null,
     },
     aiOn: dash.aiEmployees.some((e) => (e as { is_active?: boolean }).is_active !== false),
-    rightNow,
-    needsYou,
-    monthLabel: impact.monthLabel,
-    monthStats,
+    rightNow: view.rightNow,
+    needsYou: view.needsYou,
+    monthLabel: view.monthLabel,
+    monthStats: view.monthStats,
     // The four primary destinations, hrefs and gating from nav.ts so the sheet and the rail cannot
     // disagree. 'Calls' used to sit here: it is a figure with no screen behind it, so it moved to the
     // Week pane where figures belong and stopped pretending to be somewhere you could go.

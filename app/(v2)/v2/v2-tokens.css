@@ -3620,3 +3620,48 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    line already names the count, and thirty amber marks down a column would make the list unreadable
    while telling somebody nothing they could act on row by row. */
 .v2 .v2-xrec[data-none] { color: var(--v2-ink-40); font-size: 13px; }
+
+/* ── THE HERO, EMBEDDED IN A PAGE THAT SCROLLS ──────────────────────────────────────────────────────
+   /v2 is a route that owns the viewport: `.v2` is 100dvh with hidden overflow and `.v2-hero` is
+   absolutely positioned into it. The dashboard is a page — tabs and tables under it, a sidebar beside
+   it — but the composition is meant to be the SAME screen, so the hero still takes the whole first
+   viewport. What changes is only that the page continues below it instead of ending.
+
+   Measured against /v2 at 390x844 until the two agreed: hero top 0, height 844, width 390; caption
+   top 583; block top 583; talk button top 714. Anything less than identical here was the composition
+   arranged into v1's layout rather than brought across.
+
+   WIDTH IS `auto`, NOT `100%`. `.v2 .v2-root` sets width:100%, and with a percentage width the
+   negative margins below move the box without widening it — the hero measured 358px inside a 390px
+   viewport and looked like a padding bug. Auto lets the margins do what they are written to do. */
+.v2.v2-embedded {
+  height: auto;
+  overflow: visible;
+  background: transparent;
+}
+/* Out of the page's padding on every side, and the full height of the viewport — the same first
+   screen /v2 gives, with the dashboard resuming underneath rather than the route ending. */
+.v2.v2-embedded .v2-root {
+  position: relative;
+  width: auto;
+  height: 100dvh;
+  margin: -16px -16px 0;
+  overflow: hidden;
+}
+.v2.v2-embedded .v2-hero { position: absolute; inset: 0; }
+/* THE LEFT IS ALREADY THE SAME, THE RIGHT HAS TO BE MADE SO.
+   /v2 insets its desktop hero by a 236px rail and a 312px right column. The dashboard's own sidebar
+   is outside this subtree and offsets the content by 224px at xl — near enough the rail that the left
+   edge already agrees — so the rail inset is dropped and only the right column is kept. That column
+   is not decoration in /v2 either: it holds the day's figures as static tiles, which is exactly what
+   v1's TodayWork already renders, so the same content lands in the same place. */
+.v2.v2-embedded .v2-root[data-mode="desktop"] .v2-hero { left: 0; right: var(--v2-side-w); }
+.v2.v2-embedded .v2-side {
+  position: absolute; top: 0; right: 0; bottom: 0; width: var(--v2-side-w);
+  overflow-y: auto; padding: 28px 24px;
+}
+
+/* The page's padding steps up at sm:, so the escape does too. */
+@media (min-width: 640px) {
+  .v2.v2-embedded .v2-root { margin: -24px -24px 0; }
+}

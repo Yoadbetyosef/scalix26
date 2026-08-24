@@ -158,7 +158,9 @@ describe('the button', () => {
     expect(button).toMatch(/state === 'idle' \? <MicIcon \/> : <StopIcon \/>/)
     expect(button).toMatch(/state === 'listening' \|\| state === 'speaking' \? 'End'/)
     // ARMED keeps its own word — nothing is running to stop, it is waiting for you.
-    expect(button).toMatch(/: rudiState\(state\)/)
+    // The name is an argument now: the dashboard's employee is whatever the customer called her, and
+    // the button was telling an employee named Amy to talk to Rudi. Defaulted, so /v2 is unchanged.
+    expect(button).toMatch(/: rudiState\(state, name\)/)
   })
 
   it('hugs its content and is centred, in both states', () => {

@@ -7,6 +7,10 @@ const read = (f: string) => readFileSync(new URL(f, import.meta.url), 'utf8')
 // Comments stripped: the block above these rules NAMES the wrong figures it replaced, and should.
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
 const data = strip(read('./data.ts'))
+// The derivations moved to lib/dashboard/home-view.ts so /dashboard reads the same ones instead of a
+// second copy. These assertions follow the code: they are about what the home screen SAYS, and it
+// says it from there now, for both screens rather than one.
+const view = strip(read('../../../lib/dashboard/home-view.ts'))
 const arrivals = read('../../../lib/inbox/arrivals.ts')
 const brief = read('../../../components/dashboard/hero/ask-amy-shared.ts')
 
@@ -76,17 +80,18 @@ describe('every figure comes from the inbox’s own grouping', () => {
 
 describe('nothing on the home screen reports handled work as outstanding', () => {
   it('Attention Needed carries the two inbox groups and nothing derived from lead status', () => {
-    expect(data).toContain('arrivals.drafts > 0')
-    expect(data).toContain('arrivals.unanswered > 0')
-    expect(data).not.toContain('leads need an answer')
-    expect(data).not.toContain('dash.stats.activeLeads')
+    expect(view).toContain('arrivals.drafts > 0')
+    expect(view).toContain('arrivals.unanswered > 0')
+    expect(view).not.toContain('leads need an answer')
+    expect(view).not.toContain('dash.stats.activeLeads')
   })
 
   it('the month-long takeover tally is gone from a list headed "needs you now"', () => {
     // It counted every handover this month, dealt with or not — and double-counted the ones whose
     // customer spoke last, which are already in `unanswered`.
+    expect(view).not.toContain('humanTakeoverCount')
+    expect(view).not.toContain('asked for a person')
     expect(data).not.toContain('humanTakeoverCount')
-    expect(data).not.toContain('asked for a person')
   })
 
   it('the leads badge is gone rather than showing a number that was not true', () => {

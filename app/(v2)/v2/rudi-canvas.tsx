@@ -84,6 +84,14 @@ interface Props {
    * right-hand card would sit under the sidebar. Off unless the caller says otherwise.
    */
   readouts?: boolean
+  /**
+   * What the readouts SAY. Three pairs, cycled.
+   *
+   * A prop because the default is a lie: CARDS is a literal in readout-cards.ts — "CALLS TODAY 3",
+   * "AVG CALL 1m 21s" — the same six figures for every tenant. Harmless in a design preview and not
+   * harmless on somebody's dashboard, so anything customer-facing passes its own.
+   */
+  cards?: Array<Array<[string, string]>>
   className?: string
   onClick?: () => void
 }
@@ -225,7 +233,7 @@ function rr(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: n
   x.closePath()
 }
 
-export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, className, onClick, persona = 'rudi', breakpoint = 'mobile' }: Props) {
+export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, cards = CARDS, className, onClick, persona = 'rudi', breakpoint = 'mobile' }: Props) {
   // Read once. See paintFor: a persona OR breakpoint change means a remount, keyed by the caller.
   const paint = useRef(paintFor(persona, breakpoint)).current
   const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, scan: SCAN, base: BASE, name: NAME } = paint
@@ -263,6 +271,10 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
 
   useEffect(() => { minRef.current = minimised }, [minimised])
   useEffect(() => { readoutsRef.current = readouts }, [readouts])
+  // Live, for the same reason as readouts above: the loop's effect has [] deps, so a value captured
+  // at mount would freeze whatever the first render happened to hold.
+  const cardsDataRef = useRef(cards)
+  useEffect(() => { cardsDataRef.current = cards }, [cards])
 
   const setState = useCallback((s: RudiState) => {
     const from = stateRef.current
@@ -616,7 +628,8 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
 
       const a = cardAlpha(ct) * scanA
       if (a <= 0.01) return
-      const set = CARDS[Math.floor(ct / (1 / CARDS.length)) % CARDS.length]
+      const sets = cardsDataRef.current.length ? cardsDataRef.current : CARDS
+      const set = sets[Math.floor(ct / (1 / sets.length)) % sets.length]
       // Where the subject stops, image space through the same cover-fit the portrait is drawn with —
       // never a canvas fraction, or the floor slides up and down him as the frame changes shape.
       const floorPx = BASE == null ? null : DY + BASE * IH * S
