@@ -59,7 +59,7 @@ function typeHue(type: CustomerProfile['customerType']): string {
 // table so a conversation keeps its colour from the row you clicked to the panel you opened — and so
 // a Server Component can read it, which it cannot do from this file (see channels.ts).
 const SENTIMENT_HUE: Record<string, string> = {
-  positive: 'var(--v2-t2)', neutral: 'var(--v2-ink-45)', negative: 'var(--v2-t4)',
+  positive: 'var(--v2-t2)', neutral: 'var(--v2-mute)', negative: 'var(--v2-t4)',
 }
 export function Chip({ value, hue }: { value: string; hue: string }) {
   return <span className="v2-stat" style={{ ['--chan' as string]: hue }}>{value}</span>

@@ -17,7 +17,7 @@ const STATUS_HUE: Record<string, string> = {
   changes_requested: 'var(--v2-t4)',
   rejected: 'var(--v2-red-ink)',
   sent: 'var(--v2-t1)', opened: 'var(--v2-t1)',
-  revoked: 'var(--v2-ink-45)', expired: 'var(--v2-ink-45)',
+  revoked: 'var(--v2-mute)', expired: 'var(--v2-mute)',
 }
 
 export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
@@ -123,7 +123,7 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
                     being asked to approve anything, they are holding the job. Calling it "factory" there
                     reads as an approval still outstanding. */}
                 <span className="capitalize" style={{ color: 'var(--v2-ink)' }}>{ap.approvalType === 'factory' && ['production', 'ready', 'delivered', 'completed'].includes(stage) ? 'work order' : ap.approvalType}</span>
-                <span className="v2-stat" style={{ ['--chan' as string]: STATUS_HUE[ap.status] ?? 'var(--v2-ink-45)' }}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
+                <span className="v2-stat" style={{ ['--chan' as string]: STATUS_HUE[ap.status] ?? 'var(--v2-mute)' }}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
                 <span className="v2-kick">{ap.recipientEmail}</span>
                 {ap.estimatedCompletionDate && <span className="v2-kick">· est {ap.estimatedCompletionDate}</span>}
                 {ap.respondedAt && <span className="v2-kick">· {new Date(ap.respondedAt).toLocaleString()}</span>}
@@ -222,8 +222,8 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
                     // Internal file: show it, explain why it can't be sent, and make it one click to fix.
                     <div key={a.id} className="flex items-center gap-2" style={{ padding: '5px 0' }}>
                       <input type="checkbox" disabled style={{ width: 17, height: 17, opacity: 0.4 }} />
-                      <span className="truncate text-sm" style={{ color: 'var(--v2-ink-45)' }}>{a.fileName}</span>
-                      <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-ink-45)' }}>internal only</span>
+                      <span className="truncate text-sm" style={{ color: 'var(--v2-mute)' }}>{a.fileName}</span>
+                      <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>internal only</span>
                       <button
                         type="button"
                         onClick={async () => {

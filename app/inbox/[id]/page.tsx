@@ -78,7 +78,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   // settled one, closed the muted one. Channel hue comes from the list, so the row's colour follows
   // the conversation in.
   const STATUS_HUE: Record<string, string> = {
-    open: 'var(--v2-t1)', resolved: 'var(--v2-t2)', closed: 'var(--v2-ink-45)',
+    open: 'var(--v2-t1)', resolved: 'var(--v2-t2)', closed: 'var(--v2-mute)',
   }
   const chanHue = channelHue(conv.channel)
 
@@ -191,13 +191,13 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
           <div className="space-y-3">
             {contact?.name && (
               <div className="flex items-center gap-2 text-sm">
-                <User className="w-4 h-4" style={{ color: 'var(--v2-ink-45)' }} />
+                <User className="w-4 h-4" style={{ color: 'var(--v2-mute)' }} />
                 <span style={{ color: 'var(--v2-ink)' }}>{contact.name}</span>
               </div>
             )}
             {ident && (
               <div className="flex items-start gap-2 text-sm">
-                <IdentIcon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--v2-ink-45)' }} />
+                <IdentIcon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--v2-mute)' }} />
                 <div className="min-w-0">
                   {ident.isPhone ? (
                     <a href={`tel:${ident.value}`} className="font-medium hover:underline break-all" style={{ color: 'var(--v2-ink)' }}>{ident.value}</a>
@@ -210,7 +210,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
             )}
             {contact?.email && (
               <div className="flex items-center gap-2 text-sm min-w-0">
-                <Mail className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-ink-45)' }} />
+                <Mail className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-mute)' }} />
                 <span className="truncate" style={{ color: 'var(--v2-ink)' }}>{contact.email}</span>
               </div>
             )}

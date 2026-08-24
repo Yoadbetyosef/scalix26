@@ -87,7 +87,7 @@ export function ContactPicker({ value, onChange }: { value: PickedContact; onCha
             aria-controls="cp-list"
             style={{ paddingRight: 26, paddingLeft: 22 }}
           />
-          <Search className="w-3.5 h-3.5" style={{ position: 'absolute', left: 2, bottom: 11, color: 'var(--v2-ink-45)', pointerEvents: 'none' }} />
+          <Search className="w-3.5 h-3.5" style={{ position: 'absolute', left: 2, bottom: 11, color: 'var(--v2-mute)', pointerEvents: 'none' }} />
           {value.id && (
             <button type="button" onClick={unlink} title="Unlink this contact" aria-label="Unlink this contact"
                     className="v2-nx" style={{ position: 'absolute', right: -6, bottom: 0, width: 28, alignSelf: 'auto', height: 30 }}>

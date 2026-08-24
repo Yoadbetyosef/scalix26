@@ -1383,13 +1383,7 @@ own.
 
 ### Known and deliberately not done
 
-**`.v2-act`'s base ink is 2.94:1.** Measured: `--v2-t1` on its own 12% ground.
-That is the approved pill, shipped on every migrated page, and it is below AA
-for the 10px mono it is set in. The new destructive variant does NOT inherit the
-problem — `--v2-red-ink` is 4.95:1 — because introducing a failing control was
-not acceptable even where an existing one fails. **Fixing the base is a design
-decision about the whole kit, not a migration detail, and it is Yoad's.** The
-same question applies to `.v2-stat`, which uses the same construction.
+**~~`.v2-act`'s base ink is 2.94:1.~~ FIXED — approved 2026-08-24, see §34.**
 
 **/appointments over-fetches.** It calls `getDashboardData`, which runs eight
 queries — analytics events, conversations, leads, AI employees — and uses one of
@@ -1407,3 +1401,49 @@ this migration.
 **`/orders/[id]/document/[type]`'s own toolbar** uses the `neutral-` greyscale
 and sits on the excluded page. It is app chrome on a document route; whether it
 follows the app or the document is a decision, not an oversight.
+
+## §34 — the chip ink, fixed
+
+Approved from §33 and done. Both chips and the filled pill now clear 4.5:1, and
+the fix is by LIGHTNESS: `oklch(from C L c h)` keeps chroma and hue exactly and
+moves only lightness. `--v2-ink-l: 0.48` for a label on a tint, `--v2-solid-l:
+0.52` for a filled ground under white — the shallowest depths that clear AA for
+every hue the app passes in, which is the four tints, the red, the live green,
+the mute and all thirteen order stages.
+
+**Why not a mix toward black,** which is what the destructive variant did first:
+one fixed ratio has to satisfy the darkest hue, and 50% is what cyan needs —
+which takes `#ff2e93` to `#7f1749`. That is not a deeper pink, it is a maroon.
+Per-hue ratios cannot be written in CSS; a per-hue lightness can. The
+destructive variant now follows the same rule and its bespoke `--v2-red-ink`
+token is only used for red text that is not a chip.
+
+Written as `@supports (color: oklch(from red 0.5 c h))` rather than as two
+`color:` lines in one rule. The two-line spelling is the usual
+progressive-enhancement idiom and is also, exactly, a rule declaring the same
+property twice — which `app/css-duplicates.test.ts` forbids, having been written
+after a real duplicate shipped. An exception for "the intentional ones" would
+make that guard a matter of opinion.
+
+### Two things this turned up
+
+**Every chip inside a list row had been rendering grey.** `.v2 .v2-row .v2-m
+span` is (0,3,1) and reached the `.v2-stat` chips in a row's title line, which
+are (0,1,0). The background was the right hue so it looked right; the label was
+`--v2-ink-46` at 2.7:1. Shipping since the rows did. The rule now matches direct
+children only, which is what the sub-line it exists for actually is.
+
+**A translucent ink cannot be deepened.** `--v2-ink-45` was the hue for a chip
+with no colour, at 2.74:1, and setting the lightness of a 45%-alpha colour still
+leaves 45% alpha. Those chips take a new solid `--v2-mute: #63636b` (5.04:1).
+
+### Verified
+
+142 rendered chips across eleven routes, measured from computed styles with
+colours resolved through a canvas — worst 5.34:1. The reporter is byte-identical
+before and after on all nine migrated routes: only the colour moved.
+
+The measurement itself needed fixing first: the first version regex-scraped
+numbers out of the computed string, which turns `oklch(0.48 0.2478 358.06)` into
+`rgb(0.48, 0.25, 358)` and reports a contrast for a colour nothing on the page
+is. It said the fix had not worked when it had.

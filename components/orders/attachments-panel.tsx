@@ -19,7 +19,7 @@ function KindIcon({ mime }: { mime: string }) {
   // The thumbnail tile's own ink, so the icon reads as part of the tile rather than as a grey the
   // rest of the page does not use.
   const cls = 'h-5 w-5'
-  const style = { color: 'var(--v2-ink-45)' }
+  const style = { color: 'var(--v2-mute)' }
   if (isImage(mime)) return <ImageIcon className={cls} style={style} />
   if (isVideo(mime)) return <Film className={cls} style={style} />
   if (mime === 'application/pdf') return <FileText className={cls} style={style} />
@@ -163,7 +163,7 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
                   : <span className="block truncate text-sm" style={{ color: 'var(--v2-ink-72)' }} title={x.fileName}>{x.fileName}</span>}
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                   <span className="v2-kick">{size(x.fileSize)}</span>
-                  <span className="v2-stat" style={{ ['--chan' as string]: x.visibility === 'public' ? 'var(--v2-t2)' : 'var(--v2-ink-45)' }}>
+                  <span className="v2-stat" style={{ ['--chan' as string]: x.visibility === 'public' ? 'var(--v2-t2)' : 'var(--v2-mute)' }}>
                     {x.visibility === 'public' ? 'Shared on approval' : 'Internal only'}
                   </span>
                 </div>

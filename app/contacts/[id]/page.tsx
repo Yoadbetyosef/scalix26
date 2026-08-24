@@ -11,7 +11,7 @@ import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
 // Status wears the same chip as the channel, in its own hue — identical to /inbox/[id], because a
 // conversation's status means the same thing on whichever screen it is listed.
 const STATUS_HUE: Record<string, string> = {
-  open: 'var(--v2-t1)', resolved: 'var(--v2-t2)', closed: 'var(--v2-ink-45)',
+  open: 'var(--v2-t1)', resolved: 'var(--v2-t2)', closed: 'var(--v2-mute)',
 }
 
 // One fact row: an icon that says what kind of thing this is, and the value. Icons earn their place
@@ -19,7 +19,7 @@ const STATUS_HUE: Record<string, string> = {
 function Fact({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 text-sm" style={{ color: 'var(--v2-ink)' }}>
-      <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--v2-ink-45)' }} />
+      <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--v2-mute)' }} />
       <div className="min-w-0">{children}</div>
     </div>
   )

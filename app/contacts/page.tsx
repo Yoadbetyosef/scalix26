@@ -78,7 +78,7 @@ export default async function ContactsPage({
           placeholder="Name, email, phone or address…"
           style={{ paddingRight: 24 }}
         />
-        <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-ink-45)' }} />
+        <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-mute)' }} />
       </form>
 
       {!contacts.length ? (
@@ -131,7 +131,7 @@ export default async function ContactsPage({
                     </span>
                   )}
                 </div>
-                <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-ink-45)' }} />
+                <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-mute)' }} />
               </Link>
             ))}
           </div>
@@ -162,19 +162,19 @@ export default async function ContactsPage({
                       {contact.phone ? (
                         <span className="inline-flex items-center gap-1.5" style={{ color: 'var(--v2-ink-72)' }}>
                           {isSocialChannel(contact.channel)
-                            ? <MessageCircle className="w-3.5 h-3.5" style={{ color: 'var(--v2-ink-45)' }} />
-                            : <Phone className="w-3.5 h-3.5" style={{ color: 'var(--v2-ink-45)' }} />}
+                            ? <MessageCircle className="w-3.5 h-3.5" style={{ color: 'var(--v2-mute)' }} />
+                            : <Phone className="w-3.5 h-3.5" style={{ color: 'var(--v2-mute)' }} />}
                           <span className="break-all">{contact.phone}</span>
                         </span>
-                      ) : <span style={{ color: 'var(--v2-ink-45)' }}>—</span>}
+                      ) : <span style={{ color: 'var(--v2-mute)' }}>—</span>}
                     </td>
                     <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>
-                      {contact.email || <span style={{ color: 'var(--v2-ink-45)' }}>—</span>}
+                      {contact.email || <span style={{ color: 'var(--v2-mute)' }}>—</span>}
                     </td>
                     <td>
                       {contact.channel
                         ? <span className="v2-stat">{contact.channel}</span>
-                        : <span style={{ color: 'var(--v2-ink-45)' }}>—</span>}
+                        : <span style={{ color: 'var(--v2-mute)' }}>—</span>}
                     </td>
                     <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>{contact.total_conversations}</td>
                     <td className="max-xl:hidden" style={{ color: 'var(--v2-ink-72)' }}>

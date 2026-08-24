@@ -29,6 +29,15 @@
   --v2-ink-45: rgba(14, 14, 17, 0.45);
   --v2-ink-42: rgba(14, 14, 17, 0.42);
   --v2-ink-40: rgba(14, 14, 17, 0.4);
+  /* A CHIP WITH NO COLOUR still needs an ink that can be read. --v2-ink-45 was doing this job and
+     it is translucent: over its own 12% tint it measures 2.74:1, and the deepening rule below
+     cannot save it, because setting the lightness of a 45%-alpha colour still leaves 45% alpha.
+     Solid, and 5.04:1 on its own tint. */
+  --v2-mute: #63636b;
+  /* The one lightness both chips set their ink to. 0.48 in oklch — see the note above .v2-stat. */
+  --v2-ink-l: 0.48;
+  /* And the lightness a FILLED pill's ground takes, so white on it clears 4.5:1. */
+  --v2-solid-l: 0.52;
 
   --v2-line: rgba(0, 0, 0, 0.08);
   --v2-line-strong: rgba(0, 0, 0, 0.12);
@@ -1018,7 +1027,12 @@
 .v2 .v2-row[data-muted] { opacity: 0.55; }
 .v2 .v2-row .v2-m { flex: 1; min-width: 0; }
 .v2 .v2-row .v2-m p { font-size: 15.5px; font-weight: 450; line-height: 1.3; color: var(--v2-ink); }
-.v2 .v2-row .v2-m span { display: block; margin-top: 4px; font-size: 13px; color: var(--v2-ink-46); line-height: 1.35; }
+/* DIRECT CHILD. `.v2-row .v2-m span` is (0,3,1) and reaches every span inside the row — including
+   a .v2-stat chip sitting in the title line, which is (0,1,0) and loses. Every channel chip in
+   every list has been painting its label in --v2-ink-46 since the rows shipped: the background was
+   the right hue, so it LOOKED right, and the text was a 2.7:1 grey. The sub-line this rule is
+   actually for is a direct child; the chips are not. */
+.v2 .v2-row .v2-m > span { display: block; margin-top: 4px; font-size: 13px; color: var(--v2-ink-46); line-height: 1.35; }
 .v2 .v2-row em {
   font-family: var(--v2-mono); font-size: 11px; font-style: normal;
   color: var(--v2-ink-55); flex: none;
@@ -1055,7 +1069,7 @@
     box-shadow: 0 1px 2px rgba(14, 14, 17, 0.04);
   }
   .v2 .v2-row .v2-m p { font-size: 16.5px; letter-spacing: -0.015em; }
-  .v2 .v2-row .v2-m span { font-size: 13.5px; }
+  .v2 .v2-row .v2-m > span { font-size: 13.5px; }
   .v2 .v2-dot { left: 6px; }
   /* The reference's mobile row is name, detail and one figure. Actions would crowd it off the edge. */
   .v2 .v2-racts { display: none; }
@@ -1253,7 +1267,7 @@
 /* RHYTHM. The name carries weight, the meta line drops back, the figure is mono and quiet. Three
    distinct jobs instead of three shades of the same one. */
 .v2 .v2-pbody .v2-row .v2-m p { font-size: 16px; font-weight: 500; letter-spacing: -0.012em; color: var(--v2-ink); }
-.v2 .v2-pbody .v2-row .v2-m span { margin-top: 5px; font-size: 12.5px; color: var(--v2-ink-40); }
+.v2 .v2-pbody .v2-row .v2-m > span { margin-top: 5px; font-size: 12.5px; color: var(--v2-ink-40); }
 .v2 .v2-pbody .v2-row em { font-size: 10.5px; letter-spacing: 0.06em; color: var(--v2-ink-40); }
 
 /* THE CHANNEL MARK. Same 8px dot for every channel, only the hue differs — the eye sorts a column by
@@ -3760,15 +3774,17 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   flex: none; display: inline-flex; align-items: center; gap: 7px;
   border: 0; cursor: pointer; border-radius: 999px; padding: 7px 14px;
   font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--ghue, var(--v2-t1));
   background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 12%, transparent);
   transition: background 0.16s;
+  /* The fallback ink. The deeper one is in the @supports block below .v2-stat. */
+  color: var(--ghue, var(--v2-t1));
 }
 .v2-act:hover { background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 20%, transparent); }
 .v2-act:disabled { opacity: 0.4; cursor: default; }
 .v2-act:disabled:hover { background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 12%, transparent); }
 /* One action per screen may be the one you are meant to take. It is the same pill filled, so the
    hierarchy is a value of one property rather than a second component. */
+/* THE FILLED PILL IS THE OTHER HALF OF §33 — see the @supports block below .v2-stat. */
 .v2-act[data-solid] { color: #fff; background: var(--ghue, var(--v2-t1)); }
 .v2-act[data-solid]:hover { background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 88%, #000); }
 .v2-act[data-wide] { flex: 1; justify-content: center; padding-top: 11px; padding-bottom: 11px; }
@@ -3778,13 +3794,11 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    state on the page is said: the same pill, in the one hue reserved for a warning, and only when
    the action is actually irreversible. Not a second component.
 
-   THE TINT AND THE INK ARE DIFFERENT REDS, DELIBERATELY. --v2-red on its own 12% ground measures
-   2.62:1, which is not a label anybody should have to read on the one control that cannot be
-   undone. The ground stays --v2-red so the pill is recognisably red; the ink is a deeper red at
-   4.95:1, which clears AA for the 10px mono the pill is set in.
-   (The base .v2-act is 2.94:1 by the same measurement. That is the approved component and it is
-   not being changed here without a decision — recorded in OUTSTANDING §33.) */
-.v2-act[data-danger] { --ghue: var(--v2-red); color: var(--v2-red-ink); }
+   It carried its own deeper-red token when the base .v2-act was still painting its label in the raw
+   hue at 2.94:1 — introducing a failing control on the one action that cannot be undone was not
+   acceptable even where an existing one failed. The base is fixed now (§33 approved), so this is
+   just the hue: the same deepening rule applies to it as to every other. */
+.v2-act[data-danger] { --ghue: var(--v2-red); }
 
 /* .v2-kick already exists — the right column's "Right now" label is the same component. Not
    redefined; it only gains the ability to take a group hue, so a header can carry its section's
@@ -3849,12 +3863,47 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 .v2-tbl tbody tr:hover td:first-child::before { opacity: 1; transform: scaleY(1); }
 /* Status, in the channel's own hue — the table already knows which channel a row came from. */
+/* ── THE INK IS A DEEPER SHADE OF THE SAME HUE ───────────────────────────────────────────────────
+   Both chips paint their label in the hue itself on a 12% tint of that hue, and that construction
+   does not clear AA: --v2-t1 measures 2.94:1 on its own tint and --v2-t4 measures 1.67:1, at 10px
+   in a mono face. Recorded as §33 and approved as a deliberate fix rather than a migration detail,
+   because these two are on every page.
+
+   The tint is untouched and the HUE is untouched — only the lightness moves. `oklch(from C L c h)`
+   keeps chroma and hue exactly and sets lightness to a fixed 0.48, which is the shallowest depth
+   that clears 4.5:1 for every hue the app actually passes in: the four tints, the red, the live
+   green, and all thirteen order stages. Worst case is cyan at 5.34:1, best is violet at 7.2.
+
+   WHY NOT color-mix TOWARD BLACK, which is what the destructive variant did first: one fixed mix
+   ratio has to satisfy the darkest hue, and 50% toward black is what cyan needs — which takes pink
+   from #ff2e93 to #7f1749 at 8.4:1. That is not a deeper pink, it is a maroon. Per-hue ratios
+   cannot be expressed in CSS; a per-hue LIGHTNESS can.
+
+   The plain `color` line before it is the fallback. Relative colour syntax is unsupported in a few
+   old engines, where the declaration is dropped and the chip keeps exactly today's appearance —
+   no worse than what already ships, and no layout difference either way. */
 .v2-stat {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
   padding: 4px 9px; border-radius: 999px;
-  color: var(--chan, var(--v2-t1));
   background: color-mix(in srgb, var(--chan, var(--v2-t1)) 12%, transparent);
+  color: var(--chan, var(--v2-t1));
+}
+
+/* ── §33: THE DEEPER INK, AS AN ENHANCEMENT RATHER THAN A DUPLICATE DECLARATION ──────────────────
+   Written as @supports and not as two `color:` lines in one rule. The second spelling is the usual
+   progressive-enhancement idiom and it is also, precisely, a rule declaring the same property
+   twice — which app/css-duplicates.test.ts exists to forbid, having been written after a real
+   duplicate shipped. An exception for "the intentional ones" would make that guard a matter of
+   opinion. This says the same thing with nothing to except.
+
+   Everything above stays the fallback: an engine without relative colour syntax renders exactly
+   what ships today. Nothing here changes a box, only a colour. */
+@supports (color: oklch(from red 0.5 c h)) {
+  .v2-act { color: oklch(from var(--ghue, var(--v2-t1)) var(--v2-ink-l) c h); }
+  .v2-stat { color: oklch(from var(--chan, var(--v2-t1)) var(--v2-ink-l) c h); }
+  .v2-act[data-solid] { background: oklch(from var(--ghue, var(--v2-t1)) var(--v2-solid-l) c h); }
+  .v2-act[data-solid]:hover { background: oklch(from var(--ghue, var(--v2-t1)) calc(var(--v2-solid-l) - 0.05) c h); }
 }
 
 /* ── LIST ROW, EXTENDED ──────────────────────────────────────────────────────────────────────────

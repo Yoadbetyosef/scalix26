@@ -145,7 +145,7 @@ export function ImportContacts({ trigger }: { trigger: ReactNode }) {
                       {parsed.rows.slice(0, 5).map((r, ri) => (
                         <tr key={ri}>{r.map((c, ci) => (
                           <td key={ci} className="max-w-[10rem] truncate" title={c}
-                              style={{ fontSize: 12.5, padding: '8px 10px', color: mapping[ci] ? 'var(--v2-ink)' : 'var(--v2-ink-45)' }}>
+                              style={{ fontSize: 12.5, padding: '8px 10px', color: mapping[ci] ? 'var(--v2-ink)' : 'var(--v2-mute)' }}>
                             {c || '—'}
                           </td>
                         ))}</tr>

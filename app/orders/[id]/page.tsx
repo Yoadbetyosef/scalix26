@@ -56,7 +56,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {STAGE_LABELS[o.stage]}
         </span>
         {isProtectedStage(o.stage) && (
-          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-ink-45)' }}>
+          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>
             <Lock style={{ width: 10, height: 10 }} /> Approval stage
           </span>
         )}
@@ -132,7 +132,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                       {l.description && <div className="v2-hint">{l.description}</div>}
                     </td>
                     <td style={{ fontVariantNumeric: 'tabular-nums' }}>{l.quantity}</td>
-                    <td style={{ fontSize: 12.5, color: 'var(--v2-ink-45)' }}>{specLine(l) || '—'}</td>
+                    <td style={{ fontSize: 12.5, color: 'var(--v2-mute)' }}>{specLine(l) || '—'}</td>
                     <td style={{ fontVariantNumeric: 'tabular-nums' }}>{money(l.unitPriceCents, o.currency)}</td>
                     <td style={{ fontVariantNumeric: 'tabular-nums' }}>{money(l.lineTotalCents, o.currency)}</td>
                   </tr>
@@ -213,7 +213,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 <span style={{ marginTop: 7, width: 5, height: 5, flex: 'none', borderRadius: '50%', background: 'var(--v2-line-strong)' }} />
                 <div>
                   <span style={{ color: 'var(--v2-ink)' }}>{EVENT_LABEL[e.type] ?? e.type}</span>
-                  {e.payload?.to ? <span style={{ color: 'var(--v2-ink-45)' }}> → {STAGE_LABELS[e.payload.to as keyof typeof STAGE_LABELS] ?? String(e.payload.to)}</span> : null}
+                  {e.payload?.to ? <span style={{ color: 'var(--v2-mute)' }}> → {STAGE_LABELS[e.payload.to as keyof typeof STAGE_LABELS] ?? String(e.payload.to)}</span> : null}
                   <p className="v2-kick" style={{ marginTop: 2 }}>{new Date(e.createdAt).toLocaleString()}{e.actor ? ` · ${e.actor}` : ''}</p>
                 </div>
               </li>

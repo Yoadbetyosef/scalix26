@@ -86,7 +86,7 @@ export default async function InboxPage({
         <form className="v2-fld" style={{ position: 'relative' }}>
           <label htmlFor="inbox-q">Search</label>
           <input id="inbox-q" name="q" defaultValue={q} placeholder="Name, number or message…" style={{ paddingRight: 24 }} />
-          <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-ink-45)' }} />
+          <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-mute)' }} />
         </form>
 
         {/* Filters. Same two groups, same hrefs, same behaviour — /v2's own .v2-chip, which already

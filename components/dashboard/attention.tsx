@@ -59,7 +59,7 @@ export function AttentionPill({ initialVisible }: { initialVisible: boolean }) {
               className="v2-notice mb-4 w-full text-left" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
         <span className="v2-chip-sq"><AlertTriangle /></span>
         <p><AttentionSentence initial={phrase(1)} idleSentence="" /></p>
-        <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--v2-ink-45)' }} />
+        <ChevronRight className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--v2-mute)' }} />
       </button>
 
       {/* PORTALLED TO <body>, and this is not tidiness — it is the only thing that makes it work.

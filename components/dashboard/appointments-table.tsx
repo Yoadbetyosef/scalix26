@@ -25,7 +25,7 @@ export type Appointment = {
 const STATUS_HUE: Record<string, string> = {
   confirmed: 'var(--v2-t1)',
   completed: 'var(--v2-t2)',
-  cancelled: 'var(--v2-ink-45)',
+  cancelled: 'var(--v2-mute)',
 }
 
 function friendlyDate(iso: string): string {
@@ -114,7 +114,7 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
                 {/* A chip, not a second micro-label: side by side, two v2-kicks read as one phrase —
                     "OWNER REVIEW SKIPPED" — and one of these is where the booking came from while
                     the other is a decision somebody made. */}
-                {a.skip_review && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-ink-45)' }}>review skipped</span>}
+                {a.skip_review && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>review skipped</span>}
               </p>
               <span>
                 {friendlyDate(a.slot_date)} · {formatTime12(a.slot_time)} · {a.service_type || 'Service'} · {a.customer_phone}

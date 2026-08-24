@@ -123,11 +123,11 @@ export default async function Kit() {
               <thead><tr><th>Name</th><th>Phone</th><th>Channel</th></tr></thead>
               <tbody>{contacts.slice(0, 4).map((c, i) => (
                 <tr key={i} style={{ ['--chan' as string]: CHAN[String(c.channel)] ?? 'var(--v2-t1)' }}>
-                  <td>{c.name || <span style={{ color: 'var(--v2-ink-45)' }}>No name yet</span>}</td>
+                  <td>{c.name || <span style={{ color: 'var(--v2-mute)' }}>No name yet</span>}</td>
                   <td>{c.phone}</td>
                   <td>{c.channel
                     ? <span className="v2-stat">{c.channel}</span>
-                    : <span style={{ color: 'var(--v2-ink-45)', fontSize: 13 }}>—</span>}</td>
+                    : <span style={{ color: 'var(--v2-mute)', fontSize: 13 }}>—</span>}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -338,6 +338,32 @@ export default async function Kit() {
                 <div><dt>Messages</dt><dd>4</dd></div>
               </dl>
               <button type="button" className="v2-ico" style={{ marginTop: 14 }} aria-label="Contact info"><Info /></button>
+            </div>
+          }
+        />
+
+        {/* 10b · THE INK — §33, approved */}
+        <Pair
+          title="Chip and pill ink — §33"
+          note="Both chips painted their label in the hue itself on a 12% tint of that hue, and the filled pill put white on the raw hue. Measured: --v2-t1 at 2.94:1, --v2-t4 at 1.67:1, white on the pink at 3.46:1 — at 10px in a mono face. The tint and the HUE are untouched; only lightness moves. oklch(from C L c h) keeps chroma and hue exactly, at a fixed 0.48 for ink and 0.52 for a filled ground — the shallowest depths that clear 4.5:1 for every hue the app passes in, including all thirteen order stages. 136 rendered chips across eleven pages now measure 5.34:1 at worst. A colour-mix toward black cannot do this: one ratio has to satisfy the darkest hue, and what cyan needs turns the pink into a maroon."
+          v1={
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[['#ff2e93', 'voice 2.94:1'], ['#22d3ee', 'sms 1.67:1'], ['#b843c4', 'email 3.84:1']].map(([h, t]) => (
+                <span key={t} style={{ fontFamily: 'var(--v2-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
+                                       padding: '4px 9px', borderRadius: 999, color: h, background: `color-mix(in srgb, ${h} 12%, transparent)` }}>{t}</span>
+              ))}
+              <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase',
+                             padding: '7px 14px', borderRadius: 999, color: '#fff', background: '#ff2e93' }}>filled 3.46:1</span>
+            </div>
+          }
+          v2={
+            <div className="v2-bar">
+              <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t1)' }}>voice</span>
+              <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>sms</span>
+              <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>email</span>
+              <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>muted</span>
+              <button type="button" className="v2-act" data-solid>filled</button>
+              <button type="button" className="v2-act" data-danger>destructive</button>
             </div>
           }
         />
