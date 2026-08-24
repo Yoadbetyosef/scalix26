@@ -27,7 +27,6 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
-import { TrialWidget } from '@/components/dashboard/trial-widget'
 import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 import { useBrand } from '@/components/brand/brand-provider'
@@ -192,6 +191,16 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
     const m = moduleForNav(i.href)
     return !m || enabledModules.includes(m)
   })
+  // The same four states TrialWidget computes, read the same way from the same two fields.
+  const planRow = (() => {
+    const isTrial = !plan || plan === 'trial'
+    if (!isTrial) return { label: `${(plan ?? '').charAt(0).toUpperCase()}${(plan ?? '').slice(1)} plan`, badge: '', urgent: false }
+    const daysLeft = trialEndsAt ? Math.max(0, Math.floor((new Date(trialEndsAt).getTime() - Date.now()) / 86400000)) : null
+    if (daysLeft !== null && daysLeft <= 0) return { label: 'Trial ended', badge: 'UPGRADE', urgent: true }
+    if (daysLeft === null) return { label: 'Free trial', badge: '', urgent: false }
+    return { label: `Trial · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`, badge: daysLeft <= 3 ? String(daysLeft) : '', urgent: daysLeft <= 3 }
+  })()
+
   const bottomPrimaryVisible = visibleNav.slice(0, 4)
   const bottomMoreVisible = visibleNav.slice(4)
   const moreActive = bottomMoreVisible.some(item => pathname.startsWith(item.href))
@@ -264,10 +273,18 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
             )
           })}
 
-          {/* The plan, as a ROW rather than a red block. Same TrialWidget data, same gating. */}
+          {/* THE PLAN, AS A ROW. It was TrialWidget — a red panel with a red "Upgrade now" button
+              wedged between the sections, which is the one thing on this rail that shouts. Same four
+              states TrialWidget derives (paid, trial, trial low, expired), same href, same gating,
+              same words. What is gone is the block: urgency is an <em> badge on a row, which is how
+              this rail says everything else that needs saying. */}
           {!hidePartnerSurfaces && plan && (
             <div style={{ ['--ghue' as string]: GROUP_HUE.g3 }}>
-              <TrialWidget plan={plan} trialEndsAt={trialEndsAt} />
+              <Link href="/settings#billing" className="v2-nav v2-grow" data-touch>
+                <span className="v2-gchip"><CreditCard /></span>
+                <span className="v2-glab hidden xl:block">{planRow.label}</span>
+                {planRow.badge && <em data-live={planRow.urgent || undefined}>{planRow.badge}</em>}
+              </Link>
             </div>
           )}
 
