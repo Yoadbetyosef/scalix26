@@ -3,9 +3,10 @@ import { Plus } from 'lucide-react'
 import { RudiPresenceProvider, GlassToasts } from './rudi-presence'
 import { V2Hero } from './v2-hero'
 import { TodayWork, type WorkFigure } from './today-work'
+import { HomeColumn } from './home-column'
+import type { HomeView } from '@/lib/dashboard/home-view'
 import { type AmyBriefing } from './ask-amy'
 import { AttentionPill } from '@/components/dashboard/attention'
-import { rudiLine } from '@/app/(v2)/v2/rudi-line'
 import type { PersonaKey } from '@/lib/persona'
 
 export type PresenceState = 'ready' | 'working' | 'attention'
@@ -18,6 +19,8 @@ export interface DashboardHeroProps {
   businessName: string
   figures: WorkFigure[]
   briefing: AmyBriefing
+  /** Right Now / Needs You / This Month, and the caption's counts. See lib/dashboard/home-view. */
+  view: HomeView
   tenantId?: string
 }
 
@@ -43,24 +46,12 @@ export function DashboardHero({
   businessName,
   figures,
   briefing,
+  view,
   tenantId,
 }: DashboardHeroProps) {
   // The readouts, from figures the page already has. CARDS in readout-cards.ts is a literal — the
   // same six numbers for every tenant — which is fine in a design preview and not fine here.
   const pct = briefing.coverage === null ? '—' : `${Math.round(briefing.coverage)}%`
-  // The caption, from /v2's own generator on v1's counts. Same function, same phrasing, same accent
-  // clause — the closing segment is what carries the gradient.
-  //
-  // ONE CLAUSE IS MISSING and that is deliberate: rudiLine can also say "N new people today", which
-  // needs the inbox's arrivals grouping, and reading it here would mean a query the dashboard does
-  // not currently make. Omitted rather than approximated from a count that means something else.
-  const sentence = rudiLine({
-    jobsToday: briefing.appointmentsToday,
-    newToday: 0,
-    newHandled: 0,
-    waiting: briefing.attention.length,
-  })
-
   const readouts: Array<Array<[string, string]>> = [
     [['CALLS ANSWERED', String(briefing.callsAnswered)], ['ANSWERED', pct]],
     [['WAITING ON YOU', String(briefing.waitingOnYou ?? briefing.leadsAwaiting)], ['BOOKED', String(briefing.booked)]],
@@ -77,10 +68,10 @@ export function DashboardHero({
       <V2Hero
         persona={persona}
         employeeName={employeeName}
-        sentence={sentence}
+        line={view.line}
         readouts={readouts}
         briefing={briefing}
-        aside={<TodayWork figures={figures} />}
+        aside={<HomeColumn view={view} />}
       />
 
       <section className="relative mx-auto max-w-5xl pt-4 sm:pt-6 sx-animate-in">

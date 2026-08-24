@@ -14,6 +14,8 @@ import { enabledModulesOf, effectiveModules } from '@/lib/modules'
 import { getModuleFlags } from '@/lib/admin/module-flags'
 import { getDashboardData } from '@/lib/dashboard/overview'
 import { buildHeroInputs } from '@/lib/dashboard/briefing'
+import { buildHomeView } from '@/lib/dashboard/home-view'
+import { loadArrivals, waitingCount } from '@/lib/inbox/arrivals'
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams
@@ -66,6 +68,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (effectiveTab === 'overview' && impactData) {
     // Moved to lib/dashboard/briefing.ts so /v2 can obtain the SAME briefing. Same inputs, same
     // values — see that file's header.
+    // The inbox's own arrivals grouping. ONE query, and the only one this hero adds: it is what lets
+    // the caption say "N new people today" — the clause /v2 has — and what Right Now / Needs You are
+    // built from. Read after the two above because it needs the business timezone, which comes from
+    // the employee rows they already loaded.
+    const arrivals = await loadArrivals(
+      tenant.id,
+      (aiEmployees[0] as { timezone?: string | null } | undefined)?.timezone ?? null,
+    )
+    const view = buildHomeView(
+      { stats, appointments_list },
+      impactData,
+      arrivals,
+      waitingCount(arrivals),
+    )
+
     const { employeeName, persona: primaryPersona, brainAgentId: agentId, briefing, presenceState, figures } =
       buildHeroInputs(aiEmployees, impactData, appointments_list, leads_list, stats)
     brainAgentId = agentId
@@ -75,7 +92,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <DashboardHero
         employeeName={employeeName}
         persona={primaryPersona}
-        briefing={briefing}
+        briefing={{ ...briefing, waitingOnYou: view.waiting }}
+        view={view}
         presenceState={presenceState}
         businessName={tenant.business_name || ''}
         tenantId={tenant.id}

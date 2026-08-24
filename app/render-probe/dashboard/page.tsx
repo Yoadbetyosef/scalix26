@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
 import { ProbeReport } from '@/app/(v2)/v2/render-probe/probe-report'
+import type { HomeView } from '@/lib/dashboard/home-view'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 
 // The REAL DashboardHero, with stub inputs, in a v1 page.
@@ -37,6 +38,23 @@ const BRIEFING: AmyBriefing = {
   appointmentsToday: 12,
 }
 
+// The same shape buildHomeView returns, chosen so the caption wraps to the same number of lines as
+// /v2's own probe stub — an unequal sentence shows up as an unequal caption top and reads as a layout
+// difference when it is only a data one.
+const VIEW: HomeView = {
+  line: { jobsToday: 0, newToday: 3, newHandled: 1, waiting: 1 },
+  waiting: 1,
+  rightNow: [],
+  needsYou: [{ title: '1 person is waiting for a reply', detail: 'They wrote last and nothing has answered yet.', action: 'Open inbox' }],
+  monthLabel: 'This month',
+  monthStats: [
+    { label: 'Conversations managed', value: '12' },
+    { label: 'Customers helped', value: '9' },
+    { label: 'Answered', value: '92%' },
+    { label: 'After hours or handover', value: '6' },
+  ],
+}
+
 export default function DashboardProbe() {
   if (process.env.NODE_ENV === 'production') notFound()
   return (
@@ -53,6 +71,7 @@ export default function DashboardProbe() {
           { label: 'Coverage', value: 92, suffix: '%' },
         ]}
         briefing={BRIEFING}
+        view={VIEW}
       />
       <div className="flex gap-1 border-b border-hairline">
         <span className="inline-block border-b-2 border-ink px-4 py-2.5 text-sm font-medium text-ink">Overview</span>

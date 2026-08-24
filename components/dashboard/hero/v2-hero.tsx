@@ -11,7 +11,9 @@ import { AskAmyText } from './ask-amy-text'
 import type { AmyBriefing } from './ask-amy-shared'
 import { useAmySession } from './use-amy-session'
 import { usePresenceScan } from './use-presence-scan'
-import type { RudiSegment } from '@/app/(v2)/v2/rudi-line'
+import { rudiLine } from '@/app/(v2)/v2/rudi-line'
+import { useAttention } from '@/components/dashboard/attention'
+import type { HomeView } from '@/lib/dashboard/home-view'
 import type { PersonaKey } from '@/lib/persona'
 import '@/app/(v2)/v2/v2-tokens.css'
 
@@ -39,13 +41,14 @@ export interface V2HeroProps {
   persona: PersonaKey
   employeeName: string
   /**
-   * The line over the portrait, in segments.
+   * The caption's INPUTS, not a built sentence.
    *
-   * Segments and not a string because the closing clause is painted with the accent gradient, and
-   * that gradient is a large part of what the caption IS. Built by /v2's own rudiLine from v1's
-   * counts — same generator, different source.
+   * Inputs because the count of things needing a person is live: v1's AttentionSentence subscribed to
+   * the attention store and updated without a reload, and building the sentence on the server would
+   * have thrown that away to match /v2. The other three counts are server facts; only `waiting` moves,
+   * so only `waiting` is replaced below.
    */
-  sentence: RudiSegment[]
+  line: HomeView['line']
   /** Three pairs, cycled over the picture. v1's counts — see the note on RudiCanvas.cards. */
   readouts: Array<Array<[string, string]>>
   /** What the agent is told about the business. v1 builds this already, in buildHeroInputs. */
@@ -54,7 +57,7 @@ export interface V2HeroProps {
   aside?: React.ReactNode
 }
 
-export function V2Hero({ persona, employeeName, sentence, readouts, briefing, aside }: V2HeroProps) {
+export function V2Hero({ persona, employeeName, line, readouts, briefing, aside }: V2HeroProps) {
   const rudi = useRef<RudiHandle | null>(null)
   const [state, setState] = useState<RudiState>('idle')
   const [said, setSaid] = useState<string | null>(null)
@@ -110,6 +113,11 @@ export function V2Hero({ persona, employeeName, sentence, readouts, briefing, as
   // null until measured — see use-breakpoint. Rendering nothing for one frame beats rendering the
   // wrong tree and jumping, and the canvas is keyed so crossing 720px genuinely remounts it.
   const mode = isMobile === null ? 'pending' : isMobile ? 'mobile' : 'desktop'
+
+  // The live count, when the store has one. Same subscription AttentionSentence used, so resolving a
+  // notification still changes the sentence without a reload — the thing matching /v2 would have cost.
+  const attention = useAttention()
+  const sentence = rudiLine({ ...line, waiting: attention.ready ? attention.unresolvedCount : line.waiting })
 
   return (
     <div className="v2 v2-embedded">
