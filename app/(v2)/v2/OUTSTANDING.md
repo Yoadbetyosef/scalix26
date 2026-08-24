@@ -1013,15 +1013,19 @@ The check that guards this now measures the difference: it fails only when the b
 covers a control under 120px wide or takes a quarter of one. The real answer is for
 the bell to stop floating and live in the bottom bar, which is item (b)'s work.
 
-**Two v1 classes remain on every migrated page, both AppShell's.** `rounded-xl`
-from the mobile bottom bar in `components/dashboard/sidebar.tsx`, and `shadow-e2`
-from the bell. The reporter now attributes them to the shell rather than to
+**~~Two~~ ONE v1 class remains on every migrated page, AppShell's.** `rounded-xl`
+came from the mobile bottom bar and went with it on 2026-08-24; `shadow-e2` from
+the bell is what is left. The reporter now attributes them to the shell rather than to
 whatever page happens to be under them — `<main>` is the page, everything else is
 chrome. `/inbox`'s own column is empty; do not chase these on the next page.
 
-**The mobile action bar sits under the bottom nav.** /inbox/[id] ends with a
-`md:hidden` Take Over / Resolve bar as its last flex child; v1's fixed bottom nav
-is drawn on top of it. Also pre-existing. Goes away with (b).
+**~~The mobile action bar sits under the bottom nav.~~ FIXED 2026-08-24 with (b).**
+/inbox/[id] ends with a `md:hidden` Take Over / Resolve bar as its last flex
+child, so it sits on the viewport's bottom edge, where v1's fixed tab bar covered
+it. Replacing the bar with the swipe handle did NOT fix this on its own — the
+handle is a 49px full-width strip in the same place and covered it just the same,
+which a real tap confirmed. The handle now publishes its height as `--v2-grab-h`
+and that bar clears it.
 
 ## §24 — /studio's card is not a link
 
@@ -1304,3 +1308,50 @@ visible }` — a `.v2` wrapper whose page has declared itself embedded is carryi
 a document, not a screen. A child cannot unclip its ancestor, so the ancestor
 asks. Inside the (v2) tree only the kit is `.v2-embedded`; the app's own embedded
 pages are not inside a `.v2` parent, so nothing else is touched.
+
+## §32 — item (b) is done: the phone navigates through /v2's sheet
+
+Shipped 2026-08-24. v1's five-slot tab bar and its "More" drawer are gone —
+`components/dashboard/mobile-sheet.tsx` + `.v2-navhost`, carrying the rail's
+three sections.
+
+**Why the bar had to go, beyond the design.** It held four routes and a More
+button, and *which* four you got came from `visibleNav.slice(0, 4)` — the list
+after module gating. So a business with Inventory on navigated differently from
+one with it off, and neither could be taught where anything was. The sheet has no
+split: same sections, same order, same rows as the rail beside it, built from the
+same `visibleNav` and the same `SECTIONS` array. One list, so they cannot drift.
+
+**The sheet is /v2's, not a copy of it.** `.v2-sheet` is `position: absolute`
+because on /v2 it lives inside `.v2-root`. Rather than write a second sheet, the
+host is `position: fixed; inset: 0` so the sheet's `absolute` resolves against it
+and every rule it already has — 88dvh, the radius, the translateY(100%) at rest,
+the 0.42s settle, `[data-open]` — applies unchanged. The drag hook is /v2's too,
+including its rule that a downward drag scrolls rather than closing when the list
+is scrolled down.
+
+**Two things this uncovered, both fixed here:**
+
+- **The host painted the app white.** `.v2` sets `background: var(--v2-paper)`,
+  and on a fixed inset-0 element at z-index 55 that is a sheet of white over
+  everything. The first render was a blank screen with a handle on it. The host
+  now sets `background: transparent` explicitly, and the test says why.
+- **Every avatar in the app had already broken, in the commit before this one.**
+  `RobotAvatar` found the dome by reading `AssetSet.scan` — which is a *drawing*
+  instruction, and removing Rudi's overlay removed it. The avatars silently fell
+  back to a plain centre-cover crop of a 784×1660 plate, which is a circle of
+  empty stage; that shipped. `scan` and the new `face` are now separate: one is
+  what to draw, the other is where the subject is, and a persona that draws
+  nothing still has a face. Measured off both new plates rather than carried over.
+
+**The bottom of a phone, measured at 390×844:** handle `[0, 796, 390, 49]`, bell
+`[334, 744, 44, 44]`, Talk `[108, 714, 175, 54]`. No two intersect, and each owns
+the pixels at its own centre. Verified on the production build in a real touch
+context with `force` banned: the sheet opens on a tap and navigates, the bell
+opens, contact-info on /inbox/[id] opens, Talk takes its own tap.
+
+**One thing that is not a regression and is worth naming.** The handle is a
+full-width 49px strip, so a list row passes under it mid-scroll. v1's tab bar was
+60px in the same place and did the same; `main`'s 72px bottom padding still
+clears the end of a list. The check that guards this now distinguishes a row that
+scrolls from a control the page pinned to the edge, and only fails on the second.

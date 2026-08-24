@@ -14,23 +14,21 @@ import {
   CreditCard,
   LogOut,
   FlaskConical,
-  MoreHorizontal,
-  X,
   Handshake,
   Shield,
   ClipboardList,
   Ship,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
-import { ScalixLogo } from '@/components/brand/scalix-logo'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 import { useBrand } from '@/components/brand/brand-provider'
 import { ALL_MODULES, enabledModulesOf, effectiveModules, moduleForNav, type ModuleKey, type ModuleState } from '@/lib/modules'
 import { GROUP_HUE } from '@/app/(v2)/v2/nav-icons'
+import { MobileSheet } from '@/components/dashboard/mobile-sheet'
+import { ChevronRight } from 'lucide-react'
 import { Calendar, BookLock } from 'lucide-react'
 import '@/app/(v2)/v2/v2-tokens.css'
 
@@ -111,7 +109,6 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   const pb = useBrand() // DB-driven partner brand (resolved by domain)
   const [plan, setPlan] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
-  const [moreOpen, setMoreOpen] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   // Default to ALL so nothing flickers/hides before the tenant's modules load.
   const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(ALL_MODULES)
@@ -162,9 +159,6 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
     fetch('/api/me/admin').then((r) => r.json()).then((j) => setIsAdmin(!!j.isAdmin)).catch(() => {})
   }, [hidePartnerSurfaces])
 
-  // Close drawer on route change
-  useEffect(() => { setMoreOpen(false) }, [pathname])
-
   async function handleSignOut() {
     // Clear any active operator workspace cookie before signing out (best-effort; the httpOnly
     // cookie can only be cleared server-side, and middleware also clears it when there's no user).
@@ -194,10 +188,6 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
     if (daysLeft === null) return { label: 'Free trial', badge: '', urgent: false }
     return { label: `Trial · ${daysLeft} day${daysLeft === 1 ? '' : 's'} left`, badge: daysLeft <= 3 ? String(daysLeft) : '', urgent: daysLeft <= 3 }
   })()
-
-  const bottomPrimaryVisible = visibleNav.slice(0, 4)
-  const bottomMoreVisible = visibleNav.slice(4)
-  const moreActive = bottomMoreVisible.some(item => pathname.startsWith(item.href))
 
   return (
     <>
@@ -307,108 +297,107 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
         </div>
       </aside>
 
-      {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-hairline z-40 flex safe-area-inset-bottom">
-        {bottomPrimaryVisible.map(({ href, icon: Icon, label }) => {
-          const active = itemActive(href, label)
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'tap-target flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium min-h-[56px] justify-center rounded-xl transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.9] active:bg-accent/10 active:text-accent-strong',
-                active ? 'text-ink' : 'text-muted'
-              )}
-            >
-              <Icon className="w-5 h-5 mb-1" />
-              <span>{label}</span>
-            </Link>
-          )
-        })}
-        {/* More button */}
-        <button
-          onClick={() => setMoreOpen(true)}
-          className={cn(
-            'flex-1 flex flex-col items-center py-2 pt-3 text-[10px] font-medium min-h-[56px] justify-center rounded-xl transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.9] active:bg-accent/10 active:text-accent-strong',
-            moreActive ? 'text-ink' : 'text-muted'
-          )}
-        >
-          <MoreHorizontal className="w-5 h-5 mb-1" />
-          <span>More</span>
-        </button>
-      </nav>
+      {/* ── THE PHONE'S NAVIGATION ──────────────────────────────────────────────────────────────
+          Was a five-slot tab bar plus a "More" drawer: two surfaces, two languages, and the split
+          at four decided by which modules a business had enabled — so no two tenants navigated the
+          same way. This is /v2's sheet, carrying the SAME three sections as the rail beside it, in
+          the same order, off the same `visibleNav` and the same gating. Nothing is promoted to a
+          tab and nothing is hidden behind a second door.
 
-      {/* Mobile More Drawer */}
-      {moreOpen && (
-        <div className="md:hidden fixed inset-0 z-50">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setMoreOpen(false)}
-          />
-          {/* Drawer */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
-              <span className="font-semibold text-ink">
-                {businessName || brand.name}
-              </span>
-              <button
-                onClick={() => setMoreOpen(false)}
-                className="w-11 h-11 -m-1.5 flex items-center justify-center rounded-full bg-sunken text-subtle"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          Every row here is built from the same arrays the rail above uses. If a module is disabled,
+          or an operator is in a client workspace, the row is missing from BOTH — there is no second
+          list to keep in step. */}
+      <MobileSheet label="Menu">
+        {(close) => (
+          <>
+            <div className="v2-nco">
+              <b>{businessName || pb?.name || brand.name}</b>
+              <span><i />Rudi · on duty</span>
             </div>
-            <nav className="px-4 py-3">
-              {bottomMoreVisible.map(({ href, icon: Icon, label }) => {
-                const active = itemActive(href, label)
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      'tap-target flex items-center gap-3 px-3 py-3.5 rounded-xl text-base transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98] active:bg-accent/10 active:text-accent-strong',
-                      active
-                        ? 'bg-sunken text-ink font-medium'
-                        : 'text-subtle hover:bg-sunken'
-                    )}
-                  >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    {label}
+
+            {/* The home row, above the sections — exactly where the rail puts it. */}
+            <div className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+              <div className="v2-gcard">
+                {visibleNav.filter((i) => i.label === PRIMARY_LABEL).map(({ href, icon: Icon, label }) => (
+                  <Link key={href} href={href} className="v2-grow" data-touch onClick={close}
+                        data-on={itemActive(href, label) || undefined}>
+                    <span className="v2-gchip"><Icon /></span>
+                    <span className="v2-glab">{label}</span>
+                    <span className="v2-gtrail"><ChevronRight className="v2-gchev" /></span>
                   </Link>
-                )
-              })}
-            </nav>
-            <div className="px-4 pb-6 border-t border-hairline pt-3 space-y-1">
-              {!hidePartnerSurfaces && (
-                <Link
-                  href="/partner"
-                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-accent-strong hover:bg-accent/5 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"
-                >
-                  <Handshake className="w-5 h-5 flex-shrink-0" />
-                  Partner Program
-                </Link>
-              )}
-              {!hidePartnerSurfaces && isAdmin && (
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-subtle hover:bg-sunken w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98]"
-                >
-                  <Shield className="w-5 h-5 flex-shrink-0" />
-                  Admin
-                </Link>
-              )}
-              <button
-                onClick={handleSignOut}
-                className="flex items-center gap-3 px-3 py-3.5 rounded-xl text-base font-medium text-red-500 hover:bg-red-50 w-full transition-all duration-150 [-webkit-tap-highlight-color:transparent] active:scale-[0.98] active:bg-red-100"
-              >
-                <LogOut className="w-5 h-5 flex-shrink-0" />
-                Sign Out
-              </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+
+            {SECTIONS.map((g) => {
+              const items = g.items
+                .map((label) => visibleNav.find((i) => i.label === label) ?? (INERT.has(label) ? { href: '', icon: INERT.get(label)!, label } : null))
+                .filter(Boolean) as { href: string; icon: typeof Handshake; label: string }[]
+              if (!items.length) return null
+              return (
+                <div key={g.id} className="v2-group" style={{ ['--ghue' as string]: GROUP_HUE[g.id] }}>
+                  <p className="v2-ghead"><i />{g.label}<s /></p>
+                  <div className="v2-gcard">
+                    {items.map(({ href, icon: Icon, label }) => {
+                      const inner = (
+                        <>
+                          <span className="v2-gchip"><Icon /></span>
+                          <span className="v2-glab">{label}</span>
+                          {label === 'AI Employees' && aiOn && <em data-live>ON</em>}
+                          {href && <span className="v2-gtrail"><ChevronRight className="v2-gchev" /></span>}
+                        </>
+                      )
+                      const attrs = { className: 'v2-grow', 'data-touch': true, 'data-on': (href && itemActive(href, label)) || undefined }
+                      // No href means no page — inert here for the same reason it is inert on the rail.
+                      return href
+                        ? <Link key={label} href={href} {...attrs} onClick={close}>{inner}</Link>
+                        : <button key={label} type="button" {...attrs} disabled>{inner}</button>
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* THE PLAN, AS A ROW — the rail's fourth state included. Same four states, same href,
+                same gating, same words; the urgency is the badge, not a red block. */}
+            {!hidePartnerSurfaces && plan && (
+              <div className="v2-group" style={{ ['--ghue' as string]: GROUP_HUE.g3 }}>
+                <div className="v2-gcard">
+                  <Link href="/settings#billing" className="v2-grow" data-touch onClick={close}>
+                    <span className="v2-gchip"><CreditCard /></span>
+                    <span className="v2-glab">{planRow.label}</span>
+                    {planRow.badge && <em data-live={planRow.urgent || undefined}>{planRow.badge}</em>}
+                    <span className="v2-gtrail"><ChevronRight className="v2-gchev" /></span>
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            <div className="v2-group" style={{ ['--ghue' as string]: GROUP_HUE.g3 }}>
+              <div className="v2-gcard">
+                {!hidePartnerSurfaces && (
+                  <Link href="/partner" className="v2-grow" data-touch onClick={close}>
+                    <span className="v2-gchip"><Handshake /></span>
+                    <span className="v2-glab">Partner Program</span>
+                    <span className="v2-gtrail"><ChevronRight className="v2-gchev" /></span>
+                  </Link>
+                )}
+                {!hidePartnerSurfaces && isAdmin && (
+                  <Link href="/admin" className="v2-grow" data-touch onClick={close}>
+                    <span className="v2-gchip"><Shield /></span>
+                    <span className="v2-glab">Admin</span>
+                    <span className="v2-gtrail"><ChevronRight className="v2-gchev" /></span>
+                  </Link>
+                )}
+                <button type="button" onClick={handleSignOut} className="v2-grow" data-touch>
+                  <span className="v2-gchip"><LogOut /></span>
+                  <span className="v2-glab">Sign Out</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </MobileSheet>
 
       {/* Persistent notification center — bell, bottom-right */}
       <NotificationCenter />

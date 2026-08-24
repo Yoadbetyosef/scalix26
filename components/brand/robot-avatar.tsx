@@ -26,7 +26,11 @@ export function RobotAvatar({
 }) {
   const p = PERSONAS[persona]
   const a = assetsFor(p, breakpoint)
-  const dome = a.scan
+  // `face` first: it is the measurement. `scan` is a drawing instruction that happens to carry the
+  // same three numbers, and reading it here is why every avatar in the app broke the moment Rudi
+  // stopped being drawn on — the fallback below is for a persona with no dome at all, not for one
+  // whose overlay was removed.
+  const dome = a.face ?? a.scan
 
   // No dome (Miles is a photograph, not a machine) — fall back to the plain cover crop his portrait
   // was always shown with rather than inventing a focal point.

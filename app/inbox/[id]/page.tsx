@@ -243,7 +243,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
       {/* C1: mobile sticky bottom action bar. md:hidden so desktop is untouched; the
           buttons here reuse the SAME HumanTakeover / ConversationActions handlers as
           the (now desktop-only) top bar. Safe-area aware via .safe-area-inset-bottom. */}
-      <div className="md:hidden flex-shrink-0 border-t border-hairline px-4 pt-3 pb-3 safe-area-inset-bottom">
+      {/* Cleared past the swipe handle. This bar is the last flex child of an h-screen page, so it
+          sits on the viewport's bottom edge — where v1's tab bar covered it, and where the handle
+          that replaced the tab bar would cover it too. --v2-grab-h is the handle's own published
+          height, so the two move together. */}
+      <div className="md:hidden flex-shrink-0 border-t border-hairline px-4 pt-3"
+           style={{ paddingBottom: 'calc(12px + var(--v2-grab-h))' }}>
         <div className="flex items-center gap-2">
           <HumanTakeover conversationId={id} active={conv.human_takeover === true} mobileBar />
           <ConversationActions conversationId={id} currentStatus={conv.status} place="bar" />

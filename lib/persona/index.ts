@@ -84,6 +84,19 @@ export interface AssetSet {
    */
   bare?: boolean
   /**
+   * WHERE THE FACE IS, for anything that has to CROP to it rather than draw on it.
+   *
+   * `scan` used to answer this by accident: it described the rings, and the avatar borrowed its
+   * x/y/r to find the dome. Removing the rings therefore silently broke every avatar in the app —
+   * the inbox rows fell back to a plain centre-cover crop of a 784x1660 plate, which is a circle of
+   * empty stage. It shipped in the render before this one.
+   *
+   * So the two are separated. `scan` is a drawing instruction; this is a measurement of the subject,
+   * and a persona that draws nothing still has a face. Same convention as DomeScan: x and r are
+   * fractions of the image WIDTH, y a fraction of its HEIGHT.
+   */
+  face?: { x: number; y: number; r: number }
+  /**
    * Where the subject stops, as a fraction of the image HEIGHT — its feet, its plinth, whatever the
    * lowest thing is that reads as part of it rather than as backdrop.
    *
@@ -190,6 +203,8 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
         height: 1660,
         // NO `scan`. The rim in the footage is the state.
         bare: true,
+        // Measured off this plate: the dark glass reads 143x154 centred at (552, 583.5) of 784x1660.
+        face: { x: 0.7041, y: 0.3515, r: 0.0912 },
         // Measured off the delivered plate: the subject's floor is row 990 of 1660. The previous
         // asset's was 0.597, so the readouts keep their clearance.
         base: 0.596,
@@ -200,6 +215,9 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
         width: 1130,
         height: 1210,
         bare: true,
+        // And off this one: 119x127 centred at (693, 435) of 1130x1210. Not carried over from the
+        // phone — that is the mistake the desktop dome numbers were written to stop.
+        face: { x: 0.6133, y: 0.3595, r: 0.0527 },
       },
     },
     // THE STAGE IS IN THE ASSET NOW. It used to be a near-black the CSS painted and the photograph

@@ -50,7 +50,11 @@ export async function AppShell({ children, mainClassName }: { children: ReactNod
 
         {/* min-w-0: a flex child defaults to min-width:auto and would expand to its content's
             min-content width (wider than the phone). This lets <main> shrink to the viewport so
-            nothing gets pushed past the screen edge. */}
+            nothing gets pushed past the screen edge.
+            The bottom padding cleared the 60px tab bar; the tab bar is gone and the swipe-up sheet's
+            handle is a 48px strip on the same edge, so 72px still clears it — and clears the bell,
+            which now sits at 56px, by another 16. Kept rather than tightened: the last thing this
+            padding should do is put a row of a list underneath a floating control. */}
         <main className={cn('relative min-w-0 flex-1 pb-[72px] md:ml-16 md:pb-0 xl:ml-[236px] print:ml-0 print:pb-0', mainClassName)}>
           {children}
         </main>

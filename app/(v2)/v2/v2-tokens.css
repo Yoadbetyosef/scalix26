@@ -103,6 +103,12 @@
      it, and everything pinned to the bottom subtracts the same one number so the group moves without
      changing shape. */
   --v2-bottom-drop: 0px;
+  /* THE SWIPE HANDLE'S HEIGHT, for pages that pin their own control to the bottom edge.
+     13 top + ~21 content + 12 bottom + the safe area. /inbox/[id]'s Take Over bar is the one that
+     needs it: it is the last flex child of an h-screen page, so it sits ON the viewport's bottom
+     edge and the handle is drawn over it. That was true of v1's 60px tab bar too — recorded in
+     OUTSTANDING §23 as something (b) would fix, and this is (b). */
+  --v2-grab-h: calc(46px + env(safe-area-inset-bottom));
   --v2-collapse: 0.5s;
 }
 
@@ -3918,6 +3924,53 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    forty-column preview table moves under them. */
 .v2-modal-body { max-height: 68vh; overflow-y: auto; overscroll-behavior: contain; }
 .v2-modal-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+
+/* ── THE PHONE'S NAVIGATION HOST ─────────────────────────────────────────────────────────────────
+   A fixed, inset-0, non-interactive frame whose only job is to be the containing block for /v2's
+   sheet. .v2-sheet is position:absolute because on /v2 it sits inside .v2-root; giving it this
+   parent makes it behave as fixed without a second copy of the sheet existing — the 88dvh, the
+   radius, the translateY(100%) at rest and the settle curve are all the ones already written.
+
+   Above the notification bell (z 50), because a sheet covering 88% of the screen must cover it too. */
+.v2-navhost {
+  position: fixed; inset: 0; z-index: 55; pointer-events: none;
+  /* TRANSPARENT, EXPLICITLY. The host carries `.v2` so the sheet inside it inherits the tokens and
+     the type — and `.v2` also sets `background: var(--v2-paper)`, which on a fixed inset-0 element
+     at z-index 55 is a sheet of white over the entire app. The first build rendered every page as a
+     blank screen with a handle on it. */
+  background: transparent;
+  height: auto;
+}
+.v2-navhost .v2-sheet { pointer-events: none; }
+.v2-navhost[data-open] .v2-sheet { pointer-events: auto; }
+.v2-navveil { position: absolute; inset: 0; background: rgba(10, 10, 13, 0.38); pointer-events: auto; }
+
+/* THE HANDLE IS A 48px TAP TARGET, not a 21px one.
+   On /v2 the handle sits at bottom:92px above the Talk bar and is mostly reached by swiping, so its
+   own height never mattered. Here it is the only way into navigation on a phone, so it gets the
+   padding to be tappable as well as swipeable, and it sits on the bottom edge where the tab bar was.
+   Full width on purpose: the whole strip is the swipe target. */
+.v2-navhost .v2-grab {
+  bottom: 0; top: auto; z-index: 1; pointer-events: auto;
+  padding: 13px 0 calc(12px + env(safe-area-inset-bottom));
+  /* Its own height, published, so a page that pins something to the bottom edge can clear it with
+     one number instead of a guess. --v2-grab-h is declared on .v2 below. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.86) 45%, rgba(255, 255, 255, 0.96));
+}
+/* The page behind is paper or a pale stage at every migrated route, so the handle takes the ink the
+   swipe affordance already uses at rest on the light plate. */
+.v2-navhost .v2-grab s { background: rgba(10, 10, 13, 0.55); }
+.v2-navhost .v2-grab span { color: var(--v2-ink-45); }
+
+/* The sheet's own header row, which the rail has and /v2's dashboard sheet did not need. */
+.v2-navhost .v2-nco { padding: 2px 18px 14px; }
+.v2-navhost .v2-nco b { display: block; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.v2-navhost .v2-nco span {
+  display: flex; align-items: center; gap: 6px; margin-top: 3px;
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--v2-ink-45);
+}
+.v2-navhost .v2-nco span i { width: 5px; height: 5px; border-radius: 50%; background: var(--v2-live); }
 
 @media (max-width: 559.98px) {
   .v2-modal-wrap { place-items: end stretch; padding: 0; }

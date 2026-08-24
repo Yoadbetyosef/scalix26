@@ -42,13 +42,17 @@ export function NotificationCenter() {
            unreachable on a phone on a live screen.
            Repositioned rather than made to yield, because yielding is per-page: it would have to be
            re-checked on every screen of the migration, and the next header control to land in that
-           corner would break it again silently. Bottom-right is the corner no page header uses, it
-           is where the bell already lives on desktop, and the only fixed thing under it is the
-           60px tab bar — which is why the offset clears 60px plus the safe area.
-           The dashboard's Talk button is the one control near it: measured at x108-283 on a 390px
-           phone, so it ends 51px before the bell begins. */
+           corner would break it again silently. Bottom-right is the corner no page header uses and
+           it is where the bell already lives on desktop.
+           The offset used to clear the 60px tab bar. The tab bar is gone — /v2's swipe-up sheet
+           replaced it — so it now clears the sheet's HANDLE instead, which is a 48px strip on the
+           bottom edge running the full width. 56px puts the bell's lower edge 8px above it. That
+           strip is inside a host at z-index 55, above this bell at 50, so an overlap would not be
+           a near miss: the handle would simply take the tap.
+           The dashboard's Talk button is the one other control near it: measured at x108-283 on a
+           390px phone, so it ends 51px before the bell begins. */
         className="fixed z-50 flex items-center justify-center transition-all duration-200 active:scale-95
-                   right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] h-11 w-11 rounded-full bg-white/90 text-ink shadow-e2 ring-1 ring-hairline backdrop-blur hover:bg-white
+                   right-3 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] h-11 w-11 rounded-full bg-white/90 text-ink shadow-e2 ring-1 ring-hairline backdrop-blur hover:bg-white
                    md:right-4 md:bottom-4 md:h-14 md:w-14 md:rounded-full md:bg-ink md:text-white md:shadow-e3 md:ring-0 md:backdrop-blur-none md:hover:bg-ink/90 md:hover:shadow-e4 md:hover:-translate-y-0.5"
       >
         <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
