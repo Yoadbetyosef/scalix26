@@ -982,3 +982,37 @@ phone in real light — this is measured on a synthetic render of one asset, and
 photograph with a darker lower third would score differently. Anything proposed
 here has to answer the SHAPE problem first, not just the contrast one: a full-width
 gradient bands, and a local box reads as an object.
+
+## §23 — three defects /inbox's migration surfaced and did not fix
+
+Found while finishing /inbox on 2026-08-24. None is /inbox's; all three are the
+shell's, and the shell is Yoad's held item (b). Recorded so they are not
+rediscovered page by page.
+
+**The notification bell covers the contact-info button on a phone.** AppShell's
+NotificationCenter is `position: fixed; right-3; top-[calc(...)]`, which is exactly
+where /inbox/[id]'s header puts its contact-info trigger. Playwright cannot click
+the trigger even with `force: true` — the bell takes the pointer and opens the
+notification sheet instead. This is pre-existing: v1's version of the button was in
+the same place. It means contact info is unreachable on a phone today, on a live
+screen. It is a shell fix, not a page fix, so it waits for (b).
+
+**Two v1 classes remain on every migrated page, both AppShell's.** `rounded-xl`
+from the mobile bottom bar in `components/dashboard/sidebar.tsx`, and `shadow-e2`
+from the bell. The reporter now attributes them to the shell rather than to
+whatever page happens to be under them — `<main>` is the page, everything else is
+chrome. `/inbox`'s own column is empty; do not chase these on the next page.
+
+**The mobile action bar sits under the bottom nav.** /inbox/[id] ends with a
+`md:hidden` Take Over / Resolve bar as its last flex child; v1's fixed bottom nav
+is drawn on top of it. Also pre-existing. Goes away with (b).
+
+## §24 — /studio's card is not a link
+
+`/studio/[id]` exists and nothing in the UI reaches it. Noted by Yoad on
+2026-08-24 for the backlog, explicitly not to be fixed during the migration.
+
+## §25 — order document views are permanently out of scope
+
+The letterheads are print artefacts, not app screens. They are excluded from the
+V2 migration for good, not deferred. Decided by Yoad, 2026-08-24.
