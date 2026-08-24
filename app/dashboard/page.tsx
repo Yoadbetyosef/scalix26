@@ -49,6 +49,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // ── Hero (overview only) — bound to real data already on the page ─────────────
   // The compact header is preserved verbatim for the Leads/Appointments tabs.
   let brainAgentId: string | undefined
+  // Seeded into the attention store so the hero's caption and the Needs You card read ONE number.
+  let heroWaiting = 0
   let topSection = (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -82,6 +84,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       arrivals,
       waitingCount(arrivals),
     )
+    heroWaiting = view.waiting
 
     const { employeeName, persona: primaryPersona, brainAgentId: agentId, briefing, presenceState, figures } =
       buildHeroInputs(aiEmployees, impactData, appointments_list, leads_list, stats)
@@ -108,7 +111,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-md:pb-[calc(100px_+_env(safe-area-inset-bottom))]">
       {/* Seed the single attention source with fresh server data (overview only). */}
-      {impactData && <AttentionSync tenantId={tenant.id} items={impactData.attention} />}
+      {impactData && <AttentionSync tenantId={tenant.id} items={impactData.attention} waiting={heroWaiting} />}
       {topSection}
 
 

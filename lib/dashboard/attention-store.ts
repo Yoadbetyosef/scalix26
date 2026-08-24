@@ -19,6 +19,15 @@ export interface AttentionSnapshot {
   ready: boolean
   visibleItems: AttentionItem[]   // active AND not dismissed — the unresolved notifications
   unresolvedCount: number
+  /**
+   * The inbox's own two groups: drafts waiting on a decision, plus people waiting for a reply.
+   *
+   * NOT unresolvedCount. That counts notifications, which include month-long tallies like takeovers;
+   * this counts what is outstanding right now. The hero's caption and the Needs You card must agree,
+   * and they disagreed — "2 things need you" above "Nothing needs you" — because one read each.
+   * Carried here rather than fetched separately so it stays live on the same realtime lead signal.
+   */
+  waiting: number
 }
 
 // Stable, count-independent key per issue (3→5 leads is the SAME issue; resolve→recur is new).
@@ -31,7 +40,8 @@ let activeItems: AttentionItem[] = []
 let records: Records = {}
 let ready = false
 let seeded = false
-let snapshot: AttentionSnapshot = { ready: false, visibleItems: [], unresolvedCount: 0 }
+let waiting = 0
+let snapshot: AttentionSnapshot = { ready: false, visibleItems: [], unresolvedCount: 0, waiting: 0 }
 const listeners = new Set<() => void>()
 let realtimeTenant: string | null = null
 
@@ -45,7 +55,7 @@ function recompute() {
     const r = records[keyOf(it)]
     return !r || r.seenAt == null
   })
-  snapshot = { ready, visibleItems, unresolvedCount: visibleItems.length }
+  snapshot = { ready, visibleItems, unresolvedCount: visibleItems.length, waiting }
   for (const l of listeners) l()
 }
 
@@ -67,7 +77,7 @@ function reconcile() {
 
 export const attentionStore = {
   getSnapshot(): AttentionSnapshot { return snapshot },
-  getServerSnapshot(): AttentionSnapshot { return { ready: false, visibleItems: [], unresolvedCount: 0 } },
+  getServerSnapshot(): AttentionSnapshot { return { ready: false, visibleItems: [], unresolvedCount: 0, waiting: 0 } },
 
   subscribe(cb: () => void): () => void {
     listeners.add(cb)
@@ -89,8 +99,9 @@ export const attentionStore = {
   },
 
   /** Seed active issues directly from server-rendered data (instant, no flash). */
-  seed(items: AttentionItem[]) {
+  seed(items: AttentionItem[], seededWaiting = 0) {
     seeded = true
+    waiting = seededWaiting
     activeItems = items || []
     if (ready) reconcile(); else recompute()
   },
@@ -102,6 +113,7 @@ export const attentionStore = {
       if (!res.ok) return
       const j = await res.json()
       activeItems = (j.items || []) as AttentionItem[]
+      waiting = typeof j.waiting === 'number' ? j.waiting : waiting
       seeded = true
       if (ready) reconcile(); else recompute()
     } catch { /* offline — keep last known */ }
