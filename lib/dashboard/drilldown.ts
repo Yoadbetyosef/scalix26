@@ -45,7 +45,9 @@ export async function getDrilldownRows(tenantId: string, metric: DrilldownMetric
     const page = leads.slice(offset, offset + limit)
     const rows: ProofRow[] = page.map((l: LeadRow) => ({
       id: l.id, kind: 'lead', name: maskName({ name: l.name, phone: l.phone }), channel: 'lead', createdAt: l.created_at,
-      summary: '', href: l.contact_id ? `/contacts/${l.contact_id}` : '/dashboard?tab=leads',
+      // A lead with no contact row has nowhere of its own to go now that the Leads tab is gone;
+      // the contact list is the nearest true destination.
+      summary: '', href: l.contact_id ? `/contacts/${l.contact_id}` : '/contacts',
       pills: [{ label: 'Lead Captured', tone: 'blue' }], ownerTimeSaved: false, statusKind: 'no_response',
     }))
     return { total: leads.length, rows, hasMore: offset + limit < leads.length, scoreboard: [`${leads.length} ${leads.length === 1 ? 'lead' : 'leads'} awaiting follow-up`] }

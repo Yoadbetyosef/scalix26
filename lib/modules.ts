@@ -127,7 +127,6 @@ export function moduleForPath(pathname: string): ModuleKey | null {
 
 /** The module a sidebar nav item (its href) belongs to, or null if it should always show. */
 export function moduleForNav(href: string): ModuleKey | null {
-  if (href.startsWith('/dashboard?tab=leads')) return 'pipeline'
   // strip any query/hash before matching a path prefix
   const path = href.split(/[?#]/)[0]
   return moduleForPath(path)

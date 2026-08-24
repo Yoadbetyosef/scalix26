@@ -5,7 +5,6 @@ import { markLeadsBooked, OPEN_FOR_BOOKING } from './booked'
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 // markLeadsBooked moved with the insert into the shared core — see lib/appointments/create.ts.
 const bookRoute = read('../appointments/create.ts')
-const table = read('../../components/dashboard/leads-table.tsx')
 const patchRoute = read('../../app/api/leads/[id]/route.ts')
 
 function fakeDb(leads: { id: string; phone: string | null; contact_id: string | null }[]) {
@@ -73,16 +72,19 @@ describe('nothing is left for a human to remember', () => {
     expect(bookRoute.indexOf("from('appointments').insert(")).toBeLessThan(bookRoute.lastIndexOf('markLeadsBooked(supabase'))
   })
 
-  it('the button is gone', () => {
-    expect(table).not.toContain("updateStatus(e, lead.id, 'booked')")
-    expect(table).not.toMatch(/>\s*Mark as Booked/)
-    // The /v2 screen that carried the other copy has since been removed entirely — see nav.ts.
+  it('the button is gone, and so is everything around it', () => {
+    // This used to assert that leads-table.tsx no longer rendered "Mark as Booked". The table itself
+    // has now gone with the Leads tab, which is the stronger form of the same guarantee: there is no
+    // file left to put the button back into. The /v2 screen that carried the other copy went earlier.
+    expect(existsSync(new URL('../../components/dashboard/leads-table.tsx', import.meta.url))).toBe(false)
     expect(existsSync(new URL('../../app/(v2)/v2/leads/page.tsx', import.meta.url))).toBe(false)
   })
 
   it('Dismiss and Restore stay — those are judgements, not facts', () => {
-    expect(table).toContain("updateStatus(e, lead.id, 'dismissed')")
-    expect(table).toContain("updateStatus(e, lead.id, 'contacted')")
+    // They stay in the API, which is all that is left of them. Nothing in the UI calls it today;
+    // whether the route itself goes is the later delete decision, not this one.
+    expect(patchRoute).toContain("'dismissed'")
+    expect(patchRoute).toContain("'contacted'")
   })
 
   it('the status guard now agrees with the column it writes to', () => {

@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { LeadsTable } from '@/components/dashboard/leads-table'
 import { AppointmentsTable } from '@/components/dashboard/appointments-table'
 import { ImpactDashboard } from '@/components/dashboard/impact-dashboard'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
@@ -19,7 +18,8 @@ import { loadArrivals, waitingCount } from '@/lib/inbox/arrivals'
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab } = await searchParams
-  const activeTab = tab === 'leads' ? 'leads' : tab === 'appointments' ? 'appointments' : 'overview'
+  // 'leads' is gone as a destination; an old bookmark or an old link falls back to Overview.
+  const activeTab = tab === 'appointments' ? 'appointments' : 'overview'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -32,17 +32,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const { data: tenant } = await serviceSupabase.from('tenants').select('*').eq('id', tenantId).maybeSingle()
   if (!tenant) redirect('/setup')
 
-  // Module gating: the Leads tab needs `pipeline`, Appointments needs `scheduling`. Direct
-  // access to a disabled tab (e.g. ?tab=leads) falls back to Overview.
+  // Module gating: Appointments needs `scheduling`. Direct access to a disabled tab falls back
+  // to Overview.
   const moduleFlags = await getModuleFlags()
   const isEnterprise = Array.isArray((tenant as { tags?: string[] }).tags) && (tenant as { tags?: string[] }).tags!.includes('Enterprise')
   const modules = effectiveModules(enabledModulesOf(tenant), moduleFlags, isEnterprise)
-  const pipelineOn = modules.includes('pipeline')
   const schedulingOn = modules.includes('scheduling')
-  const effectiveTab =
-    (activeTab === 'leads' && !pipelineOn) || (activeTab === 'appointments' && !schedulingOn) ? 'overview' : activeTab
+  const effectiveTab = activeTab === 'appointments' && !schedulingOn ? 'overview' : activeTab
 
-  const { stats, aiEmployees, leads_list, leadLinks, appointments_list } = await getDashboardData(tenant.id)
+  const { stats, aiEmployees, leads_list, appointments_list } = await getDashboardData(tenant.id)
   // Impact Dashboard (overview body) — computed only for the overview tab.
   const impactData = effectiveTab === 'overview' ? await getImpactData(tenant.id) : null
 
@@ -121,19 +119,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         >
           Overview
         </Link>
-        {pipelineOn && (
-          <Link
-            href="/dashboard?tab=leads"
-            className={`tap-target max-md:hidden md:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px rounded-t-lg transition-all [-webkit-tap-highlight-color:transparent] max-md:active:scale-[0.96] max-md:active:bg-accent/10 max-md:active:text-accent-strong ${effectiveTab === 'leads' ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
-          >
-            Leads
-            {stats.activeLeads > 0 && (
-              <span className="bg-ink text-white text-xs font-semibold rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-                {stats.activeLeads}
-              </span>
-            )}
-          </Link>
-        )}
         {schedulingOn && (
           <Link
             href="/dashboard?tab=appointments"
@@ -144,9 +129,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         )}
       </div>
 
-      {effectiveTab === 'leads' ? (
-        <LeadsTable leads={leads_list} links={leadLinks} />
-      ) : effectiveTab === 'appointments' ? (
+      {effectiveTab === 'appointments' ? (
         <AppointmentsTable appointments={appointments_list} />
       ) : (
         <ImpactDashboard data={impactData!} brainAgentId={brainAgentId} tenantId={tenant.id} />

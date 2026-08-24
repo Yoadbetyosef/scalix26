@@ -187,7 +187,10 @@ export function computeAttention(base: ImpactBase): AttentionItem[] {
   const takeover = selectTakeoverOpen(base)
   if (takeover.length > 0) attention.push({ label: `${takeover.length} ${takeover.length === 1 ? 'conversation' : 'conversations'} you're handling personally`, href: '/inbox', metric: 'attention_takeover' })
   const leadsNo = selectLeadsNoFollowup(base)
-  if (leadsNo.length > 0) attention.push({ label: `${leadsNo.length} ${leadsNo.length === 1 ? 'lead' : 'leads'} awaiting follow-up`, href: '/dashboard?tab=leads', metric: 'attention_leads' })
+  // The item survives the Leads tab, because the work does: these are people who reached out and
+  // have not been answered. On the dashboard it opens the proof drawer via `metric`; `href` is the
+  // fallback the notification bell follows, and it now points at contacts rather than a dead tab.
+  if (leadsNo.length > 0) attention.push({ label: `${leadsNo.length} ${leadsNo.length === 1 ? 'lead' : 'leads'} awaiting follow-up`, href: '/contacts', metric: 'attention_leads' })
   const fixableFailures = base.failedErrorCodes.filter((c) => !c || !PLATFORM_DELIVERY_ERROR_CODES.has(c)).length
   if (fixableFailures > 0) attention.push({ label: `${fixableFailures} ${fixableFailures === 1 ? 'message' : 'messages'} didn't reach customers`, href: '/inbox' })
   return attention

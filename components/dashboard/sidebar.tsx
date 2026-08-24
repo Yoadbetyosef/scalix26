@@ -14,7 +14,6 @@ import {
   CreditCard,
   LogOut,
   FlaskConical,
-  TrendingUp,
   MoreHorizontal,
   X,
   Handshake,
@@ -37,7 +36,6 @@ import '@/app/(v2)/v2/v2-tokens.css'
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard?tab=leads', icon: TrendingUp, label: 'Leads' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/orders', icon: ClipboardList, label: 'Orders' },
@@ -71,7 +69,7 @@ const navItems = [
 // A row that goes nowhere is honest. A row pointed at an approximate page is not.
 const SECTIONS: { id: string; label: string; items: string[] }[] = [
   { id: 'g1', label: 'Rudi', items: ['Inbox', 'Appointments', 'Contacts', 'AI Employees', 'Knowledge', 'Test AI'] },
-  { id: 'g2', label: 'Business', items: ['Leads', 'Orders', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
+  { id: 'g2', label: 'Business', items: ['Orders', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
   { id: 'g3', label: 'Account', items: ['Billing & Subscription', 'Settings'] },
 ]
 // Dashboard is in none of the three, because it is not a destination among destinations — it is the
@@ -87,7 +85,7 @@ const INERT = new Map<string, typeof Calendar>([['Appointments', Calendar], ['Kn
 // Routes verified operator-safe (reads AND mutations scoped to the active client tenant). These appear
 // in a White Label operator's client workspace — the FULL product minus Scalix billing. "Billing &
 // Subscription" is intentionally excluded (a client's plan is governed by the partner, never Scalix).
-const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Leads', 'Inbox', 'Contacts', 'Catalog', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
+const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Inbox', 'Contacts', 'Catalog', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
 
 export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules }: {
   operator?: boolean
@@ -118,12 +116,8 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   // Default to ALL so nothing flickers/hides before the tenant's modules load.
   const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(ALL_MODULES)
 
-  // Dashboard and Leads both live at /dashboard (Leads is ?tab=leads), so the
-  // active highlight has to look at the tab, not just the pathname.
-  const onLeadsTab = pathname === '/dashboard' && searchParams.get('tab') === 'leads'
   const itemActive = (href: string, label: string) => {
-    if (label === 'Leads') return onLeadsTab
-    if (label === 'Dashboard') return pathname === '/dashboard' && !onLeadsTab
+    if (label === 'Dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
   }
 

@@ -1016,3 +1016,48 @@ is drawn on top of it. Also pre-existing. Goes away with (b).
 
 The letterheads are print artefacts, not app screens. They are excluded from the
 V2 migration for good, not deferred. Decided by Yoad, 2026-08-24.
+
+## §26 — Leads: the UI is gone, the machine underneath is not
+
+Removed from the product on 2026-08-24: the rail row, the Business group entry,
+the dashboard tab, `components/dashboard/leads-table.tsx`, the `?from=leads`
+back-links on /inbox/[id] and /contacts/[id], the `pipeline` module's nav
+mapping, and the `leadLinks` query in `getDashboardData` — the only genuinely
+dead query the removal found (it pulled every conversation belonging to any
+lead's contact, ordered, so a table row could be clickable).
+
+**`?tab=leads` no longer resolves.** An old bookmark falls back to Overview
+rather than 404ing.
+
+What is left, and why it was left — this is the inventory for the later delete
+decision, not a to-do list:
+
+**Routes, still live and still reachable by URL**
+- `app/api/leads/inbound/route.ts` and `app/api/leads/inbound/[token]/route.ts`
+  — inbound lead capture. These are how leads get IN. If a tenant has a web
+  form or a partner integration pointed at either, deleting them silently drops
+  customer enquiries. **Check before deleting.**
+- `app/api/leads/[id]/route.ts` — the status PATCH (new / contacted / booked /
+  called_back / dismissed). Nothing in the UI calls it now. Dismiss and Restore
+  survive only here.
+
+**The `leads` table has nineteen readers, and most are not "the Leads screen"**
+`lib/leads/booked.ts` (an appointment marks its lead booked),
+`lib/leads/speed-to-lead.ts` and `lib/leads/drip.ts` + `/api/drip/process`
+(the follow-up engine, on a cron in vercel.json),
+`lib/amy/snapshot.ts` and `lib/amy/sources/leads.ts` + `metrics.ts` (what the
+voice agent knows), `lib/brain/engine.ts` and `view.ts` (Business Understanding),
+`lib/command-center/adapters.ts`, `lib/customer/profile.ts` (the contact panel's
+intelligence card), `lib/dashboard/impact.ts` (the "N leads awaiting follow-up"
+attention item, which survives — the work is real, only its destination moved to
+/contacts), `lib/dashboard/overview.ts` (`leads_list` still feeds the hero's
+"recovered" figure), `lib/dashboard/timeline.ts`, `lib/inbox/conversation-read.ts`,
+`lib/learning/harvest.ts`, `lib/opportunity/context.ts`,
+`lib/playbook/suggestions.ts`.
+
+**So the honest position:** removing the screen was cheap; removing the concept
+is not. `leads` is a data spine, not a page. A delete would have to answer what
+happens to the drip cron, to Amy's snapshot, and to Business Brain first.
+
+**Not in scope and not related:** `crm_leads` and `/api/partner/crm/leads` are
+Partner OS — the partner's own prospect pipeline. Untouched.

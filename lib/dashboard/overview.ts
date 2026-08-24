@@ -81,30 +81,10 @@ export async function getDashboardData(tenantId: string) {
 
   const leadsList = (leadRecords as Lead[] | null) || []
 
-  // Map each lead to a destination: its SMS conversation if one exists,
-  // otherwise the contact profile. Lets the dashboard rows be clickable.
-  const leadLinks: Record<string, string> = {}
-  const contactIds = [...new Set(leadsList.map(l => l.contact_id).filter((c): c is string => !!c))]
-  if (contactIds.length) {
-    const { data: convs } = await supabase
-      .from('conversations')
-      .select('id, contact_id, updated_at')
-      .eq('tenant_id', tenantId)
-      .in('contact_id', contactIds)
-      .order('updated_at', { ascending: false })
-    const latestByContact: Record<string, string> = {}
-    for (const c of (convs || []) as { id: string; contact_id: string | null }[]) {
-      if (c.contact_id && !latestByContact[c.contact_id]) latestByContact[c.contact_id] = c.id
-    }
-    for (const lead of leadsList) {
-      // ?from=leads lets the destination's back button return to the Leads tab
-      if (lead.contact_id && latestByContact[lead.contact_id]) {
-        leadLinks[lead.id] = `/inbox/${latestByContact[lead.contact_id]}?from=leads`
-      } else if (lead.contact_id) {
-        leadLinks[lead.id] = `/contacts/${lead.contact_id}?from=leads`
-      }
-    }
-  }
+  // The lead→destination map went with the Leads tab. It cost a real query — every conversation
+  // belonging to any lead's contact, ordered, just to pick the newest one per contact so a table row
+  // could be clickable. Nothing renders that table any more. This is the one genuinely dead query
+  // the Leads removal found.
 
   const { data: appointments } = await supabase
     .from('appointments')
@@ -125,7 +105,6 @@ export async function getDashboardData(tenantId: string) {
     conversations: conversations || [],
     aiEmployees: aiEmployees || [],
     leads_list: leadsList,
-    leadLinks,
     appointments_list: (appointments || []) as Appointment[],
   }
 }

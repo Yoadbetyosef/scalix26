@@ -19,8 +19,9 @@ import { AiSummaryCard } from '@/components/inbox/ai-summary-card'
 import { getCustomerProfile } from '@/lib/customer/profile'
 
 export default async function ConversationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
-  const { from } = await searchParams
-  const backHref = from === 'leads' ? '/dashboard?tab=leads' : '/inbox'
+  // `?from=leads` used to send you back to the Leads tab; the tab is gone, and so is the only
+  // thing that produced the parameter. Back is the inbox.
+  const backHref = '/inbox'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

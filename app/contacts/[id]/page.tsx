@@ -8,8 +8,9 @@ import { Badge } from '@/components/ui/badge'
 import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
 
 export default async function ContactProfilePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string }> }) {
-  const { from } = await searchParams
-  const backHref = from === 'leads' ? '/dashboard?tab=leads' : '/contacts'
+  // `?from=leads` used to send you back to the Leads tab; the tab is gone, and so is the only
+  // thing that produced the parameter. Back is contacts.
+  const backHref = '/contacts'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
