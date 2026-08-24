@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { useClientMounted } from '@/lib/use-client-mounted'
 
 /**
  * THE MODAL THE KIT DID NOT HAVE.
@@ -27,6 +29,15 @@ import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react'
  *
  * Escape closes, and the veil closes on click. Neither is a substitute for a Cancel button; both are
  * what people try first.
+ *
+ * ── AND IT PORTALS TO <body> ────────────────────────────────────────────────────────────────────
+ *
+ * A transform, filter or perspective on ANY ancestor becomes the containing block for a
+ * `position: fixed` descendant — so a dialog opened from inside an animated wrapper stops being
+ * fixed to the viewport and becomes fixed to that wrapper. The attention drawer hit exactly this:
+ * its wrapper carried an entrance animation, and the drawer measured [0, 56, 390, 844] — hanging
+ * 56px below the screen with its last row under the swipe handle. Nothing about its CSS was wrong.
+ * A dialog cannot know what it will be rendered inside, so it does not rely on knowing.
  */
 
 const FOCUSABLE = [
@@ -54,6 +65,8 @@ export function Modal({ open, onClose, title, step, children, actions, wide, dis
   const panel = useRef<HTMLDivElement>(null)
   const returnTo = useRef<HTMLElement | null>(null)
   const titleId = useId()
+  // createPortal needs a DOM; this renders on the server first.
+  const mounted = useClientMounted()
 
   const close = useCallback(() => { if (dismissable) onClose() }, [dismissable, onClose])
 
@@ -96,9 +109,9 @@ export function Modal({ open, onClose, title, step, children, actions, wide, dis
     return () => document.removeEventListener('keydown', onKey, true)
   }, [open, close])
 
-  if (!open) return null
+  if (!open || !mounted) return null
 
-  return (
+  return createPortal(
     <div className="v2 v2-modal-wrap" role="presentation">
       <div className="v2-veil" onClick={close} aria-hidden />
       <div
@@ -119,6 +132,7 @@ export function Modal({ open, onClose, title, step, children, actions, wide, dis
         <div className="v2-modal-body">{children}</div>
         {actions && <div className="v2-modal-acts">{actions}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -11,5 +11,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  return <AppShell>{children}</AppShell>
+  // NO BOTTOM PADDING ON THE PHONE. AppShell gives <main> 72px so a list's last row cannot hide
+  // under the swipe handle. The dashboard has no list — the hero is exactly one viewport tall and
+  // the handle floats over it, the same way it floats over /v2 — so that padding is 72px of page
+  // to scroll for nothing, on the one screen whose whole point is that it has no fold.
+  return <AppShell mainClassName="max-md:pb-0">{children}</AppShell>
 }

@@ -35,6 +35,7 @@ import '@/app/(v2)/v2/v2-tokens.css'
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/inbox', icon: Inbox, label: 'Inbox' },
+  { href: '/appointments', icon: Calendar, label: 'Appointments' },
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/orders', icon: ClipboardList, label: 'Orders' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
@@ -75,7 +76,9 @@ const SECTIONS: { id: string; label: string; items: string[] }[] = [
 const PRIMARY_LABEL = 'Dashboard'
 
 /** Marks for the two rows that have no page. Same icons /v2 gives them. */
-const INERT = new Map<string, typeof Calendar>([['Appointments', Calendar], ['Knowledge', BookLock]])
+// Knowledge alone now. Appointments came off this list the day it got a page: it was inert because
+// the schedule lived in a tab under the dashboard hero and there was nowhere honest to point at.
+const INERT = new Map<string, typeof Calendar>([['Knowledge', BookLock]])
 
 // First 4 (visible) items go in the mobile bottom bar, the rest in the "More" drawer.
 // The split happens per-render after module filtering (see visibleNav below).

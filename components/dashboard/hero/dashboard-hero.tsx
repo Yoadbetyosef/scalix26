@@ -67,17 +67,24 @@ export function DashboardHero({
         aside={<HomeColumn view={view} />}
       />
 
-      {/* NOTHING SCROLLS UNDER THE HERO ANY MORE.
-          Two things used to. A 24px "Dashboard" heading over the business name, which is the page
-          header the kit already ruled out everywhere else — the rail says which screen this is, and
-          the portrait says whose business it is. And TodayWork, the figures a second time on mobile;
-          they were only ever here because mobile has no right-hand column, but mobile has the
-          readout cards on the hero itself, which is where /v2 puts them. Both were the last of "the
-          pieces arranged into v1's layout".
-          The attention pill stays: it is a live signal, not a figure and not a heading. */}
-      <section className="relative mx-auto max-w-5xl pt-4 sm:pt-6 sx-animate-in">
+      {/* NOTHING SCROLLS UNDER THE HERO — AND NOW THAT IS LITERALLY TRUE.
+          Three things used to sit below it and all three have gone somewhere better: the page
+          header (the rail says which screen this is), TodayWork (the figures are in the right
+          column, and on a phone on the hero's own readout cards), and Attention Needed (the NEEDS
+          YOU card, which was already asking the same question).
+
+          What is left is mobile-only — the attention pill and the toasts — and it FLOATS. As a
+          sibling section it was a block under a 100dvh hero, which made the dashboard 1,860px tall
+          on a phone to carry one 48px banner. Fixed, just under the hero's own top strip, it costs
+          the page nothing and sits where a banner belongs: at the top, over the picture, not below
+          the fold of a screen designed to have no fold.
+
+          Desktop renders none of it: both children are md:hidden, so the section was an empty box
+          with padding taking up space under the hero for no reason. */}
+      <section className="md:hidden fixed left-0 right-0 z-30 px-4 sx-animate-in"
+               style={{ top: 'calc(56px + env(safe-area-inset-top))' }}>
         <AttentionPill initialVisible={presenceState === 'attention'} />
-        <div className="relative md:hidden"><GlassToasts /></div>
+        <GlassToasts />
       </section>
     </RudiPresenceProvider>
   )

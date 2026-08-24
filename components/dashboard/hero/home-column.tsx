@@ -1,4 +1,5 @@
 import type { HomeView } from '@/lib/dashboard/home-view'
+import { NeedsYou } from './needs-you'
 
 // /v2's right-hand column, on v1's data.
 //
@@ -10,7 +11,8 @@ import type { HomeView } from '@/lib/dashboard/home-view'
 // The one thing deliberately not carried over is `disabled title="v2 preview"` on the Needs You rows.
 // /v2 is a preview and its rows go nowhere; this is the product, and a button that does nothing is
 // worse here than a row that is plainly not a button yet. They are not buttons until they lead
-// somewhere.
+// somewhere — which is still true of the arrivals rows, and no longer true of the notification
+// rows beside them, which now go exactly where the amber banner used to send them.
 
 export function HomeColumn({ view }: { view: HomeView }) {
   return (
@@ -25,17 +27,11 @@ export function HomeColumn({ view }: { view: HomeView }) {
           </div>
         ))}
 
-      <div className="v2-blk">
-        <p className="v2-kick" data-tone="warn"><i />Needs you{view.needsYou.length > 0 ? ` · ${view.needsYou.length}` : ''}</p>
-        {view.needsYou.length === 0
-          ? <div className="v2-card" data-empty><p>Nothing needs you</p><span>Every lead has been answered.</span></div>
-          : view.needsYou.map((n) => (
-            <div key={n.title} className="v2-card v2-item">
-              <p>{n.title}</p>
-              <em>{n.detail}</em>
-            </div>
-          ))}
-      </div>
+      {/* NEEDS YOU is a client island now: it reads the attention store so a dismiss anywhere in
+          the app updates it the same frame, which the amber banner below the hero used to do and
+          this column did not. It also carries the #attention-needed anchor the notification bell
+          and the voice assistant deep-link to — that anchor moved here with the list. */}
+      <NeedsYou className="v2-blk" fallback={view.needsYou} anchor />
 
       <div className="v2-blk">
         <p className="v2-kick"><i />This month · {view.monthLabel}</p>

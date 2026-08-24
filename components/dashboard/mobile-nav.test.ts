@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // THE PHONE NAVIGATES THROUGH ONE SURFACE, AND IT IS THE RAIL'S.
@@ -80,5 +80,52 @@ describe('the three things at the bottom of a phone do not fight', () => {
     // would not be a near miss — the handle would simply take the tap.
     expect(bell).toMatch(/bottom-\[calc\(3\.5rem\+env\(safe-area-inset-bottom\)\)\]/)
     expect(css).toMatch(/\.v2-navhost \{[\s\S]*?z-index: 55[\s\S]*?\}/)
+  })
+})
+
+describe('the dashboard has no fold', () => {
+  const dash = read('app/dashboard/page.tsx')
+  const hero = read('components/dashboard/hero/dashboard-hero.tsx')
+  const column = read('components/dashboard/hero/home-column.tsx')
+  const needs = read('components/dashboard/hero/needs-you.tsx')
+
+  it('has no tab strip and nothing left to render under the hero', () => {
+    // The markup, not the word — the file's own comment explains that ?tab=appointments is a dead
+    // link now, and an assertion that cannot tell a comment from a link is not an assertion.
+    expect(dash).not.toMatch(/href="\/dashboard\?tab=/)
+    expect(dash).not.toMatch(/<(ImpactDashboard|AppointmentsTable)/)
+    // Again the code, not the prose: the function must take no searchParams and derive no tab.
+    expect(dash).toMatch(/export default async function DashboardPage\(\) \{/)
+    expect(dash).not.toMatch(/const effectiveTab/)
+    // The one remaining below-hero element is mobile-only and floats, so it costs the page no height.
+    expect(hero).toMatch(/<section className="md:hidden fixed/)
+  })
+
+  it('moved Attention Needed into NEEDS YOU, with the anchor', () => {
+    expect(column).toMatch(/<NeedsYou className="v2-blk" fallback=\{view\.needsYou\} anchor \/>/)
+    expect(needs).toMatch(/id=\{anchor \? 'attention-needed' : undefined\}/)
+    // The store is the live source — a dismiss anywhere updates it the same frame.
+    expect(needs).toMatch(/useAttention\(\)/)
+    expect(needs).toMatch(/attentionStore\.dismiss\(item\)/)
+    // Empty only when BOTH the notification queue and the arrivals rows are empty. An empty state
+    // shown over a non-empty queue is the bug this move exists to end.
+    expect(needs).toMatch(/const total = attention\.length \+ fallback\.length/)
+    expect(needs).toMatch(/total === 0/)
+  })
+
+  it('gave appointments a page rather than deleting the tab', () => {
+    expect(existsSync(join(process.cwd(), 'app/appointments/page.tsx'))).toBe(true)
+    expect(read('components/dashboard/sidebar.tsx')).toMatch(/href: '\/appointments'/)
+    // …and took it off the inert list, which is what made the rail row honest.
+    expect(read('components/dashboard/sidebar.tsx')).toMatch(/const INERT = new Map<string, typeof Calendar>\(\[\['Knowledge', BookLock\]\]\)/)
+    expect(read('lib/modules.ts')).toMatch(/\{ prefix: '\/appointments', module: 'scheduling' \}/)
+  })
+
+  it('portals anything fixed that a transformed ancestor could capture', () => {
+    // A transform on an ancestor becomes the containing block for position:fixed. The pill sits in
+    // an sx-animate-in section, and the drawer measured [0,56,390,844] before this — 56px off the
+    // bottom of the screen, with its last row under the swipe handle.
+    expect(read('components/dashboard/attention.tsx')).toMatch(/createPortal\(/)
+    expect(read('components/v2/modal.tsx')).toMatch(/createPortal\(/)
   })
 })

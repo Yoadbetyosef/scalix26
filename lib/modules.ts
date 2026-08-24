@@ -89,6 +89,7 @@ export function moduleEnabled(tenant: TenantModules, key: ModuleKey): boolean {
 // Longest-prefix wins so `/settings/availability` (scheduling) is not shadowed by `/settings`.
 const ROUTE_MODULE: { prefix: string; module: ModuleKey }[] = [
   { prefix: '/settings/availability', module: 'scheduling' },
+  { prefix: '/appointments', module: 'scheduling' },
   { prefix: '/inbox', module: 'inbox' },
   { prefix: '/contacts', module: 'contacts' },
   { prefix: '/ai-employees', module: 'ai_voice' },

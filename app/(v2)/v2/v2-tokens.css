@@ -4031,6 +4031,25 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2-card[data-empty] b { font-size: 14.5px; }
 .v2-card[data-empty] span { font-size: 13.5px; color: var(--v2-ink-45); }
 
+/* ── A NEEDS-YOU ROW ─────────────────────────────────────────────────────────────────────────────
+   The card, made tappable, with its dismiss on the end. It replaces an amber block with an amber
+   border and an amber triangle — the same treatment the rail's red trial panel and the inbox's
+   takeover banner both lost. The urgency is already carried by the section's own warn-toned kick
+   label; repeating it on every row was three amber signals for one fact. */
+.v2-need { flex-direction: row; align-items: center; gap: 8px; padding: 0; overflow: hidden; }
+.v2-nhit {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 13px 4px 13px 15px; text-align: left; background: none; border: 0; cursor: pointer;
+}
+.v2-nhit:hover { background: var(--v2-hover); }
+.v2-nlab { min-width: 0; font-size: 14px; line-height: 1.35; color: var(--v2-ink); }
+.v2-nx {
+  flex: none; display: grid; place-items: center; width: 38px; align-self: stretch;
+  border: 0; background: none; cursor: pointer; color: var(--v2-ink-45); transition: color 0.16s, background 0.16s;
+}
+.v2-nx:hover { color: var(--v2-ink); background: var(--v2-hover); }
+.v2-nx svg { width: 15px; height: 15px; }
+
 /* ── UPGRADE / NOTICE ────────────────────────────────────────────────────────────────────────────
    The amber alert becomes a row with a badge, the way the rail's red block did. Same information,
    no colour block: the badge carries the urgency and the row carries the sentence. */
