@@ -1194,3 +1194,30 @@ Not one. The engine, the confidence scoring, the patterns, the presenter — all
 untested. `lib/brain/context/orchestrate.test.ts` tests the shared layer and
 stays. This cuts both ways: a delete breaks no test, and nothing would have
 caught a regression if it had stayed.
+
+## §29 — what the kit still lacks, after /contacts
+
+Three gaps the migration filled by extending an approved component, and one it
+could not.
+
+**Filled, and now in the tokens rather than in a page:** `.v2-chip-sq` had
+geometry only inside a card or a notice, so its first use outside either
+collapsed; `.v2-head` did not wrap, so a header with two actions overflowed at
+390px; the scoped responsive utilities stopped at `lg`, and the table's last two
+columns need `xl`.
+
+**NOT FILLED — the kit has no modal.** /contacts opens two: New contact and the
+three-step Import wizard. The kit has a bottom drawer (`.v2-drawer`), which is
+the phone's answer, and a card. Both dialogs are currently the card's edge
+language at dialog width on the same dimmed veil — one hairline, no shadow, the
+form's rules inside — built inline in the two components rather than promoted.
+That is a deliberate hold: a modal is a real component with focus trapping,
+escape handling and a scroll lock, and inventing one unreviewed is how a second
+language starts. **This is the next thing the kit should gain**, and these two
+dialogs are the candidate to review it against.
+
+**Also noted, not fixed:** a contact whose only identifier is a phone number
+gets `+` as its initial, on both the list and the detail header. v1 did the same
+(`title[0]`), so it is not a regression — but it means every phone-only contact
+in the book wears the same meaningless chip. Stripping the leading `+` would
+give a digit; that is a content change, not a reskin, so it waits.
