@@ -47,11 +47,15 @@ describe('the same engine paints both employees', () => {
     expect(canvas).toContain('paintFor(persona, breakpoint)')
   })
 
-  it('still paints Rudi exactly as it did', () => {
+  it('keeps Rudi\'s ramp, and moves his ground with the plate', () => {
     // The ramp used to be three RGB triples written by hand in this file. Whatever else moved, these
-    // three numbers must not have.
+    // three numbers must not have — they are the hue the caption's accent clause and the readouts
+    // are drawn from, and the new plates changed the stage, not the employee.
     expect(PERSONAS.rudi.ramp!.map(hexToRgb)).toEqual([[34, 211, 238], [139, 92, 246], [255, 46, 147]])
-    expect(PERSONAS.rudi.ground).toBe('#0d0d10')
+    // The ground DID move, from a near-black the CSS painted to the lavender the photograph carries.
+    // It is measured off the delivered plates and exists only so the frame is not bare for the one
+    // paint before the image decodes — see robot-scan.test.ts, which pins it against --v2-stage too.
+    expect(PERSONAS.rudi.ground).toBe('#EEE6F7')
   })
 
   it('tolerates an employee with no speaking loop and no mesh', () => {

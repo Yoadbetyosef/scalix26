@@ -12,7 +12,12 @@
   /* ── Ink and ground ─────────────────────────────────────────────────────────────────────────── */
   --v2-ink: #0e0e11;
   --v2-paper: #ffffff;
-  --v2-stage: #0d0d10;
+  /* THE STAGE IS IN THE PHOTOGRAPH NOW. This was a near-black the CSS painted and the portrait sat
+     on. The new plates carry their own lavender, baked in, and this is what they measure — between
+     the mobile plate's #EEE7F6 and the desktop's #ECE4F6. Its only job is that the frame is never
+     bare before the image decodes, so it must match the image rather than lead it. Moves together
+     with PERSONAS.rudi.ground, which the canvas reads because it cannot read a custom property. */
+  --v2-stage: #EEE6F7;
 
   /* Ink at the opacities the reference actually uses. Named by role, not by number, so a component
      never has to re-derive rgba(14,14,17,.45) and get it slightly wrong. */
@@ -340,6 +345,17 @@
 .v2-root[data-state="listening"] .v2-grab span,
 .v2-root[data-state="armed"] .v2-grab span { color: rgba(255, 255, 255, 0.6); }
 
+/* AND SO DOES THE CAPTION, for the same reason and by the same selector.
+   The caption is ink now because the stage is pale — but the veil that raises while the mic is open
+   is still a DARK gradient, and it covers 48% of the frame from the bottom, which is exactly where
+   the caption sits. Ink on that field is the same invisibility the flip was made to fix, in the
+   other direction. Nothing else about the veil changes: it is the one thing that moves when
+   listening begins, and it still moves once.
+   The gradient accent clause is deliberately untouched — .v2-cap b paints itself from --v2-grad and
+   reads on either field. */
+.v2-root[data-state="listening"] .v2-cap,
+.v2-root[data-state="armed"] .v2-cap { color: #fff; }
+
 /* ── THE TRANSCRIPT TAKES THE RESTING SENTENCE'S PLACE, AT ITS SIZE ──────────────────────────────
    `.v2-you` is a 10px mono label, which is right when it sits ABOVE a caption as an echo of what was
    typed. While the mic is open there is no caption — the override is empty — so the echo is the only
@@ -369,14 +385,15 @@
 }
 .v2-cap {
   max-width: 620px; font-size: 31px; line-height: 1.22; font-weight: 600;
-  letter-spacing: -0.03em; color: #fff; min-height: 78px; transition: opacity 0.24s;
-  /* THE HEADLINE CARRIES ITS OWN READABILITY NOW. The scrim used to, by covering a third of the
-     frame; it starts below the robot instead, so the text is over bare plate at luminance 158.8 where
-     white is 2.65:1 and fails.
-     Two layers, because one cannot do both jobs: the tight 2px pass puts a hard edge on the glyph,
-     the wide 22px pass darkens the field it sits on. A single 18px blur at .45 did neither well
-     enough to measure. */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 22px rgba(0, 0, 0, 0.75);
+  letter-spacing: -0.03em; color: var(--v2-ink); min-height: 78px; transition: opacity 0.24s;
+  /* INK, AND NO SHADOW AT ALL.
+     White with two black shadows was the right answer on a near-black stage. The stage is a pale
+     lavender now, measured at #EEE7F6 where the caption sits: white on it is 1.21:1, which is not a
+     contrast problem so much as invisible text. Ink on the same field is 15.97:1 on the phone and
+     15.60:1 on the desktop plate — so far past AA that the two shadow passes have nothing left to
+     do, and a black halo under black type only muddies the glyph edge. Both are gone rather than
+     inverted: a white halo would be solving a problem that no longer exists. */
+  text-shadow: none;
 }
 /* NO BACKDROP BEHIND THE HEADLINE, AND THAT IS A CHOICE MADE AGAINST THE NUMBERS.
    There was one — a blurred box ramped to sit behind the three lines — and it worked: floor 6.79:1,
@@ -760,12 +777,15 @@
 .v2-top {
   position: absolute; top: 0; left: 0; right: 0; z-index: 4;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 20px; color: #fff;
+  /* INK, for the same reason the caption is. This strip sits at the top of the phone hero, which is
+     the palest part of the plate — white on it measured 1.2:1, so the business name was there and
+     unreadable. */
+  padding: 18px 20px; color: var(--v2-ink);
 }
 .v2-top b { font-size: 14px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
 .v2-top i {
   display: flex; align-items: center; gap: 6px; font-style: normal;
-  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.14em; color: rgba(255, 255, 255, 0.6);
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.14em; color: var(--v2-ink-45);
 }
 .v2-top i s { width: 5px; height: 5px; border-radius: 50%; background: var(--v2-cyan); box-shadow: 0 0 8px var(--v2-cyan); }
 .v2-ov { position: absolute; left: 0; right: 0; bottom: 148px; z-index: 3; padding: 0 20px; transition: opacity 0.3s; }

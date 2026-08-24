@@ -90,9 +90,30 @@ describe('he recedes into the veil', () => {
     expect(rule).toMatch(/rgba\(10, 10, 13, 0\.92\) 100%/)
   })
 
-  it('gives the headline its own readability rather than a tall veil', () => {
-    // Two layers: a tight 2px pass for the glyph edge, a wide 22px pass for the field it sits on.
-    expect(css).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
+  it('gives the headline its readability from the ink, now that the stage is pale', () => {
+    // It used to be white with two black shadows, which was right on a near-black stage. The plates
+    // carry their own lavender since 2026-08-24, measured at #EEE7F6 where the caption sits: white
+    // on that is 1.21:1, which is not a contrast problem so much as invisible text. Ink is 15.97:1
+    // on the phone plate and 15.60:1 on the desktop one, so the shadows have nothing left to do.
+    const at = css.indexOf('\n.v2-cap {')
+    const cap = css.slice(at, css.indexOf('}', at))
+    expect(cap).toMatch(/color: var\(--v2-ink\)/)
+    expect(cap).toMatch(/text-shadow: none/)
+  })
+
+  it('flips the caption back to white under the veil, by the veil\'s own selector', () => {
+    // The veil is still a DARK gradient and it still covers 48% from the bottom, which is exactly
+    // where the caption sits. Ink on that field is the same invisibility in the other direction.
+    // Bound to the same two states that raise the veil rather than to a second guess at when.
+    expect(css).toMatch(/\.v2-root\[data-state="listening"\] \.v2-cap,\s*\n\.v2-root\[data-state="armed"\] \.v2-cap \{ color: #fff; \}/)
+  })
+
+  it('leaves the gradient accent clause alone', () => {
+    // .v2-cap b paints itself from --v2-grad and reads on either field, so the flip is the BASE
+    // colour only. If this ever starts inheriting the base colour the accent stops being an accent.
+    const b = css.slice(css.indexOf('.v2-cap b {'), css.indexOf('}', css.indexOf('.v2-cap b {')))
+    expect(b).toMatch(/background: var\(--v2-grad\)/)
+    expect(b).toMatch(/-webkit-text-fill-color: transparent/)
   })
 
   it('has NO backdrop behind it, which is a choice taken against the numbers', () => {
@@ -101,20 +122,21 @@ describe('he recedes into the veil', () => {
     // only dark thing on a light plate — it stopped reading as the bottom of a gradient and started
     // reading as a grey object laid on the photograph.
     //
-    // So the caption is white on the plate with a text-shadow and nothing else, and it does not meet
-    // AA. That is recorded in OUTSTANDING §22 with the figures. This test exists so the element
-    // cannot come back quietly: anything put here has to answer the shape problem, not just the
-    // contrast one, and re-adding it should be a decision someone makes on purpose.
+    // The contrast half of that argument is now settled by the plate — ink on #EEE7F6 is 15.97:1,
+    // so nothing needs to be added behind the text. The SHAPE half is why this test stays: a box
+    // behind the caption read as a grey object laid on the photograph, and it would read as one on
+    // a pale plate too. Anything put here has to answer that, not just a contrast number.
     expect(css).not.toMatch(/\.v2-cap::before/)
 
     // position:relative went with it. It was there to contain the pseudo-element and nothing else —
     // .v2-cap's only child is the loading skeleton, which is in normal flow.
-    const cap = css.slice(css.indexOf('.v2-cap {'), css.indexOf('}', css.indexOf('.v2-cap {')))
+    const at = css.indexOf('\n.v2-cap {')
+    const cap = css.slice(at, css.indexOf('}', at))
     expect(cap).not.toMatch(/position: relative/)
     expect(cap).not.toMatch(/z-index/)
-    // The shadow stays. It is a halo per glyph rather than a shape on the picture, which is the whole
-    // distinction the backdrop failed on.
-    expect(cap).toMatch(/text-shadow: 0 1px 2px rgba\(0, 0, 0, 0\.55\), 0 2px 22px rgba\(0, 0, 0, 0\.75\)/)
+    // The shadow went too, and for a different reason than the backdrop did: not shape, but that a
+    // black halo under black type only muddies the glyph edge.
+    expect(cap).toMatch(/text-shadow: none/)
   })
 
   it('is told the state by the root, which is where the DOM chrome can read it', () => {

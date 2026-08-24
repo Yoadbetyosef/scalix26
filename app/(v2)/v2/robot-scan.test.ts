@@ -4,29 +4,68 @@ import { join } from 'node:path'
 import { coverFit, domeInCanvas, phaseAt, SCAN_PHASES } from './rudi-canvas'
 import { PERSONAS, assetsFor } from '@/lib/persona'
 
-// Rudi is a robot. The scan is four rings leaving the dome of his face and a halo on the glass —
-// five things drawn, and nothing else. Everything the portrait loop drew ACROSS a face is gone.
+// Rudi is a robot, and NOTHING IS DRAWN ON HIM ANY MORE.
+//
+// This file used to pin four rings, a halo and two sets of dome fractions. The plates changed on
+// 2026-08-24: the dome's rim now lights and cycles in the footage itself, so a drawn ring is a second
+// answer to a question the picture already answers — and the two disagreed, the ring sitting around
+// an already-lit rim in a hue the rim was not wearing. `bare: true` says draw nothing.
+//
+// What survives here, and must: the anchoring maths. coverFit and domeInCanvas are live engine
+// capability that the next persona with a dome will need, and their tests now run against an
+// explicit FIXTURE rather than against Rudi's live record — which is the honest arrangement, because
+// a test that reads its inputs from the thing it is testing stops being a test the moment the thing
+// changes.
 
 const src = readFileSync(join(process.cwd(), 'app/(v2)/v2/rudi-canvas.tsx'), 'utf8')
   .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
 
 const RUDI = assetsFor(PERSONAS.rudi, 'mobile')
 const DESK = assetsFor(PERSONAS.rudi, 'desktop')
-const DOME = RUDI.scan!
+
+// THE FIXTURE. These were Rudi's mobile dome fractions until the plates changed, measured off
+// 784x1660. They are kept as a fixture because the anchoring maths below is what is under test and
+// it needs a dome to anchor to — not because any persona still carries them.
+const DOME = {
+  x: 0.684, y: 0.349, r: 0.108,
+  rings: 4, from: 1, reach: 1.5, falloff: 1, alpha: 0.34, stroke: 0.052,
+  inner: 0.86, outer: 1,
+  ink: [34, 211, 238] as [number, number, number], inkFar: [139, 92, 246] as [number, number, number],
+  halo: { inner: 0, outer: 1.5, ink: [34, 211, 238] as [number, number, number], alpha: 0.1, swing: 0.06, radPerS: 10 / 4.4 },
+}
 
 describe('the three numbers the whole thing rests on', () => {
   // Measured off the dome INCLUDING its rim, which is what the rings sit outside of. A measurement of
   // the dark glass core alone comes out at 0.672 / 0.336 / 0.096 — inside this in every direction.
-  it('pins the dome to the plate it was measured off', () => {
-    expect([DOME.x, DOME.y, DOME.r]).toEqual([0.684, 0.349, 0.108])
+  it('draws nothing on the robot, at either size', () => {
+    // The rim in the footage carries the state. Both breakpoints, because a flag on one of two
+    // asset sets is how the desktop kept the phone's numbers the last time this went wrong.
+    expect(RUDI.bare).toBe(true)
+    expect(DESK.bare).toBe(true)
+    expect(RUDI.scan).toBeUndefined()
+    expect(DESK.scan).toBeUndefined()
+  })
+
+  it('makes `bare` mean nothing at all is drawn, not just no rings', () => {
+    // Four separate draw calls had to be gated, and missing one leaves a mark on the machine. The
+    // guard is asserted on the source because there is no DOM here to look at.
+    expect(src).toMatch(/if \(!BARE\) \{[\s\S]*?drawDomeState/)
+    expect(src).toMatch(/if \(!BARE\) \{[\s\S]*?drawRings/)
+    expect(src).toMatch(/if \(!BARE\) \{[\s\S]*?drawSweep/)
+    // the node network and the sweep band tail
+    expect(src).toMatch(/if \(BARE \|\| scanA < 0\.02\)/)
+    // and the ambient bloom, which only ever showed at an edge and tinted the new stage there
+    expect(src).toMatch(/if \(!BARE\) \{\s*\n\s*const g = ctx!\.createRadialGradient/)
+    // the collapsed thumbnail path has its own return and needs its own gate
+    expect(src).toMatch(/if \(BARE\) \{ raf = requestAnimationFrame\(draw\); return \}/)
   })
 
   it('pins the source the fractions are fractions OF', () => {
     // A fraction is meaningless without the frame it divides. Both media are this size, and both were
     // extracted byte-identically so neither has been re-encoded away from it.
     expect([RUDI.width, RUDI.height]).toEqual([784, 1660])
-    expect(RUDI.still).toBe('/v2/rudi-robot-still.jpg')
-    expect(RUDI.video).toBe('/v2/rudi-robot-speaking.mp4')
+    expect(RUDI.still).toBe('/v2/rudi-stage-still.jpg')
+    expect(RUDI.video).toBe('/v2/rudi-stage-speaking.mp4')
   })
 
   it('leaves Miles on his own dimensions and his own loop', () => {
@@ -48,31 +87,29 @@ describe('the three numbers the whole thing rests on', () => {
     // 1130/1210 = 0.934 against the hero's 710/760 = 0.934. Cover-fit is then a 1:1 fit — the phone
     // pair in that box threw the sides away and scaled up what was left.
     expect([DESK.width, DESK.height]).toEqual([1130, 1210])
-    expect(DESK.still).toBe('/v2/rudi-robot-desktop-still.jpg')
-    expect(DESK.video).toBe('/v2/rudi-robot-desktop-speaking.mp4')
+    expect(DESK.still).toBe('/v2/rudi-stage-desktop-still.jpg')
+    expect(DESK.video).toBe('/v2/rudi-stage-desktop-speaking.mp4')
   })
 
-  it('measures the desktop dome off the desktop asset, not off the phone', () => {
-    // Carried over, the phone's numbers put it 6% low and 2% left of where it actually is here.
-    expect([DESK.scan!.x, DESK.scan!.y, DESK.scan!.r]).toEqual([0.5845, 0.3322, 0.0978])
+  it('keeps the still and the clip on ONE source, which is what makes the crossfade land', () => {
+    // The pair that arrived could not be aligned — the body fitted at +9% but the dome sat ~50px
+    // away at a different angle, because they were two poses rather than two states. The still is
+    // now frame 91 of the clip, through the same build. Same stem, same size, so the two cannot
+    // drift apart in a later edit without this failing.
+    for (const a of [RUDI, DESK]) {
+      expect(a.video).toBe(a.still!.replace(/-still\.jpg$/, '-speaking.mp4'))
+    }
+    // The floor the readouts clear, measured off the delivered plate rather than carried over.
+    expect(RUDI.base).toBe(0.596)
   })
 
-  it('gives each asset its OWN rings and its own halo, not only its own dome', () => {
-    expect(RUDI.scan!.rings).toBe(4)
-    expect(DESK.scan!.rings).toBe(3)
-    // Three rings stopping just outside the rim, not four travelling a dome and a half out.
-    expect(RUDI.scan!.from + RUDI.scan!.reach).toBeCloseTo(2.5, 5)
-    expect(DESK.scan!.from + DESK.scan!.reach).toBeCloseTo(1.65, 5)
-    // A stroke less than half as thick, and a pale blue-white rather than cyan.
-    expect(DESK.scan!.stroke).toBeLessThan(RUDI.scan!.stroke / 2)
-    expect(DESK.scan!.ink).toEqual([190, 235, 245])
-    expect(DESK.scan!.ink).toEqual(DESK.scan!.inkFar)
-    // A bloom ON the glass rather than a ring around his head, and breathing slower. If two sets of
-    // numbers is the rule it applies to all of them, not only the ones that obviously differ.
-    expect(DESK.scan!.halo.outer).toBe(1.22)
-    expect(DESK.scan!.halo.alpha).toBe(0.05)
-    expect(DESK.scan!.halo.radPerS).toBeCloseTo(7 / 4.4, 6)
-    expect(RUDI.scan!.halo.radPerS).toBeCloseTo(10 / 4.4, 6)
+  it('puts the stage in the photograph rather than under it', () => {
+    // The CSS used to paint a near-black behind the portrait. The plates carry their own lavender
+    // now, so the token and the persona's literal exist only to stop the frame being bare for the
+    // one paint before the image decodes — which means they must MATCH the plate, not lead it.
+    expect(PERSONAS.rudi.ground).toBe('#EEE6F7')
+    const css = readFileSync(join(process.cwd(), 'app/(v2)/v2/v2-tokens.css'), 'utf8')
+    expect(css).toContain('--v2-stage: #EEE6F7;')
   })
 })
 
@@ -132,15 +169,21 @@ describe('the mapping — image space through the fit, never a fraction of the c
     const hero = 710 / 760
     expect(asset).toBeCloseTo(hero, 3)
 
-    const f = coverFit(710, 760, DESK.width, DESK.height, DESK.scan!)
+    // The desktop plate has no dome to anchor to any more, so the fit is asked for without one —
+    // which is the case that matters: with the aspects matched, cover-fit has no spare height to
+    // slide and the anchor would have nothing to correct either way.
+    const f = coverFit(710, 760, DESK.width, DESK.height, null)
     expect(Math.abs(f.dy)).toBeLessThan(1)
     expect(Math.abs(f.dx)).toBeLessThan(1)
     // Nothing cropped: the drawn box is the hero box, to within a pixel.
     expect(f.dw).toBeCloseTo(710, 0)
     expect(f.dh).toBeCloseTo(760, 0)
-    // And the dome lands where the asset says it does, not where the anchor would have put it.
-    const d = domeInCanvas(f, DESK.width, DESK.height, DESK.scan!)
-    expect(d.y / 760).toBeCloseTo(DESK.scan!.y, 3)
+    // And it stays a no-op if a future persona DOES put a dome on this geometry — proving the
+    // no-op is a property of the aspect match rather than of the missing dome.
+    const withDome = coverFit(710, 760, DESK.width, DESK.height, { x: 0.5845, y: 0.3322, r: 0.0978 })
+    expect(Math.abs(withDome.dy)).toBeLessThan(1)
+    const d = domeInCanvas(withDome, DESK.width, DESK.height, { x: 0.5845, y: 0.3322, r: 0.0978 })
+    expect(d.y / 760).toBeCloseTo(0.3322, 3)
   })
 
   it('still anchors on the PHONE, where the aspects do not match', () => {

@@ -70,6 +70,20 @@ export interface AssetSet {
   /** Present = the scan is rings from here. Absent = the older sweep-and-mesh, for a portrait. */
   scan?: DomeScan
   /**
+   * NOTHING IS DRAWN ON OR AROUND THIS SUBJECT.
+   *
+   * `scan` had two states and both of them draw: present meant rings from the dome, absent meant the
+   * sweep and the node network. There was no way to say "the asset carries its own state" — and that
+   * is exactly what Rudi's assets now do. His dome rim lights and cycles in the footage itself, so a
+   * ring drawn around it is a second answer to a question the picture has already answered, and the
+   * two do not agree with each other.
+   *
+   * Deleting `scan` would have selected the sweep, which is worse. So this is explicit: no rings, no
+   * sweep, no mesh, no halo, no bloom. The engine still crossfades the still and the clip and still
+   * paints the readouts, which are chrome beside the picture rather than marks on it.
+   */
+  bare?: boolean
+  /**
    * Where the subject stops, as a fraction of the image HEIGHT — its feet, its plinth, whatever the
    * lowest thing is that reads as part of it rather than as backdrop.
    *
@@ -155,56 +169,45 @@ export const PERSONAS: Record<PersonaKey, Persona> = {
     // moves is the part of him that is already a display.
     nodes: null,
     assets: {
-      // THE PHONE. From docs/miles/robot-scan-C.html, extracted byte-identically — still and clip
-      // aligned to within a pixel and sharing one robot-free plate, and a re-encode is what would
-      // spend that.
+      // ONE SOURCE FOR BOTH, AND THAT IS THE WHOLE POINT.
+      //
+      // The still is not a separate render any more — it is frame 91 of the clip, put through the
+      // same function that builds every other frame. The pair that arrived could not be aligned: the
+      // body and base fitted at +9% scale but the dome sat ~50px away at a different angle, because
+      // they are two poses, not two states. No scale-and-translate fixes that, and a crossfade
+      // between them turned the head. Taking the idle frame out of the clip makes the alignment
+      // exact by construction, needs no colour grading at all, and picks up the pose where the
+      // machine is looking up rather than down.
+      //
+      // Frame 91 for two measured reasons: it is one of the two dimmest frames of the rim's cycle,
+      // so it reads as idle and the crossfade does not flash; and the dome's bounding box at frame
+      // 91 and at frame 275 is pixel-identical, which puts the motion's period at exactly 184
+      // frames. The clip is frames 91..274 — one period — so it loops back onto its own first frame.
       mobile: {
-        still: '/v2/rudi-robot-still.jpg',
-        video: '/v2/rudi-robot-speaking.mp4',
+        still: '/v2/rudi-stage-still.jpg',
+        video: '/v2/rudi-stage-speaking.mp4',
         width: 784,
         height: 1660,
-        scan: {
-          // The dome INCLUDING its rim, which is what the rings sit outside of. The dark glass core
-          // alone measures 0.672 / 0.336 / 0.096 — inside this in every direction, which is the rim.
-          x: 0.684, y: 0.349, r: 0.108,
-          rings: 4, from: 1, reach: 1.5, falloff: 1, alpha: 0.34, stroke: 0.052,
-          inner: 0.86, outer: 1,
-          ink: [34, 211, 238], inkFar: [139, 92, 246],
-          halo: { inner: 0, outer: 1.5, ink: [34, 211, 238], alpha: 0.1, swing: 0.06, radPerS: 10 / 4.4 },
-        },
-        // 0.597 in the source, where the contact shadow under the plinth stops. Measured twice by
-        // different routes that agree: straight off the JPEG, and back-projected through the
-        // cover-fit from a 390x844 render. The columns the right-hand readout occupies give 0.5976,
-        // so this is the whole subject's floor rather than the deepest point of it.
-        base: 0.598,
+        // NO `scan`. The rim in the footage is the state.
+        bare: true,
+        // Measured off the delivered plate: the subject's floor is row 990 of 1660. The previous
+        // asset's was 0.597, so the readouts keep their clearance.
+        base: 0.596,
       },
-      // THE DESKTOP HERO, from docs/miles/rudi-desktop-scan.html. Built at the hero's own aspect —
-      // 1130/1210 = 0.934 against 710/760 = 0.934 — so cover-fit is a 1:1 fit and nothing is cropped.
-      // The phone pair in a 710x760 box threw the sides away and scaled up what was left, which is
-      // why the arm was cut off and the rest looked soft.
       desktop: {
-        still: '/v2/rudi-robot-desktop-still.jpg',
-        video: '/v2/rudi-robot-desktop-speaking.mp4',
+        still: '/v2/rudi-stage-desktop-still.jpg',
+        video: '/v2/rudi-stage-desktop-speaking.mp4',
         width: 1130,
         height: 1210,
-        scan: {
-          // MEASURED OFF THIS ASSET, not carried over: the phone's numbers put the dome 6% low and
-          // 2% left of where it actually is here.
-          x: 0.5845, y: 0.3322, r: 0.0978,
-          // Three rings, thinner, stopping just outside the rim rather than travelling a dome and a
-          // half out, and mostly white with a cyan cast rather than cyan itself.
-          rings: 3, from: 1.03, reach: 0.62, falloff: 2, alpha: 0.55,
-          // W*0.0022 in the reference, over a dome radius of 0.0978W — the same number, expressed
-          // against the thing it is drawn around rather than against the viewport.
-          stroke: 0.0225,
-          inner: 0.955, outer: 1.02,
-          ink: [190, 235, 245], inkFar: [190, 235, 245],
-          // A bloom ON the glass rather than a ring of light around his head, and breathing slower.
-          halo: { inner: 0.55, outer: 1.22, ink: [34, 211, 238], alpha: 0.05, swing: 0.04, radPerS: 7 / 4.4 },
-        },
+        bare: true,
       },
     },
-    ground: '#0d0d10',
+    // THE STAGE IS IN THE ASSET NOW. It used to be a near-black the CSS painted and the photograph
+    // sat on; the new plates carry their own lavender, baked in, and this is what they measure —
+    // #EEE6F7, between the mobile plate's #EEE7F6 and the desktop's #ECE4F6. It exists so the frame
+    // is never bare before the image decodes, and so it must match the image rather than lead it.
+    // Moves with --v2-stage; the canvas cannot read a custom property.
+    ground: '#EEE6F7',
     accent: '#FF2E93',
     wash: '#FFEDF6',
     washInk: '#B0126A',

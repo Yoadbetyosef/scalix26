@@ -175,6 +175,8 @@ interface Paint {
   ih: number
   /** Present = rings from here; absent = the sweep and the mesh. Fractions of the SOURCE, not the canvas. */
   scan: DomeScan | null
+  /** True = draw nothing on or around the subject. The asset carries its own state. See lib/persona. */
+  bare: boolean
   /** Where the subject's feet stop, as a fraction of the SOURCE height. Null = it imposes no floor. */
   base: number | null
   name: string
@@ -202,6 +204,7 @@ function paintFor(key: PersonaKey, at: Breakpoint): Paint {
     iw: a.width,
     ih: a.height,
     scan: a.scan ?? null,
+    bare: a.bare === true,
     base: a.base ?? null,
     name: p.name,
   }
@@ -236,7 +239,7 @@ function rr(x: CanvasRenderingContext2D, px: number, py: number, w: number, h: n
 export function RudiCanvas({ handleRef, onStateChange, minimised = false, readouts = false, cards = CARDS, className, onClick, persona = 'rudi', breakpoint = 'mobile' }: Props) {
   // Read once. See paintFor: a persona OR breakpoint change means a remount, keyed by the caller.
   const paint = useRef(paintFor(persona, breakpoint)).current
-  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, scan: SCAN, base: BASE, name: NAME } = paint
+  const { still: STILL, video: VIDEO, nodes: NODES, bg: STAGE_BG, stops: STOPS, scan: SCAN, bare: BARE, base: BASE, name: NAME } = paint
   const DOME = SCAN
   const IW = paint.iw
   const IH = paint.ih
@@ -677,6 +680,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
         if (!reduced) {
           // A machine gets the same rings the full engine draws — they cost four strokes and a
           // gradient, which is well inside what the collapsed path is allowed to spend.
+          if (BARE) { raf = requestAnimationFrame(draw); return }
           if (DOME) { drawRings(now, 1); raf = requestAnimationFrame(draw); return }
           // The idle rate from the main path — 3600ms — so a phone and a desktop sweep in step.
           const prog = (now % 3600) / 3600
@@ -718,12 +722,16 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
       const band = prog * CH
       const hc = hue(STOPS, prog)
 
-      // Ambient bloom behind the portrait.
-      const g = ctx!.createRadialGradient(CW / 2, CH * 0.4, 20, CW / 2, CH * 0.4, CH * 0.6)
-      g.addColorStop(0, rgba(hc, 0.24 * pulse))
-      g.addColorStop(1, rgba(hc, 0))
-      ctx!.fillStyle = g
-      ctx!.fillRect(0, 0, CW, CH)
+      // Ambient bloom behind the portrait. Not for a bare subject: the plate is opaque and fills the
+      // frame, so this only ever showed at an edge where cover-fit left a sliver — as a coloured cast
+      // on a stage that is now part of the photograph.
+      if (!BARE) {
+        const g = ctx!.createRadialGradient(CW / 2, CH * 0.4, 20, CW / 2, CH * 0.4, CH * 0.6)
+        g.addColorStop(0, rgba(hc, 0.24 * pulse))
+        g.addColorStop(1, rgba(hc, 0))
+        ctx!.fillStyle = g
+        ctx!.fillRect(0, 0, CW, CH)
+      }
 
       // ── NO BREATH. THIS IS A FIX, NOT A PRECAUTION. ─────────────────────────────────────────────
       //
@@ -786,12 +794,19 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
       // Chrome, above the scrim, on its own clock and its own layer.
       drawCards(dt)
 
-      // ── His face carries the state, instead of a veil over the room. ──────────────────────────
-      if (DOME) drawDomeState(now, st, dt)
-
-      // ── The scan. Rings from the dome for a machine; the sweep for a face. ─────────────────────
-      if (DOME) drawRings(now, scanA)
-      else drawSweep(now, band, scanA, (st === 'idle' ? 1 : 2.2) + burst * 1.8)
+      // ── NOTHING IS DRAWN ON A BARE SUBJECT. ───────────────────────────────────────────────────
+      //
+      // Rudi's plates carry the state themselves: the dome's rim lights and cycles cyan through
+      // magenta in the footage. A drawn halo and four drawn rings are a second answer to the same
+      // question, and they disagreed with the first — the rings sat around a rim that was already
+      // lit, in a hue the rim was not currently wearing.
+      if (!BARE) {
+        // ── His face carries the state, instead of a veil over the room. ────────────────────────
+        if (DOME) drawDomeState(now, st, dt)
+        // ── The scan. Rings from the dome for a machine; the sweep for a face. ──────────────────
+        if (DOME) drawRings(now, scanA)
+        else drawSweep(now, band, scanA, (st === 'idle' ? 1 : 2.2) + burst * 1.8)
+      }
 
       // ── LISTENING: THE CANVAS DRAWS NOTHING AT ALL. ─────────────────────────────────────────────
       //
@@ -810,7 +825,7 @@ export function RudiCanvas({ handleRef, onStateChange, minimised = false, readou
       // removing the meter is what makes that visible rather than a thing it happens to render.
 
       // Speaking (and the tail of listening) draws no network and no band at all.
-      if (scanA < 0.02) { raf = requestAnimationFrame(draw); return }
+      if (BARE || scanA < 0.02) { raf = requestAnimationFrame(draw); return }
       // A machine's scan is the rings and the halo and nothing else. The node network and the sweep
       // band below belong to the portrait loop, and drawing either across him is the thing this
       // change exists to stop.
