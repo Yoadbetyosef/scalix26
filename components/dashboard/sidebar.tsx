@@ -105,6 +105,10 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   const supabase = createClient()
   // RUDI open, the others closed — /v2 opens its first group and leaves the rest shut.
   const [open, setOpen] = useState<Record<string, boolean>>({ g1: true })
+  // Whether an employee is actually on duty. /v2 shows an ON badge beside AI Employees and derives
+  // it as `some(e => e.is_active !== false)`; same test here, so the two surfaces cannot disagree
+  // about whether anybody is answering.
+  const [aiOn, setAiOn] = useState(false)
   const [businessName, setBusinessName] = useState<string>('')
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND)
   const pb = useBrand() // DB-driven partner brand (resolved by domain)
@@ -137,7 +141,7 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const [{ data: tenant }, { data: flagRows }] = await Promise.all([
-        supabase.from('tenants').select('business_name, plan, trial_ends_at, enabled_modules, tags').eq('user_id', user.id).single(),
+        supabase.from('tenants').select('id, business_name, plan, trial_ends_at, enabled_modules, tags').eq('user_id', user.id).single(),
         supabase.from('module_flags').select('module, state'),
       ])
       if (tenant?.business_name) setBusinessName(tenant.business_name)
@@ -147,6 +151,10 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
       const flags = Object.fromEntries((flagRows || []).map((f) => [f.module, f.state as ModuleState]))
       const isEnterprise = Array.isArray(tenant?.tags) && tenant.tags.includes('Enterprise')
       setEnabledModules(effectiveModules(enabledModulesOf(tenant), flags, isEnterprise))
+      if (tenant?.id) {
+        const { data: emps } = await supabase.from('ai_employees').select('is_active').eq('tenant_id', tenant.id)
+        setAiOn(!!emps?.some((e) => (e as { is_active?: boolean }).is_active !== false))
+      }
     }
     loadBusinessName()
   }, [operator, operatorBusinessName, operatorModules])
@@ -240,6 +248,9 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
                       <>
                         <span className="v2-gchip"><Icon /></span>
                         <span className="v2-glab hidden xl:block">{label}</span>
+                        {/* Only where /v2 puts it, and only when somebody is actually on duty — a badge
+                            that is always lit says nothing. */}
+                        {label === 'AI Employees' && aiOn && <em data-live>ON</em>}
                       </>
                     )
                     const attrs = { className: 'v2-nav v2-grow', 'data-touch': true, 'data-on': (href && itemActive(href, label)) || undefined }

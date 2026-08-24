@@ -123,6 +123,12 @@ export function V2Hero({ persona, employeeName, line, readouts, briefing, aside 
 
   return (
     <div className="v2 v2-embedded">
+      {/* The grain. /v2 has it and the dashboard did not, which is most of why the two read as
+          different surfaces even when every box measured the same.
+          It is position:fixed, so it tints the whole viewport rather than just the hero — including
+          the tables below. That is what /v2 does with it, and it is why it belongs to the frame; if
+          it should move to AppShell so every page gets it, that is a step-2 call. */}
+      <div className="v2-grain" aria-hidden />
       <div className="v2-root" data-mode={mode} data-state={state}>
         <div className="v2-hero">
           <RudiCanvas

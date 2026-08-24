@@ -127,10 +127,15 @@ function pageInventory() {
 function navItems() {
   const root = document.querySelector('.v2-rail, aside.hidden, aside')
   if (!root) return []
+  // VISIBLE anchors only. The desktop rail is `hidden md:flex`, so at 390px it is display:none and
+  // still in the DOM — counting it reported 14 nav items on a phone that shows none, which is a
+  // reporter fault dressed as a finding.
   return Array.from(root.querySelectorAll('a')).map((a) => {
     const r = a.getBoundingClientRect()
-    return { label: (a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 24), top: Math.round(r.top) }
-  }).filter((n) => n.label)
+    const st = getComputedStyle(a)
+    const shown = r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'
+    return shown ? { label: (a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 24), top: Math.round(r.top) } : null
+  }).filter((n): n is { label: string; top: number } => !!n && !!n.label)
 }
 
 /** Anything with a visible rule on it — the page's section boundaries. */
