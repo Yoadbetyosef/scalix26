@@ -34,9 +34,22 @@ export function NotificationCenter() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Notifications"
+        /* THE BELL IS BOTTOM-RIGHT AT EVERY WIDTH NOW.
+           It used to be top-right on mobile, at right-3 / top-8px, 44x44. A page header puts its
+           right-hand control in exactly that square — /inbox/[id] puts contact info at x336 y17,
+           38x38 — so the bell covered it and took the tap. Playwright could not reach the button
+           even with force:true; a person cannot reach it at all, which means contact info was
+           unreachable on a phone on a live screen.
+           Repositioned rather than made to yield, because yielding is per-page: it would have to be
+           re-checked on every screen of the migration, and the next header control to land in that
+           corner would break it again silently. Bottom-right is the corner no page header uses, it
+           is where the bell already lives on desktop, and the only fixed thing under it is the
+           60px tab bar — which is why the offset clears 60px plus the safe area.
+           The dashboard's Talk button is the one control near it: measured at x108-283 on a 390px
+           phone, so it ends 51px before the bell begins. */
         className="fixed z-50 flex items-center justify-center transition-all duration-200 active:scale-95
-                   right-3 top-[calc(0.5rem+env(safe-area-inset-top))] h-11 w-11 rounded-full bg-white/90 text-ink shadow-e2 ring-1 ring-hairline backdrop-blur hover:bg-white
-                   md:right-4 md:top-auto md:bottom-4 md:h-14 md:w-14 md:rounded-full md:bg-ink md:text-white md:shadow-e3 md:ring-0 md:backdrop-blur-none md:hover:bg-ink/90 md:hover:shadow-e4 md:hover:-translate-y-0.5"
+                   right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] h-11 w-11 rounded-full bg-white/90 text-ink shadow-e2 ring-1 ring-hairline backdrop-blur hover:bg-white
+                   md:right-4 md:bottom-4 md:h-14 md:w-14 md:rounded-full md:bg-ink md:text-white md:shadow-e3 md:ring-0 md:backdrop-blur-none md:hover:bg-ink/90 md:hover:shadow-e4 md:hover:-translate-y-0.5"
       >
         <Bell className="w-[22px] h-[22px]" strokeWidth={1.75} />
         {unresolvedCount > 0 ? (

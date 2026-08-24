@@ -989,13 +989,29 @@ Found while finishing /inbox on 2026-08-24. None is /inbox's; all three are the
 shell's, and the shell is Yoad's held item (b). Recorded so they are not
 rediscovered page by page.
 
-**The notification bell covers the contact-info button on a phone.** AppShell's
-NotificationCenter is `position: fixed; right-3; top-[calc(...)]`, which is exactly
-where /inbox/[id]'s header puts its contact-info trigger. Playwright cannot click
-the trigger even with `force: true` — the bell takes the pointer and opens the
-notification sheet instead. This is pre-existing: v1's version of the button was in
-the same place. It means contact info is unreachable on a phone today, on a live
-screen. It is a shell fix, not a page fix, so it waits for (b).
+**~~The notification bell covers the contact-info button on a phone.~~ FIXED
+2026-08-24.** The bell was `fixed right-3 top-8px`, 44x44 — exactly where a page
+header puts its right-hand control, and /inbox/[id] put contact info at x336 y17,
+38x38. Playwright could not tap it even with `force: true`; a person could not tap
+it at all. Pre-existing — v1's button was in the same square.
+
+Moved to bottom-right on mobile, the corner it already occupies on desktop and the
+one no page header uses, clearing the 60px tab bar plus the safe area. Repositioned
+rather than made to yield, because yielding is per-page and the next header control
+to land in that corner would break it again silently.
+
+Verified on the production build in a real touch context (`hasTouch`, `isMobile`,
+no `force`): contact-info at [336,17,38,38] and the bell at [334,728,44,44] do not
+intersect, a real tap on each opens the right thing, and the dashboard's Talk
+button [108,714,175,54] ends 51px before the bell begins.
+
+**Residual, and it is inherent:** a floating button over a scrolling list always
+covers part of a row. On /inbox and /contacts the bell overlaps 44px of one
+full-width row. That is not the same defect — the row is 390px wide and reachable
+everywhere else, whereas the contact-info button had no other tap target at all.
+The check that guards this now measures the difference: it fails only when the bell
+covers a control under 120px wide or takes a quarter of one. The real answer is for
+the bell to stop floating and live in the bottom bar, which is item (b)'s work.
 
 **Two v1 classes remain on every migrated page, both AppShell's.** `rounded-xl`
 from the mobile bottom bar in `components/dashboard/sidebar.tsx`, and `shadow-e2`
