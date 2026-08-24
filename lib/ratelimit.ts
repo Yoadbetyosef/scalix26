@@ -35,8 +35,6 @@ export const POLICIES = {
   ai_amy:          { limit: 20,  window: '1 m',  fail: 'open' },
   ai_chat:         { limit: 30,  window: '1 m',  fail: 'open' },
   ai_voice:        { limit: 30,  window: '1 m',  fail: 'open' },
-  brain_run:       { limit: 10,  window: '1 h',  fail: 'open' },
-  brain_read:      { limit: 30,  window: '1 m',  fail: 'open' },
   scan_website:    { limit: 10,  window: '1 h',  fail: 'open' },
   // Manual "sync now" on a connected website. Keyed by SOURCE, not tenant: a business with three
   // shops should be able to refresh each one — the limit exists to stop someone hammering a single

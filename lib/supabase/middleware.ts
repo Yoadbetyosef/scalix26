@@ -75,7 +75,7 @@ export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-passw
     // is the real gate. These are NOT open: a request without the secret gets 401 at the route.
     // (drip/reviews/mailbox/email-process are already covered above via /api/drip, /api/mailbox,
     //  /api/reviews/*, /api/webhooks.)
-    '/api/brain/cron', '/api/partner/cron', '/api/learning/run', '/api/cron/',
+    '/api/partner/cron', '/api/learning/run', '/api/cron/',
     // Azure publisher-domain verification. Microsoft fetches this with no session; a login 307
     // makes Entra think the file is missing (browser follows to /auth/login HTML).
     '/.well-known/']

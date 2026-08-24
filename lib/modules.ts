@@ -17,7 +17,16 @@ export const MODULES = [
   { key: 'invoices', label: 'Invoices', description: 'Invoicing & billing docs' },
   { key: 'payments', label: 'Payments', description: 'Payment collection (Stripe)' },
   { key: 'analytics', label: 'Analytics', description: 'Reports & analytics' },
-  { key: 'business_brain', label: 'Business Brain', description: 'AI business understanding' },
+  // BUSINESS BRAIN IS DELETED, AND THIS KEY IS NOT — deliberately, for one week.
+  //
+  // The feature's page, routes, components and engine went on 2026-08-24. This entry stays because
+  // 27 of 33 tenant rows carry 'business_brain' in their enabled_modules JSON, and ModuleKey is
+  // derived from this tuple: dropping the line narrows the type and turns stored data into an
+  // unknown key. That is a data migration, not a deletion, and it belongs with the table drop.
+  //
+  // It gated nothing while the feature existed — no brain route ever checked it — so leaving it
+  // costs a dead row in /admin/modules and nothing else.
+  { key: 'business_brain', label: 'Business Brain', description: 'AI business understanding (feature removed 2026-08-24; key retained until the data migration)' },
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'AI knowledge base' },
   { key: 'orders', label: 'Orders', description: 'Orders & external factory/customer approvals' },
   { key: 'studio', label: 'Design Studio', description: 'Lean product catalog with variants, QR pages & one-tap production/quotes/invoices' },

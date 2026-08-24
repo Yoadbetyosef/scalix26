@@ -1221,3 +1221,34 @@ gets `+` as its initial, on both the list and the detail header. v1 did the same
 (`title[0]`), so it is not a regression — but it means every phone-only contact
 in the book wears the same meaningless chip. Stripping the leading `+` would
 give a digit; that is a content change, not a reskin, so it waits.
+
+## §30 — Business Brain is deleted; the six tables are not, yet
+
+Done on 2026-08-24, from the §28 inventory. Gone: `app/ai-employees/[id]/brain`,
+all four `app/api/brain/*` routes, `components/ai-employees/business-brain.tsx`,
+`components/dashboard/business-brain-card.tsx`, the nine non-context files in
+`lib/brain/`, `scripts/brain-demo.ts`, the `/api/brain/cron` entry in
+vercel.json, its middleware bypass, the entry card on `/ai-employees/[id]`, and
+the two orphaned `brain_run` / `brain_read` rate-limit buckets.
+
+`lib/brain/context/**` is untouched and all five consumers verified intact —
+Amy's answer path and snapshot route, the Anthropic pipeline, the email reply
+path, the Twilio voice webhook.
+
+**THE SIX TABLES ARE STILL THERE, ON PURPOSE.** `business_patterns`,
+`business_understanding`, `business_recommendations`, `business_dna`,
+`brain_updates`, `brain_briefings`. Verified after the delete: a grep for each
+name across `app/`, `components/`, `lib/`, `scripts/` and `types/` returns
+**zero**. Nothing reads them, nothing writes them, and the nightly job that
+filled them no longer runs. Drop them in a week if nothing surfaces —
+`add_business_brain.sql`, `add_brain_updates.sql`, `add_brain_briefings.sql` are
+the migrations that created them.
+
+**One thing to do WITH the drop, not before it.** `lib/modules.ts` still
+declares the `business_brain` key. It is annotated in place and deliberately
+retained: 27 of 33 tenant rows carry `'business_brain'` in their
+`enabled_modules` JSON, and `ModuleKey` is derived from that tuple — removing
+the line narrows the type and turns stored data into an unknown key. That is a
+data migration (strip the value from every tenant, then drop the key), and it
+belongs in the same change as the tables. It gated nothing while the feature
+existed, so the cost of leaving it is one dead row in /admin/modules.
