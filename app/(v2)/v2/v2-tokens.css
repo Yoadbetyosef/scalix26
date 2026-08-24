@@ -3998,6 +3998,17 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2-popn { display: block; font-size: 14px; color: var(--v2-ink); }
 .v2-popr .v2-kick { margin-top: 2px; }
 
+/* ── QUOTED RESPONSE ─────────────────────────────────────────────────────────────────────────────
+   What the factory or the customer actually wrote back. v1 gave it a tinted block with a coloured
+   left border in emerald or amber depending on the verdict — two more filled surfaces on a page
+   that had four already. The rule stays, in the state's own hue, and the words sit on paper: the
+   verdict is on the chip beside the row, so the quote does not need to repeat it in a background. */
+.v2-quote {
+  margin: 8px 0 0; padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--chan, var(--v2-line-strong));
+  font-size: 14px; line-height: 1.45; color: var(--v2-ink);
+}
+
 /* ── MODAL ───────────────────────────────────────────────────────────────────────────────────────
    THE CARD'S EDGE, ON THE VEIL. Not a new surface: one hairline, no shadow, the same 16px radius
    and the same paper as .v2-card, over the same dim .v2-veil the drawer uses. A dialog on this

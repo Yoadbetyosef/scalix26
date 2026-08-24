@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, Plus, X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 
 // Who is making this piece. Start typing and pick a factory already used before, or add a new one once.
 //
@@ -11,7 +11,6 @@ import { Check, Plus, X } from 'lucide-react'
 
 export interface Supplier { id: string; name: string; contactName: string | null; email: string | null; phone: string | null }
 
-const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 
 export function SupplierPicker({ value, onChange, autoFocus }: {
   value: Supplier | null
@@ -54,29 +53,34 @@ export function SupplierPicker({ value, onChange, autoFocus }: {
 
   if (value) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-300 px-2.5 py-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-gray-900">{value.name}</p>
-          <p className="truncate text-xs text-gray-500">{[value.contactName, value.email].filter(Boolean).join(' · ') || 'No email on file'}</p>
+      <div className="v2-card" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: '10px 12px' }}>
+        <div className="min-w-0" style={{ flex: 1 }}>
+          <p className="truncate" style={{ fontSize: 14, fontWeight: 500, color: 'var(--v2-ink)' }}>{value.name}</p>
+          <span className="truncate">{[value.contactName, value.email].filter(Boolean).join(' · ') || 'No email on file'}</span>
         </div>
-        <button type="button" onClick={() => { onChange(null); setTerm('') }} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-100" aria-label="Choose a different supplier"><X className="h-4 w-4" /></button>
+        <button type="button" onClick={() => { onChange(null); setTerm('') }} className="v2-nx"
+                style={{ alignSelf: 'auto', height: 30 }} aria-label="Choose a different supplier"><X /></button>
       </div>
     )
   }
 
   if (creating) {
     return (
-      <div className="rounded-lg border border-gray-300 p-2.5">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="block text-xs text-gray-500">Factory / workshop name<input autoFocus value={draft.name} onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))} className={inp} placeholder="Gio Creations" /></label>
-          <label className="block text-xs text-gray-500">Contact person<input value={draft.contactName} onChange={(e) => setDraft((p) => ({ ...p, contactName: e.target.value }))} className={inp} placeholder="Nancy" /></label>
-          <label className="block text-xs text-gray-500">Email<input type="email" value={draft.email} onChange={(e) => setDraft((p) => ({ ...p, email: e.target.value }))} className={inp} placeholder="name@workshop.com" /></label>
-          <label className="block text-xs text-gray-500">Phone<input value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} className={inp} /></label>
+      <div className="v2-card">
+        <div className="v2-form">
+          <div className="v2-fld"><label htmlFor="sp-name">Factory / workshop name</label>
+            <input id="sp-name" autoFocus value={draft.name} onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))} placeholder="Gio Creations" /></div>
+          <div className="v2-fld"><label htmlFor="sp-contact">Contact person</label>
+            <input id="sp-contact" value={draft.contactName} onChange={(e) => setDraft((p) => ({ ...p, contactName: e.target.value }))} placeholder="Nancy" /></div>
+          <div className="v2-fld"><label htmlFor="sp-email">Email</label>
+            <input id="sp-email" type="email" value={draft.email} onChange={(e) => setDraft((p) => ({ ...p, email: e.target.value }))} placeholder="name@workshop.com" /></div>
+          <div className="v2-fld"><label htmlFor="sp-phone">Phone</label>
+            <input id="sp-phone" value={draft.phone} onChange={(e) => setDraft((p) => ({ ...p, phone: e.target.value }))} /></div>
         </div>
-        {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-        <div className="mt-2 flex gap-2">
-          <button type="button" onClick={create} disabled={busy || !draft.name.trim()} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">{busy ? 'Saving…' : 'Save supplier'}</button>
-          <button type="button" onClick={() => { setCreating(false); setErr(null) }} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
+        {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><p>{err}</p></div>}
+        <div className="v2-bar">
+          <button type="button" onClick={create} disabled={busy || !draft.name.trim()} className="v2-act" data-solid>{busy ? 'Saving…' : 'Save supplier'}</button>
+          <button type="button" onClick={() => { setCreating(false); setErr(null) }} className="v2-act">Cancel</button>
         </div>
       </div>
     )
@@ -84,34 +88,28 @@ export function SupplierPicker({ value, onChange, autoFocus }: {
 
   return (
     <div>
-      <input
-        autoFocus={autoFocus}
-        value={term}
-        onChange={(e) => setTerm(e.target.value)}
-        className={inp}
-        placeholder="Search factories…"
-      />
-      <div className="mt-1 overflow-hidden rounded-lg border border-gray-200">
+      <div className="v2-fld">
+        <label htmlFor="sp-search">Search factories</label>
+        <input id="sp-search" autoFocus={autoFocus} value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Start typing a name…" />
+      </div>
+      {/* The same list surface the customer typeahead uses — paper and one hairline, in flow here
+          rather than floating, because this one is always open. */}
+      <div style={{ marginTop: 8, border: '1px solid var(--v2-line)', borderRadius: 12, overflow: 'hidden' }}>
         {matches.map((s) => (
-          <button
-            key={s.id} type="button" onClick={() => onChange(s)}
-            className="flex w-full items-center gap-2 border-b border-gray-100 px-2.5 py-2 text-left last:border-b-0 hover:bg-gray-50"
-          >
-            <Check className="h-3.5 w-3.5 shrink-0 text-gray-300" />
-            <span className="min-w-0">
-              <span className="block truncate text-sm text-gray-900">{s.name}</span>
-              <span className="block truncate text-xs text-gray-500">{[s.contactName, s.email].filter(Boolean).join(' · ') || 'No email on file'}</span>
-            </span>
+          <button key={s.id} type="button" onClick={() => onChange(s)} className="v2-popr">
+            <span className="v2-popn truncate">{s.name}</span>
+            <span className="v2-kick">{[s.contactName, s.email].filter(Boolean).join(' · ') || 'No email on file'}</span>
           </button>
         ))}
         {/* The empty state is the normal one on the first send — the table starts empty on purpose. */}
         {matches.length === 0 && (
-          <p className="px-2.5 py-2 text-xs text-gray-400">{term.trim() ? 'No factory matches that.' : 'No factories saved yet.'}</p>
+          <p className="v2-kick" style={{ padding: '11px 13px' }}>{term.trim() ? 'No factory matches that.' : 'No factories saved yet.'}</p>
         )}
         <button
           type="button"
           onClick={() => { setDraft({ name: term.trim(), contactName: '', email: '', phone: '' }); setCreating(true) }}
-          className="flex w-full items-center gap-1.5 border-t border-gray-100 px-2.5 py-2 text-left text-sm font-medium text-blue-600 hover:bg-blue-50"
+          className="v2-popr"
+          style={{ borderTop: '1px solid var(--v2-line)', borderBottom: 0, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--v2-t1)' }}
         >
           <Plus className="h-3.5 w-3.5" /> Add {term.trim() ? `"${term.trim()}"` : 'a new factory'}
         </button>

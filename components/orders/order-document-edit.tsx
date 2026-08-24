@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Modal } from '@/components/v2/modal'
 import { useRouter } from 'next/navigation'
 import { TAX_CHOICES } from '@/lib/tax/canada'
 
@@ -76,60 +77,57 @@ export function OrderDocumentEdit({
     }
   }
 
-  const inp = 'mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm'
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-      >
-        Edit tax
-      </button>
-    )
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4">
-      <div className="mt-16 w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
-        <h3 className="text-lg font-semibold text-gray-900">Tax on this order</h3>
-        <p className="mt-1 text-xs text-gray-500">
+    <>
+      <button onClick={() => setOpen(true)} className="v2-act">Edit tax</button>
+
+      {/* The third hand-rolled overlay in this tree, and the one that differed most — bg-black/30
+          and a shadow-xl where the others used bg-black/40 and none. One dialog now. */}
+      <Modal
+        open={open}
+        onClose={() => { setOpen(false); setErr(null) }}
+        dismissable={!busy}
+        title="Tax on this order"
+        actions={
+          <>
+            <button onClick={() => void save()} disabled={busy} className="v2-act" data-solid>{busy ? 'Saving…' : 'Save'}</button>
+            <button onClick={() => { setOpen(false); setErr(null) }} disabled={busy} className="v2-act">Cancel</button>
+          </>
+        }
+      >
+        <p className="v2-hint" style={{ marginBottom: 18 }}>
           This order is {stage}. Its tax and its invoice photo can still be corrected — the price,
           the line items and the customer cannot.
         </p>
 
-        <label className="mt-4 block text-xs text-gray-500">Tax (delivering to)
-          <select value={choice} onChange={(e) => setChoice(e.target.value)} className={inp} disabled={busy}>
-            <option value="">No tax — nothing shown on the document</option>
-            {TAX_CHOICES.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.region} · {c.label} {c.ratePercent}%{c.hint ? ` — ${c.hint}` : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="v2-fld">
+          <label htmlFor="ode-tax">Tax (delivering to)</label>
+          <span className="v2-sel">
+            <select id="ode-tax" value={choice} onChange={(e) => setChoice(e.target.value)} disabled={busy}>
+              <option value="">No tax — nothing shown on the document</option>
+              {TAX_CHOICES.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.region} · {c.label} {c.ratePercent}%{c.hint ? ` — ${c.hint}` : ''}
+                </option>
+              ))}
+            </select>
+          </span>
+        </div>
 
-        <label className="mt-3 flex items-center gap-2 text-xs text-gray-600">
-          <input type="checkbox" checked={exempt} onChange={(e) => setExempt(e.target.checked)} disabled={busy} className="h-3.5 w-3.5 rounded border-gray-300" />
-          Provincial tax exempt (resale)
+        <label className="v2-check" style={{ marginTop: 14 }}>
+          <input type="checkbox" checked={exempt} onChange={(e) => setExempt(e.target.checked)} disabled={busy} />
+          <span>Provincial tax exempt (resale)<em>Asserted by you and printed as written — nothing here validates a certificate.</em></span>
         </label>
         {exempt && (
-          <label className="mt-2 block text-xs text-gray-500">Printed under the tax line
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="PST exempt — resale certificate on file" className={inp} disabled={busy} />
-          </label>
+          <div className="v2-fld" style={{ marginTop: 10 }}>
+            <label htmlFor="ode-note">Printed under the tax line</label>
+            <input id="ode-note" value={note} onChange={(e) => setNote(e.target.value)}
+                   placeholder="PST exempt — resale certificate on file" disabled={busy} />
+          </div>
         )}
 
-        {err && <p className="mt-3 text-xs text-red-600">{err}</p>}
-
-        <div className="mt-5 flex gap-2">
-          <button onClick={() => void save()} disabled={busy} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-          <button onClick={() => { setOpen(false); setErr(null) }} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+        {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 16 }}><p>{err}</p></div>}
+      </Modal>
+    </>
   )
 }

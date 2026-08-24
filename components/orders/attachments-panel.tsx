@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, FileText, Film, Image as ImageIcon, Upload } from 'lucide-react'
 import { ACCEPT_ATTR } from '@/lib/orders/attachment-types'
+import { useConfirm } from '@/components/v2/confirm'
 
 // Sketches, reference photos, CAD renders, videos and documents for an order. Drag a pile of files in or
 // pick them — they upload one after another so a single rejection doesn't lose the rest. The bucket is
@@ -15,11 +16,14 @@ const isImage = (m: string) => m.startsWith('image/') && m !== 'image/heic' && m
 const isVideo = (m: string) => m.startsWith('video/')
 
 function KindIcon({ mime }: { mime: string }) {
-  const cls = 'h-5 w-5 text-gray-400'
-  if (isImage(mime)) return <ImageIcon className={cls} />
-  if (isVideo(mime)) return <Film className={cls} />
-  if (mime === 'application/pdf') return <FileText className={cls} />
-  return <Box className={cls} />                                   // CAD / archive / anything else
+  // The thumbnail tile's own ink, so the icon reads as part of the tile rather than as a grey the
+  // rest of the page does not use.
+  const cls = 'h-5 w-5'
+  const style = { color: 'var(--v2-ink-45)' }
+  if (isImage(mime)) return <ImageIcon className={cls} style={style} />
+  if (isVideo(mime)) return <Film className={cls} style={style} />
+  if (mime === 'application/pdf') return <FileText className={cls} style={style} />
+  return <Box className={cls} style={style} />                     // CAD / archive / anything else
 }
 
 // ── ONE PHOTO GOES ON THE INVOICE ────────────────────────────────────────────────────────────────
@@ -48,6 +52,7 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
   const [progress, setProgress] = useState<string | null>(null)
   const [errs, setErrs] = useState<string[]>([])
   const [dragging, setDragging] = useState(false)
+  const { ask, dialog } = useConfirm()
   const fileInput = useRef<HTMLInputElement>(null)
   const base = `/api/orders/${orderId}/attachments`
 
@@ -94,7 +99,11 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
     setBusy(true); try { await fetch(`${base}/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ visibility }) }); await load() } finally { setBusy(false) }
   }
   const remove = async (id: string, name: string) => {
-    if (!confirm(`Delete ${name}?`)) return
+    if (!(await ask({
+      title: `Delete ${name}?`,
+      body: 'The file is removed from this order and from the approval page anyone has open. It cannot be recovered.',
+      confirmLabel: 'Delete file', danger: true,
+    }))) return
     setBusy(true); try { await fetch(`${base}/${id}`, { method: 'DELETE' }); await load() } finally { setBusy(false) }
   }
 
@@ -105,11 +114,12 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); void uploadAll(Array.from(e.dataTransfer.files)) }}
         onClick={() => !busy && fileInput.current?.click()}
-        className={`mb-3 flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${dragging ? 'border-gray-900 bg-gray-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}
+        className="v2-drop"
+        data-over={dragging || undefined}
       >
-        <Upload className="h-5 w-5 text-gray-400" />
-        <span className="text-sm font-medium text-gray-900">{busy ? progress ?? 'Working…' : 'Drop files here, or click to choose'}</span>
-        <span className="text-xs text-gray-500">Photos, sketches, PDFs, videos, CAD (STL, OBJ, 3DM, STEP, ZIP…) — up to 50 MB each</span>
+        <Upload />
+        <b>{busy ? progress ?? 'Working…' : 'Drop files here, or click to choose'}</b>
+        <span>Photos, sketches, PDFs, videos, CAD (STL, OBJ, 3DM, STEP, ZIP…) — up to 50 MB each</span>
       </div>
       <input
         ref={fileInput} type="file" multiple className="hidden" accept={ACCEPT_ATTR} disabled={busy}
@@ -117,27 +127,31 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
       />
 
       {errs.length > 0 && (
-        <ul className="mb-3 space-y-1 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-          {errs.map((m, i) => <li key={i}>{m}</li>)}
-        </ul>
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 12 }}>
+          <p>{errs.map((m, i) => <span key={i} style={{ display: 'block' }}>{m}</span>)}</p>
+          <em>{errs.length} failed</em>
+        </div>
       )}
 
       {/* Said once, above the list, rather than repeated on every row. It is the answer to "why is my
           ring not on the invoice" and it is true before anything has been chosen. */}
       {canSetInvoiceImage && items.some((x) => isImage(x.mimeType) && x.visibility === 'public') && !chosen && (
-        <p className="mb-2 text-xs text-gray-500">
+        <p className="v2-kick" style={{ marginBottom: 8 }}>
           No photo is set for the invoice, so it will print without one. Everything shared here still
           appears on the estimate.
         </p>
       )}
 
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400">No files yet.</p>
+        <div className="v2-card" data-empty style={{ marginTop: 12 }}>
+          <b>No files yet</b><span>Sketches, renders, photographs and CAD go here, and can be shared on the approval page.</span>
+        </div>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
           {items.map((x) => (
-            <li key={x.id} className="flex items-start gap-3 rounded-lg border border-gray-200 p-2">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50">
+            <li key={x.id} className="v2-card" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 10 }}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden"
+                   style={{ borderRadius: 10, background: 'var(--v2-hover)' }}>
                 {isImage(x.mimeType) && x.url
                   // eslint-disable-next-line @next/next/no-img-element -- signed one-off URL, not a static asset
                   ? <img src={x.url} alt="" className="h-full w-full object-cover" />
@@ -145,11 +159,11 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
               </div>
               <div className="min-w-0 flex-1">
                 {x.url
-                  ? <a href={x.url} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium text-blue-600 hover:underline" title={x.fileName}>{x.fileName}</a>
-                  : <span className="block truncate text-sm text-gray-700" title={x.fileName}>{x.fileName}</span>}
+                  ? <a href={x.url} target="_blank" rel="noreferrer" className="block truncate text-sm hover:underline" style={{ color: 'var(--v2-ink)', fontWeight: 500 }} title={x.fileName}>{x.fileName}</a>
+                  : <span className="block truncate text-sm" style={{ color: 'var(--v2-ink-72)' }} title={x.fileName}>{x.fileName}</span>}
                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-gray-400">{size(x.fileSize)}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${x.visibility === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className="v2-kick">{size(x.fileSize)}</span>
+                  <span className="v2-stat" style={{ ['--chan' as string]: x.visibility === 'public' ? 'var(--v2-t2)' : 'var(--v2-ink-45)' }}>
                     {x.visibility === 'public' ? 'Shared on approval' : 'Internal only'}
                   </span>
                 </div>
@@ -157,27 +171,29 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
                 {isImage(x.mimeType) && x.visibility === 'public' && canSetInvoiceImage && (
                   <div className="mt-1">
                     {chosen === x.id ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-                        On the invoice
-                        <button onClick={() => void chooseForInvoice(null)} disabled={busy} className="font-normal text-gray-500 underline">remove</button>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>On the invoice</span>
+                        <button onClick={() => void chooseForInvoice(null)} disabled={busy} className="v2-act">Remove</button>
                       </span>
                     ) : (
-                      <button onClick={() => void chooseForInvoice(x.id)} disabled={busy} className="text-xs text-gray-600 underline">
-                        Use on the invoice
-                      </button>
+                      <button onClick={() => void chooseForInvoice(x.id)} disabled={busy} className="v2-act">Use on the invoice</button>
                     )}
                   </div>
                 )}
-                <div className="mt-1 flex gap-2">
-                  <button onClick={() => setVisibility(x.id, x.visibility === 'public' ? 'internal' : 'public')} disabled={busy} className="text-xs text-gray-600 underline">{x.visibility === 'public' ? 'Make internal' : 'Share on approval'}</button>
-                  <button onClick={() => remove(x.id, x.fileName)} disabled={busy} className="text-xs text-red-600 underline">Delete</button>
+                {/* Underlined micro-text was two link-shaped things that are not links; they are the
+                    same pills as everywhere else now, with the destructive one after the hairline. */}
+                <div className="v2-bar" style={{ marginTop: 8 }}>
+                  <button onClick={() => setVisibility(x.id, x.visibility === 'public' ? 'internal' : 'public')} disabled={busy} className="v2-act">{x.visibility === 'public' ? 'Make internal' : 'Share on approval'}</button>
+                  <hr />
+                  <button onClick={() => remove(x.id, x.fileName)} disabled={busy} className="v2-act" data-danger>Delete</button>
                 </div>
               </div>
             </li>
           ))}
         </ul>
       )}
-      <p className="mt-2 text-[11px] text-gray-400">Files you upload are shared on the approval page by default — click “Make internal” to keep one to yourself. Storage is private throughout; the approval page serves files through a short-lived, token-scoped link.</p>
+      <p className="v2-hint" style={{ marginTop: 10 }}>Files you upload are shared on the approval page by default — click “Make internal” to keep one to yourself. Storage is private throughout; the approval page serves files through a short-lived, token-scoped link.</p>
+      {dialog}
     </div>
   )
 }

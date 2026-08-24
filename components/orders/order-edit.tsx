@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Modal } from '@/components/v2/modal'
 import { useRouter } from 'next/navigation'
 import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
 import { TAX_CHOICES } from '@/lib/tax/canada'
 import { LineItemFields, emptyLine, fetchOptionLists, lineFromSaved, lineToPayload, namelessError, type LineDraft } from './line-item-fields'
 
-const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
 
 export interface OrderEditInitial {
@@ -99,68 +99,86 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Edit order</button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => !busy && setOpen(false)}>
-          <div className="my-8 w-full max-w-3xl rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900">Edit order</h3>
-            <p className="mt-0.5 text-xs text-gray-500">Update the customer, pricing, items and details before sending for approval.</p>
+      <button onClick={() => setOpen(true)} className="v2-act">Edit order</button>
+      {/* THE APPROVED MODAL, replacing a hand-rolled overlay. Three of these existed in this tree,
+          each with slightly different odds and ends — bg-black/40 here, bg-black/30 and a shadow-xl
+          there — and none of them trapped focus, closed on Escape, or locked the page behind them.
+          `dismissable={!busy}` is the one thing the old overlay did get right: a click outside while
+          a save is in flight must not abandon it, and now Escape cannot either. */}
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        dismissable={!busy}
+        title="Edit order"
+        wide
+        actions={
+          <>
+            <button onClick={save} disabled={busy} className="v2-act" data-solid>{busy ? 'Saving…' : 'Save changes'}</button>
+            <button onClick={() => setOpen(false)} disabled={busy} className="v2-act">Cancel</button>
+          </>
+        }
+      >
+        <>
+            <p className="v2-hint" style={{ marginBottom: 18 }}>Update the customer, pricing, items and details before sending for approval.</p>
 
-            <div className="mt-4 space-y-5">
+            <div className="space-y-6">
               <section>
-                <h4 className="mb-2 text-sm font-semibold text-gray-900">Customer</h4>
+                <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Customer</p><s /></div>
                 <ContactPicker value={customer} onChange={setCustomer} />
               </section>
 
               <section>
-                <h4 className="mb-2 text-sm font-semibold text-gray-900">Order</h4>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <label className="block text-xs text-gray-500">Order number<input value={f.orderNumber} onChange={set('orderNumber')} className={inp} /></label>
-                  <label className="block text-xs text-gray-500">Assigned to<input value={f.assignedEmployee} onChange={set('assignedEmployee')} className={inp} /></label>
-                  <label className="block text-xs text-gray-500">Order date<input type="date" value={f.orderDate} onChange={set('orderDate')} className={inp} /></label>
-                  <label className="block text-xs text-gray-500">Requested completion<input type="date" value={f.requestedCompletionDate} onChange={set('requestedCompletionDate')} className={inp} /></label>
+                <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Order</p><s /></div>
+                <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))' }}>
+                  <div className="v2-fld"><label htmlFor="oe-order-number">Order number</label><input id="oe-order-number" value={f.orderNumber} onChange={set('orderNumber')} /></div>
+                  <div className="v2-fld"><label htmlFor="oe-assigned-to">Assigned to</label><input id="oe-assigned-to" value={f.assignedEmployee} onChange={set('assignedEmployee')} /></div>
+                  <div className="v2-fld"><label htmlFor="oe-order-date">Order date</label><input id="oe-order-date" type="date" value={f.orderDate} onChange={set('orderDate')} /></div>
+                  <div className="v2-fld"><label htmlFor="oe-requested-completion">Requested completion</label><input id="oe-requested-completion" type="date" value={f.requestedCompletionDate} onChange={set('requestedCompletionDate')} /></div>
                 </div>
-                <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-gray-800">
-                  <input type="checkbox" checked={isCustomDesign} onChange={(e) => setIsCustomDesign(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+                <label className="v2-check">
+                  <input type="checkbox" checked={isCustomDesign} onChange={(e) => setIsCustomDesign(e.target.checked)} />
                   Custom design
                 </label>
               </section>
 
               {isCustomDesign && (
                 <section>
-                  <h4 className="mb-2 text-sm font-semibold text-gray-900">Client requirements</h4>
-                  <textarea value={f.clientRequirements} onChange={set('clientRequirements')} rows={5} placeholder="Style references, budget, deadline, engraving, sizing…" className={inp} />
+                  <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Client requirements</p><s /></div>
+                  <div className="v2-fld"><label htmlFor="oe-brief">The brief</label>
+                    <textarea id="oe-brief" value={f.clientRequirements} onChange={set('clientRequirements')} rows={5} placeholder="Style references, budget, deadline, engraving, sizing…" /></div>
                 </section>
               )}
 
               <section>
-                <h4 className="mb-2 text-sm font-semibold text-gray-900">Factory / Supplier</h4>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="block text-xs text-gray-500">Factory name<input value={f.factoryName} onChange={set('factoryName')} className={inp} /></label>
-                  <label className="block text-xs text-gray-500">Contact name<input value={f.factoryContactName} onChange={set('factoryContactName')} className={inp} /></label>
-                  <label className="block text-xs text-gray-500">Factory email<input value={f.factoryEmail} onChange={set('factoryEmail')} className={inp} /></label>
+                <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Factory / Supplier</p><s /></div>
+                <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+                  <div className="v2-fld"><label htmlFor="oe-factory-name">Factory name</label><input id="oe-factory-name" value={f.factoryName} onChange={set('factoryName')} /></div>
+                  <div className="v2-fld"><label htmlFor="oe-contact-name">Contact name</label><input id="oe-contact-name" value={f.factoryContactName} onChange={set('factoryContactName')} /></div>
+                  <div className="v2-fld"><label htmlFor="oe-factory-email">Factory email</label><input id="oe-factory-email" value={f.factoryEmail} onChange={set('factoryEmail')} /></div>
                 </div>
               </section>
 
               <section>
-                <div className="mb-2 flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-900">Items</h4>
-                  <span className="text-xs text-gray-500">Subtotal {sym}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                <div className="v2-head" style={{ marginBottom: 12 }}>
+                  <p className="v2-kick"><i />Items · {lines.length}</p>
+                  <s />
+                  <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>Subtotal {sym}{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="space-y-3">
                   {lines.map((l, i) => (
-                    <div key={i} className="rounded-lg border border-gray-200 p-3">
+                    <div key={i} className="v2-card" style={{ gap: 0 }}>
                       <LineItemFields line={l} lists={lists} currencySymbol={sym} onChange={(k, v) => setLine(i, k, v)} />
-                      <button type="button" onClick={() => setLines((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : p))} className="mt-2 text-xs text-red-600 hover:underline">Remove item</button>
+                      <button type="button" onClick={() => setLines((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : p))} className="v2-act" data-danger style={{ marginTop: 14, alignSelf: 'flex-start' }}>Remove item</button>
                     </div>
                   ))}
-                  <button type="button" onClick={() => setLines((p) => [...p, emptyLine()])} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">+ Add item</button>
+                  <button type="button" onClick={() => setLines((p) => [...p, emptyLine()])} className="v2-act">+ Add item</button>
                 </div>
               </section>
 
               <section>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="block text-xs text-gray-500">Deposit ({sym})<input value={f.depositAmount} onChange={set('depositAmount')} placeholder="0" className={inp} /></label>
+                <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+                  <div className="v2-fld"><label htmlFor="oe-deposit">Deposit ({sym})</label>
+                    <input id="oe-deposit" value={f.depositAmount} onChange={set('depositAmount')} placeholder="0" /></div>
                   {/* PLACE OF SUPPLY — the destination, not the seller's province. A BC business
                       delivering to Ontario charges 13% HST, and getting this backwards is invisible on
                       the document: the arithmetic looks right, it is just the wrong rate. */}
@@ -169,8 +187,9 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                       BC, SK and MB appear twice because both readings are correct and only the seller
                       knows which sale it was — the hint beside each says which, without requiring any
                       tax law to read. */}
-                  <label className="block text-xs text-gray-500">Tax (delivering to)
-                    <select value={f.taxChoiceId} onChange={(e) => setF((p) => ({ ...p, taxChoiceId: e.target.value }))} className={inp}>
+                  <div className="v2-fld"><label htmlFor="oe-tax">Tax (delivering to)</label>
+                    <span className="v2-sel">
+                    <select id="oe-tax" value={f.taxChoiceId} onChange={(e) => setF((p) => ({ ...p, taxChoiceId: e.target.value }))}>
                       <option value="">No tax — nothing shown on the document</option>
                       {TAX_CHOICES.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -178,14 +197,17 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                         </option>
                       ))}
                     </select>
-                  </label>
+                    </span>
+                  </div>
                   {(initial.templates?.length ?? 0) > 0 && (
-                    <label className="block text-xs text-gray-500">Document template
-                      <select value={f.documentTemplateId} onChange={(e) => setF((p) => ({ ...p, documentTemplateId: e.target.value }))} className={inp}>
+                    <div className="v2-fld"><label htmlFor="oe-tpl">Document template</label>
+                      <span className="v2-sel">
+                      <select id="oe-tpl" value={f.documentTemplateId} onChange={(e) => setF((p) => ({ ...p, documentTemplateId: e.target.value }))}>
                         <option value="">Default</option>
                         {initial.templates!.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
-                    </label>
+                      </span>
+                    </div>
                   )}
                   {/* THE EXEMPTION. It is why a GST-only rate was picked, and it is what the customer
                       reads when a BC invoice shows 5% and they know the province charges PST. Nothing
@@ -194,35 +216,27 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                       The note prints ONLY while the box is ticked, so unticking it removes the claim
                       from the document without destroying what she typed. */}
                   <div className="sm:col-span-3">
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
-                      <input type="checkbox" checked={pstExempt} onChange={(e) => setPstExempt(e.target.checked)} className="h-3.5 w-3.5 rounded border-gray-300" />
-                      Provincial tax exempt (resale)
+                    <label className="v2-check">
+                      <input type="checkbox" checked={pstExempt} onChange={(e) => setPstExempt(e.target.checked)} />
+                      <span>Provincial tax exempt (resale)<em>Asserted by you and printed as written — nothing here validates a certificate.</em></span>
                     </label>
                     {pstExempt && (
-                      <label className="mt-2 block text-xs text-gray-500">Printed under the tax line
-                        <input
-                          value={f.pstExemptionNote}
-                          onChange={set('pstExemptionNote')}
-                          placeholder="PST exempt — resale certificate on file"
-                          className={inp}
-                        />
-                      </label>
+                      <div className="v2-fld" style={{ marginTop: 10 }}>
+                        <label htmlFor="oe-pst">Printed under the tax line</label>
+                        <input id="oe-pst" value={f.pstExemptionNote} onChange={set('pstExemptionNote')}
+                               placeholder="PST exempt — resale certificate on file" />
+                      </div>
                     )}
                   </div>
-                  <label className="block text-xs text-gray-500">Public notes (visible on approval page)<textarea value={f.publicNotes} onChange={set('publicNotes')} rows={2} className={inp} /></label>
-                  <label className="block text-xs text-gray-500">Internal notes (never shared)<textarea value={f.internalNotes} onChange={set('internalNotes')} rows={2} className={inp} /></label>
+                  <div className="v2-fld"><label htmlFor="oe-public-notes-visible-on-">Public notes (visible on approval page)</label><textarea id="oe-public-notes-visible-on-" value={f.publicNotes} onChange={set('publicNotes')} rows={2} /></div>
+                  <div className="v2-fld"><label htmlFor="oe-internal-notes-never-sha">Internal notes (never shared)</label><textarea id="oe-internal-notes-never-sha" value={f.internalNotes} onChange={set('internalNotes')} rows={2} /></div>
                 </div>
               </section>
             </div>
 
-            {err && <div className="mt-3 text-xs text-red-600">{err}</div>}
-            <div className="mt-4 flex gap-2">
-              <button onClick={save} disabled={busy} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">{busy ? 'Saving…' : 'Save changes'}</button>
-              <button onClick={() => setOpen(false)} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
+            {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 16 }}><p>{err}</p></div>}
+        </>
+      </Modal>
     </>
   )
 }

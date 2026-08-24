@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
+import { ArrowLeft, Lock } from 'lucide-react'
+import { stageHue } from '@/lib/orders/stage-colors'
 import { STAGE_LABELS, isProtectedStage, canEditWorkflow, canEditDocumentFacts } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
 import { OrderEdit } from '@/components/orders/order-edit'
@@ -37,56 +39,74 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   if (!o) notFound()
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-4"><Link href="/orders" className="text-sm text-gray-500 hover:underline">← Orders</Link></div>
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="font-mono text-xs text-gray-500">{o.orderNumber}</div>
-          <h1 className="text-2xl font-semibold text-gray-900">{o.customerName ?? 'Order'}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">{STAGE_LABELS[o.stage]}{isProtectedStage(o.stage) && ' 🔒'}</span>
-            {o.isCustomDesign && <span className="inline-block rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-medium text-violet-800">Custom design</span>}
-          </div>
+    <div className="v2 v2-embedded mx-auto max-w-4xl p-4 sm:p-6">
+      {/* Back, the order number, the customer, and what state it is in — the same header shape
+          /inbox/[id] and /contacts/[id] use. The 24px title stays here and only here: on a detail
+          screen the subject's NAME is the title, which is a different thing from a page header
+          repeating the rail's word. */}
+      <div className="v2-head" style={{ alignItems: 'center', marginBottom: 16 }}>
+        <Link href="/orders" className="v2-ico tap-target" aria-label="Back to orders"><ArrowLeft /></Link>
+        <div className="min-w-0" style={{ flex: 1 }}>
+          <p className="v2-kick">{o.orderNumber}</p>
+          <h1 className="truncate" style={{ fontSize: 19, fontWeight: 600, letterSpacing: '-0.02em', color: 'var(--v2-ink)', marginTop: 2 }}>
+            {o.customerName ?? 'Order'}
+          </h1>
         </div>
-        <div className="flex items-center gap-2">
-          {/* TWO GATES, NOT ONE. The full drawer is workflow and closes when the job ends. Tax is a
-              fact about a document that exists, and it is the fact most likely to be missing at that
-              exact moment — so it stays open on finished and completed, and shuts on cancelled,
-              where there is no document to be right about. See lib/orders/stages.ts. */}
-          {canEditWorkflow(o.stage) ? (
-            <OrderEdit orderId={o.id} initial={{
-              orderNumber: o.orderNumber, contactId: o.contactId,
-              customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
-              factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
-              assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
-              depositCents: o.depositCents, currency: o.currency, internalNotes: o.internalNotes, publicNotes: o.publicNotes,
-              deliveryProvince: o.deliveryProvince, taxKind: o.taxKind,
-              pstExempt: o.pstExempt, pstExemptionNote: o.pstExemptionNote,
-              documentTemplateId: o.documentTemplateId,
-              templates: templates.map((t) => ({ id: t.id, name: t.name })),
-              clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
-              lineItems: o.lineItems,
-            }} />
-          ) : canEditDocumentFacts(o.stage) ? (
-            <OrderDocumentEdit
-              orderId={o.id}
-              stage={STAGE_LABELS[o.stage].toLowerCase()}
-              initial={{
-                deliveryProvince: o.deliveryProvince, taxKind: o.taxKind,
-                pstExempt: o.pstExempt, pstExemptionNote: o.pstExemptionNote,
-              }}
-            />
-          ) : null}
-          {/* Open in a new tab: the document is a print-to-PDF page, not a place to navigate away to. */}
-          <Link href={`/orders/${o.id}/document/estimate`} target="_blank" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Estimate</Link>
-          <Link href={`/orders/${o.id}/document/quote`} target="_blank" className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Quote</Link>
-          <StageControl orderId={o.id} stage={o.stage} />
-          <DeleteOrderButton orderId={o.id} orderNumber={o.orderNumber} />
-        </div>
+        <span className="v2-stat" style={{ ['--chan' as string]: stageHue(o.stage) }}>
+          {STAGE_LABELS[o.stage]}
+        </span>
+        {isProtectedStage(o.stage) && (
+          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-ink-45)' }}>
+            <Lock style={{ width: 10, height: 10 }} /> Approval stage
+          </span>
+        )}
+        {o.isCustomDesign && (
+          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>Custom design</span>
+        )}
       </div>
 
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Approval workflow</h3>
+      {/* THE ACTION BAR, with the separator that is its whole point: everything after the hairline
+          changes something that cannot be put back. v1 put six equally-weighted boxes in a row and
+          made two of them red, so Delete order was exactly as easy to hit as Estimate. */}
+      <div className="v2-bar" style={{ marginBottom: 24 }}>
+        {/* TWO GATES, NOT ONE. The full drawer is workflow and closes when the job ends. Tax is a
+            fact about a document that exists, and it is the fact most likely to be missing at that
+            exact moment — so it stays open on finished and completed, and shuts on cancelled,
+            where there is no document to be right about. See lib/orders/stages.ts. */}
+        {canEditWorkflow(o.stage) ? (
+          <OrderEdit orderId={o.id} initial={{
+            orderNumber: o.orderNumber, contactId: o.contactId,
+            customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
+            factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
+            assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
+            depositCents: o.depositCents, currency: o.currency, internalNotes: o.internalNotes, publicNotes: o.publicNotes,
+            deliveryProvince: o.deliveryProvince, taxKind: o.taxKind,
+            pstExempt: o.pstExempt, pstExemptionNote: o.pstExemptionNote,
+            documentTemplateId: o.documentTemplateId,
+            templates: templates.map((t) => ({ id: t.id, name: t.name })),
+            clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
+            lineItems: o.lineItems,
+          }} />
+        ) : canEditDocumentFacts(o.stage) ? (
+          <OrderDocumentEdit
+            orderId={o.id}
+            stage={STAGE_LABELS[o.stage].toLowerCase()}
+            initial={{
+              deliveryProvince: o.deliveryProvince, taxKind: o.taxKind,
+              pstExempt: o.pstExempt, pstExemptionNote: o.pstExemptionNote,
+            }}
+          />
+        ) : null}
+        {/* Open in a new tab: the document is a print-to-PDF page, not a place to navigate away to. */}
+        <Link href={`/orders/${o.id}/document/estimate`} target="_blank" className="v2-act">Estimate ↗</Link>
+        <Link href={`/orders/${o.id}/document/quote`} target="_blank" className="v2-act">Quote ↗</Link>
+        <StageControl orderId={o.id} stage={o.stage} />
+        <hr />
+        <DeleteOrderButton orderId={o.id} orderNumber={o.orderNumber} />
+      </div>
+
+      <section style={{ marginBottom: 24 }}>
+        <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Approval workflow</p><s /></div>
         {/* A finished job had nowhere to go, so finished work was re-typed into another system. */}
         {/* Both finished states, because invoicing is INDEPENDENT of how the job ended. Finishing an
             order neither raises an invoice nor forbids one later — see finish.ts. */}
@@ -95,72 +115,112 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <FinishActions orderId={o.id} invoicedAt={o.invoicedAt} archivedAt={o.archivedAt} />
           </div>
         )}
-
         <ApprovalActions orderId={o.id} stage={o.stage} orderSupplier={o.supplierId ? await getSupplier(o.supplierId) : null} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} />
-      </div>
+      </section>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 md:col-span-2">
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">Line items</h3>
+      <div className="grid gap-6 md:grid-cols-3">
+        <section className="md:col-span-2">
+          <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Line items · {o.lineItems.length}</p><s /></div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-gray-500"><tr>{['Product', 'Qty', 'Specs', 'Unit', 'Total'].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
-              <tbody className="divide-y divide-gray-100">
+            <table className="v2-tbl">
+              <thead><tr>{['Product', 'Qty', 'Specs', 'Unit', 'Total'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+              <tbody>
                 {o.lineItems.map((l) => (
                   <tr key={l.id}>
-                    <td className="px-2 py-1.5"><div className="font-medium text-gray-900">{l.productName}</div>{l.description && <div className="text-xs text-gray-500">{l.description}</div>}</td>
-                    <td className="px-2 py-1.5 tabular-nums">{l.quantity}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-600">{specLine(l) || '—'}</td>
-                    <td className="px-2 py-1.5 tabular-nums">{money(l.unitPriceCents, o.currency)}</td>
-                    <td className="px-2 py-1.5 tabular-nums">{money(l.lineTotalCents, o.currency)}</td>
+                    <td>
+                      <div style={{ fontWeight: 500, color: 'var(--v2-ink)' }}>{l.productName}</div>
+                      {l.description && <div className="v2-hint">{l.description}</div>}
+                    </td>
+                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{l.quantity}</td>
+                    <td style={{ fontSize: 12.5, color: 'var(--v2-ink-45)' }}>{specLine(l) || '—'}</td>
+                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{money(l.unitPriceCents, o.currency)}</td>
+                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>{money(l.lineTotalCents, o.currency)}</td>
                   </tr>
                 ))}
-                {o.lineItems.length === 0 && <tr><td colSpan={5} className="px-2 py-3 text-center text-gray-400">No line items</td></tr>}
               </tbody>
             </table>
+            {o.lineItems.length === 0 && (
+              <div className="v2-card" data-empty style={{ marginTop: 12 }}>
+                <b>No line items</b><span>Use Edit order to add what is being made.</span>
+              </div>
+            )}
           </div>
-          <div className="mt-3 flex justify-end gap-6 text-sm"><span className="text-gray-500">Subtotal <span className="font-medium text-gray-900">{money(o.subtotalCents, o.currency)}</span></span><span className="text-gray-500">Deposit <span className="font-medium text-gray-900">{money(o.depositCents, o.currency)}</span></span><span className="text-gray-500">Balance <span className="font-medium text-gray-900">{money(o.balanceCents, o.currency)}</span></span></div>
-        </div>
+          {/* The kit's totals row: pairs right-aligned, tabular figures, the balance emphasised
+              because it is the number anybody actually came to read. */}
+          <dl className="v2-tot">
+            <div><dt>Subtotal</dt><dd>{money(o.subtotalCents, o.currency)}</dd></div>
+            <div><dt>Deposit</dt><dd>{money(o.depositCents, o.currency)}</dd></div>
+            <div><dt>Balance</dt><dd>{money(o.balanceCents, o.currency)}</dd></div>
+          </dl>
+        </section>
 
-        <div className="space-y-4">
-          <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm">
-            <h3 className="mb-2 text-sm font-semibold text-gray-900">Details</h3>
-            <dl className="space-y-1.5 text-gray-600">
-              <div className="flex justify-between"><dt>Customer email</dt><dd className="text-gray-900">{o.customerEmail ?? '—'}</dd></div>
-              <div className="flex justify-between"><dt>Factory</dt><dd className="text-gray-900">{o.factoryName ?? '—'}</dd></div>
-              <div className="flex justify-between"><dt>Factory email</dt><dd className="text-gray-900">{o.factoryEmail ?? '—'}</dd></div>
-              <div className="flex justify-between"><dt>Requested</dt><dd className="text-gray-900">{o.requestedCompletionDate ?? '—'}</dd></div>
-              <div className="flex justify-between"><dt>Est. completion</dt><dd className="text-gray-900">{o.estimatedCompletionDate ?? '—'}</dd></div>
+        <div className="space-y-6">
+          <section>
+            <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Details</p><s /></div>
+            <dl className="v2-facts" data-narrow>
+              <div><dt>Customer email</dt><dd>{o.customerEmail ?? '—'}</dd></div>
+              <div><dt>Factory</dt><dd>{o.factoryName ?? '—'}</dd></div>
+              <div><dt>Factory email</dt><dd>{o.factoryEmail ?? '—'}</dd></div>
+              <div><dt>Requested</dt><dd>{o.requestedCompletionDate ?? '—'}</dd></div>
+              <div><dt>Est. completion</dt><dd>{o.estimatedCompletionDate ?? '—'}</dd></div>
             </dl>
-          </div>
+          </section>
+
+          {/* Three notes, three tinted blocks in v1 — violet, white, amber. They are the kit's card
+              with a hued micro-label instead: the label says whose words these are and whether they
+              leave the building, which is the only thing the tint was ever encoding. */}
           {o.clientRequirements && (
-            <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm">
-              <h3 className="mb-1 text-sm font-semibold text-violet-900">Client requirements</h3>
-              <p className="whitespace-pre-wrap text-violet-900/80">{o.clientRequirements}</p>
-            </div>
+            <section>
+              <div className="v2-head" style={{ marginBottom: 10 }}>
+                <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Client requirements</p><s />
+              </div>
+              <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--v2-ink)' }}>{o.clientRequirements}</p>
+            </section>
           )}
-          {o.publicNotes && <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm"><h3 className="mb-1 text-sm font-semibold text-gray-900">Public notes</h3><p className="text-gray-600">{o.publicNotes}</p></div>}
-          {o.internalNotes && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm"><h3 className="mb-1 text-sm font-semibold text-amber-900">Internal notes (never shared)</h3><p className="text-amber-800">{o.internalNotes}</p></div>}
+          {o.publicNotes && (
+            <section>
+              <div className="v2-head" style={{ marginBottom: 10 }}><p className="v2-kick"><i />Public notes</p><s /></div>
+              <p className="text-sm" style={{ color: 'var(--v2-ink)' }}>{o.publicNotes}</p>
+              <p className="v2-hint" style={{ marginTop: 4 }}>Visible on the approval page.</p>
+            </section>
+          )}
+          {o.internalNotes && (
+            <section>
+              <div className="v2-head" style={{ marginBottom: 10 }}>
+                <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Internal notes</p>
+                <s />
+                <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>never shared</span>
+              </div>
+              <p className="text-sm" style={{ color: 'var(--v2-ink)' }}>{o.internalNotes}</p>
+            </section>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Attachments</h3>
+      <section style={{ marginTop: 24 }}>
+        <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Attachments</p><s /></div>
         <AttachmentsPanel orderId={o.id} invoiceImageId={o.invoiceImageId} canSetInvoiceImage={canEditDocumentFacts(o.stage)} />
-      </div>
+      </section>
 
-      <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Activity</h3>
-        <ul className="space-y-2">
-          {o.events.map((e) => (
-            <li key={e.id} className="flex items-start gap-2 text-sm">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
-              <div><span className="text-gray-900">{EVENT_LABEL[e.type] ?? e.type}</span>{e.payload?.to ? <span className="text-gray-500"> → {STAGE_LABELS[e.payload.to as keyof typeof STAGE_LABELS] ?? String(e.payload.to)}</span> : null}<div className="text-xs text-gray-400">{new Date(e.createdAt).toLocaleString()}{e.actor ? ` · ${e.actor}` : ''}</div></div>
-            </li>
-          ))}
-          {o.events.length === 0 && <li className="text-sm text-gray-400">No activity yet.</li>}
-        </ul>
-      </div>
+      <section style={{ marginTop: 24 }}>
+        <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Activity · {o.events.length}</p><s /></div>
+        {o.events.length === 0 ? (
+          <div className="v2-card" data-empty><b>No activity yet</b><span>Every stage change and approval will be listed here.</span></div>
+        ) : (
+          <ul className="space-y-2.5">
+            {o.events.map((e) => (
+              <li key={e.id} className="flex items-start gap-2.5 text-sm">
+                <span style={{ marginTop: 7, width: 5, height: 5, flex: 'none', borderRadius: '50%', background: 'var(--v2-line-strong)' }} />
+                <div>
+                  <span style={{ color: 'var(--v2-ink)' }}>{EVENT_LABEL[e.type] ?? e.type}</span>
+                  {e.payload?.to ? <span style={{ color: 'var(--v2-ink-45)' }}> → {STAGE_LABELS[e.payload.to as keyof typeof STAGE_LABELS] ?? String(e.payload.to)}</span> : null}
+                  <p className="v2-kick" style={{ marginTop: 2 }}>{new Date(e.createdAt).toLocaleString()}{e.actor ? ` · ${e.actor}` : ''}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   )
 }

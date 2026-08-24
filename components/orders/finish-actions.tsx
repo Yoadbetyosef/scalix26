@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { useConfirm } from '@/components/v2/confirm'
 import { useState } from 'react'
 import { FileText, Archive } from 'lucide-react'
 
@@ -15,11 +16,16 @@ export function FinishActions({ orderId, invoicedAt, archivedAt }: {
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
+  const { ask, dialog } = useConfirm()
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
   const run = async (action: 'invoice' | 'archive') => {
-    if (action === 'archive' && !confirm('Copy these pieces into your catalog? Quantities are set to zero — the piece has been delivered, so you own none of it.')) return
+    if (action === 'archive' && !(await ask({
+      title: 'Copy these pieces into your catalog?',
+      body: 'Quantities are set to zero — the piece has been delivered, so you own none of it. This adds the design to the catalogue so it can be made again; it does not change this order.',
+      confirmLabel: 'Add to catalog',
+    }))) return
     setBusy(action); setErr(null); setNote(null)
     try {
       const r = await fetch(`/api/orders/${orderId}/finish`, {
@@ -35,22 +41,26 @@ export function FinishActions({ orderId, invoicedAt, archivedAt }: {
   }
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4">
-      <p className="text-sm font-semibold text-neutral-900">This job is finished</p>
-      <p className="mt-0.5 text-xs text-neutral-500">Raise the invoice from what is already here, or keep the piece in your catalog. Nothing needs re-typing.</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={() => run('invoice')} disabled={busy !== null}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
-          <FileText className="h-4 w-4" /> {busy === 'invoice' ? 'Working…' : invoicedAt ? 'Open invoice' : 'Raise invoice'}
+    /* This was the one component in the tree using the `neutral-` greyscale while everything around
+       it used `gray-` — a real inconsistency the survey turned up, and one that disappears by
+       having no greyscale of its own at all. */
+    <div className="v2-card">
+      <div>
+        <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--v2-ink)' }}>This job is finished</p>
+        <span>Raise the invoice from what is already here, or keep the piece in your catalog. Nothing needs re-typing.</span>
+      </div>
+      <div className="v2-bar">
+        <button onClick={() => run('invoice')} disabled={busy !== null} className="v2-act" data-solid>
+          <FileText className="h-3.5 w-3.5" /> {busy === 'invoice' ? 'Working…' : invoicedAt ? 'Open invoice' : 'Raise invoice'}
         </button>
-        <button onClick={() => run('archive')} disabled={busy !== null || !!archivedAt}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm font-semibold text-neutral-700 disabled:opacity-50">
-          <Archive className="h-4 w-4" /> {archivedAt ? 'In catalog' : busy === 'archive' ? 'Working…' : 'Add to catalog'}
+        <button onClick={() => run('archive')} disabled={busy !== null || !!archivedAt} className="v2-act">
+          <Archive className="h-3.5 w-3.5" /> {archivedAt ? 'In catalog' : busy === 'archive' ? 'Working…' : 'Add to catalog'}
         </button>
       </div>
-      {invoicedAt && <p className="mt-2 text-xs text-neutral-400">Invoiced {new Date(invoicedAt).toLocaleDateString()}</p>}
-      {note && <p className="mt-2 text-xs text-emerald-700">{note}</p>}
-      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+      {invoicedAt && <p className="v2-kick">Invoiced {new Date(invoicedAt).toLocaleDateString()}</p>}
+      {note && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><p>{note}</p></div>}
+      {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><p>{err}</p></div>}
+      {dialog}
     </div>
   )
 }

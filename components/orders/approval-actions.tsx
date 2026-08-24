@@ -1,20 +1,23 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Modal } from '@/components/v2/modal'
+import { useConfirm } from '@/components/v2/confirm'
 import { useRouter } from 'next/navigation'
 import { canSendForApproval, canSendToProduction, type OrderStage, type ApprovalType } from '@/lib/orders/stages'
 import { SupplierPicker, type Supplier } from './supplier-picker'
 
 interface Approval { id: string; approvalType: ApprovalType; recipientEmail: string; status: string; version: number; respondedAt: string | null; responseComment: string | null; estimatedCompletionDate: string | null; createdAt: string }
 interface Att { id: string; fileName: string; visibility: 'internal' | 'public' }
-const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 // A response should read at a glance: approved is settled, anything else needs her.
-const STATUS_TINT: Record<string, string> = {
-  approved: 'bg-emerald-100 text-emerald-800',
-  changes_requested: 'bg-amber-100 text-amber-800',
-  rejected: 'bg-red-100 text-red-800',
-  sent: 'bg-blue-50 text-blue-700', opened: 'bg-blue-50 text-blue-700',
-  revoked: 'bg-gray-100 text-gray-500', expired: 'bg-gray-100 text-gray-500',
+// One hue per state, and the chip derives its own tint and ink from it — v1 hand-picked seven
+// background/foreground pairs out of five different Tailwind ramps.
+const STATUS_HUE: Record<string, string> = {
+  approved: 'var(--v2-t2)',
+  changes_requested: 'var(--v2-t4)',
+  rejected: 'var(--v2-red-ink)',
+  sent: 'var(--v2-t1)', opened: 'var(--v2-t1)',
+  revoked: 'var(--v2-ink-45)', expired: 'var(--v2-ink-45)',
 }
 
 export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
@@ -34,6 +37,7 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
   // The factory a send is addressed to. A record, not a typed address — see supplier-picker.tsx.
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [prodOpen, setProdOpen] = useState(false)
+  const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     const [ar, at] = await Promise.all([fetch(`/api/orders/${orderId}/approvals`), fetch(`/api/orders/${orderId}/attachments`)])
@@ -63,7 +67,14 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
       setOpen(null); router.refresh(); void load()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
-  const revoke = async (id: string) => { if (!confirm('Revoke this approval link? It will stop working.')) return; await fetch(`/api/orders/${orderId}/approvals/${id}`, { method: 'DELETE' }); router.refresh(); void load() }
+  const revoke = async (id: string) => {
+    if (!(await ask({
+      title: 'Revoke this approval link?',
+      body: 'The link stops working immediately. If the factory or the customer has it open, their page will stop loading and they will not be able to respond.',
+      confirmLabel: 'Revoke the link', danger: true,
+    }))) return
+    await fetch(`/api/orders/${orderId}/approvals/${id}`, { method: 'DELETE' }); router.refresh(); void load()
+  }
   // Moving to Production emails the factory ONLY if a factory approval was sent and approved — that is the
   // only place an address exists today. So the confirm promises the stage move (always true) and never a
   // send, and the outcome afterwards names the address or says plainly that nobody was told.
@@ -88,15 +99,17 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
 
   return (
     <div>
-      {err && <div className="mb-2 text-xs text-red-600">{err}</div>}
-      <div className="flex flex-wrap gap-2">
-        {canFactory && <button onClick={() => openModal('factory')} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">Send to Factory for Approval</button>}
-        {canCustomer && <button onClick={() => openModal('customer')} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800">Send to Customer for Approval</button>}
-        {canProd && <button onClick={() => { setSupplier(orderSupplier ?? null); setErr(null); setProdOpen(true) }} disabled={busy} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40">Move to Production</button>}
+      {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginBottom: 12 }}><p>{err}</p></div>}
+      <div className="v2-bar">
+        {canFactory && <button onClick={() => openModal('factory')} className="v2-act" data-solid>Send to factory for approval</button>}
+        {canCustomer && <button onClick={() => openModal('customer')} className="v2-act" data-solid>Send to customer for approval</button>}
+        {/* Was the only emerald button in the app. Moving to production is a forward step, not a
+            success message — the filled pill already says it is the primary act here. */}
+        {canProd && <button onClick={() => { setSupplier(orderSupplier ?? null); setErr(null); setProdOpen(true) }} disabled={busy} className="v2-act" data-solid>Move to production</button>}
       </div>
 
       {outcome && (
-        <div className={`mt-2 rounded-lg border px-3 py-2 text-sm ${outcome.tone === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
+        <div className="v2-notice" style={{ ['--ghue' as string]: outcome.tone === 'ok' ? 'var(--v2-t2)' : 'var(--v2-t4)', marginTop: 12 }}>
           {outcome.text}
         </div>
       )}
@@ -105,22 +118,22 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
         <ul className="mt-3 space-y-1.5 text-sm">
           {approvals.map((ap) => (
             <li key={ap.id}>
-              <div className="flex flex-wrap items-center gap-2 text-gray-600">
+              <div className="flex flex-wrap items-center gap-2" style={{ color: 'var(--v2-ink-72)' }}>
                 {/* Once the piece is being made, a factory request is the work order — the factory is not
                     being asked to approve anything, they are holding the job. Calling it "factory" there
                     reads as an approval still outstanding. */}
-                <span className="capitalize text-gray-900">{ap.approvalType === 'factory' && ['production', 'ready', 'delivered', 'completed'].includes(stage) ? 'work order' : ap.approvalType}</span>
-                <span className={`rounded px-1.5 py-0.5 text-[11px] ${STATUS_TINT[ap.status] ?? 'bg-gray-100 text-gray-700'}`}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
-                <span className="text-xs text-gray-400">{ap.recipientEmail}</span>
-                {ap.estimatedCompletionDate && <span className="text-xs text-gray-400">· est {ap.estimatedCompletionDate}</span>}
-                {ap.respondedAt && <span className="text-xs text-gray-400">· {new Date(ap.respondedAt).toLocaleString()}</span>}
-                {['sent', 'opened'].includes(ap.status) && <button onClick={() => revoke(ap.id)} className="ml-auto text-xs text-red-600 underline">Revoke</button>}
+                <span className="capitalize" style={{ color: 'var(--v2-ink)' }}>{ap.approvalType === 'factory' && ['production', 'ready', 'delivered', 'completed'].includes(stage) ? 'work order' : ap.approvalType}</span>
+                <span className="v2-stat" style={{ ['--chan' as string]: STATUS_HUE[ap.status] ?? 'var(--v2-ink-45)' }}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
+                <span className="v2-kick">{ap.recipientEmail}</span>
+                {ap.estimatedCompletionDate && <span className="v2-kick">· est {ap.estimatedCompletionDate}</span>}
+                {ap.respondedAt && <span className="v2-kick">· {new Date(ap.respondedAt).toLocaleString()}</span>}
+                {['sent', 'opened'].includes(ap.status) && <button onClick={() => revoke(ap.id)} className="v2-act" data-danger style={{ marginLeft: 'auto' }}>Revoke</button>}
               </div>
               {/* What they actually said. It was being fetched and never shown, so a "changes requested"
                   gave no clue WHAT to change without going to find the notification email. */}
               {ap.responseComment && (
-                <blockquote className={`mt-1 rounded-lg border-l-2 px-3 py-2 text-sm ${ap.status === 'approved' ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-amber-400 bg-amber-50 text-amber-900'}`}>
-                  <span className="mr-1 text-xs font-medium capitalize opacity-70">{ap.approvalType} said:</span>
+                <blockquote className="v2-quote" style={{ ['--chan' as string]: ap.status === 'approved' ? 'var(--v2-t2)' : 'var(--v2-t4)' }}>
+                  <span className="v2-kick" style={{ marginRight: 6 }}>{ap.approvalType} said</span>
                   <span className="whitespace-pre-wrap">{ap.responseComment}</span>
                 </blockquote>
               )}
@@ -130,63 +143,87 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
       )}
 
       {prodOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setProdOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900">Move to Production</h3>
-            <p className="mt-1 text-sm text-gray-500">
+        <Modal open onClose={() => setProdOpen(false)} dismissable={!busy} title="Move to production"
+          actions={
+            <>
+              <button onClick={() => toProduction(supplier)} disabled={busy || !supplier?.email} className="v2-act" data-solid>{busy ? 'Sending…' : 'Send work order & move'}</button>
+              <button onClick={() => toProduction(null)} disabled={busy} className="v2-act">Move without notifying anyone</button>
+              <button onClick={() => setProdOpen(false)} className="v2-act" style={{ marginLeft: 'auto' }}>Cancel</button>
+            </>
+          }>
+          <>
+            <p className="v2-hint" style={{ marginBottom: 16 }}>
               {stage === 'factory_approved' ? 'This skips customer approval. ' : ''}
               Choose the factory making this piece and they get the work order — the full specification and photographs, with no prices.
             </p>
-            <div className="mt-3">
-              <div className="text-xs text-gray-500">Factory</div>
+            <div style={{ marginTop: 14 }}>
               <SupplierPicker value={supplier} onChange={setSupplier} autoFocus />
             </div>
-            {err && <div className="mt-2 text-xs text-red-600">{err}</div>}
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button onClick={() => toProduction(supplier)} disabled={busy || !supplier?.email} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? 'Sending…' : 'Send work order & move'}</button>
-              {/* Moving without telling anyone is legitimate — she may have phoned them. It is offered as
-                  its own labelled choice so it can never be mistaken for a send. */}
-              <button onClick={() => toProduction(null)} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:opacity-40">Move without notifying anyone</button>
-              <button onClick={() => setProdOpen(false)} className="ml-auto rounded-lg px-3 py-2 text-sm text-gray-500">Cancel</button>
-            </div>
-            {supplier && !supplier.email && <p className="mt-2 text-xs text-amber-700">{supplier.name} has no email address saved, so nothing can be sent to them.</p>}
-          </div>
-        </div>
+            {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 14 }}><p>{err}</p></div>}
+            {/* Moving without telling anyone is legitimate — she may have phoned them. It is in the
+                action row as its own labelled choice so it can never be mistaken for a send. */}
+            {supplier && !supplier.email && (
+              <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 14 }}>
+                <p>{supplier.name} has no email address saved, so nothing can be sent to them.</p>
+              </div>
+            )}
+          </>
+        </Modal>
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(null)}>
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900">Send to {open === 'factory' ? 'Factory' : 'Customer'} for Approval</h3>
+        <Modal open onClose={() => setOpen(null)} dismissable={!busy}
+          title={`Send to ${open === 'factory' ? 'factory' : 'customer'} for approval`}
+          actions={
+            <>
+              <button onClick={send} disabled={busy || (open === 'factory' ? !supplier?.email : !f.recipientEmail)} className="v2-act" data-solid>{busy ? 'Sending…' : 'Send approval request'}</button>
+              <button onClick={() => setOpen(null)} className="v2-act">Cancel</button>
+            </>
+          }>
+          <>
             {open === 'factory' ? (
-              <div className="mt-3">
-                <div className="text-xs text-gray-500">Factory</div>
+              <div style={{ marginBottom: 16 }}>
                 <SupplierPicker value={supplier} onChange={setSupplier} autoFocus />
-                {supplier && !supplier.email && <p className="mt-1 text-xs text-amber-700">{supplier.name} has no email address saved. Remove and re-add them with one to send.</p>}
+                {supplier && !supplier.email && (
+                  <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 10 }}>
+                    <p>{supplier.name} has no email address saved. Remove and re-add them with one to send.</p>
+                  </div>
+                )}
               </div>
             ) : null}
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {open === 'customer' && <label className="block text-xs text-gray-500">Recipient name<input value={f.recipientName} onChange={(e) => setF((p) => ({ ...p, recipientName: e.target.value }))} className={inp} /></label>}
-              {open === 'customer' && <label className="block text-xs text-gray-500">Recipient email<input value={f.recipientEmail} onChange={(e) => setF((p) => ({ ...p, recipientEmail: e.target.value }))} className={inp} /></label>}
-              <label className="block text-xs text-gray-500">Subject<input value={f.subject} onChange={(e) => setF((p) => ({ ...p, subject: e.target.value }))} className={inp} /></label>
-              <label className="block text-xs text-gray-500">Approval deadline<input type="date" value={f.deadline} onChange={(e) => setF((p) => ({ ...p, deadline: e.target.value }))} className={inp} /></label>
+
+            <div className="v2-form">
+              {open === 'customer' && (
+                <div className="v2-fld"><label htmlFor="aa-rname">Recipient name</label>
+                  <input id="aa-rname" value={f.recipientName} onChange={(e) => setF((p) => ({ ...p, recipientName: e.target.value }))} /></div>
+              )}
+              {open === 'customer' && (
+                <div className="v2-fld"><label htmlFor="aa-remail">Recipient email</label>
+                  <input id="aa-remail" value={f.recipientEmail} onChange={(e) => setF((p) => ({ ...p, recipientEmail: e.target.value }))} /></div>
+              )}
+              <div className="v2-fld"><label htmlFor="aa-subject">Subject</label>
+                <input id="aa-subject" value={f.subject} onChange={(e) => setF((p) => ({ ...p, subject: e.target.value }))} /></div>
+              <div className="v2-fld"><label htmlFor="aa-deadline">Approval deadline</label>
+                <input id="aa-deadline" type="date" value={f.deadline} onChange={(e) => setF((p) => ({ ...p, deadline: e.target.value }))} /></div>
+              <div className="v2-fld wide"><label htmlFor="aa-msg">Message</label>
+                <textarea id="aa-msg" value={f.message} onChange={(e) => setF((p) => ({ ...p, message: e.target.value }))} rows={2} /></div>
             </div>
-            <label className="mt-3 block text-xs text-gray-500">Message<textarea value={f.message} onChange={(e) => setF((p) => ({ ...p, message: e.target.value }))} rows={2} className={inp} /></label>
+
             {atts.length > 0 && (
-              <div className="mt-3">
-                <div className="text-xs text-gray-500">Files to send with this request</div>
+              <div style={{ marginTop: 18 }}>
+                <p className="v2-kick" style={{ marginBottom: 8 }}>Files to send with this request</p>
                 {atts.map((a) => (
                   a.visibility === 'public' ? (
-                    <label key={a.id} className="mt-1 flex items-center gap-2 text-sm text-gray-700">
+                    <label key={a.id} className="v2-check" style={{ padding: '5px 0' }}>
                       <input type="checkbox" checked={f.include.includes(a.id)} onChange={(e) => setF((p) => ({ ...p, include: e.target.checked ? [...p.include, a.id] : p.include.filter((x) => x !== a.id) }))} />
-                      {a.fileName}
+                      <span>{a.fileName}</span>
                     </label>
                   ) : (
                     // Internal file: show it, explain why it can't be sent, and make it one click to fix.
-                    <div key={a.id} className="mt-1 flex items-center gap-2 text-sm text-gray-400">
-                      <input type="checkbox" disabled className="opacity-40" />
-                      <span className="truncate">{a.fileName}</span>
-                      <span className="shrink-0 text-xs">internal only</span>
+                    <div key={a.id} className="flex items-center gap-2" style={{ padding: '5px 0' }}>
+                      <input type="checkbox" disabled style={{ width: 17, height: 17, opacity: 0.4 }} />
+                      <span className="truncate text-sm" style={{ color: 'var(--v2-ink-45)' }}>{a.fileName}</span>
+                      <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-ink-45)' }}>internal only</span>
                       <button
                         type="button"
                         onClick={async () => {
@@ -194,23 +231,30 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
                           setAtts((p) => p.map((x) => (x.id === a.id ? { ...x, visibility: 'public' } : x)))
                           setF((p) => ({ ...p, include: [...p.include, a.id] }))
                         }}
-                        className="shrink-0 text-xs text-blue-600 underline"
+                        className="v2-act"
                       >Share it</button>
                     </div>
                   )
                 ))}
                 {!atts.some((a) => a.visibility === 'public') && (
-                  <p className="mt-1.5 text-xs text-amber-700">Uploaded files start as internal. Click <strong>Share it</strong> to include one with this request.</p>
+                  <p className="v2-hint" style={{ marginTop: 8 }}>Uploaded files start as internal. Click <strong>Share it</strong> to include one with this request.</p>
                 )}
               </div>
             )}
-            <label className="mt-3 block text-xs text-gray-500">Internal note (never shared)<input value={f.internalNote} onChange={(e) => setF((p) => ({ ...p, internalNote: e.target.value }))} className={inp} /></label>
-            <label className="mt-2 flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={f.sendCopyToSelf} onChange={(e) => setF((p) => ({ ...p, sendCopyToSelf: e.target.checked }))} />Send a copy to me</label>
-            {err && <div className="mt-2 text-xs text-red-600">{err}</div>}
-            <div className="mt-4 flex gap-2"><button onClick={send} disabled={busy || (open === 'factory' ? !supplier?.email : !f.recipientEmail)} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">{busy ? 'Sending…' : 'Send approval request'}</button><button onClick={() => setOpen(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm">Cancel</button></div>
-          </div>
-        </div>
+
+            <div className="v2-fld" style={{ marginTop: 18 }}>
+              <label htmlFor="aa-note">Internal note<span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)', marginLeft: 8 }}>never shared</span></label>
+              <input id="aa-note" value={f.internalNote} onChange={(e) => setF((p) => ({ ...p, internalNote: e.target.value }))} />
+            </div>
+            <label className="v2-check">
+              <input type="checkbox" checked={f.sendCopyToSelf} onChange={(e) => setF((p) => ({ ...p, sendCopyToSelf: e.target.checked }))} />
+              <span>Send a copy to me</span>
+            </label>
+            {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginTop: 14 }}><p>{err}</p></div>}
+          </>
+        </Modal>
       )}
+      {dialog}
     </div>
   )
 }

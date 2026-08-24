@@ -82,8 +82,11 @@ describe('the button does not promise what the action cannot do', () => {
   const ui = code('components/orders/approval-actions.tsx')
 
   it('is labelled for the stage move, which always happens', () => {
-    expect(ui).toMatch(/>Move to Production</)
-    expect(ui).not.toMatch(/>Send to Production</)
+    // Case-insensitive on the label only: the V2 pass moved the app to sentence case, and what this
+    // test is actually about is the VERB. "Move" names the stage change, which always happens;
+    // "Send" would promise the work order, which may not go anywhere if the factory has no email.
+    expect(ui).toMatch(/>Move to production</i)
+    expect(ui).not.toMatch(/>Send to production</i)
   })
 
   it('cannot send a work order without a factory to send it to', () => {
