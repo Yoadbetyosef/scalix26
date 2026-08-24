@@ -1086,3 +1086,95 @@ the first, so this is low priority — but the two locks these routes are
 supposed to have (middleware `isDevProbe` + `notFound()`) only deliver one and
 a half in production. Both were verified to actually block; only the status
 line is wrong.
+
+## §28 — Business Brain: the inventory, for a delete decision
+
+The dashboard card is gone (8d1edb6). Nothing else has been deleted. This is
+the full surface, so the decision can be made from a list rather than from a
+guess.
+
+**A correction to that commit message first.** It says the card "was the only
+link into /ai-employees/[id]/brain from anywhere a person lands". That is
+wrong. `app/ai-employees/[id]/page.tsx:44` still carries a full-width card —
+Brain icon, heading "Business Brain", subtitle "What your AI understands about
+your business — and what it recommends." The feature is still reachable, two
+clicks in, from the AI employee's own page. Left deliberately: that is the
+feature's natural home, and removing it is part of the full delete, not part of
+clearing the dashboard.
+
+### Is /ai-employees/[id]/brain part of it? Yes — it is the feature's only page
+
+Its entire body is `<BusinessBrain agentId agentName />`. The page itself reads
+only `ai_employees`, for the name and the ownership check; every figure on it is
+fetched client-side from the three brain APIs, and the component imports twelve
+symbols from `lib/brain/present`. It is not a separate feature that shares a
+word.
+
+### THE TRAP: `lib/brain/context/` is NOT Business Brain
+
+Eleven files — `orchestrate.ts`, `registry.ts`, `types.ts`, `providers/*` — that
+happen to live in the same directory. Its export `assembleBusinessContext` has
+five live consumers: `lib/amy/answer.ts`, `lib/anthropic/pipeline.ts`,
+`lib/email/reply.ts`, `app/api/webhooks/twilio/voice/route.ts`,
+`app/api/ai/amy/snapshot/route.ts` — the voice agent, Amy, and email replies.
+No file in `lib/brain/context/**` imports a sibling `lib/brain/*.ts`, and no
+`lib/brain/*.ts` mentions context. **`rm -rf lib/brain` breaks the phone.** If
+the rest of `lib/brain` goes, this should move to `lib/ai-context/` so the
+directory stops implying ownership.
+
+### Exclusively Business Brain — safe to delete together
+
+Page: `app/ai-employees/[id]/brain/page.tsx`.
+API: `app/api/brain/[agentId]` (GET, the read view), `app/api/brain/run/[agentId]`
+(POST, runs the analysis), `app/api/brain/briefing/[agentId]` (POST, the COO
+briefing text + Aura TTS), `app/api/brain/cron` (GET+POST, the nightly study).
+Components: `components/ai-employees/business-brain.tsx`, and
+`components/dashboard/business-brain-card.tsx`, which is now orphaned — zero
+importers repo-wide.
+Lib: the nine non-context files in `lib/brain/` — engine, types, patterns,
+understanding, recommendations, confidence, view, present, updates (~944 lines).
+Script: `scripts/brain-demo.ts` (referenced by no package.json script; its header
+names a tsconfig that does not exist).
+
+### It runs on a schedule
+
+`vercel.json`: `/api/brain/cron` at `0 8 * * *`. Nightly it walks up to 300
+tenants, picks each one's active AI employee, snapshots, runs the analysis and
+writes the diff. `maxDuration = 300`. Deleting the feature means removing that
+entry AND the path from the middleware bypass list (`lib/supabase/middleware.ts:78`).
+
+### Six tables, owned outright
+
+`business_patterns`, `business_understanding`, `business_recommendations`,
+`business_dna` (all from `supabase/migrations/add_business_brain.sql`),
+`brain_updates` (`add_brain_updates.sql`), `brain_briefings`
+(`add_brain_briefings.sql`). A repo-wide grep for all six names returns nothing
+outside `lib/brain/` and `app/api/brain/` — no other feature reads this data.
+
+The engine only READS the shared tables: conversations, messages, leads,
+appointments, payments, payment_requests, tenants, connected_calendars. It
+writes nothing outside its own six.
+
+### Edits required in shared files, if it goes
+
+`app/ai-employees/[id]/page.tsx` — the link at :44 and the `Brain` import at :6.
+`vercel.json` — the cron entry. `lib/supabase/middleware.ts:78` — the bypass.
+`lib/ratelimit.ts:38-39` — the `brain_run` and `brain_read` buckets, used by
+nothing else. `lib/modules.ts:20` — the `business_brain` module key, which is
+declared, shown in the admin module UIs, and **never actually enforced**: no
+brain route checks it.
+
+### Must NOT be deleted
+
+`lib/brain/context/**` (above). `lib/playbook/data.ts` (provides `authAgent` to
+three brain routes but belongs to Playbook), `lib/deepgram/speak.ts` (shared
+with phone calls), `lib/cron/auth.ts`, `lib/billing/gate.ts`.
+`components/ai-employees/business-intelligence-progress.tsx` wears a Brain icon
+and is the **Learning** feature, not this one.
+
+### There are no tests
+
+Not one. The engine, the confidence scoring, the patterns, the presenter — all
+untested. `lib/brain/context/orchestrate.test.ts` tests the shared layer and
+stays. This cuts both ways: a delete breaks no test, and nothing would have
+caught a regression if it had stayed.
