@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
-import { CreditCard, FileText, Info, Upload } from 'lucide-react'
+import QRCode from 'qrcode'
+import { CreditCard, Download, FileText, Image as ImageIcon, Info, Upload } from 'lucide-react'
 import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { ModalDemo } from './modal-demo'
 import '../v2-tokens.css'
@@ -28,7 +29,7 @@ const CHAN: Record<string, string> = {
 async function load() {
   const db = createAdminClient()
   // The tenant with something to show — the kit is about components, not about one business.
-  const { data: prods } = await db.from('catalog_products').select('tenant_id, name, price, sku, category').limit(200)
+  const { data: prods } = await db.from('catalog_products').select('id, tenant_id, name, price, sku, category, image_url').limit(200)
   const busiest = Object.entries((prods ?? []).reduce<Record<string, number>>((a, p) => {
     const t = (p as { tenant_id: string }).tenant_id; a[t] = (a[t] ?? 0) + 1; return a
   }, {})).sort((a, b) => b[1] - a[1])[0]?.[0]
@@ -42,7 +43,7 @@ async function load() {
     db.from('messages').select('content, role, timestamp').in('role', ['user', 'assistant']).order('timestamp', { ascending: false }).limit(40),
   ])
   const product = (prods ?? []).find((p) => (p as { tenant_id: string }).tenant_id === busiest) as
-    { name?: string; price?: number; sku?: string; category?: string } | undefined
+    { id?: string; name?: string; price?: number; sku?: string; category?: string; image_url?: string | null } | undefined
   const all = (msgs ?? []).map((m) => {
     const r = m as { content?: string; role?: string; timestamp?: string }
     return { text: r.content ?? '', us: r.role !== 'user', at: r.timestamp ?? '' }
@@ -50,7 +51,13 @@ async function load() {
   // One of each, alternating, so the pair actually shows the distinction it is about.
   const them = all.filter((m) => !m.us), us = all.filter((m) => m.us)
   const thread = [them[0], us[0], them[1]].filter(Boolean) as typeof all
-  return { contacts: contacts ?? [], product, msgs: thread }
+  // The kit's QR is a real one, encoding the real product's real URL — a hand-drawn square would
+  // have hidden the only thing worth checking, which is whether a 240px code stays scannable inside a
+  // 112px frame with a 7px quiet zone.
+  const qrTarget = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'}/catalog/${(product as { id?: string } | undefined)?.id ?? ''}`
+  let qr: string | null = null
+  try { qr = await QRCode.toDataURL(qrTarget, { margin: 1, width: 240 }) } catch { /* non-fatal */ }
+  return { contacts: contacts ?? [], product, msgs: thread, qr, qrTarget }
 }
 
 const Pair = ({ title, note, v1, v2 }: { title: string; note: string; v1: React.ReactNode; v2: React.ReactNode }) => (
@@ -66,7 +73,7 @@ const Pair = ({ title, note, v1, v2 }: { title: string; note: string; v1: React.
 
 export default async function Kit() {
   if (process.env.NODE_ENV === 'production') notFound()
-  const { contacts, product, msgs } = await load()
+  const { contacts, product, msgs, qr, qrTarget } = await load()
   const money = (n?: number) => (typeof n === 'number' ? `$${n.toLocaleString()}` : '—')
 
   return (
@@ -489,13 +496,61 @@ export default async function Kit() {
           v2={<ModalDemo contacts={contacts.map((c) => ({ name: c.name ?? null, email: c.email ?? null, phone: c.phone ?? null }))} />}
         />
 
+        {/* 15 · MEDIA + CODE — /catalog/[id] */}
+        <Pair
+          title="Media and code · /catalog/[id]"
+          note="Two portraits of the same object, so they share a baseline instead of three sections of vertical distance. The photo's fallback is the frame with an icon in it, not a missing element, so a product with no image still lines up with one that has both. The caption under the code says what scanning it does — the same sentence v1 had, moved from beside the code to under it, where a caption goes. The action is .v2-act, already approved; nothing here is a new control."
+          v1={
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {product?.image_url
+                  ? <img src={product.image_url} alt="" style={{ height: 96, width: 96, borderRadius: 8, objectFit: 'cover' }} />
+                  : <div style={{ height: 96, width: 96, borderRadius: 8, background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImageIcon style={{ width: 24, height: 24, color: '#a1a1aa' }} /></div>}
+                <div><div style={{ fontWeight: 600 }}>{product?.name ?? 'Product'}</div><div style={{ fontSize: 13, color: '#71717a' }}>{product?.sku ?? '—'}</div></div>
+              </div>
+              <div style={{ border: '1px solid #e4e4e7', borderRadius: 12, background: '#fff', padding: 16 }}>
+                <h3 style={{ marginBottom: 8, fontWeight: 600 }}>QR code</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {qr && <img src={qr} alt="Product QR" style={{ height: 112, width: 112, borderRadius: 8, border: '1px solid #e4e4e7' }} />}
+                  <div>
+                    <p style={{ fontSize: 12, color: '#71717a' }}>Opens the product page for showroom/warehouse staff.</p>
+                    <button style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid #d4d4d8', padding: '6px 12px', fontSize: 14, fontWeight: 500 }}><Download style={{ width: 16, height: 16 }} /> Download QR</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+          v2={
+            <div className="v2-shots">
+              <div className="v2-shot">
+                <b>Photo</b>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {product?.image_url
+                  ? <img src={product.image_url} alt={product?.name ?? 'Product'} />
+                  : <i><ImageIcon /></i>}
+              </div>
+              <div className="v2-shot" data-code>
+                <b>Scan</b>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {qr ? <img src={qr} alt={`QR code for ${product?.name ?? 'this product'}`} /> : <i><ImageIcon /></i>}
+                <span>Opens this product for showroom and warehouse staff.</span>
+                <span className="v2-act"><Download className="w-4 h-4" /> Download</span>
+              </div>
+            </div>
+          }
+        />
+
         <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Not yet designed</p><s /></div>
         <p className="v2k-note">
-          Four component types the detail pages surfaced that are not in this kit, because they need a
-          decision before a design: the <b>tabs</b> on /ai-employees/[id]/playbook, the <b>activity
-          timeline</b> on /contacts/[id], the <b>media and QR block</b> on /catalog/[id], and the
-          <b> dark panel</b> on /ai-employees/[id]/brain — which is already closer to /v2 than anything
-          else in v1 and may be the thing others move toward rather than away from.
+          Nothing outstanding. All four the detail pages surfaced have been answered: the <b>media and
+          code block</b> is the pair immediately above; the <b>activity timeline</b> on /contacts/[id]
+          turned out to need no new component — it is the list row, one per event, which is what a
+          timeline is once the drawn spine is taken off it; the <b>tabs</b> on
+          /ai-employees/[id]/playbook are <code>.v2-tabs</code>, already in the tokens and already on
+          /v2 itself, so the migration adopts them rather than proposing them; and the <b>dark panel</b>
+          on /ai-employees/[id]/brain went away with Business Brain itself.
         </p>
         <p className="v2k-note">
           Two more are now in the kit above, marked <b>added after approval</b>, because /inbox needed

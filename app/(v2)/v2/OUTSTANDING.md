@@ -1447,3 +1447,40 @@ The measurement itself needed fixing first: the first version regex-scraped
 numbers out of the computed string, which turns `oklch(0.48 0.2478 358.06)` into
 `rgb(0.48, 0.25, 358)` and reports a contrast for a colour nothing on the page
 is. It said the fix had not worked when it had.
+
+## §35 — the media and code block, and one bug it turned up
+
+`/catalog/[id]` needed the last of the four components the detail pages surfaced
+with no kit answer. Designed first as a kit pair, then used.
+
+**The design.** A catalogue item has two portraits: the photograph a person
+recognises across a showroom, and the code a phone reads at arm's length. v1 kept
+them apart — the photo small in the summary card at the top, the QR in a white
+box of its own three sections down under a 16px heading — so the one screen that
+has both never showed them together, and the sentence explaining what the code is
+for sat as grey body copy beside it.
+
+`.v2-shots` / `.v2-shot` puts them on one baseline: same square, same radius, same
+hairline, each named by the micro-label this language already uses for "what this
+is", with the caption under the thing it describes and the action under the thing
+it acts on. `--shot` sets the size, so a 112px detail block and a 56px row
+thumbnail are one component. The action is `.v2-act`; nothing here is a new
+control. The code frame gets 7px of white padding — a QR is edge-to-edge modules
+and without a quiet zone inside the frame the hairline reads as part of the code.
+
+### The bug: `--v2-ink-24` does not exist
+
+It is referenced **23 times** in `v2-tokens.css` and defined nowhere. Every one of
+those declarations is invalid, so each property falls back to its inherited or
+initial value. For `color` that is inherited ink, which is why nothing ever looked
+broken — those labels are simply darker than intended. For `stroke` the initial
+value is `none`, which is how it surfaced: the fallback icon in the new frame was
+drawn in no colour at all.
+
+All 23 sites are on the `/v2` prototype routes (`.v2-conv`, `.v2-ag-*`,
+`.v2-iv-*`, `.v2-igrid`), not on migrated app pages, and two tests pin the
+declaration text. **Not fixed here on purpose:** defining the token would lighten
+23 places at once, several of them mono micro-labels that would land near 2:1 —
+the exact thing §34 just spent a pass removing. It needs a decision about what
+each site should be, not a one-line define. The new rule uses `--v2-ink-45`, the
+same stroke `.v2-drop`'s icon uses.

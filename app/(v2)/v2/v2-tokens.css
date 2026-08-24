@@ -4262,3 +4262,37 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px;
   background: linear-gradient(90deg, var(--v2-t1), var(--v2-t3) 60%, var(--v2-t4));
 }
+
+/* ── MEDIA + CODE ────────────────────────────────────────────────────────────────────────────────
+   A catalogue item has two portraits: the photograph a person recognises across a showroom, and the
+   code a phone reads at arm's length. v1 kept them apart — the photo small in the summary card at the
+   top, the QR in a white box of its own three sections down, under a 16px heading — so the one screen
+   that has both never showed them together, and the sentence explaining what the code is for sat as
+   grey body copy beside it.
+   They belong on one baseline: the same square, the same radius, the same hairline, each named by the
+   micro-label this language already uses for "what this is". The action goes under the thing it acts
+   on and nowhere else, as .v2-act — no new button. --shot sets the size, so a 112px detail block and a
+   56px row thumbnail are the same component. */
+.v2-shots { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 22px; }
+.v2-shot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.v2-shot > b {
+  font-family: var(--v2-mono); font-weight: 400; font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--v2-ink-45);
+}
+/* One frame, whether it holds a photograph, a code, or nothing yet — a product without an image must
+   not collapse the row it shares with one that has both. */
+.v2-shot > img, .v2-shot > i {
+  display: flex; align-items: center; justify-content: center;
+  width: var(--shot, 112px); height: var(--shot, 112px);
+  background: var(--v2-paper); border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius-card); object-fit: cover;
+}
+/* --v2-ink-45, not --v2-ink-24: the latter is referenced 23 times above and defined nowhere, so it
+   resolves to nothing and `stroke` falls back to its initial `none` — an icon drawn in no colour at
+   all. OUTSTANDING §35. This is the same stroke .v2-drop's icon uses. */
+.v2-shot > i svg { width: 22px; height: 22px; stroke: var(--v2-ink-45); stroke-width: 1.5; fill: none; }
+/* A QR is edge-to-edge modules; without a quiet zone inside the frame the hairline reads as part of
+   the code. White under it too, because a scanner wants white and --v2-paper is not promised to be. */
+.v2-shot[data-code] > img { padding: 7px; background: #fff; }
+.v2-shot > span { max-width: 24ch; font-size: 12.5px; line-height: 1.45; color: var(--v2-ink-45); }
+.v2-shot > .v2-act { align-self: flex-start; }
