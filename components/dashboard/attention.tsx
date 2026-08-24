@@ -14,12 +14,12 @@ export function useAttention(): AttentionSnapshot {
  * Mount once on the dashboard. The notification bell also binds the tenant globally, so the count
  * is correct on every page — this just gives the dashboard the freshest data with zero flicker.
  */
-export function AttentionSync({ tenantId, items }: { tenantId: string; items: AttentionItem[] }) {
+export function AttentionSync({ tenantId, items, waiting = 0 }: { tenantId: string; items: AttentionItem[]; waiting?: number }) {
   useEffect(() => {
     attentionStore.setTenant(tenantId)
-    attentionStore.seed(items)
+    attentionStore.seed(items, waiting)
     // Re-seed when the server-rendered items change (navigation / refresh).
-  }, [tenantId, JSON.stringify(items)])
+  }, [tenantId, JSON.stringify(items), waiting])
   return null
 }
 

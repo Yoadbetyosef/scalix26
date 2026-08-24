@@ -114,10 +114,12 @@ export function V2Hero({ persona, employeeName, line, readouts, briefing, aside 
   // wrong tree and jumping, and the canvas is keyed so crossing 720px genuinely remounts it.
   const mode = isMobile === null ? 'pending' : isMobile ? 'mobile' : 'desktop'
 
-  // The live count, when the store has one. Same subscription AttentionSentence used, so resolving a
-  // notification still changes the sentence without a reload — the thing matching /v2 would have cost.
+  // The live count — and the RIGHT one. This read `unresolvedCount` and produced "2 things need you"
+  // over a card saying "Nothing needs you": that counts notifications, including month-long tallies
+  // like takeovers, while the card counts the inbox's two groups. `waiting` is the card's own number,
+  // carried on the same store so the sentence still updates without a reload.
   const attention = useAttention()
-  const sentence = rudiLine({ ...line, waiting: attention.ready ? attention.unresolvedCount : line.waiting })
+  const sentence = rudiLine({ ...line, waiting: attention.ready ? attention.waiting : line.waiting })
 
   return (
     <div className="v2 v2-embedded">
