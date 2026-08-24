@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
-import { MessageSquare, Package, FileText, CreditCard, Info } from 'lucide-react'
+import { CreditCard, FileText, Info, Upload } from 'lucide-react'
 import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { ModalDemo } from './modal-demo'
 import '../v2-tokens.css'
@@ -339,6 +339,79 @@ export default async function Kit() {
               </dl>
               <button type="button" className="v2-ico" style={{ marginTop: 14 }} aria-label="Contact info"><Info /></button>
             </div>
+          }
+        />
+
+        {/* 11 · ACTION BAR — /orders/[id] carries six verbs, two irreversible */}
+        <Pair
+          title="Action bar — new"
+          note="Six verbs across the top of an order. v1 gave each its own bordered box and made the two irreversible ones red, so the first thing the page said was “six buttons”, and “Delete order” was exactly as easy to hit as “Estimate”. Same pills as everywhere else, wrapping rather than scrolling; one filled because it is the thing you most likely came to do; and a hairline marking where the reversible actions stop. The rule is the separator — the red is only allowed after it."
+          v1={
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {['Edit order', 'Estimate', 'Quote', 'Mark finished'].map((l) => (
+                <span key={l} style={{ borderRadius: 8, border: '1px solid #d1d5db', padding: '8px 12px', fontSize: 14, color: '#374151', background: '#fff' }}>{l}</span>
+              ))}
+              {['Cancel order', 'Delete order'].map((l) => (
+                <span key={l} style={{ borderRadius: 8, border: '1px solid #fecaca', padding: '8px 12px', fontSize: 14, color: '#dc2626', background: '#fff' }}>{l}</span>
+              ))}
+            </div>
+          }
+          v2={
+            <div className="v2-bar">
+              <button type="button" className="v2-act" data-solid>Edit order</button>
+              <button type="button" className="v2-act">Estimate</button>
+              <button type="button" className="v2-act">Quote</button>
+              <button type="button" className="v2-act">Mark finished</button>
+              <hr />
+              <button type="button" className="v2-act" data-danger>Cancel order</button>
+              <button type="button" className="v2-act" data-danger>Delete order</button>
+            </div>
+          }
+        />
+
+        {/* 12 · DETAILS LIST — already in the kit, shown against the panel it replaces */}
+        <Pair
+          title="Key-value details — /v2’s own, already here"
+          note="Not a new component: .v2-facts is the dt/dd grid already used by the contact rail and the inbox panel, and the order’s Details panel is the same thing — a label and a value. It is paired here because /orders/[id] builds its own by hand out of a bordered card and two text sizes, and the point of the kit is that it should not have to."
+          v1={
+            <div style={{ borderRadius: 12, border: '1px solid #e5e7eb', background: '#fff', padding: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>Details</div>
+              {[['Customer email', '—'], ['Factory', '—'], ['Requested', '2026-09-07'], ['Est. completion', '—']].map(([k, v]) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13.5 }}>
+                  <span style={{ color: '#6b7280' }}>{k}</span><span style={{ color: '#111827' }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          }
+          v2={
+            <div>
+              <p className="v2-kick" style={{ marginBottom: 12 }}>Details</p>
+              <dl className="v2-facts" data-narrow>
+                <div><dt>Customer email</dt><dd>—</dd></div>
+                <div><dt>Factory</dt><dd>—</dd></div>
+                <div><dt>Requested</dt><dd>2026-09-07</dd></div>
+                <div><dt>Est. completion</dt><dd>—</dd></div>
+              </dl>
+            </div>
+          }
+        />
+
+        {/* 13 · DROPZONE — new */}
+        <Pair
+          title="File dropzone — new"
+          note="The empty card’s dashed edge, made a target — same border, same radius, same paper, because a dashed edge is already this language’s way of saying “nothing here yet” and a drop target is that plus an invitation. One state is added and only one: the moment a file is dragged over it, which is the only moment the surface should react. Used by the order’s attachments panel and by the contacts import wizard, which built its own."
+          v1={
+            <div style={{ borderRadius: 12, border: '2px dashed #d1d5db', background: '#f9fafb', padding: '34px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Drop files here, or click to choose</div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Photos, sketches, PDFs, videos, CAD — up to 50 MB each</div>
+            </div>
+          }
+          v2={
+            <button type="button" className="v2-drop">
+              <Upload />
+              <b>Drop files here, or click to choose</b>
+              <span>Photos, sketches, PDFs, videos, CAD (STL, OBJ, 3DM, STEP, ZIP…) — up to 50 MB each</span>
+            </button>
           }
         />
 
