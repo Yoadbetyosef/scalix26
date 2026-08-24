@@ -46,7 +46,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // ── Hero (overview only) — bound to real data already on the page ─────────────
   // The compact header is preserved verbatim for the Leads/Appointments tabs.
-  let brainAgentId: string | undefined
   // Seeded into the attention store so the hero's caption and the Needs You card read ONE number.
   let heroWaiting = 0
   let topSection = (
@@ -84,9 +83,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     )
     heroWaiting = view.waiting
 
-    const { employeeName, persona: primaryPersona, brainAgentId: agentId, briefing, presenceState } =
+    const { employeeName, persona: primaryPersona, briefing, presenceState } =
       buildHeroInputs(aiEmployees, impactData, appointments_list, leads_list, stats)
-    brainAgentId = agentId
 
     topSection = (
       <>
@@ -132,7 +130,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {effectiveTab === 'appointments' ? (
         <AppointmentsTable appointments={appointments_list} />
       ) : (
-        <ImpactDashboard data={impactData!} brainAgentId={brainAgentId} tenantId={tenant.id} />
+        <ImpactDashboard data={impactData!} tenantId={tenant.id} />
       )}
     </div>
   )

@@ -3,26 +3,28 @@
 import { useState } from 'react'
 import type { ImpactData, AttentionItem } from '@/lib/dashboard/impact'
 import { DrillDownDrawer, type DrawerConfig } from '@/components/dashboard/drill-down-drawer'
-import { BusinessBrainCard } from '@/components/dashboard/business-brain-card'
 import { AttentionNeeded } from '@/components/dashboard/attention-needed'
 
-// WHAT IS LEFT OF THE BELOW-FOLD DASHBOARD.
+// WHAT IS LEFT OF THE BELOW-FOLD DASHBOARD: ONE THING, AND IT IS A WORK QUEUE.
 //
-// The hero owns the viewport and its right column carries the month's figures, so the three sections
-// that restated them are gone: "What Would Have Happened Without <brand>", the four impact metric
-// cards, and "Your AI Employee This Month". The month label went with them — the right column already
-// says which month it is. What remains is the two things that are not figures: Attention Needed, which
-// is a work queue, and Business Brain, which is its own feature with its own entry point.
-export function ImpactDashboard({ data, brainAgentId, tenantId }: { data: ImpactData; brainAgentId?: string; tenantId: string }) {
+// The hero owns the viewport and its right column carries the month's figures, so everything that
+// restated them went first — "What Would Have Happened Without <brand>", the four impact metric
+// cards, "Your AI Employee This Month", the month label. Business Brain followed, card and heading:
+// it was the last panel here, and a dashboard whose job is "what needs you now" is not where a
+// standing summary of what the AI has learned belongs.
+//
+// Attention Needed stays, and is the reason this component still exists. It is not a figure restated
+// somewhere else — it is the list of things a person has to act on, and it is the only one.
+export function ImpactDashboard({ data, tenantId }: { data: ImpactData; tenantId: string }) {
   // Drill-down drawer (proof). Attention Needed still opens it; the four metric cards that used
   // to are gone.
   const [drawer, setDrawer] = useState<DrawerConfig | null>(null)
 
   return (
     <div className="space-y-5 md:space-y-8">
-      {/* ATTENTION NEEDED + BUSINESS BRAIN — side by side, under the numbers */}
-      <div id="attention-needed" className="grid gap-4 md:grid-cols-2 md:items-start scroll-mt-20">
-      <div>
+      {/* Full width now that nothing sits beside it. The id and scroll-mt are the anchor the
+          notification bell and the voice assistant deep-link to — they must survive. */}
+      <div id="attention-needed" className="scroll-mt-20">
         <h2 className="text-lg sm:text-xl font-normal text-ink mb-3">Attention Needed</h2>
         <AttentionNeeded
           items={data.attention}
@@ -35,13 +37,6 @@ export function ImpactDashboard({ data, brainAgentId, tenantId }: { data: Impact
             setDrawer({ metric: item.metric!, title: meta.title, subtitle: meta.subtitle, headerCount: `${n}` })
           }}
         />
-      </div>
-      {brainAgentId && (
-        <div>
-          <h2 className="text-lg sm:text-xl font-normal text-ink mb-3">Business Brain</h2>
-          <BusinessBrainCard agentId={brainAgentId} />
-        </div>
-      )}
       </div>
 
       {/* Drill-down proof drawer (lazy-loads real records when opened) */}

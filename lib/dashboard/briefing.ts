@@ -19,7 +19,7 @@ import { primaryOf } from '@/lib/agents/primary'
 // ── THE BODY BELOW IS UNCHANGED ─────────────────────────────────────────────────────────────────────
 //
 // Extracted programmatically from the page rather than retyped — lib/invoices/OUTSTANDING.md §7h. The
-// only edits are mechanical: `brainAgentId` became a returned field instead of an outer-scope
+// only edits are mechanical: the hero's inputs became returned fields instead of outer-scope
 // assignment, and the three inputs the block closed over are now parameters. Every value, every
 // comparison and every sentence is byte-identical to what /dashboard rendered before.
 
@@ -37,7 +37,6 @@ export interface HeroInputs {
    */
   persona: AgentPersona
   employeeVoice: string | null
-  brainAgentId: string | undefined
   briefing: AmyBriefing
   presenceState: PresenceState
   stateSentence: string
@@ -53,13 +52,12 @@ export function buildHeroInputs(
 ): HeroInputs {
   const employeesTyped = aiEmployees as { id?: string; name?: string | null; status?: string | null; voice?: string | null; created_at?: string | null }[]
   // Was `.find(active) || [0]` over an unordered query. See primaryOf: with two active employees that
-  // is a coin toss, and it decides this hero's name, voice, portrait and which brain it loads.
+  // is a coin toss, and it decides this hero's name, voice and portrait.
   const primaryEmployee = primaryOf(employeesTyped)
   const employeeName = primaryEmployee?.name || 'Your AI'
   const persona: AgentPersona =
     (primaryEmployee as { persona?: AgentPersona } | undefined)?.persona === 'miles' ? 'miles' : 'rudi'
   const employeeVoice = primaryEmployee?.voice ?? null
-  const brainAgentId = primaryEmployee?.id
 
   const handled = impactData.conversationsManaged.value
   const booked = appointments_list.filter((a) => a.status === 'confirmed' || a.status === 'completed').length
@@ -98,5 +96,5 @@ export function buildHeroInputs(
     appointmentsToday,
   }
 
-  return { employeeName, persona, employeeVoice, brainAgentId, briefing, presenceState, stateSentence, idleSentence }
+  return { employeeName, persona, employeeVoice, briefing, presenceState, stateSentence, idleSentence }
 }
