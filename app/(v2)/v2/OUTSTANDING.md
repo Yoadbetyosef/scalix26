@@ -1061,3 +1061,28 @@ happens to the drip cron, to Amy's snapshot, and to Business Brain first.
 
 **Not in scope and not related:** `crm_leads` and `/api/partner/crm/leads` are
 Partner OS — the partner's own prospect pipeline. Untouched.
+
+## §27 — /v2/kit and /v2/render-probe soft-404 in production
+
+Found verifying the 2026-08-24 deploy. Both return **HTTP 200 with the 404
+page as the body**. `/render-probe/dashboard`, which is not under this route
+group, correctly returns 404.
+
+**Nothing is exposed.** `notFound()` is the first statement in both pages,
+before any query runs, and the kit's `load()` — which uses an admin client and
+picks the tenant with the most catalogue rows across the whole platform — never
+executes. Zero `.v2k-block` elements render. This is a status-code defect, not
+a data one.
+
+**Why.** `app/(v2)/v2/layout.tsx` does async work (getUser, getActiveTenantId)
+and then renders a shell. By the time the page below it throws `notFound()`,
+the response has begun streaming and the 200 is already committed, so Next can
+only render the not-found UI into it. The pages outside this route group have
+no such layout and set the status correctly.
+
+**Why it matters anyway:** a soft 404 is indexable and invisible to uptime
+monitoring. The layout already sets `robots: { index: false }`, which limits
+the first, so this is low priority — but the two locks these routes are
+supposed to have (middleware `isDevProbe` + `notFound()`) only deliver one and
+a half in production. Both were verified to actually block; only the status
+line is wrong.
