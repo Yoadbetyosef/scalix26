@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders } from '@/lib/orders/store'
-import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, isTerminalStage, type OrderStage } from '@/lib/orders/stages'
-import { stageColor, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-colors'
+import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, type OrderStage } from '@/lib/orders/stages'
+import { Lock } from 'lucide-react'
+import { stageColor, stageHue, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-colors'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -21,39 +22,52 @@ export default async function OrdersBoardPage() {
   const byStage = (s: OrderStage) => orders.filter((o) => o.stage === s)
 
   return (
-    <div className="p-6">
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">Orders — Board</h1>
-        <div className="flex gap-2">
-          <Link href="/orders" className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Table</Link>
-          <Link href="/orders/new" className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800">+ New Order</Link>
-        </div>
+    <div className="v2 v2-embedded p-4 sm:p-6">
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Board · {orders.length}</p>
+        <s />
+        <Link href="/orders" className="v2-act">Table</Link>
+        <Link href="/orders/new" className="v2-act" data-solid>New order</Link>
       </div>
+
+      {/* THE COLUMN HUES ARE UNCHANGED — that fan is a designed thing, thirteen hues no two of which
+          sit closer than 16°, and the table now reads from the same one via stageHue. What changed
+          is the chrome around them: v1 wrapped each column in a grey card on a grey body, so the
+          board read as a wall of boxes with the hue reduced to a 3px rule. The hue is the column
+          now — a tinted header on paper, one hairline, and the cards inside are the kit's rows. */}
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {/* Terminal stages get no column — a board column that only ever accumulates is a list, not a
-            stage of work. 'finished' joins 'cancelled' here; both are still on /orders. */}
         {ORDER_STAGES.filter((s) => s !== 'cancelled' && s !== 'finished').map((s) => {
           const c = stageColor(s)
+          const rows = byStage(s)
           return (
-            <div key={s} className={`${STAGE_COLUMN_WIDTH} shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50`}>
-              <div className="h-[3px]" style={{ background: c.bar }} />
-              <div className="flex items-center justify-between gap-2 border-b px-3 py-2" style={{ background: c.bg, borderColor: c.border }}>
-                {/* nowrap, because the column is sized to the longest label and a wrapped header would
-                    mean that measurement was wrong rather than that the name was too long. */}
-                <span className="whitespace-nowrap text-xs font-semibold" style={{ color: c.text }}>{STAGE_LABELS[s]}</span>
-                <span className="flex shrink-0 items-center gap-1 text-[10px]" style={{ color: c.text, opacity: isTerminalStage(s) ? 0.65 : 0.75 }}>
-                  {byStage(s).length}{isProtectedStage(s) && <span title="Approval stage — moves via workflow actions only">🔒</span>}
+            <div key={s} className={`${STAGE_COLUMN_WIDTH} shrink-0 overflow-hidden`}
+                 style={{ border: '1px solid var(--v2-line)', borderRadius: 'var(--v2-radius-card)', background: 'var(--v2-paper)' }}>
+              <div className="flex items-center justify-between gap-2 px-3 py-2.5"
+                   style={{ background: c.bg, borderBottom: `1px solid ${c.border}` }}>
+                <span className="v2-kick" style={{ color: c.text, whiteSpace: 'nowrap' }}>{STAGE_LABELS[s]}</span>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span className="v2-kick" style={{ color: c.text, opacity: 0.8 }}>{rows.length}</span>
+                  {/* An approval stage moves only through the order's own workflow actions. It was a
+                      padlock emoji; a title on an emoji is not a label anyone reads. */}
+                  {isProtectedStage(s) && (
+                    <Lock aria-label="Approval stage — moves via workflow actions only"
+                          style={{ width: 11, height: 11, color: c.text, opacity: 0.7 }} />
+                  )}
                 </span>
               </div>
-              <div className="space-y-2 p-2">
-                {byStage(s).map((o) => (
-                  <Link key={o.id} href={`/orders/${o.id}`} className="block rounded-lg border border-gray-200 bg-white p-2.5 hover:border-gray-300">
-                    <div className="font-mono text-[11px] text-gray-500">{o.orderNumber}</div>
-                    <div className="text-sm font-medium text-gray-900">{o.customerName ?? 'No customer'}</div>
-                    <div className="mt-0.5 text-xs text-gray-500">{money(o.subtotalCents)}{o.factoryName ? ` · ${o.factoryName}` : ''}</div>
+              <div className="v2-list">
+                {rows.map((o) => (
+                  <Link key={o.id} href={`/orders/${o.id}`} className="v2-row" data-click
+                        style={{ ['--chan' as string]: stageHue(s), padding: '11px 13px' }}>
+                    <div className="v2-m">
+                      <p className="truncate">{o.customerName ?? 'No customer'}</p>
+                      <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11 }}>
+                        {o.orderNumber} · {money(o.subtotalCents)}{o.factoryName ? ` · ${o.factoryName}` : ''}
+                      </span>
+                    </div>
                   </Link>
                 ))}
-                {byStage(s).length === 0 && <div className="px-1 py-2 text-[11px] text-gray-400">—</div>}
+                {rows.length === 0 && <p className="v2-kick" style={{ padding: '14px 13px' }}>Nothing here</p>}
               </div>
             </div>
           )

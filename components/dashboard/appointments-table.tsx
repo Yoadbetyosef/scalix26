@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, Check, BellOff, Phone, Star } from 'lucide-react'
+import { Check, BellOff, Phone, Star } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { EmptyState } from '@/components/ui/empty-state'
 import { formatTime12 } from '@/lib/appointments'
 
 export type Appointment = {
@@ -21,10 +20,12 @@ export type Appointment = {
   review_sent_at: string | null
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  confirmed: 'bg-blue-50 text-blue-700',
-  completed: 'bg-green-100 text-green-700',
-  cancelled: 'bg-sunken text-subtle',
+// Status wears the kit's chip in its own hue — the same three-value pattern /inbox/[id] uses for a
+// conversation. Confirmed is the live one, completed the settled one, cancelled the muted one.
+const STATUS_HUE: Record<string, string> = {
+  confirmed: 'var(--v2-t1)',
+  completed: 'var(--v2-t2)',
+  cancelled: 'var(--v2-ink-45)',
 }
 
 function friendlyDate(iso: string): string {
@@ -76,69 +77,75 @@ export function AppointmentsTable({ appointments }: { appointments: Appointment[
 
   if (!rows.length) {
     return (
-      <EmptyState icon={Calendar} title="Ready to start booking">
-        Your AI is standing by to book appointments the moment a customer asks — they&rsquo;ll land here automatically, with no back-and-forth.
-      </EmptyState>
+      <div className="v2 v2-embedded">
+        <div className="v2-card" data-empty>
+          <b>Ready to start booking</b>
+          <span>Your AI is standing by to book appointments the moment a customer asks — they&rsquo;ll land here automatically, with no back-and-forth.</span>
+        </div>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-7 gap-y-2 sx-card px-5 py-3.5 text-sm">
-        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-blue-400" /><span className="sx-tabular font-medium text-ink">{counts.today}</span><span className="text-subtle">Today</span></span>
-        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" /><span className="sx-tabular font-medium text-ink">{counts.completed}</span><span className="text-subtle">Completed</span></span>
-        <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" /><span className="sx-tabular font-medium text-ink">{counts.upcoming}</span><span className="text-subtle">Upcoming</span></span>
+    <div className="v2 v2-embedded">
+      {/* The header the page never had. /appointments was created by moving the dashboard's tab
+          here, and a tab has no title — so the count went into the micro-label, where the rail
+          cannot say it, and the three tallies followed as chips rather than as a bordered stat bar
+          with its own three dot colours. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Schedule · {rows.length}</p>
+        <s />
+        <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t1)' }}>{counts.today} today</span>
+        <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>{counts.completed} completed</span>
+        <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>{counts.upcoming} upcoming</span>
       </div>
 
-      <div className="space-y-2 sx-stagger">
-        {rows.map((a) => {
-          const cfg = STATUS_STYLES[a.status] || STATUS_STYLES.confirmed
-          return (
-            <div key={a.id} className="rounded-2xl border border-hairline bg-white shadow-e1 p-4 sm:p-5 transition-all hover:shadow-e2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-ink truncate">{a.customer_name || 'Customer'}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${cfg}`}>{a.status}</span>
-                    {a.skip_review && <span className="text-[11px] text-muted">review skipped</span>}
-                  </div>
-                  <p className="text-sm text-ink mt-1">{friendlyDate(a.slot_date)} · {formatTime12(a.slot_time)}</p>
-                  <p className="text-xs text-muted mt-0.5 break-words">
-                    {a.service_type || 'Service'} · <span className="break-all">{a.customer_phone}</span>
-                    {a.channel && <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded bg-sunken text-subtle capitalize">{a.channel}</span>}
-                  </p>
-                </div>
-                <div className="flex flex-col items-stretch gap-2 flex-shrink-0">
-                  <a href={`tel:${a.customer_phone}`} className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-ink text-white hover:bg-ink/90">
-                    <Phone className="w-3.5 h-3.5" /> Call
-                  </a>
-                  {a.status !== 'completed' && (
-                    <button onClick={() => markCompleted(a.id)} disabled={busy === a.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-hairline-strong text-ink shadow-e1 hover:bg-sunken hover:shadow-e2 transition-all disabled:opacity-50">
-                      <Check className="w-3.5 h-3.5 text-emerald-500" strokeWidth={2.5} /> {busy === a.id ? '…' : 'Mark Completed'}
-                    </button>
-                  )}
-                  {a.review_sent_at ? (
-                    <span className="inline-flex items-center justify-center gap-1 px-3 py-1 text-xs font-medium text-green-600">
-                      <Star className="w-3.5 h-3.5 fill-current" /> Review sent
-                    </span>
-                  ) : (
-                    <button onClick={() => sendReview(a.id)} disabled={busy === a.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white border border-hairline-strong text-ink shadow-e1 hover:bg-sunken hover:shadow-e2 transition-all disabled:opacity-50">
-                      <Star className="w-3.5 h-3.5 text-amber-500" /> {busy === a.id ? '…' : 'Send Review Now'}
-                    </button>
-                  )}
-                  {!a.skip_review && !a.review_sent_at && (
-                    <button onClick={() => skipReview(a.id)} disabled={busy === a.id}
-                      className="tap-target inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium text-muted hover:text-subtle hover:bg-sunken disabled:opacity-50">
-                      <BellOff className="w-3.5 h-3.5" /> Skip Review
-                    </button>
-                  )}
-                </div>
-              </div>
+      <div className="v2-list sx-stagger">
+        {rows.map((a) => (
+          /* The kit's list row. v1 gave each appointment a shadowed card with a four-button column
+             stacked down its right side, which on a phone is a card taller than it is wide. The row
+             lights from the left in the status's own hue and the actions are the kit's pills. */
+          <div key={a.id} className="v2-row" style={{ ['--chan' as string]: STATUS_HUE[a.status] ?? 'var(--v2-t1)' }}>
+            <div className="v2-m">
+              <p className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="truncate">{a.customer_name || 'Customer'}</span>
+                <span className="v2-stat">{a.status}</span>
+                {a.channel && <span className="v2-kick">{a.channel}</span>}
+                {/* A chip, not a second micro-label: side by side, two v2-kicks read as one phrase —
+                    "OWNER REVIEW SKIPPED" — and one of these is where the booking came from while
+                    the other is a decision somebody made. */}
+                {a.skip_review && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-ink-45)' }}>review skipped</span>}
+              </p>
+              <span>
+                {friendlyDate(a.slot_date)} · {formatTime12(a.slot_time)} · {a.service_type || 'Service'} · {a.customer_phone}
+              </span>
             </div>
-          )
-        })}
+            <div className="v2-bar" style={{ flex: 'none', justifyContent: 'flex-end' }}>
+              <a href={`tel:${a.customer_phone}`} className="v2-act" data-solid data-touch>
+                <Phone className="w-3.5 h-3.5" /> Call
+              </a>
+              {a.status !== 'completed' && (
+                <button onClick={() => markCompleted(a.id)} disabled={busy === a.id} className="v2-act" data-touch>
+                  <Check className="w-3.5 h-3.5" /> {busy === a.id ? 'Working' : 'Completed'}
+                </button>
+              )}
+              {a.review_sent_at ? (
+                <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>
+                  <Star className="w-3 h-3" /> Review sent
+                </span>
+              ) : (
+                <button onClick={() => sendReview(a.id)} disabled={busy === a.id} className="v2-act" data-touch>
+                  <Star className="w-3.5 h-3.5" /> {busy === a.id ? 'Working' : 'Send review'}
+                </button>
+              )}
+              {!a.skip_review && !a.review_sent_at && (
+                <button onClick={() => skipReview(a.id)} disabled={busy === a.id} className="v2-act" data-touch>
+                  <BellOff className="w-3.5 h-3.5" /> Skip
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

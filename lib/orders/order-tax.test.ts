@@ -128,8 +128,18 @@ describe('the orders list stopped calling a link a status', () => {
   })
 
   it('the stage chip is the status, and a finished job reads quieter', () => {
-    expect(listPage).toContain('isTerminalStage(o.stage)')
     expect(listPage).toContain('{STAGE_LABELS[o.stage]}')
+    // "Quieter" used to be a two-way isTerminalStage() ternary between two greys. The list reads
+    // the BOARD's hue fan now — stageHue — which already answers this and answers it better: the
+    // three terminal stages are the three whose saturation collapses under 13%, so a finished job
+    // recedes without the list needing its own opinion about which stages are finished. One colour
+    // language across the table and the board rather than two.
+    expect(listPage).toContain('stageHue(o.stage)')
+    const colors = read('./stage-colors.ts')
+    for (const terminal of ['completed', 'finished', 'cancelled']) {
+      // The word is in the trailing comment, past the closing brace, so match the whole line.
+      expect(colors).toMatch(new RegExp(`^\\s*${terminal}:.*settled`, 'm'))
+    }
   })
 })
 

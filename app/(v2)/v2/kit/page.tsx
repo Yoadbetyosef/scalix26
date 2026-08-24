@@ -369,6 +369,25 @@ export default async function Kit() {
           }
         />
 
+        {/* 11b · CHECKBOX — found while migrating the order form */}
+        <Pair
+          title="Checkbox row — new"
+          note="Spelled by hand in four files as `flex cursor-pointer items-center gap-2 text-sm text-gray-800` around a raw 16px box. The whole row is the target rather than the box, the box takes the accent when checked, and the aside that explains the option takes the form's own hint style instead of being a third grey on the line."
+          v1={
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#1f2937', cursor: 'pointer' }}>
+              <input type="checkbox" defaultChecked style={{ width: 16, height: 16 }} />
+              Custom design
+              <span style={{ fontSize: 12, color: '#6b7280' }}>— bespoke piece made to the client&apos;s brief</span>
+            </label>
+          }
+          v2={
+            <label className="v2-check">
+              <input type="checkbox" defaultChecked />
+              <span>Custom design<em>bespoke piece made to the client&apos;s brief</em></span>
+            </label>
+          }
+        />
+
         {/* 12 · DETAILS LIST — already in the kit, shown against the panel it replaces */}
         <Pair
           title="Key-value details — /v2’s own, already here"

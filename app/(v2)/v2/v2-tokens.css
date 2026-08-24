@@ -3961,6 +3961,43 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2-tot dd { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--v2-ink); }
 .v2-tot > div:last-child dd { font-size: 17px; font-weight: 600; }
 
+/* ── CHECKBOX ROW ────────────────────────────────────────────────────────────────────────────────
+   A FOURTH thing the kit did not have, found while migrating the order form — v1 spells it
+   `flex cursor-pointer items-center gap-2 text-sm text-gray-800` with a raw `h-4 w-4 rounded
+   border-gray-300` box, in four files.
+
+   The box takes the accent when checked, the label is ink, and the aside after it is the form's own
+   hint style rather than a third grey. The whole row is the target: a 16px box is not one. */
+.v2-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; padding: 8px 0; }
+.v2-check input[type="checkbox"] {
+  flex: none; width: 17px; height: 17px; margin-top: 1px; border-radius: 5px; cursor: pointer;
+  accent-color: var(--ghue, var(--v2-t1));
+}
+.v2-check > span { font-size: 14px; line-height: 1.4; color: var(--v2-ink); }
+.v2-check > span em {
+  display: block; margin-top: 2px; font-style: normal; font-size: 12px; color: var(--v2-ink-45);
+}
+.v2-check:has(input:disabled) { cursor: default; opacity: 0.55; }
+
+/* ── TYPEAHEAD POPOVER ───────────────────────────────────────────────────────────────────────────
+   A FIFTH thing the kit lacked. Two of them exist in orders — the customer picker and the supplier
+   picker — and both spell it `absolute z-20 mt-1 w-full rounded-lg border border-gray-200 bg-white
+   shadow-lg`. Paper and one hairline, like every other surface here; the shadow goes, because the
+   thing that lifts a popover off the page is that it overlaps, not that it is shadowed. */
+.v2-pop {
+  position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin-top: 4px;
+  max-height: 260px; overflow: auto;
+  background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: 12px;
+}
+.v2-popr {
+  display: block; width: 100%; padding: 9px 13px; text-align: left;
+  background: none; border: 0; cursor: pointer; border-bottom: 1px solid var(--v2-line);
+}
+.v2-pop li:last-child .v2-popr { border-bottom: 0; }
+.v2-popr:hover, .v2-popr[data-on] { background: var(--v2-hover); }
+.v2-popn { display: block; font-size: 14px; color: var(--v2-ink); }
+.v2-popr .v2-kick { margin-top: 2px; }
+
 /* ── MODAL ───────────────────────────────────────────────────────────────────────────────────────
    THE CARD'S EDGE, ON THE VEIL. Not a new surface: one hairline, no shadow, the same 16px radius
    and the same paper as .v2-card, over the same dim .v2-veil the drawer uses. A dialog on this

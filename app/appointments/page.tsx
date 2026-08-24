@@ -16,8 +16,12 @@ import { getDashboardData } from '@/lib/dashboard/overview'
  * `appointments_list`, unchanged. What it gains is a URL, a place in the rail, and its own module
  * gate on `scheduling`, which the tab only ever had by way of the dashboard's own check.
  *
- * The TABLE is still v1's. This page exists so the move loses nothing; the V2 migration of what is
- * inside it is the next piece of work.
+ * The list inside it is the kit's, migrated in the same pass that gave the page its URL.
+ *
+ * OVER-FETCH, KNOWN. getDashboardData runs eight queries — analytics events, conversations, leads,
+ * AI employees — and this page uses one of them. It is shared with the dashboard, which needs all
+ * eight, so splitting it is a change to that hot path rather than to this one. Recorded in
+ * OUTSTANDING §33 rather than done here.
  */
 export default async function AppointmentsPage() {
   const supabase = await createClient()

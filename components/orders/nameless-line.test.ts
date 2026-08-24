@@ -55,7 +55,14 @@ describe('both forms refuse rather than drop, and say so where she is', () => {
     })
   }
   it('the Product field says it is required before anybody presses Save', () => {
-    expect(src('components/orders/line-item-fields.tsx')).toMatch(/Product <span className="text-red-600" aria-hidden>\*<\/span>/)
+    // The asterisk, not the class it was painted with. The V2 migration moved it from text-red-600
+    // to --v2-red-ink, which is the same mark in a red that clears AA; what must not change is that
+    // the mark is there, that it is hidden from assistive tech (the input carries aria-required),
+    // and that it is on the Product label rather than somewhere kinder to find.
+    const s = src('components/orders/line-item-fields.tsx')
+    expect(s).toMatch(/<label htmlFor="li-product">Product <span[^>]*aria-hidden>\*<\/span><\/label>/)
+    // Not [^>]* — an onChange handler contains "=>" and the character class stops at the arrow.
+    expect(s).toMatch(/id="li-product"[\s\S]{0,200}?required aria-required/)
   })
 })
 

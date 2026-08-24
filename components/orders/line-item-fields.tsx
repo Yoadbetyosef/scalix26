@@ -70,7 +70,6 @@ export const lineFromSaved = (l: {
   certificateLab: l.certificateLab ?? '', ringSize: l.ringSize ?? '',
 })
 
-const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 
 // ── A LINE WITH SOMETHING IN IT MUST NOT BE THROWN AWAY IN SILENCE ─────────────────────────────────
 //
@@ -112,14 +111,17 @@ export const namelessError = (lines: LineDraft[]): string | null => {
 // Keep showing it rather than silently blanking the field.
 function OptionSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
   const all = value && !options.includes(value) ? [value, ...options] : options
+  const id = `li-${label.replace(/\W+/g, '-').toLowerCase()}`
   return (
-    <label className="block text-xs text-gray-500">
-      {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={inp}>
-        <option value="">—</option>
-        {all.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </label>
+    <div className="v2-fld">
+      <label htmlFor={id}>{label}</label>
+      <span className="v2-sel">
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">—</option>
+          {all.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </span>
+    </div>
   )
 }
 
@@ -146,14 +148,14 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
   const lengthOpts = opts(LENGTH_LIST_KEY)
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-4">
+    <div className="space-y-5">
+      <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         {/* NAMED AS REQUIRED, because it is: a row without one is dropped, and the only signal used
             to be the item vanishing after Save. */}
-        <label className="block text-xs text-gray-500">
-          Product <span className="text-red-600" aria-hidden>*</span>
-          <input value={line.productName} onChange={(e) => onChange('productName', e.target.value)} required aria-required className={inp} />
-        </label>
+        <div className="v2-fld">
+          <label htmlFor="li-product">Product <span style={{ color: 'var(--v2-red-ink)' }} aria-hidden>*</span></label>
+          <input id="li-product" value={line.productName} onChange={(e) => onChange('productName', e.target.value)} required aria-required />
+        </div>
         {/* The type list is HERS — she adds "Anklet" in Settings and it appears here, showing every
             field until somebody describes what an anklet needs.
             AND IT ONLY RENDERS IF SHE HAS ONE. A tenant who has not taken the jewellery starter, or
@@ -163,25 +165,33 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
         {typeOptions.length > 0 && (
           <div>
             <OptionSelect label="Piece type" value={line.productType} options={typeOptions} onChange={(v) => onChange('productType', v)} />
-            {readAs && <p className="mt-0.5 text-[11px] text-gray-400">Read as {readAs} from the name. Pick one to be sure.</p>}
+            {readAs && <p className="v2-hint" style={{ marginTop: 4 }}>Read as {readAs} from the name. Pick one to be sure.</p>}
           </div>
         )}
-        <label className="block text-xs text-gray-500">SKU<input value={line.sku} onChange={(e) => onChange('sku', e.target.value)} className={inp} /></label>
-        <label className="block text-xs text-gray-500">Qty<input value={line.quantity} onChange={(e) => onChange('quantity', e.target.value)} className={inp} /></label>
-        <label className="block text-xs text-gray-500">Unit price ({currencySymbol})<input value={line.unitPrice} onChange={(e) => onChange('unitPrice', e.target.value)} placeholder="0" className={inp} /></label>
+        <div className="v2-fld"><label htmlFor="li-sku">SKU</label><input id="li-sku" value={line.sku} onChange={(e) => onChange('sku', e.target.value)} /></div>
+        <div className="v2-fld"><label htmlFor="li-qty">Qty</label><input id="li-qty" value={line.quantity} onChange={(e) => onChange('quantity', e.target.value)} /></div>
+        <div className="v2-fld"><label htmlFor="li-price">Unit price ({currencySymbol})</label><input id="li-price" value={line.unitPrice} onChange={(e) => onChange('unitPrice', e.target.value)} placeholder="0" /></div>
         {/* INTERNAL. Labelled on the input itself, because the one thing that must never happen is
             somebody typing a cost into a field they believe the customer will see. It appears on no
             document, share link, approval page, email or PDF — asserted in
             lib/orders/internal-cost.test.ts. */}
-        <label className="block text-xs text-amber-700">
-          Internal cost ({currencySymbol}) <span className="font-normal text-amber-600">· your team only</span>
-          <input value={line.internalCost} onChange={(e) => onChange('internalCost', e.target.value)} placeholder="—" className={inp} />
-        </label>
+        {/* The one field on this form the customer must never see, so it is the one field marked.
+            A chip rather than an amber label: amber text on an amber label beside eleven grey ones
+            was the loudest thing in the group and still did not say WHY it was different. */}
+        <div className="v2-fld">
+          <label htmlFor="li-cost">
+            Internal cost ({currencySymbol})
+            <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)', marginLeft: 8 }}>your team only</span>
+          </label>
+          <input id="li-cost" value={line.internalCost} onChange={(e) => onChange('internalCost', e.target.value)} placeholder="—" />
+        </div>
       </div>
 
-      <fieldset className="rounded-lg bg-gray-50 p-3">
-        <legend className="px-1 text-xs font-semibold text-gray-700">Stone</legend>
-        <div className="grid gap-2 sm:grid-cols-4">
+      {/* The stone group. A grey filled box inside a card was a surface inside a surface; the group
+          is a labelled rule now, which is what every other grouping in this language is. */}
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend className="v2-kick" style={{ marginBottom: 10 }}>Stone</legend>
+        <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           <OptionSelect label="Type" value={line.stoneType} options={opts('stone_type')} onChange={(v) => onChange('stoneType', v)} />
           <OptionSelect label="Natural / Lab Grown" value={line.stoneOrigin} options={opts('stone_origin')} onChange={(v) => onChange('stoneOrigin', v)} />
           <OptionSelect label="Quality" value={line.stoneQuality} options={opts('stone_quality')} onChange={(v) => onChange('stoneQuality', v)} />
@@ -194,20 +204,20 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
             <OptionSelect label={f.label} value={line.centerStoneShape} options={opts('center_stone_shape')} onChange={(v) => onChange('centerStoneShape', v)} />
           ) })()}
           {(() => { const f = spec('centerStoneCarat', line.centerStoneCarat); return f && (
-            <label className="block text-xs text-gray-500">{f.label}<input value={line.centerStoneCarat} onChange={(e) => onChange('centerStoneCarat', e.target.value)} inputMode="decimal" placeholder="e.g. 1.25" className={inp} /></label>
+            <div className="v2-fld"><label htmlFor="li-centerStoneCarat">{f.label}</label><input id="li-centerStoneCarat" value={line.centerStoneCarat} onChange={(e) => onChange('centerStoneCarat', e.target.value)} inputMode="decimal" placeholder="e.g. 1.25" /></div>
           ) })()}
           {(() => { const f = spec('sideStoneShape', line.sideStoneShape); return f && (
             <OptionSelect label={f.label} value={line.sideStoneShape} options={opts('side_stone_shape')} onChange={(v) => onChange('sideStoneShape', v)} />
           ) })()}
           {(() => { const f = spec('sideStoneCaratTotal', line.sideStoneCaratTotal); return f && (
-            <label className="block text-xs text-gray-500">{f.label}<input value={line.sideStoneCaratTotal} onChange={(e) => onChange('sideStoneCaratTotal', e.target.value)} inputMode="decimal" placeholder="e.g. 0.50" className={inp} /></label>
+            <div className="v2-fld"><label htmlFor="li-sideStoneCaratTotal">{f.label}</label><input id="li-sideStoneCaratTotal" value={line.sideStoneCaratTotal} onChange={(e) => onChange('sideStoneCaratTotal', e.target.value)} inputMode="decimal" placeholder="e.g. 0.50" /></div>
           ) })()}
           {/* The lab that graded the stone — it belongs with the stone, not with the metal. */}
           <OptionSelect label="Certificate lab" value={line.certificateLab} options={opts('certificate_lab')} onChange={(v) => onChange('certificateLab', v)} />
         </div>
       </fieldset>
 
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <OptionSelect label="Gold karat / metal" value={line.metalKarat} options={opts('metal_karat')} onChange={(v) => onChange('metalKarat', v)} />
         {/* Ring size is its own field, not free text: a mistyped size is a remake. It is offered on the
             things worn on a finger, and on anything else only if a value is already sitting in it. */}
@@ -223,13 +233,13 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
           if (!f) return null
           return f.list === LENGTH_LIST_KEY && lengthOpts.length > 0
             ? <OptionSelect label={f.label} value={line.measurements} options={lengthOpts} onChange={(v) => onChange('measurements', v)} />
-            : <label className="block text-xs text-gray-500">{f.label}<input value={line.measurements} onChange={(e) => onChange('measurements', e.target.value)} className={inp} /></label>
+            : <div className="v2-fld"><label htmlFor="li-measurements">{f.label}</label><input id="li-measurements" value={line.measurements} onChange={(e) => onChange('measurements', e.target.value)} /></div>
         })()}
-        <label className="block text-xs text-gray-500">Finish / colour note<input value={line.color} onChange={(e) => onChange('color', e.target.value)} className={inp} /></label>
-        <label className="block text-xs text-gray-500">Custom spec<input value={line.customSpec} onChange={(e) => onChange('customSpec', e.target.value)} className={inp} /></label>
+        <div className="v2-fld"><label htmlFor="li-color">Finish / colour note</label><input id="li-color" value={line.color} onChange={(e) => onChange('color', e.target.value)} /></div>
+        <div className="v2-fld"><label htmlFor="li-customSpec">Custom spec</label><input id="li-customSpec" value={line.customSpec} onChange={(e) => onChange('customSpec', e.target.value)} /></div>
       </div>
 
-      <label className="block text-xs text-gray-500">Description<input value={line.description} onChange={(e) => onChange('description', e.target.value)} className={inp} /></label>
+      <div className="v2-fld"><label htmlFor="li-description">Description</label><input id="li-description" value={line.description} onChange={(e) => onChange('description', e.target.value)} /></div>
     </div>
   )
 }

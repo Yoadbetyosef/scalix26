@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 
 // Customer field on an order: start typing a name and pick someone already in the address book. Choosing
 // them fills email, phone, address and currency from the saved record and links the order to that contact,
@@ -14,7 +14,6 @@ export interface PickedContact {
 }
 interface Match { id: string; name: string | null; email: string | null; phone: string | null; address: string | null; currency: string | null }
 
-const inp = 'mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 
 export function ContactPicker({ value, onChange }: { value: PickedContact; onChange: (v: PickedContact) => void }) {
   const [matches, setMatches] = useState<Match[]>([])
@@ -69,49 +68,58 @@ export function ContactPicker({ value, onChange }: { value: PickedContact; onCha
   const showList = open && !value.id && value.name.trim().length >= 2 && matches.length > 0
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div ref={box} className="relative">
-        <label className="block text-xs text-gray-500">
-          Customer
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-            <input
-              value={value.name}
-              onChange={(e) => { onChange({ ...value, id: null, name: e.target.value }); setOpen(true) }}
-              onFocus={() => setOpen(true)}
-              onKeyDown={onKeyDown}
-              placeholder="Start typing a name…"
-              autoComplete="off"
-              className={`${inp} pl-8 ${value.id ? 'border-emerald-300 bg-emerald-50/40' : ''}`}
-            />
-            {value.id && (
-              <button type="button" onClick={unlink} title="Unlink this contact" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        </label>
+        {/* Rule, not box — and the search icon sits on the baseline rather than inside a field,
+            because there is no field to sit inside any more. Same treatment /inbox's search got. */}
+        <div className="v2-fld" style={{ position: 'relative' }}>
+          <label htmlFor="cp-name">Customer</label>
+          <input
+            id="cp-name"
+            value={value.name}
+            onChange={(e) => { onChange({ ...value, id: null, name: e.target.value }); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={onKeyDown}
+            placeholder="Start typing a name…"
+            autoComplete="off"
+            role="combobox"
+            aria-expanded={showList}
+            aria-controls="cp-list"
+            style={{ paddingRight: 26, paddingLeft: 22 }}
+          />
+          <Search className="w-3.5 h-3.5" style={{ position: 'absolute', left: 2, bottom: 11, color: 'var(--v2-ink-45)', pointerEvents: 'none' }} />
+          {value.id && (
+            <button type="button" onClick={unlink} title="Unlink this contact" aria-label="Unlink this contact"
+                    className="v2-nx" style={{ position: 'absolute', right: -6, bottom: 0, width: 28, alignSelf: 'auto', height: 30 }}>
+              <X />
+            </button>
+          )}
+        </div>
 
+        {/* Linked reads as a state, so it is a chip in the settled hue rather than emerald text
+            under an emerald-tinted input. The input itself does not change colour: a field that
+            turns green is a field that has to be explained. */}
         {value.id && (
-          <p className="mt-1 flex items-center gap-1 text-xs text-emerald-700">
-            <Check className="h-3 w-3" /> Linked to a saved contact — their details filled in below.
+          <p style={{ marginTop: 6 }}>
+            <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>Linked to a saved contact</span>
           </p>
         )}
 
         {showList && (
-          <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+          /* The suggestion list. Paper, one hairline, the row's own hover — the same surface as
+             every other list in the app rather than a shadowed popover. */
+          <ul id="cp-list" role="listbox" className="v2-pop">
             {matches.map((m, i) => (
-              <li key={m.id}>
+              <li key={m.id} role="option" aria-selected={i === active}>
                 <button
                   type="button"
                   onMouseEnter={() => setActive(i)}
                   onClick={() => pick(m)}
-                  className={`block w-full px-3 py-2 text-left text-sm ${i === active ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                  className="v2-popr"
+                  data-on={i === active || undefined}
                 >
-                  <span className="font-medium text-gray-900">{m.name || m.email || m.phone || 'Unnamed contact'}</span>
-                  {(m.email || m.phone) && (
-                    <span className="ml-2 text-xs text-gray-500">{[m.email, m.phone].filter(Boolean).join(' · ')}</span>
-                  )}
+                  <span className="v2-popn">{m.name || m.email || m.phone || 'Unnamed contact'}</span>
+                  {(m.email || m.phone) && <span className="v2-kick">{[m.email, m.phone].filter(Boolean).join(' · ')}</span>}
                 </button>
               </li>
             ))}
@@ -119,16 +127,20 @@ export function ContactPicker({ value, onChange }: { value: PickedContact; onCha
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        <label className="block text-xs text-gray-500">Email<input value={value.email} onChange={(e) => onChange({ ...value, email: e.target.value })} className={inp} /></label>
-        <label className="block text-xs text-gray-500">Phone<input value={value.phone} onChange={(e) => onChange({ ...value, phone: e.target.value })} className={inp} /></label>
-        <label className="block text-xs text-gray-500">Address<input value={value.address} onChange={(e) => onChange({ ...value, address: e.target.value })} className={inp} /></label>
-        <label className="block text-xs text-gray-500">
-          Currency
-          <select value={value.currency} onChange={(e) => onChange({ ...value, currency: e.target.value })} className={inp}>
-            {['usd', 'cad', 'gbp', 'eur', 'ils'].map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
-          </select>
-        </label>
+      <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+        <div className="v2-fld"><label htmlFor="cp-email">Email</label>
+          <input id="cp-email" value={value.email} onChange={(e) => onChange({ ...value, email: e.target.value })} /></div>
+        <div className="v2-fld"><label htmlFor="cp-phone">Phone</label>
+          <input id="cp-phone" value={value.phone} onChange={(e) => onChange({ ...value, phone: e.target.value })} /></div>
+        <div className="v2-fld"><label htmlFor="cp-addr">Address</label>
+          <input id="cp-addr" value={value.address} onChange={(e) => onChange({ ...value, address: e.target.value })} /></div>
+        <div className="v2-fld"><label htmlFor="cp-cur">Currency</label>
+          <span className="v2-sel">
+            <select id="cp-cur" value={value.currency} onChange={(e) => onChange({ ...value, currency: e.target.value })}>
+              {['usd', 'cad', 'gbp', 'eur', 'ils'].map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+            </select>
+          </span>
+        </div>
       </div>
     </div>
   )

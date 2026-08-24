@@ -49,6 +49,19 @@ export const STAGE_COLORS: Record<OrderStage, StageColor> = {
 
 export const stageColor = (s: OrderStage): StageColor => STAGE_COLORS[s] ?? STAGE_COLORS.new
 
+/**
+ * The stage's hue as a single value, for the V2 components that take one.
+ *
+ * `.v2-stat` and `.v2-row` are both driven by a `--chan` custom property — one colour, from which
+ * they derive their own tint and ink. This fan already answers that question better than a new
+ * table would: thirteen hues, no two neighbours closer than 16°, the three terminal stages
+ * collapsed to near-neutral, and text clearing 4.5:1 on every one. `bar` is the hue at full
+ * strength, which is what a chip's ink wants; the chip mixes its own 12% ground from it.
+ *
+ * So the board's colour language and the table's are the same language, rather than two.
+ */
+export const stageHue = (s: OrderStage): string => stageColor(s).bar
+
 // Widest label is "Waiting for Customer Approval" — 180px in Inter 600 at 12px, measured off the font
 // the app actually ships rather than estimated. The header also carries 24px of padding, the count and
 // the approval padlock, which is 247px in total: w-64 (256px) cleared it by nine pixels and lost that
