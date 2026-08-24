@@ -27,21 +27,18 @@ const CHANNEL_LABELS: { channel: string; label: string }[] = [
   { channel: 'email', label: 'by email' },
 ]
 
-export interface Metric { value: number; lifetime?: number; trendPct: number | null }
+export interface Metric { value: number }
 export interface AttentionItem { label: string; href: string; metric?: DrilldownMetric }
 export interface ChannelStat { channel: string; label: string; count: number }
 export type DrilldownMetric = 'customers_assisted' | 'opportunities' | 'conversations_managed' | 'coverage' | 'attention_takeover' | 'attention_leads'
 
 export interface ImpactData {
-  hasAnyData: boolean
   monthLabel: string
-  trendsAvailable: boolean
-  customersHelped: Metric & { lifetime: number }
-  opportunities: Metric & { lifetime: number }
+  customersHelped: Metric
+  opportunities: Metric
   conversationsManaged: Metric
-  coveragePct: { value: number | null; responded: number; total: number; trendPct: number | null }
+  coveragePct: { value: number | null; responded: number; total: number }
   channelBreakdown: ChannelStat[]
-  humanTakeoverCount: number
   attention: AttentionItem[]
 }
 
@@ -125,11 +122,9 @@ export function currentMonthWindow() {
   return {
     start: Date.UTC(y, m, 1),
     end: Date.UTC(y, m + 1, 1),
-    prevStart: Date.UTC(y, m - 1, 1),
     label: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(now),
   }
 }
-const LIFETIME = { start: 0, end: Number.MAX_SAFE_INTEGER }
 
 const byNewest = (a: Conv, b: Conv) => +new Date(b.created_at) - +new Date(a.created_at)
 
@@ -183,11 +178,6 @@ export function selectLeadsNoFollowup(base: ImpactBase): LeadRow[] {
   return base.leads.filter((l) => !l.responded_at).sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
 }
 
-function pct(curr: number, prev: number): number | null {
-  if (prev <= 0) return null
-  return Math.round(((curr - prev) / prev) * 100)
-}
-
 // ── ATTENTION: the single definition of what "needs attention" (customer-actionable). ────────
 // One place computes the items; every surface (dashboard header, voice assistant, notification
 // bell, Attention Needed section) consumes them through the client attention store. A2P carrier
@@ -211,7 +201,7 @@ export async function getAttention(tenantId: string): Promise<AttentionItem[]> {
 // ── Card data (counts derived from the SAME selectors used by drill-down) ─────
 export async function getImpactData(tenantId: string): Promise<ImpactData> {
   const base = await loadImpactBase(tenantId)
-  const { start, end, prevStart, label } = currentMonthWindow()
+  const { start, end, label } = currentMonthWindow()
 
   const curManaged = selectConversationsManaged(base, start, end)
   const curOpp = selectOpportunities(base, start, end)
@@ -221,36 +211,30 @@ export async function getImpactData(tenantId: string): Promise<ImpactData> {
   const total = cov.rows.length
   const coverage = total > 0 ? Math.round((responded / total) * 100) : null
 
-  const prevManaged = selectConversationsManaged(base, prevStart, start)
-  const prevOpp = selectOpportunities(base, prevStart, start)
-  const prevCust = selectCustomersAssisted(base, prevStart, start)
-  const prevCov = selectCoverageInbound(base, prevStart, start)
-  const prevResponded = prevCov.rows.filter((r) => prevCov.respondedSet.has(r.id)).length
-  const prevCoverage = prevCov.rows.length > 0 ? Math.round((prevResponded / prevCov.rows.length) * 100) : null
-  const trendsAvailable = prevManaged.length > 0
-
-  const lifeCust = selectCustomersAssisted(base, LIFETIME.start, LIFETIME.end).length
-  const lifeOpp = selectOpportunities(base, LIFETIME.start, LIFETIME.end).length
+  // NO PREVIOUS-MONTH OR LIFETIME PASS ANY MORE. The four "vs last month" trends and the two
+  // "since you started" totals were read by the impact metric cards, which the hero's right column
+  // replaced. Six full re-selections over every conversation the tenant has ever had, computed on
+  // every dashboard render for two lines of small print nobody reads any more.
+  //
+  // Worth being exact about what this does and does not save: the seven Supabase queries in
+  // loadImpactBase are unchanged, because they were never per-window — they pull the tenant's
+  // conversations, messages and leads once and every figure is sliced from that in memory. So no
+  // query was dropped here; six O(conversations) passes were.
 
   // Per-channel recap: responded conversations this window grouped by channel.
   const counts = new Map<string, number>()
   for (const c of curManaged) if (base.respondedEver.has(c.id) && c.channel) counts.set(c.channel, (counts.get(c.channel) || 0) + 1)
   const channelBreakdown = CHANNEL_LABELS.map(({ channel, label: l }) => ({ channel, label: l, count: counts.get(channel) || 0 })).filter((c) => c.count > 0)
 
-  const humanTakeoverCount = curManaged.filter((c) => c.human_takeover === true).length
-
   const attention = computeAttention(base)
 
   return {
-    hasAnyData: base.convs.length > 0 || base.respondedEver.size > 0,
     monthLabel: label,
-    trendsAvailable,
-    customersHelped: { value: curCust.length, lifetime: lifeCust, trendPct: trendsAvailable ? pct(curCust.length, prevCust.length) : null },
-    opportunities: { value: curOpp.length, lifetime: lifeOpp, trendPct: trendsAvailable ? pct(curOpp.length, prevOpp.length) : null },
-    conversationsManaged: { value: curManaged.length, trendPct: trendsAvailable ? pct(curManaged.length, prevManaged.length) : null },
-    coveragePct: { value: coverage, responded, total, trendPct: trendsAvailable && prevCoverage !== null && coverage !== null ? coverage - prevCoverage : null },
+    customersHelped: { value: curCust.length },
+    opportunities: { value: curOpp.length },
+    conversationsManaged: { value: curManaged.length },
+    coveragePct: { value: coverage, responded, total },
     channelBreakdown,
-    humanTakeoverCount,
     attention,
   }
 }

@@ -1,8 +1,5 @@
-import Link from 'next/link'
-import { Plus } from 'lucide-react'
 import { RudiPresenceProvider, GlassToasts } from './rudi-presence'
 import { V2Hero } from './v2-hero'
-import { TodayWork, type WorkFigure } from './today-work'
 import { HomeColumn } from './home-column'
 import type { HomeView } from '@/lib/dashboard/home-view'
 import { type AmyBriefing } from './ask-amy'
@@ -16,8 +13,6 @@ export interface DashboardHeroProps {
   /** Which employee to paint. From the ai_employees row — never assumed. */
   persona: PersonaKey
   presenceState: PresenceState
-  businessName: string
-  figures: WorkFigure[]
   briefing: AmyBriefing
   /** Right Now / Needs You / This Month, and the caption's counts. See lib/dashboard/home-view. */
   view: HomeView
@@ -43,8 +38,6 @@ export function DashboardHero({
   employeeName,
   persona,
   presenceState,
-  businessName,
-  figures,
   briefing,
   view,
   tenantId,
@@ -74,31 +67,17 @@ export function DashboardHero({
         aside={<HomeColumn view={view} />}
       />
 
+      {/* NOTHING SCROLLS UNDER THE HERO ANY MORE.
+          Two things used to. A 24px "Dashboard" heading over the business name, which is the page
+          header the kit already ruled out everywhere else — the rail says which screen this is, and
+          the portrait says whose business it is. And TodayWork, the figures a second time on mobile;
+          they were only ever here because mobile has no right-hand column, but mobile has the
+          readout cards on the hero itself, which is where /v2 puts them. Both were the last of "the
+          pieces arranged into v1's layout".
+          The attention pill stays: it is a live signal, not a figure and not a heading. */}
       <section className="relative mx-auto max-w-5xl pt-4 sm:pt-6 sx-animate-in">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-ink md:text-xl md:font-light">Dashboard</h1>
-            {businessName && <p className="mt-0.5 truncate text-sm text-muted">{businessName}</p>}
-          </div>
-          <Link
-            href="/ai-employees/new"
-            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-button px-2 py-1 text-sm text-subtle transition-colors hover:text-ink"
-          >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">New AI Employee</span>
-            <span className="sm:hidden">New</span>
-          </Link>
-        </div>
-
         <AttentionPill initialVisible={presenceState === 'attention'} />
-
-        {/* The figures again, below the fold — on MOBILE only. On desktop they are in the hero's
-            right-hand column, where /v2 puts them, and printing them twice on one screen was the
-            thing this change exists to stop. */}
-        <div className="relative md:hidden">
-          <GlassToasts />
-          <TodayWork figures={figures} />
-        </div>
+        <div className="relative md:hidden"><GlassToasts /></div>
       </section>
     </RudiPresenceProvider>
   )

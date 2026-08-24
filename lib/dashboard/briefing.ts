@@ -42,7 +42,6 @@ export interface HeroInputs {
   presenceState: PresenceState
   stateSentence: string
   idleSentence: string
-  figures: { value: number | null; suffix?: string; label: string }[]
 }
 
 export function buildHeroInputs(
@@ -99,13 +98,5 @@ export function buildHeroInputs(
     appointmentsToday,
   }
 
-  // The figures were written inline in the JSX; same four values, same order, same labels.
-  const figures = [
-    { value: handled, label: 'Handled' },
-    { value: booked, label: 'Booked' },
-    { value: recovered, label: 'Recovered' },
-    { value: answered, suffix: '%', label: 'Answered' },
-  ]
-
-  return { employeeName, persona, employeeVoice, brainAgentId, briefing, presenceState, stateSentence, idleSentence, figures }
+  return { employeeName, persona, employeeVoice, brainAgentId, briefing, presenceState, stateSentence, idleSentence }
 }

@@ -86,7 +86,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     )
     heroWaiting = view.waiting
 
-    const { employeeName, persona: primaryPersona, brainAgentId: agentId, briefing, presenceState, figures } =
+    const { employeeName, persona: primaryPersona, brainAgentId: agentId, briefing, presenceState } =
       buildHeroInputs(aiEmployees, impactData, appointments_list, leads_list, stats)
     brainAgentId = agentId
 
@@ -98,9 +98,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         briefing={{ ...briefing, waitingOnYou: view.waiting }}
         view={view}
         presenceState={presenceState}
-        businessName={tenant.business_name || ''}
         tenantId={tenant.id}
-        figures={figures}
       />
       </>
     )
@@ -151,7 +149,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       ) : effectiveTab === 'appointments' ? (
         <AppointmentsTable appointments={appointments_list} />
       ) : (
-        <ImpactDashboard data={impactData!} businessName={tenant.business_name} brainAgentId={brainAgentId} tenantId={tenant.id} />
+        <ImpactDashboard data={impactData!} brainAgentId={brainAgentId} tenantId={tenant.id} />
       )}
     </div>
   )

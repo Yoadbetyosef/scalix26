@@ -67,19 +67,11 @@ export default function DashboardProbe() {
         employeeName="Amy"
         persona="rudi"
         presenceState="attention"
-        businessName="T.G. Jewellers"
-        figures={[
-          { label: 'Recovered', value: 2 },
-          { label: 'Handled', value: 12 },
-          { label: 'Booked', value: 3 },
-          { label: 'Coverage', value: 92, suffix: '%' },
-        ]}
         briefing={BRIEFING}
         view={VIEW}
       />
       <div className="flex gap-1 border-b border-hairline">
         <span className="inline-block border-b-2 border-ink px-4 py-2.5 text-sm font-medium text-ink">Overview</span>
-        <span className="inline-block px-4 py-2.5 text-sm font-medium text-muted">Leads</span>
         <span className="inline-block px-4 py-2.5 text-sm font-medium text-muted">Appointments</span>
       </div>
       <div className="rounded-xl border border-hairline p-6 text-sm text-muted">The tables below the tabs sit here.</div>
