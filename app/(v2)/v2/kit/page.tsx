@@ -53,7 +53,7 @@ async function load() {
 
 const Pair = ({ title, note, v1, v2 }: { title: string; note: string; v1: React.ReactNode; v2: React.ReactNode }) => (
   <section className="v2k-block">
-    <div className="v2k-head"><p className="v2k-kick"><i />{title}</p><s /></div>
+    <div className="v2-head"><p className="v2-kick"><i />{title}</p><s /></div>
     <div className="v2k-pair">
       <div className="v2k-side" data-v1><span className="v2k-tag">v1, today</span>{v1}</div>
       <div className="v2k-side"><span className="v2k-tag">v2, proposed</span>{v2}</div>
@@ -70,8 +70,8 @@ export default async function Kit() {
   return (
     <div className="v2 v2-embedded">
       <div className="v2k-page">
-        <div className="v2k-head" style={{ marginBottom: 30 }}>
-          <p className="v2k-kick"><i />Component kit · v1 beside v2</p><s />
+        <div className="v2-head" style={{ marginBottom: 30 }}>
+          <p className="v2-kick"><i />Component kit · v1 beside v2</p><s />
         </div>
 
         {/* 1 · PAGE HEADER */}
@@ -90,10 +90,10 @@ export default async function Kit() {
             </div>
           }
           v2={
-            <div className="v2k-head">
-              <p className="v2k-kick"><i />Contacts · {contacts.length}</p>
+            <div className="v2-head">
+              <p className="v2-kick"><i />Contacts · {contacts.length}</p>
               <s />
-              <button type="button" className="v2k-act" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>New contact</button>
+              <button type="button" className="v2-act" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>New contact</button>
             </div>
           }
         />
@@ -117,14 +117,14 @@ export default async function Kit() {
             </table>
           }
           v2={
-            <table className="v2k-tbl">
+            <table className="v2-tbl">
               <thead><tr><th>Name</th><th>Phone</th><th>Channel</th></tr></thead>
               <tbody>{contacts.slice(0, 4).map((c, i) => (
                 <tr key={i} style={{ ['--chan' as string]: CHAN[String(c.channel)] ?? 'var(--v2-t1)' }}>
                   <td>{c.name || <span style={{ color: 'var(--v2-ink-45)' }}>No name yet</span>}</td>
                   <td>{c.phone}</td>
                   <td>{c.channel
-                    ? <span className="v2k-chip">{c.channel}</span>
+                    ? <span className="v2-stat">{c.channel}</span>
                     : <span style={{ color: 'var(--v2-ink-45)', fontSize: 13 }}>—</span>}</td>
                 </tr>
               ))}</tbody>
@@ -148,15 +148,15 @@ export default async function Kit() {
           }
           v2={
             <>
-              <div className="v2k-head" style={{ marginBottom: 16 }}><p className="v2k-kick"><i />The product</p><s /></div>
-              <div className="v2k-form">
-                <div className="v2k-f wide"><label>Name</label><input readOnly defaultValue={product?.name ?? ''} /></div>
-                <div className="v2k-f"><label>Category</label>
-                  <span className="v2k-sel"><select defaultValue=""><option value="">{product?.category || 'Sofas'}</option></select></span>
+              <div className="v2-head" style={{ marginBottom: 16 }}><p className="v2-kick"><i />The product</p><s /></div>
+              <div className="v2-form">
+                <div className="v2-fld wide"><label>Name</label><input readOnly defaultValue={product?.name ?? ''} /></div>
+                <div className="v2-fld"><label>Category</label>
+                  <span className="v2-sel"><select defaultValue=""><option value="">{product?.category || 'Sofas'}</option></select></span>
                 </div>
-                <div className="v2k-f"><label>Price</label><input readOnly defaultValue={money(product?.price)} /></div>
-                <div className="v2k-f wide"><label>Description</label><textarea placeholder="Materials, dimensions, finish…" /></div>
-                <div className="v2k-f"><label>SKU</label><input readOnly defaultValue={product?.sku ?? ''} /><span className="v2k-hint">Generated if left blank</span></div>
+                <div className="v2-fld"><label>Price</label><input readOnly defaultValue={money(product?.price)} /></div>
+                <div className="v2-fld wide"><label>Description</label><textarea placeholder="Materials, dimensions, finish…" /></div>
+                <div className="v2-fld"><label>SKU</label><input readOnly defaultValue={product?.sku ?? ''} /><span className="v2-hint">Generated if left blank</span></div>
               </div>
             </>
           }
@@ -176,8 +176,8 @@ export default async function Kit() {
             </div>
           }
           v2={
-            <div className="v2k-card" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
-              <span className="v2k-chip-sq"><FileText /></span>
+            <div className="v2-card" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+              <span className="v2-chip-sq"><FileText /></span>
               <h4>Platform Usage</h4>
               <p>Total conversations, messages and active channels over time.</p>
             </div>
@@ -194,7 +194,7 @@ export default async function Kit() {
             </div>
           }
           v2={
-            <div className="v2k-card" data-empty>
+            <div className="v2-card" data-empty>
               <b>No orders yet</b>
               <span>The first one will appear here as soon as it is created.</span>
             </div>
@@ -215,8 +215,8 @@ export default async function Kit() {
             </div>
           }
           v2={
-            <div className="v2k-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
-              <span className="v2k-chip-sq"><CreditCard /></span>
+            <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+              <span className="v2-chip-sq"><CreditCard /></span>
               <p>Your plan includes one AI employee.</p>
               <em>Upgrade</em>
             </div>
@@ -241,19 +241,19 @@ export default async function Kit() {
             </div>
           }
           v2={
-            <div className="v2k-thread">
+            <div className="v2-thread">
               {msgs.slice(0, 3).map((m, i) => (
-                <div key={i} className="v2k-bub" data-who={m.us ? 'us' : 'them'}>
+                <div key={i} className="v2-bub" data-who={m.us ? 'us' : 'them'}>
                   {m.text.slice(0, 90)}
                   <time>{m.at ? new Date(m.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}</time>
                 </div>
               ))}
-              {!msgs.length && <div className="v2k-card" data-empty><b>No messages yet</b><span>The first conversation will appear here.</span></div>}
+              {!msgs.length && <div className="v2-card" data-empty><b>No messages yet</b><span>The first conversation will appear here.</span></div>}
             </div>
           }
         />
 
-        <div className="v2k-head"><p className="v2k-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Not yet designed</p><s /></div>
+        <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Not yet designed</p><s /></div>
         <p className="v2k-note">
           Four component types the detail pages surfaced that are not in this kit, because they need a
           decision before a design: the <b>tabs</b> on /ai-employees/[id]/playbook, the <b>activity

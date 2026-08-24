@@ -72,7 +72,9 @@ export default async function ConversationPage({ params, searchParams }: { param
         : contact?.email || 'Unknown'
 
   return (
-    <div className="flex flex-col h-screen max-h-screen">
+    // `v2` for the tokens, `v2-embedded` so the shell's 100dvh does not fight the page's own
+    // h-screen scroll frame. Same frame, same behaviour.
+    <div className="v2 v2-embedded flex flex-col h-screen max-h-screen">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-hairline flex-shrink-0">
         <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:text-ink hover:bg-sunken flex-shrink-0">
@@ -85,7 +87,7 @@ export default async function ConversationPage({ params, searchParams }: { param
           <h2 className="text-sm font-semibold text-ink truncate">
             {headerTitle}
           </h2>
-          <div className="flex items-center gap-1.5 text-xs text-subtle flex-wrap">
+          <div className="v2-kick flex-wrap" style={{ gap: 6 }}>
             <span>{conv.channel === 'voice' ? 'Voice' : conv.channel}</span>
             {/* C3: date moved out of the header on mobile (dates live in the messages);
                 desktop keeps it via max-md:hidden so md+ stays pixel-identical. */}
@@ -135,22 +137,18 @@ export default async function ConversationPage({ params, searchParams }: { param
                   key={msg.id}
                   className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                 >
-                  <div
-                    className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                      isAgent
-                        ? 'bg-accent-strong text-white rounded-br-md'
-                        : msg.role === 'assistant'
-                        ? 'bg-accent text-white rounded-br-md'
-                        : 'bg-sunken text-ink rounded-bl-md'
-                    }`}
-                  >
+                  {/* The kit's bubble. One hue for the side that is the product, hairline paper for
+                      the customer — not two violets told apart by alignment. The agent and the
+                      assistant share the hue because they are the same side of the conversation;
+                      which of them spoke is what the label below says. */}
+                  <div className="v2-bub" data-who={isOutbound ? 'us' : 'them'}>
                     {isAgent && (
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 mb-0.5">You · Agent</p>
+                      <p className="v2-kick" style={{ color: 'rgba(255,255,255,.75)', marginBottom: 2 }}>You · Agent</p>
                     )}
                     <p className="text-sm leading-relaxed">{msg.content}</p>
-                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/60' : 'text-muted'}`}>
+                    <time className={isOutbound ? '' : 'text-muted'}>
                       {formatDateTime(msg.timestamp, tz)}
-                    </p>
+                    </time>
                     {/* A2: surface a failed/undelivered SMS so it never looks "sent" silently. */}
                     {isOutbound && (msg.delivery_status === 'undelivered' || msg.delivery_status === 'failed') && (
                       <p className="text-xs mt-1 font-medium text-red-200 bg-red-600/30 rounded px-1.5 py-0.5 inline-block">

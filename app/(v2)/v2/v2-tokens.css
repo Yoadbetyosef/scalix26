@@ -3665,3 +3665,187 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 @media (min-width: 640px) {
   .v2.v2-embedded .v2-root { margin: -24px -24px 0; }
 }
+
+
+/* ══ THE COMPONENT LANGUAGE ═══════════════════════════════════════════════════════════════════════
+   Promoted from app/(v2)/v2/kit/kit.css on approval. /v2/kit renders every one of these beside the
+   v1 it replaces, on live rows, and is the reference a migrated page is measured against — if a page
+   and the kit disagree, the page is wrong.
+
+   Three of these merged with classes that already existed rather than being added beside them:
+   .v2-kick, .v2-card and .v2-thread were the same components under the same names. .v2-chip, .v2-f,
+   .v2-page, .v2-side and .v2-tag were NOT — those are different things in /v2 and the kit's versions
+   took distinct names (.v2-stat, .v2-fld) rather than quietly redefining them.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+/* ── THE PROPOSED v2 COMPONENT LANGUAGE ─────────────────────────────────────────────────────────────
+   Everything here is `.v2k-*` and lives in this file, not in v2-tokens.css. Until it is approved it
+   must not be able to reach a single app page, and a class nothing else references cannot.
+   On approval these move into v2-tokens.css as `.v2-*` and this file goes away.
+
+   Everything is built from tokens already on `.v2` — no new colours are invented. */
+
+/* ── PAGE HEADER ─────────────────────────────────────────────────────────────────────────────────
+   /v2 has no page headers: the rail says where you are, so a 24px bold repeat of the rail's own label
+   is the same word twice in two type sizes. What replaces it is a mono micro-label — the same one the
+   rail's sections use — with the primary action on the same line. */
+.v2-head { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; }
+.v2-head .v2-kick { flex: none; }
+.v2-head s { flex: 1; height: 1px; border: 0; background: linear-gradient(90deg, var(--v2-line), transparent); }
+/* The primary action. A row in the rail is a destination; this is a verb, so it reads as one — the
+   chip's tint as a fill, the label in the hue, and no icon square, which is what tells the two apart. */
+.v2-act {
+  flex: none; display: inline-flex; align-items: center; gap: 7px;
+  border: 0; cursor: pointer; border-radius: 999px; padding: 7px 14px;
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ghue, var(--v2-t1));
+  background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 12%, transparent);
+  transition: background 0.16s;
+}
+.v2-act:hover { background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 20%, transparent); }
+
+/* .v2-kick already exists — the right column's "Right now" label is the same component. Not
+   redefined; it only gains the ability to take a group hue, so a header can carry its section's
+   colour the way the rail's do. */
+.v2-kick i { background: var(--ghue, currentColor); }
+
+/* ── FORM ────────────────────────────────────────────────────────────────────────────────────────
+   This did not exist in /v2 — the preview has no screen that takes typing beyond one composer — so it
+   is designed here rather than ported.
+   A RULE, NOT A BOX. Every other surface in this language is flat and separated by hairlines: cards
+   have no shadow, sections are divided by a rule that fades out, the rail's groups are dots and
+   lines. A boxed input is the one v1 thing that would survive into it, and forty boxed inputs on
+   /catalog/new is what makes that screen look like software rather than like paper. */
+.v2-form { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 26px; }
+@media (max-width: 720px) { .v2-form { grid-template-columns: 1fr; } }
+.v2-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.v2-fld.wide { grid-column: 1 / -1; }
+.v2-fld label {
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--v2-ink-45);
+}
+.v2-fld input, .v2-fld select, .v2-fld textarea {
+  appearance: none; width: 100%; background: transparent; border: 0;
+  border-bottom: 1px solid var(--v2-line); border-radius: 0;
+  padding: 7px 0 8px; font: inherit; font-size: 15px; color: var(--v2-ink);
+  transition: border-color 0.16s, box-shadow 0.16s;
+}
+.v2-fld textarea { resize: vertical; min-height: 76px; line-height: 1.5; }
+.v2-fld input::placeholder, .v2-fld textarea::placeholder { color: var(--v2-ink-45); }
+.v2-fld input:focus, .v2-fld select:focus, .v2-fld textarea:focus {
+  outline: none; border-bottom-color: var(--v2-t1);
+  /* The rule thickens rather than a ring appearing — a focus ring is a box, and the point is no box. */
+  box-shadow: 0 1px 0 0 var(--v2-t1);
+}
+/* The chevron is drawn rather than left to the platform, which renders a boxed control on macOS. */
+.v2-fld .v2-sel { position: relative; display: block; }
+.v2-fld .v2-sel::after {
+  content: ''; position: absolute; right: 2px; top: 12px; width: 7px; height: 7px;
+  border-right: 1.5px solid var(--v2-ink-45); border-bottom: 1.5px solid var(--v2-ink-45);
+  transform: rotate(45deg); pointer-events: none;
+}
+.v2-fld .v2-hint { font-size: 12px; color: var(--v2-ink-45); }
+
+/* ── TABLE ───────────────────────────────────────────────────────────────────────────────────────
+   Mono micro-label headers, rows that light from the left rather than filling grey. */
+.v2-tbl { width: 100%; border-collapse: collapse; }
+.v2-tbl th {
+  text-align: left; padding: 0 14px 10px;
+  font-family: var(--v2-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--v2-ink-45);
+  border-bottom: 1px solid var(--v2-line);
+}
+.v2-tbl td { padding: 13px 14px; border-bottom: 1px solid var(--v2-line); font-size: 14.5px; }
+.v2-tbl tbody tr { position: relative; transition: background 0.14s; }
+.v2-tbl tbody tr:hover { background: var(--v2-hover); }
+/* The left accent: a rule that grows in, in the row's own channel hue. */
+.v2-tbl tbody tr td:first-child { position: relative; }
+.v2-tbl tbody tr td:first-child::before {
+  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 2px;
+  background: var(--chan, var(--v2-t1)); opacity: 0; transform: scaleY(0.3);
+  transition: opacity 0.16s, transform 0.16s;
+}
+.v2-tbl tbody tr:hover td:first-child::before { opacity: 1; transform: scaleY(1); }
+/* Status, in the channel's own hue — the table already knows which channel a row came from. */
+.v2-stat {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 4px 9px; border-radius: 999px;
+  color: var(--chan, var(--v2-t1));
+  background: color-mix(in srgb, var(--chan, var(--v2-t1)) 12%, transparent);
+}
+
+/* ── CARD ────────────────────────────────────────────────────────────────────────────────────────
+   Flat edge, no shadow, and an icon square that is the rail's chip at the rail's size. */
+/* .v2-card already exists and carried a box-shadow. FLAT EDGE is the approved decision, so the
+   shadow goes here rather than a second card class being invented beside it — one card, everywhere,
+   including /v2's own right column. */
+.v2-card { box-shadow: none; display: flex; flex-direction: column; gap: 10px; }
+.v2-card .v2-chip-sq {
+  width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ghue, var(--v2-t1)) 10%, transparent);
+}
+.v2-card .v2-chip-sq svg { width: 17px; height: 17px; stroke: var(--ghue, var(--v2-t1)); stroke-width: 2; fill: none; }
+.v2-card h4 { margin: 0; font-size: 15px; font-weight: 600; }
+.v2-card p { margin: 0; font-size: 13.5px; color: var(--v2-ink-45); }
+
+/* ── EMPTY STATE ─────────────────────────────────────────────────────────────────────────────────
+   A bold line that says what is not here, and a muted one that says what to do. */
+.v2-card[data-empty] { align-items: flex-start; gap: 4px; border-style: dashed; }
+.v2-card[data-empty] b { font-size: 14.5px; }
+.v2-card[data-empty] span { font-size: 13.5px; color: var(--v2-ink-45); }
+
+/* ── UPGRADE / NOTICE ────────────────────────────────────────────────────────────────────────────
+   The amber alert becomes a row with a badge, the way the rail's red block did. Same information,
+   no colour block: the badge carries the urgency and the row carries the sentence. */
+.v2-notice {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--v2-line); border-radius: 12px; padding: 13px 15px;
+}
+.v2-notice .v2-chip-sq { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ghue, var(--v2-t4)) 12%, transparent); flex: none; }
+.v2-notice .v2-chip-sq svg { width: 16px; height: 16px; stroke: var(--ghue, var(--v2-t4)); stroke-width: 2; fill: none; }
+.v2-notice p { margin: 0; flex: 1; font-size: 14px; }
+.v2-notice em {
+  font-style: normal; font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 4px 9px; border-radius: 999px;
+  color: var(--v2-t4); background: color-mix(in srgb, var(--v2-t4) 14%, transparent);
+}
+
+/* ── CHAT ────────────────────────────────────────────────────────────────────────────────────────
+   The customer's words on paper, the employee's in the gradient the caption already uses. */
+/* .v2-thread already exists as the inbox's message list — same component, so only the bubbles are
+   new. */
+.v2-bub { max-width: 78%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; line-height: 1.45; }
+/* --v2-sunken does not exist; the sheet has --v2-line and --v2-hover and no filled surface token.
+   The customer's side is a hairline-bounded paper bubble rather than an invented grey. */
+.v2-bub[data-who="them"] {
+  align-self: flex-start; border-bottom-left-radius: 5px;
+  background: var(--v2-hover); border: 1px solid var(--v2-line);
+}
+/* ONE HUE, NOT THE GRADIENT. The first pass used the caption's full gradient and it restarted inside
+   every bubble, so a three-word reply and a two-line one looked like different colours — and it spent
+   the gradient, which earns its weight by appearing once per screen on the closing clause. A single
+   sample from the same family says "this is the employee" without competing with it. */
+.v2-bub[data-who="us"] {
+  align-self: flex-end; border-bottom-right-radius: 5px; color: #fff;
+  background: var(--v2-t1);
+}
+.v2-bub time { display: block; margin-top: 4px; font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.08em; opacity: 0.6; }
+
+/* ── TABS ────────────────────────────────────────────────────────────────────────────────────────
+   The micro-label, used as a control. The active one is marked by a gradient underline rather than a
+   filled pill or a heavier weight: the rail already spends weight on "where you are", and a second
+   selected-state vocabulary on the same screen is what makes v1's three header variants read as three
+   different products. */
+.v2-tabs { display: flex; align-items: center; gap: 22px; border-bottom: 1px solid var(--v2-line); }
+.v2-tab {
+  position: relative; background: none; border: 0; cursor: pointer; padding: 0 0 11px;
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--v2-ink-45); transition: color 0.16s;
+}
+.v2-tab:hover { color: var(--v2-ink); }
+.v2-tab[data-on] { color: var(--v2-ink); }
+.v2-tab[data-on]::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--v2-t1), var(--v2-t3) 60%, var(--v2-t4));
+}

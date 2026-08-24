@@ -107,59 +107,55 @@ export default async function InboxPage({
       )
     : conversations || []
 
+  // `v2` carries the tokens every promoted class reads; `v2-embedded` undoes the 100dvh and hidden
+  // overflow that belong to a route owning the viewport, not to a page inside AppShell.
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 sm:p-6 border-b border-hairline bg-white space-y-3">
-        <h1 className="text-2xl font-light tracking-tight text-ink">Shared Inbox</h1>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-          <form>
-            <input
-              name="q"
-              defaultValue={q}
-              placeholder="Search conversations..."
-              className="pl-10 h-11 w-full rounded-xl border border-hairline bg-white text-sm text-ink placeholder:text-muted outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
-            />
-          </form>
+    <div className="v2 v2-embedded flex flex-col h-full">
+      {/* THE HEADER, /v2's. No page title: the rail already says Inbox, and a 24px repeat of the
+          rail's own word is the same label twice. The micro-label carries the count instead — the one
+          thing the rail cannot say — and the rule runs to the edge the way every section header in
+          this language does. */}
+      <div className="p-4 sm:p-6 border-b border-hairline space-y-4">
+        <div className="v2-head" style={{ marginBottom: 0 }}>
+          <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>
+            <i />Shared inbox{filtered.length ? ` · ${filtered.length}` : ''}
+          </p>
+          <s />
         </div>
 
-        {/* Filters. Mobile (I1): status + channel chips merge into ONE horizontally
-            scrollable row (chips flex-shrink-0, 32px tall). Desktop: two stacked rows,
-            unchanged — `md:contents` on the wrapper dissolves it back into the parent's
-            space-y-3 flow so each inner div is its own row again. */}
+        {/* Search — a rule, not a box, per the kit. The icon sits on the baseline rather than inside
+            a field, because there is no field to sit inside any more. */}
+        <form className="v2-fld" style={{ position: 'relative' }}>
+          <label htmlFor="inbox-q">Search</label>
+          <input id="inbox-q" name="q" defaultValue={q} placeholder="Name, number or message…" style={{ paddingRight: 24 }} />
+          <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-ink-45)' }} />
+        </form>
+
+        {/* Filters. Same two groups, same hrefs, same behaviour — /v2's own .v2-chip, which already
+            has the selected state this needs, instead of v1's ink-filled pill. */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 max-md:-mx-4 max-md:px-4 md:contents">
-          {/* Status filters — scrollable row */}
           <div className="contents md:flex md:gap-2 md:overflow-x-auto md:no-scrollbar md:pb-0.5">
             {['all', 'open', 'resolved', 'closed'].map(s => (
               <Link
                 key={s}
                 href={`/inbox?status=${s}&channel=${channel}&q=${q}`}
-                className={cn(
-                  'flex-shrink-0 px-3.5 rounded-full text-xs font-medium transition-colors capitalize flex items-center max-md:h-8 md:min-h-[40px]',
-                  status === s ? 'bg-ink text-white' : 'bg-sunken text-subtle hover:bg-hairline-strong'
-                )}
+                className="v2-chip flex-shrink-0 capitalize"
+                data-on={status === s || undefined}
               >
                 {s}
               </Link>
             ))}
           </div>
 
-          {/* Channel filters — scrollable row */}
           <div className="contents md:flex md:gap-2 md:overflow-x-auto md:no-scrollbar md:pb-0.5">
             {['all', 'sms', 'voice', 'email', 'instagram', 'facebook'].map(c => (
               <Link
                 key={c}
                 href={`/inbox?status=${status}&channel=${c}&q=${q}`}
-                className={cn(
-                  'flex-shrink-0 px-3.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 max-md:h-8 md:min-h-[40px]',
-                  channel === c ? 'bg-ink text-white' : 'bg-sunken text-subtle hover:bg-hairline-strong'
-                )}
+                className="v2-chip flex-shrink-0"
+                data-on={channel === c || undefined}
               >
-                {c !== 'all' && (
-                  <span className={cn('h-1.5 w-1.5 rounded-full', channel === c ? 'bg-white/70' : (CHANNEL_STYLE[c]?.dot || 'bg-muted'))} />
-                )}
+                {c !== 'all' && <span className={cn('h-1.5 w-1.5 rounded-full', CHANNEL_STYLE[c]?.dot || 'bg-muted')} />}
                 {c === 'all' ? 'All Channels' : CHANNEL_LABELS[c]}
               </Link>
             ))}
@@ -171,14 +167,19 @@ export default async function InboxPage({
       <div className="flex-1 overflow-auto">
         {filtered.length === 0 ? (
           (q || status !== 'all' || channel !== 'all') ? (
-            <div className="flex flex-col items-center justify-center h-64 text-muted">
-              <MessageCircle className="w-10 h-10 mb-2" strokeWidth={1.5} />
-              <p className="text-sm">No conversations match your filters</p>
+            <div className="p-4 sm:p-6">
+              <div className="v2-card" data-empty>
+                <b>Nothing matches those filters</b>
+                <span>Clear the search or choose another channel.</span>
+              </div>
             </div>
           ) : (
-            <EmptyState icon={MessageCircle} title="Your AI employee is ready">
-              The moment someone calls, texts, emails, or messages your business, the conversation appears here — answered, summarized, and ready for you.
-            </EmptyState>
+            <div className="p-4 sm:p-6">
+              <div className="v2-card" data-empty>
+                <b>Your AI employee is ready</b>
+                <span>The moment someone calls, texts, emails or messages your business, the conversation appears here — answered, summarised and ready for you.</span>
+              </div>
+            </div>
           )
         ) : (
           <div className="max-md:space-y-0 md:space-y-2 max-md:p-0 md:p-4 sx-stagger">
