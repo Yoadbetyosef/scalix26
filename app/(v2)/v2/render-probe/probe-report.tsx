@@ -101,6 +101,54 @@ function paintedPixels(canvas: HTMLCanvasElement) {
   }
 }
 
+/**
+ * EVERY v2-classed element on the page, and the page's own scroll.
+ *
+ * The hero-only report answered "is the hero the same" and could not answer "is the SCREEN the same"
+ * — which is how a headshot beside the robot, and later a whole missing right column, got past it.
+ * This walks the document rather than a subtree.
+ */
+function pageInventory() {
+  const seen: { sel: string; top: number; left: number; w: number; h: number }[] = []
+  document.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    const cls = typeof el.className === 'string' ? el.className : ''
+    const v2 = cls.split(/\s+/).filter((c) => /^v2-/.test(c))
+    if (!v2.length) return
+    const st = getComputedStyle(el)
+    if (st.display === 'none' || st.visibility === 'hidden') return
+    const r = el.getBoundingClientRect()
+    if (!r.width && !r.height) return
+    seen.push({ sel: '.' + v2.join('.'), top: Math.round(r.top), left: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height) })
+  })
+  return seen.sort((a, b) => a.top - b.top || a.left - b.left)
+}
+
+/** Navigation, wherever it lives: /v2's rail or v1's sidebar. */
+function navItems() {
+  const root = document.querySelector('.v2-rail, aside.hidden, aside')
+  if (!root) return []
+  // VISIBLE anchors only. The desktop rail is `hidden md:flex`, so at 390px it is display:none and
+  // still in the DOM — counting it reported 14 nav items on a phone that shows none, which is a
+  // reporter fault dressed as a finding.
+  return Array.from(root.querySelectorAll('a')).map((a) => {
+    const r = a.getBoundingClientRect()
+    const st = getComputedStyle(a)
+    const shown = r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'
+    return shown ? { label: (a.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 24), top: Math.round(r.top) } : null
+  }).filter((n): n is { label: string; top: number } => !!n && !!n.label)
+}
+
+/** Anything with a visible rule on it — the page's section boundaries. */
+function dividers() {
+  const out: { tag: string; top: number; w: number }[] = []
+  document.querySelectorAll<HTMLElement>('hr, [class*="border-b"], [class*="border-t"], .v2-hair').forEach((el) => {
+    const r = el.getBoundingClientRect()
+    if (r.width < 40) return
+    out.push({ tag: el.tagName.toLowerCase(), top: Math.round(r.top), w: Math.round(r.width) })
+  })
+  return out.sort((a, b) => a.top - b.top)
+}
+
 /** Anything painted over the frame that is not the screen itself. */
 function strayNodes() {
   return Array.from(document.body.children)
@@ -187,6 +235,27 @@ export function ProbeReport({ force }: { force: ProbeState }) {
           }
         })(),
         strayNodes: strayNodes(),
+        page: {
+          scrollHeight: document.documentElement.scrollHeight,
+          clientHeight: document.documentElement.clientHeight,
+        },
+        inventory: pageInventory(),
+        nav: navItems(),
+        dividers: dividers(),
+        // The pulsing ring on the Talk button is an ::after, so it has no box of its own to measure.
+        talkRing: (() => {
+          const t = document.querySelector('.v2-talk')
+          if (!t) return null
+          const a = getComputedStyle(t, '::after')
+          return { content: a.content, inset: a.inset, border: a.border, opacity: a.opacity, animation: a.animationName }
+        })(),
+        // The small mono line above the caption in /v2.
+        tag: (() => {
+          const el = document.querySelector('.v2-tag')
+          if (!el) return null
+          const r = el.getBoundingClientRect()
+          return { text: (el.textContent ?? '').trim().slice(0, 40), top: Math.round(r.top) }
+        })(),
       }
 
       let node = document.getElementById('probe-report')

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { DashboardHero } from '@/components/dashboard/hero/dashboard-hero'
 import { ProbeReport } from '@/app/(v2)/v2/render-probe/probe-report'
+import { Sidebar } from '@/components/dashboard/sidebar'
 import type { HomeView } from '@/lib/dashboard/home-view'
 import type { AmyBriefing } from '@/components/dashboard/hero/ask-amy-shared'
 
@@ -57,8 +58,11 @@ const VIEW: HomeView = {
 
 export default function DashboardProbe() {
   if (process.env.NODE_ENV === 'production') notFound()
+  // The real shell, so the reporter compares rails and not just heroes.
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+    <div className="md:pl-16 xl:pl-[236px]">
+      <Sidebar />
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <DashboardHero
         employeeName="Amy"
         persona="rudi"
@@ -83,6 +87,7 @@ export default function DashboardProbe() {
           rather than by two descriptions. It queries the DOM by class and cares nothing for
           which route it is on. */}
       <ProbeReport force="idle" />
+      </div>
     </div>
   )
 }

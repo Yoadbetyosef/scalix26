@@ -1,0 +1,14 @@
+/* The kit page's own frame — the two-column comparison, its labels and notes.
+ * The COMPONENTS moved to v2-tokens.css on approval; what is left is chrome for showing them. */
+/* ── THE KIT'S OWN FRAME ─────────────────────────────────────────────────────────────────────── */
+.v2k-page { max-width: 1180px; margin: 0 auto; padding: 34px 26px 90px; }
+.v2k-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: start; margin-bottom: 12px; }
+@media (max-width: 900px) { .v2k-pair { grid-template-columns: 1fr; } }
+.v2k-side { border: 1px solid var(--v2-line); border-radius: 14px; padding: 18px; background: var(--v2-paper); }
+.v2k-side > .v2k-tag {
+  display: block; margin: -4px 0 16px; font-family: var(--v2-mono); font-size: 9.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--v2-ink-45);
+}
+.v2k-side[data-v1] { background: #fff; }
+.v2k-block { margin-bottom: 46px; }
+.v2k-note { margin: 12px 0 0; font-size: 13.5px; color: var(--v2-ink-45); max-width: 74ch; }

@@ -2,8 +2,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { ArrowLeft, Mail, MessageCircle, Phone, User } from 'lucide-react'
+import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { formatDateTime, formatDate, formatDuration, contactIdentifier, looksLikeName, isSocialChannel } from '@/lib/utils'
 import { formatPhone } from '@/lib/format'
 import { readConversation } from '@/lib/inbox/conversation-read'
@@ -12,7 +12,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS', voice: 'Voice', whatsapp: 'WhatsApp', instagram: 'Instagram', facebook: 'Facebook', email: 'Email',
 }
 import { ConversationActions } from '@/components/inbox/conversation-actions'
-import { ConversationContactPanel, CustomerProfileBlock } from '@/components/inbox/conversation-contact-panel'
+import { ConversationContactPanel, CustomerProfileBlock, Chip, CHANNEL_HUE } from '@/components/inbox/conversation-contact-panel'
 import { HumanTakeover } from '@/components/inbox/human-takeover'
 import { MessageComposer } from '@/components/inbox/message-composer'
 import { AiSummaryCard } from '@/components/inbox/ai-summary-card'
@@ -71,21 +71,30 @@ export default async function ConversationPage({ params, searchParams }: { param
         ? formatPhone(contact.phone)
         : contact?.email || 'Unknown'
 
+  // Status wears the same chip as everything else, in its own hue: open is the live one, resolved the
+  // settled one, closed the muted one. Channel hue comes from the list, so the row's colour follows
+  // the conversation in.
+  const STATUS_HUE: Record<string, string> = {
+    open: 'var(--v2-t1)', resolved: 'var(--v2-t2)', closed: 'var(--v2-ink-45)',
+  }
+  const chanHue = CHANNEL_HUE[conv.channel] ?? 'var(--v2-t1)'
+
   return (
-    <div className="flex flex-col h-screen max-h-screen">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 bg-white border-b border-hairline flex-shrink-0">
-        <Link href={backHref} className="tap-target -ml-2 flex h-11 w-11 items-center justify-center rounded-xl text-muted hover:text-ink hover:bg-sunken flex-shrink-0">
-          <ArrowLeft className="w-5 h-5" />
+    // `v2` for the tokens, `v2-embedded` so the shell's 100dvh does not fight the page's own
+    // h-screen scroll frame. Same frame, same behaviour.
+    <div className="v2 v2-embedded flex flex-col h-screen max-h-screen">
+      {/* Header. Same five things in the same order; the back arrow and the avatar are the kit's round
+          icon button and the one face, so the row no longer opens with a grey square and a letter. */}
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4 border-b border-hairline flex-shrink-0">
+        <Link href={backHref} className="v2-ico tap-target" aria-label="Back">
+          <ArrowLeft />
         </Link>
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-medium flex-shrink-0 ${conv.channel === 'voice' ? 'bg-accent/10 text-accent-strong' : 'bg-sunken text-subtle'}`}>
-          {conv.channel === 'voice' ? <Phone className="w-4 h-4" /> : (contact?.name?.[0] || contact?.phone?.[0] || '?')}
-        </div>
+        <RobotAvatar size={36} />
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-semibold text-ink truncate">
+          <h2 className="text-sm font-semibold truncate" style={{ color: 'var(--v2-ink)' }}>
             {headerTitle}
           </h2>
-          <div className="flex items-center gap-1.5 text-xs text-subtle flex-wrap">
+          <div className="v2-kick flex-wrap" style={{ gap: 6 }}>
             <span>{conv.channel === 'voice' ? 'Voice' : conv.channel}</span>
             {/* C3: date moved out of the header on mobile (dates live in the messages);
                 desktop keeps it via max-md:hidden so md+ stays pixel-identical. */}
@@ -98,7 +107,7 @@ export default async function ConversationPage({ params, searchParams }: { param
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-          <Badge variant={conv.status as 'open' | 'resolved' | 'closed'}>{conv.status}</Badge>
+          <Chip value={conv.status} hue={STATUS_HUE[conv.status] ?? 'var(--v2-ink-45)'} />
           {/* C1: top action buttons — desktop only. On mobile they move to the sticky
               bottom bar below; SAME components/handlers, just relocated (max-md:hidden). */}
           <div className="hidden md:flex items-center gap-1.5">
@@ -114,10 +123,15 @@ export default async function ConversationPage({ params, searchParams }: { param
         {/* Messages */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Human takeover banner */}
+          {/* An alert, not a coloured block — the same move the kit made on the amber upgrade panel.
+              v1 filled the full width with solid ink, which read as a header for the transcript under
+              it rather than a warning about it. The badge carries the urgency, the sentence carries
+              the fact, and the paper stays paper. */}
           {conv.human_takeover && (
-            <div className="mx-4 sm:mx-6 mt-4 px-4 py-2.5 bg-ink text-white rounded-2xl flex items-center gap-2 flex-shrink-0">
-              <User className="w-4 h-4 flex-shrink-0" />
-              <p className="text-sm font-medium">You are now handling this conversation</p>
+            <div className="v2-notice mx-4 sm:mx-6 mt-4 flex-shrink-0" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+              <span className="v2-chip-sq"><User /></span>
+              <p>You are handling this conversation. The AI will not reply until you hand it back.</p>
+              <em>Manual</em>
             </div>
           )}
 
@@ -125,116 +139,108 @@ export default async function ConversationPage({ params, searchParams }: { param
               component holds pure UI state); desktop shows full text as before. */}
           {conv.summary && <AiSummaryCard summary={conv.summary} />}
 
-          {/* Transcript */}
-          <div className="flex-1 overflow-auto p-4 sm:p-6 space-y-4">
-            {(messages || []).map((msg) => {
-              const isAgent = msg.role === 'agent'
-              const isOutbound = msg.role === 'assistant' || isAgent
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 ${
-                      isAgent
-                        ? 'bg-accent-strong text-white rounded-br-md'
-                        : msg.role === 'assistant'
-                        ? 'bg-accent text-white rounded-br-md'
-                        : 'bg-sunken text-ink rounded-bl-md'
-                    }`}
-                  >
+          {/* Transcript — .v2-thread, the kit's own, which is also /v2's: a column with a 660px measure
+              and 10px between turns. v1 wrapped every message in a full-width flex row and pushed it
+              left or right; the thread does that with align-self, so a bubble is as wide as it needs
+              to be rather than 78% of whatever the window happens to be. */}
+          <div className="flex-1 overflow-auto p-4 sm:p-6">
+            <div className="v2-thread">
+              {(messages || []).map((msg) => {
+                const isAgent = msg.role === 'agent'
+                const isOutbound = msg.role === 'assistant' || isAgent
+                return (
+                  /* One hue for the side that is the product, hairline paper for the customer — not two
+                     violets told apart by alignment. The agent and the assistant share the hue because
+                     they are the same side of the conversation; which of them spoke is what the label
+                     above says. */
+                  <div key={msg.id} className="v2-bub" data-who={isOutbound ? 'us' : 'them'}>
                     {isAgent && (
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/70 mb-0.5">You · Agent</p>
+                      <p className="v2-kick" style={{ color: 'rgba(255,255,255,.75)', marginBottom: 2 }}>You · Agent</p>
                     )}
                     <p className="text-sm leading-relaxed">{msg.content}</p>
-                    <p className={`text-xs mt-1 ${isOutbound ? 'text-white/60' : 'text-muted'}`}>
+                    <time className={isOutbound ? '' : 'text-muted'}>
                       {formatDateTime(msg.timestamp, tz)}
-                    </p>
+                    </time>
                     {/* A2: surface a failed/undelivered SMS so it never looks "sent" silently. */}
                     {isOutbound && (msg.delivery_status === 'undelivered' || msg.delivery_status === 'failed') && (
-                      <p className="text-xs mt-1 font-medium text-red-200 bg-red-600/30 rounded px-1.5 py-0.5 inline-block">
-                        ⚠ Not delivered{msg.error_code ? ` (error ${msg.error_code})` : ''}
-                      </p>
+                      <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)', marginTop: 4, background: 'rgba(255,255,255,.22)', color: '#fff' }}>
+                        Not delivered{msg.error_code ? ` · ${msg.error_code}` : ''}
+                      </span>
                     )}
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
 
           {/* Manual message composer — only when a human has taken over */}
           {conv.human_takeover && <MessageComposer conversationId={id} />}
         </div>
 
-        {/* Contact Sidebar — desktop only */}
-        <div className="w-64 border-l border-hairline bg-white p-4 overflow-auto flex-shrink-0 hidden lg:block">
-          <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-3">Contact</h3>
+        {/* Contact rail — desktop only. The same two columns the mobile sheet shows, because they are
+            the same facts; .v2-facts is that pair, and .v2-kick is the section label the rail's own
+            groups use. The identity block keeps its icons: a phone number that is a phone number and
+            an email that is an email is the one place on this screen where an icon says something the
+            label does not. */}
+        <div className="w-64 border-l border-hairline p-5 overflow-auto flex-shrink-0 hidden lg:block">
+          <p className="v2-kick" style={{ marginBottom: 12 }}>Contact</p>
 
           <div className="space-y-3">
             {contact?.name && (
               <div className="flex items-center gap-2 text-sm">
-                <User className="w-4 h-4 text-muted" />
-                <span className="text-ink">{contact.name}</span>
+                <User className="w-4 h-4" style={{ color: 'var(--v2-ink-45)' }} />
+                <span style={{ color: 'var(--v2-ink)' }}>{contact.name}</span>
               </div>
             )}
             {ident && (
               <div className="flex items-start gap-2 text-sm">
-                <IdentIcon className="w-4 h-4 text-muted flex-shrink-0 mt-0.5" />
+                <IdentIcon className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--v2-ink-45)' }} />
                 <div className="min-w-0">
                   {ident.isPhone ? (
-                    <a href={`tel:${ident.value}`} className="text-ink font-medium hover:underline break-all">{ident.value}</a>
+                    <a href={`tel:${ident.value}`} className="font-medium hover:underline break-all" style={{ color: 'var(--v2-ink)' }}>{ident.value}</a>
                   ) : (
-                    <span className="text-ink break-all">{ident.value}</span>
+                    <span className="break-all" style={{ color: 'var(--v2-ink)' }}>{ident.value}</span>
                   )}
-                  <p className="text-xs text-muted">{ident.label}</p>
+                  <p className="v2-kick" style={{ marginTop: 2 }}>{ident.label}</p>
                 </div>
               </div>
             )}
             {contact?.email && (
-              <div className="flex items-center gap-2 text-sm">
-                <MessageSquare className="w-4 h-4 text-muted" />
-                <span className="text-ink truncate">{contact.email}</span>
+              <div className="flex items-center gap-2 text-sm min-w-0">
+                <Mail className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-ink-45)' }} />
+                <span className="truncate" style={{ color: 'var(--v2-ink)' }}>{contact.email}</span>
               </div>
             )}
           </div>
 
           {contact?.id && (
-            <Link href={`/contacts/${contact.id}`} className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-subtle hover:text-ink transition-colors">
+            <Link href={`/contacts/${contact.id}`} className="v2-act" style={{ marginTop: 16 }}>
               View full profile →
             </Link>
           )}
 
-          <div className="mt-6 pt-4 border-t border-hairline">
-            <h3 className="text-xs font-semibold text-subtle uppercase tracking-wide mb-3">Details</h3>
-            <div className="space-y-2 text-xs text-subtle">
-              <div className="flex justify-between">
-                <span>Channel</span>
-                <Badge variant={conv.channel as 'sms' | 'voice' | 'whatsapp' | 'instagram' | 'facebook'}>
-                  {conv.channel}
-                </Badge>
+          <div className="mt-6 pt-5 border-t border-hairline">
+            <p className="v2-kick" style={{ marginBottom: 12 }}>Details</p>
+            <dl className="v2-facts" data-narrow>
+              <div><dt>Channel</dt><dd><Chip value={conv.channel} hue={chanHue} /></dd></div>
+              <div>
+                <dt>Sentiment</dt>
+                <dd>{conv.sentiment
+                  ? <Chip value={conv.sentiment} hue={conv.sentiment === 'positive' ? 'var(--v2-t2)' : conv.sentiment === 'negative' ? 'var(--v2-t4)' : 'var(--v2-ink-45)'} />
+                  : '—'}</dd>
               </div>
-              <div className="flex justify-between">
-                <span>Sentiment</span>
-                {conv.sentiment ? (
-                  <Badge variant={conv.sentiment as 'positive' | 'neutral' | 'negative'}>{conv.sentiment}</Badge>
-                ) : <span>—</span>}
-              </div>
-              <div className="flex justify-between">
-                <span>Messages</span>
-                <span className="font-medium text-ink">{messages?.length || 0}</span>
-              </div>
-            </div>
+              <div><dt>Messages</dt><dd>{messages?.length || 0}</dd></div>
+            </dl>
           </div>
 
-          <CustomerProfileBlock profile={profile} className="mt-6 pt-4" />
+          <CustomerProfileBlock profile={profile} className="mt-6 pt-5 border-t border-hairline" />
         </div>
       </div>
 
       {/* C1: mobile sticky bottom action bar. md:hidden so desktop is untouched; the
           buttons here reuse the SAME HumanTakeover / ConversationActions handlers as
           the (now desktop-only) top bar. Safe-area aware via .safe-area-inset-bottom. */}
-      <div className="md:hidden flex-shrink-0 bg-white border-t border-hairline px-4 pt-3 pb-3 safe-area-inset-bottom">
+      <div className="md:hidden flex-shrink-0 border-t border-hairline px-4 pt-3 pb-3 safe-area-inset-bottom">
         <div className="flex items-center gap-2">
           <HumanTakeover conversationId={id} active={conv.human_takeover === true} mobileBar />
           <ConversationActions conversationId={id} currentStatus={conv.status} place="bar" />

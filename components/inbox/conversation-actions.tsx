@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
@@ -37,19 +36,21 @@ export function ConversationActions({ conversationId, currentStatus, place = 'to
     }
   }
 
-  // Mobile bottom action bar — Resolve (outline, beside Take Over) / Reopen.
+  // The kit's .v2-act throughout — same three verbs, same handlers, same placements. A status verb
+  // is not a destination, so it stays the pill: hollow for the secondary ones, filled only where the
+  // bottom bar's primary already was.
   if (place === 'bar') {
     return (
       <>
         {currentStatus !== 'resolved' && (
-          <Button variant="outline" loading={loading} onClick={() => updateStatus('resolved')} className="flex-[2] h-12">
+          <button className="v2-act" data-wide disabled={loading} onClick={() => updateStatus('resolved')}>
             Resolve
-          </Button>
+          </button>
         )}
         {currentStatus === 'closed' && (
-          <Button variant="outline" loading={loading} onClick={() => updateStatus('open')} className="flex-[2] h-12">
+          <button className="v2-act" data-wide disabled={loading} onClick={() => updateStatus('open')}>
             Reopen
-          </Button>
+          </button>
         )}
       </>
     )
@@ -60,14 +61,14 @@ export function ConversationActions({ conversationId, currentStatus, place = 'to
     return (
       <div className="flex flex-col gap-2">
         {currentStatus !== 'closed' && (
-          <Button variant="ghost" loading={loading} onClick={() => updateStatus('closed')} className="w-full justify-center h-12">
+          <button className="v2-act" data-wide disabled={loading} onClick={() => updateStatus('closed')}>
             Close conversation
-          </Button>
+          </button>
         )}
         {currentStatus !== 'open' && (
-          <Button variant="outline" loading={loading} onClick={() => updateStatus('open')} className="w-full justify-center h-12">
+          <button className="v2-act" data-wide disabled={loading} onClick={() => updateStatus('open')}>
             Reopen conversation
-          </Button>
+          </button>
         )}
       </div>
     )
@@ -76,19 +77,19 @@ export function ConversationActions({ conversationId, currentStatus, place = 'to
   return (
     <div className="flex gap-1.5">
       {currentStatus !== 'resolved' && (
-        <Button size="sm" variant="outline" loading={loading} onClick={() => updateStatus('resolved')}>
+        <button className="v2-act" disabled={loading} onClick={() => updateStatus('resolved')}>
           Resolve
-        </Button>
+        </button>
       )}
       {currentStatus !== 'closed' && (
-        <Button size="sm" variant="ghost" loading={loading} onClick={() => updateStatus('closed')}>
+        <button className="v2-act" disabled={loading} onClick={() => updateStatus('closed')}>
           Close
-        </Button>
+        </button>
       )}
       {currentStatus !== 'open' && (
-        <Button size="sm" variant="outline" loading={loading} onClick={() => updateStatus('open')}>
+        <button className="v2-act" disabled={loading} onClick={() => updateStatus('open')}>
           Reopen
-        </Button>
+        </button>
       )}
     </div>
   )

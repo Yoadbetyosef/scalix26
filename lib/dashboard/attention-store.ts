@@ -41,7 +41,8 @@ let records: Records = {}
 let ready = false
 let seeded = false
 let waiting = 0
-let snapshot: AttentionSnapshot = { ready: false, visibleItems: [], unresolvedCount: 0, waiting: 0 }
+const EMPTY_SNAPSHOT: AttentionSnapshot = Object.freeze({ ready: false, visibleItems: [], unresolvedCount: 0, waiting: 0 })
+let snapshot: AttentionSnapshot = EMPTY_SNAPSHOT
 const listeners = new Set<() => void>()
 let realtimeTenant: string | null = null
 
@@ -77,7 +78,12 @@ function reconcile() {
 
 export const attentionStore = {
   getSnapshot(): AttentionSnapshot { return snapshot },
-  getServerSnapshot(): AttentionSnapshot { return { ready: false, visibleItems: [], unresolvedCount: 0, waiting: 0 } },
+  // ONE frozen object, not a fresh one per call. useSyncExternalStore compares snapshots by
+  // identity, so returning a new literal each time is an unequal snapshot on every render —
+  // React says so out loud: "The result of getServerSnapshot should be cached to avoid an
+  // infinite loop". It was doing this before `waiting` was added; the warning is in the console
+  // on every page that mounts the bell.
+  getServerSnapshot(): AttentionSnapshot { return EMPTY_SNAPSHOT },
 
   subscribe(cb: () => void): () => void {
     listeners.add(cb)

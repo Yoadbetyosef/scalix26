@@ -176,7 +176,9 @@ export async function updateSession(request: NextRequest) {
   // PUBLIC_ROUTES: that list is the production contract, and this opens only off production. The
   // page itself also calls notFound() in a production build, so this is the second of two locks.
   const isDevProbe = process.env.NODE_ENV !== 'production'
-    && (pathname.startsWith('/v2/render-probe') || pathname.startsWith('/render-probe'))
+    && (pathname.startsWith('/v2/render-probe') || pathname.startsWith('/render-probe')
+      // The component kit: v1 beside v2, for approval. Same two locks as the probes.
+      || pathname.startsWith('/v2/kit'))
   const isPublic = isDevProbe || publicRoutes.some(r => pathname.startsWith(r))
 
   if (!user && !isPublic && pathname !== '/') {
