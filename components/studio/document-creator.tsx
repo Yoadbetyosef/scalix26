@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Settings2, Mail, MessageSquare, Copy, ExternalLink, Check } from 'lucide-react'
+import { X, Settings2, Mail, MessageSquare, Copy, ExternalLink, Check, Minus, Plus } from 'lucide-react'
 import type { StudioProduct, StudioVariant, StudioDocType, StudioDocument } from '@/lib/studio/types'
 import { DOC_META, variantPrice, variantTitle } from '@/lib/studio/types'
 import { DocSettingsModal } from '@/components/studio/doc-settings-modal'
+import { Modal } from '@/components/v2/modal'
 
-const input = 'h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
 const money = (n: number | null) => (n != null ? `$${Number(n).toLocaleString()}` : '—')
 
 type Line = { ref: string; name: string; sub: string | null; unit: number | null; qty: number }
@@ -56,73 +56,86 @@ export function DocumentCreator({ product, variants, type, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-ink">{doc ? `${meta.title} ready` : `New ${meta.noun}`}</h2>
-          <div className="flex items-center gap-1">
-            {!doc && <button onClick={() => setSettingsOpen(true)} title="Branding & terms" className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-subtle hover:bg-sunken hover:text-ink"><Settings2 className="h-4 w-4" /> Branding</button>}
-            <button onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-sunken"><X className="h-5 w-5" /></button>
+    <>
+      {/* THE APPROVED DIALOG. This was a hand-rolled fixed overlay: no focus trap, no Escape, no
+          scroll lock, no dialog role, and Tab walked straight out of it onto the page behind. The
+          component does all four, and portals to <body> so an animated ancestor cannot stop it being
+          fixed to the viewport. Not dismissable while a request is in flight. */}
+      <Modal
+        open
+        onClose={onClose}
+        title={doc ? `${meta.title} ready` : `New ${meta.noun}`}
+        dismissable={!busy}
+        wide={!!doc}
+        actions={doc ? undefined : (
+          <>
+            <span className="v2-kick" style={{ marginRight: 'auto' }}>
+              {!isProduction ? `Subtotal $${subtotal.toLocaleString()}` : `${chosen.length} item${chosen.length === 1 ? '' : 's'}`}
+            </span>
+            <button onClick={() => setSettingsOpen(true)} className="v2-act tap-target"><Settings2 className="w-3.5 h-3.5" /> Branding</button>
+            <button onClick={create} disabled={busy} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>{busy ? 'Creating…' : 'Create & preview'}</button>
+          </>
+        )}
+      >
+        {err && (
+          <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)', marginBottom: 18 }}>
+            <span className="v2-chip-sq"><X /></span>
+            <p>{err}</p>
           </div>
-        </div>
-
-        {err && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+        )}
 
         {doc ? (
           <PreviewAndSend doc={doc} meta={meta} initialEmail={email} initialPhone={phone} onClose={onClose} />
         ) : (
           <>
             {/* Items + quantities */}
-            <div className="mb-4 rounded-xl border border-hairline-strong">
-              <p className="border-b border-hairline px-3 py-2 text-xs font-medium uppercase tracking-wide text-subtle">Items & quantities</p>
-              <div className="divide-y divide-hairline">
-                {lines.map((l) => (
-                  <div key={l.ref} className="flex items-center gap-3 px-3 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-ink">{l.name}</p>
-                      <p className="truncate text-xs text-muted">{[l.sub, !isProduction ? money(l.unit) : null].filter(Boolean).join(' · ')}</p>
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-1">
-                      <button onClick={() => setQty(l.ref, l.qty - 1)} className="h-8 w-8 rounded-lg border border-hairline-strong text-ink">−</button>
-                      <input className="h-8 w-12 rounded-lg border border-hairline-strong text-center text-sm outline-none focus:border-accent" type="number" min={0} value={l.qty} onChange={(e) => setQty(l.ref, Math.trunc(Number(e.target.value)))} />
-                      <button onClick={() => setQty(l.ref, l.qty + 1)} className="h-8 w-8 rounded-lg border border-hairline-strong text-ink">+</button>
-                    </div>
+            <p className="v2-kick" style={{ marginBottom: 6 }}>Items &amp; quantities</p>
+            <div className="v2-list" style={{ marginBottom: 22 }}>
+              {lines.map((l) => (
+                <div key={l.ref} className="v2-row" style={{ ['--chan' as string]: l.qty > 0 ? 'var(--v2-t2)' : 'var(--v2-mute)' }}>
+                  <div className="v2-m">
+                    <p><span className="truncate">{l.name}</span></p>
+                    <span>{[l.sub, !isProduction ? money(l.unit) : null].filter(Boolean).join(' · ')}</span>
                   </div>
-                ))}
-              </div>
+                  {/* A stepper, in the kit's own controls: two icon buttons and the bare field the
+                      form language already uses. v1 drew three bordered boxes in a row. */}
+                  <div className="flex items-center gap-1 flex-none">
+                    <button onClick={() => setQty(l.ref, l.qty - 1)} className="v2-ico" aria-label={`One fewer ${l.name}`}><Minus /></button>
+                    <input
+                      className="v2-qty" type="number" min={0} value={l.qty}
+                      aria-label={`Quantity of ${l.name}`}
+                      onChange={(e) => setQty(l.ref, Math.trunc(Number(e.target.value)))}
+                    />
+                    <button onClick={() => setQty(l.ref, l.qty + 1)} className="v2-ico" aria-label={`One more ${l.name}`}><Plus /></button>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="space-y-3">
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{meta.party} name</span>
-                <input className={input} value={party} onChange={(e) => setParty(e.target.value)} placeholder={isProduction ? 'Factory / supplier' : 'Client name'} />
-              </label>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{meta.party} email</span>
-                  <input className={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@email.com" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{meta.party} phone</span>
-                  <input className={input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 0000" />
-                </label>
+            <div className="v2-form">
+              <div className="v2-fld wide">
+                <label htmlFor="dc-party">{meta.party} name</label>
+                <input id="dc-party" value={party} onChange={(e) => setParty(e.target.value)} placeholder={isProduction ? 'Factory / supplier' : 'Client name'} />
               </div>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Notes (optional)</span>
-                <textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </label>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between">
-              {!isProduction ? <span className="text-sm text-muted">Subtotal <span className="text-base font-bold text-ink">${subtotal.toLocaleString()}</span></span> : <span className="text-sm text-muted">{chosen.length} item{chosen.length === 1 ? '' : 's'}</span>}
-              <button onClick={create} disabled={busy} className="h-11 rounded-lg bg-ink px-5 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Creating…' : 'Create & preview'}</button>
+              <div className="v2-fld">
+                <label htmlFor="dc-email">{meta.party} email</label>
+                <input id="dc-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@email.com" />
+              </div>
+              <div className="v2-fld">
+                <label htmlFor="dc-phone">{meta.party} phone</label>
+                <input id="dc-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 0000" />
+              </div>
+              <div className="v2-fld wide">
+                <label htmlFor="dc-notes">Notes (optional)</label>
+                <textarea id="dc-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </div>
             </div>
           </>
         )}
-      </div>
+      </Modal>
 
       {settingsOpen && <DocSettingsModal onClose={() => setSettingsOpen(false)} />}
-    </div>
+    </>
   )
 }
 
@@ -157,34 +170,50 @@ function PreviewAndSend({ doc, meta, initialEmail, initialPhone, onClose }: {
   function copy() { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500) }
 
   return (
-    <div className="space-y-4">
-      {/* Live preview of exactly what the client sees */}
-      <div className="overflow-hidden rounded-xl border border-hairline-strong">
-        <p className="border-b border-hairline bg-sunken/50 px-3 py-2 text-xs font-medium uppercase tracking-wide text-subtle">Preview — what the {meta.party.toLowerCase()} sees</p>
-        <iframe src={`/d/${doc.token}`} title="Preview" className="h-[360px] w-full bg-white" />
+    <div style={{ display: 'grid', gap: 18 }}>
+      {/* Live preview of exactly what the client sees. The frame is the media block's — one hairline,
+          the card radius — because that is what a framed representation of the thing looks like here. */}
+      <div>
+        <p className="v2-kick" style={{ marginBottom: 8 }}>Preview — what the {meta.party.toLowerCase()} sees</p>
+        <iframe src={`/d/${doc.token}`} title="Preview" style={{ height: 360, width: '100%', background: '#fff', border: '1px solid var(--v2-line)', borderRadius: 'var(--v2-radius-card)' }} />
       </div>
 
-      {status && <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{status}</div>}
-      {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+      {status && (
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+          <span className="v2-chip-sq"><Check /></span>
+          <p>{status}</p>
+        </div>
+      )}
+      {err && (
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)' }}>
+          <span className="v2-chip-sq"><X /></span>
+          <p>{err}</p>
+        </div>
+      )}
 
       {/* Send */}
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          <input className={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Client email" />
-          <button onClick={() => send('email')} disabled={busy === 'email'} className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50"><Mail className="h-4 w-4" /> {busy === 'email' ? '…' : 'Email'}</button>
+      <div style={{ display: 'grid', gap: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+          <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+            <label htmlFor="ps-email">Client email</label>
+            <input id="ps-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@email.com" />
+          </div>
+          <button onClick={() => send('email')} disabled={busy === 'email'} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)', marginBottom: 4 }}><Mail className="w-3.5 h-3.5" /> {busy === 'email' ? '…' : 'Email'}</button>
         </div>
-        <div className="flex gap-2">
-          <input className={input} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Client phone" />
-          <button onClick={() => send('sms')} disabled={busy === 'sms'} className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50"><MessageSquare className="h-4 w-4" /> {busy === 'sms' ? '…' : 'SMS'}</button>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+          <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+            <label htmlFor="ps-phone">Client phone</label>
+            <input id="ps-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 555 000 0000" />
+          </div>
+          <button onClick={() => send('sms')} disabled={busy === 'sms'} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)', marginBottom: 4 }}><MessageSquare className="w-3.5 h-3.5" /> {busy === 'sms' ? '…' : 'SMS'}</button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-hairline pt-3">
-        <div className="flex gap-3">
-          <button onClick={copy} className="inline-flex items-center gap-1.5 text-sm font-medium text-subtle hover:text-ink">{copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />} {copied ? 'Copied' : 'Copy link'}</button>
-          <a href={`/d/${doc.token}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-subtle hover:text-ink"><ExternalLink className="h-4 w-4" /> Open</a>
-        </div>
-        <button onClick={onClose} className="h-10 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-ink">Done</button>
+      <div className="v2-bar" style={{ paddingTop: 16, borderTop: '1px solid var(--v2-line)' }}>
+        <button onClick={copy} className="v2-act tap-target">{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />} {copied ? 'Copied' : 'Copy link'}</button>
+        <a href={`/d/${doc.token}`} target="_blank" rel="noreferrer" className="v2-act tap-target"><ExternalLink className="w-3.5 h-3.5" /> Open</a>
+        <span style={{ flex: 1 }} />
+        <button onClick={onClose} className="v2-act tap-target" data-solid>Done</button>
       </div>
     </div>
   )

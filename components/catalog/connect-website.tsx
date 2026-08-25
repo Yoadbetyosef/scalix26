@@ -142,55 +142,59 @@ export function ConnectWebsite({ onProductsChanged }: { onProductsChanged?: () =
 
   if (loading) return null
 
+  // A SECTION, NOT A CARD-INSIDE-A-PAGE. v1 boxed this panel and then boxed the source rows inside
+  // it and the failure state inside those — three nested borders before a sentence. In this language
+  // a section is a micro-label and a rule, and the rows below it are the same list row the catalogue
+  // itself uses, so "your website" and "your products" read as two parts of one page.
   return (
-    <div className="mb-4 rounded-xl border border-hairline-strong bg-white">
-      <div className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Globe className="h-4 w-4 text-muted" />
-          <h2 className="text-sm font-semibold text-ink">Your website</h2>
-        </div>
+    <div className="mb-6">
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Your website</p>
+        <s />
         {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken"
-          >
-            <Plus className="h-4 w-4" /> Connect a site
+          <button onClick={() => setShowForm(true)} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+            <Plus className="w-3.5 h-3.5" /> Connect a site
           </button>
         )}
       </div>
 
       {showForm && (
-        <div className="border-b border-hairline px-4 py-4">
-          <label className="block text-xs font-medium text-subtle">
-            Website address
+        <div className="mb-4">
+          <div className="v2-fld">
+            <label htmlFor="connect-url">Website address</label>
             <input
+              id="connect-url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && owns && url.trim()) void connect() }}
               placeholder="yourshop.com"
               autoFocus
-              className="mt-1 h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm text-ink outline-none focus:border-accent"
             />
-          </label>
+          </div>
 
           {/* Not decoration: this is the tenant stating they're entitled to the content we're about
               to read. The server refuses the request without it. */}
-          <label className="mt-3 flex items-start gap-2 text-sm text-subtle">
-            <input type="checkbox" checked={owns} onChange={(e) => setOwns(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-hairline-strong" />
+          <label className="v2-check" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+            <input type="checkbox" checked={owns} onChange={(e) => setOwns(e.target.checked)} />
             <span>I confirm I own or am authorized to use this website’s content.</span>
           </label>
 
-          {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {error && (
+            <div className="v2-notice mt-3" style={{ ['--ghue' as string]: 'var(--v2-red)' }}>
+              <span className="v2-chip-sq"><AlertCircle /></span>
+              <p>{error}</p>
+            </div>
+          )}
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="v2-bar mt-4">
             <button
               onClick={() => void connect()}
               disabled={!owns || !url.trim() || connecting}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink/90 disabled:opacity-40"
+              className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)' }}
             >
-              {connecting ? <><Loader2 className="h-4 w-4 animate-spin" /> Looking at your site…</> : 'Connect'}
+              {connecting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Looking at your site…</> : 'Connect'}
             </button>
-            <button onClick={() => { setShowForm(false); setError(null) }} className="rounded-lg px-3 py-2 text-sm text-subtle hover:text-ink">
+            <button onClick={() => { setShowForm(false); setError(null) }} className="v2-act tap-target">
               Cancel
             </button>
           </div>
@@ -198,18 +202,21 @@ export function ConnectWebsite({ onProductsChanged }: { onProductsChanged?: () =
       )}
 
       {sources.length === 0 && !showForm && (
-        <p className="px-4 py-4 text-sm text-muted">
-          Connect your website and we’ll read your products from it — so the AI can answer questions about what you sell.
-        </p>
+        <div className="v2-card" data-empty>
+          <b>No site connected</b>
+          <span>Connect your website and we’ll read your products from it — so the AI can answer questions about what you sell.</span>
+        </div>
       )}
 
-      <div className="divide-y divide-hairline">
-        {sources.map((s) => (
-          <SourceRow key={s.id} source={s} onResync={() => void resync(s.id)} onDisconnect={() => void disconnect(s.id)} onUpload={() => fileRef.current?.click()} />
-        ))}
-      </div>
+      {sources.length > 0 && (
+        <div className="v2-list">
+          {sources.map((s) => (
+            <SourceRow key={s.id} source={s} onResync={() => void resync(s.id)} onDisconnect={() => void disconnect(s.id)} onUpload={() => fileRef.current?.click()} />
+          ))}
+        </div>
+      )}
 
-      {/* What those sources actually captured. Inside this card on purpose: everything here comes
+      {/* What those sources actually captured. Directly under them on purpose: everything here comes
           from the website, and the physical inventory list lives further down the page. */}
       <IngestedProducts />
 
@@ -217,7 +224,7 @@ export function ConnectWebsite({ onProductsChanged }: { onProductsChanged?: () =
         ref={fileRef} type="file" accept=".csv,text/csv,.tsv,text/tab-separated-values" className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadCsv(f); e.target.value = '' }}
       />
-      {uploading && <p className="px-4 py-3 text-sm text-muted"><Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" /> Reading your file…</p>}
+      {uploading && <p className="v2-kick mt-3"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Reading your file…</p>}
     </div>
   )
 }
@@ -228,57 +235,62 @@ function SourceRow({ source, onResync, onDisconnect, onUpload }: {
   const host = source.source_url.replace(/^https?:\/\//, '').replace(/^file:\/\//, '')
   const failed = source.status === 'failed'
   const working = source.status === 'detecting' || source.status === 'syncing' || source.status === 'pending'
+  // The row's own hue says its state without a second badge: amber while it is still going, red when
+  // it could not be read, and the violet this whole section is keyed to once it is up to date.
+  const hue = failed ? 'var(--v2-red)' : working ? 'var(--v2-amber)' : 'var(--v2-t3)'
 
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-ink">{host}</p>
-          <p className="mt-0.5 text-xs text-subtle">
+    <div style={{ ['--chan' as string]: hue }}>
+      <div className="v2-row" style={{ borderBottom: failed || working ? 0 : undefined }}>
+        <span className="v2-chip-sq" style={{ ['--ghue' as string]: hue }}><Globe /></span>
+        <div className="v2-m">
+          <p><span className="truncate">{host}</span></p>
+          <span>
             {failed ? 'Not connected'
               : working ? (source.status === 'detecting' ? 'Working out what your site runs on…' : 'Reading your products…')
               : <>{source.detected_platform || PLATFORM_LABEL[source.source_type] || 'Website'} · {source.products_found} products · synced {timeAgo(source.last_synced_at)}</>}
-          </p>
+          </span>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-1">
+        {source.status === 'active' && (
+          <span className="v2-stat" style={{ ['--chan' as string]: hue }}><CheckCircle2 className="w-3 h-3" /> Up to date</span>
+        )}
+        <div className="flex items-center gap-1 flex-none">
           {source.status === 'active' && (
-            <button onClick={onResync} title="Sync now" className="rounded-lg border border-hairline-strong p-2 text-subtle hover:bg-sunken hover:text-ink">
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
+            <button onClick={onResync} title="Sync now" aria-label="Sync now" className="v2-ico" style={{ ['--ghue' as string]: hue }}><RefreshCw /></button>
           )}
-          <button onClick={onDisconnect} title="Disconnect" className="rounded-lg border border-hairline-strong p-2 text-subtle hover:bg-sunken hover:text-ink">
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <button onClick={onDisconnect} title="Disconnect" aria-label="Disconnect" className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }}><X /></button>
         </div>
       </div>
 
       {working && <Progress progress={source.progress} />}
-
-      {source.status === 'active' && (
-        <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-emerald-700">
-          <CheckCircle2 className="h-3.5 w-3.5" /> Up to date
-        </p>
-      )}
 
       {failed && <FailureState reason={source.last_status} detail={source.error_log?.[0]?.message ?? null} onUpload={onUpload} />}
     </div>
   )
 }
 
+// The tab's gradient underline, doing a second job. A progress bar in this language is a rule that
+// fills, not a pill inside a track — same 2px, same gradient, same radius as the mark under a
+// selected tab, so nothing new has to be learned to read it.
 function Progress({ progress }: { progress: Source['progress'] }) {
   const current = progress?.current ?? 0
   const total = progress?.total ?? null
   const pct = total && total > 0 ? Math.min(100, Math.round((current / total) * 100)) : null
 
   return (
-    <div className="mt-2">
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-sunken">
+    <div style={{ padding: '0 14px 14px' }}>
+      <div style={{ height: 2, borderRadius: 2, background: 'var(--v2-line)', overflow: 'hidden' }}>
         <div
-          className={`h-full rounded-full bg-accent transition-all duration-500 ${pct === null ? 'w-1/3 animate-pulse' : ''}`}
-          style={pct === null ? undefined : { width: `${pct}%` }}
+          className={pct === null ? 'animate-pulse' : undefined}
+          style={{
+            height: '100%', borderRadius: 2,
+            background: 'linear-gradient(90deg, var(--v2-t1), var(--v2-t3) 60%, var(--v2-t4))',
+            width: pct === null ? '33%' : `${pct}%`,
+            transition: 'width 0.5s',
+          }}
         />
       </div>
-      <p className="mt-1 text-xs text-muted">
+      <p className="v2-kick" style={{ marginTop: 8 }}>
         {progress?.phase ?? 'starting'}{current > 0 && ` · ${current}${total ? ` of ${total}` : ''} products`}
       </p>
     </div>
@@ -291,24 +303,21 @@ function FailureState({ reason, detail, onUpload }: { reason: string | null; det
   const copy = FAILURE_COPY[reason ?? 'default'] ?? FAILURE_COPY.default
 
   return (
-    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-      <p className="flex items-start gap-2 text-sm font-medium text-ink">
-        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-        {copy.title}
-      </p>
-      <p className="mt-1 pl-6 text-sm text-subtle">{copy.body}</p>
-      {detail && reason !== 'spa_unsupported' && <p className="mt-1 pl-6 text-xs text-muted">{detail}</p>}
-
-      <div className="mt-3 flex flex-wrap gap-2 pl-6">
-        <button onClick={onUpload} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-sunken">
-          <Upload className="h-4 w-4" /> Upload a spreadsheet
-        </button>
-        <Link href="/catalog/new" className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-sunken">
-          <Plus className="h-4 w-4" /> Add products by hand
-        </Link>
-        <a href="mailto:support@scalix26.com?subject=Help%20connecting%20my%20product%20catalog" className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-white px-3 py-2 text-sm font-medium text-ink hover:bg-sunken">
-          <Link2 className="h-4 w-4" /> Send us the links
-        </a>
+    <div style={{ padding: '0 14px 16px' }}>
+      <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-amber)', alignItems: 'flex-start' }}>
+        <span className="v2-chip-sq"><AlertCircle /></span>
+        <p>
+          {copy.title}
+          <span style={{ display: 'block', marginTop: 4, fontSize: 13, fontWeight: 400, color: 'var(--v2-ink-45)' }}>{copy.body}</span>
+          {detail && reason !== 'spa_unsupported' && (
+            <span style={{ display: 'block', marginTop: 4, fontSize: 12, fontWeight: 400, color: 'var(--v2-mute)' }}>{detail}</span>
+          )}
+          <span className="v2-bar" style={{ marginTop: 12 }}>
+            <button onClick={onUpload} className="v2-act tap-target"><Upload className="w-3.5 h-3.5" /> Upload a spreadsheet</button>
+            <Link href="/catalog/new" className="v2-act tap-target"><Plus className="w-3.5 h-3.5" /> Add by hand</Link>
+            <a href="mailto:support@scalix26.com?subject=Help%20connecting%20my%20product%20catalog" className="v2-act tap-target"><Link2 className="w-3.5 h-3.5" /> Send us the links</a>
+          </span>
+        </p>
       </div>
     </div>
   )

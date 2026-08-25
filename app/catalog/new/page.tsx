@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import { ProductForm } from '@/components/catalog/product-form'
 
 export default function NewProductPage() {
@@ -17,9 +18,14 @@ export default function NewProductPage() {
     router.push(`/catalog/${d.product.id}?created=1`)
   }
   return (
-    <div className="mx-auto max-w-2xl p-4 sm:p-6">
-      <Link href="/catalog" className="text-sm text-subtle hover:text-ink">← Catalog</Link>
-      <h1 className="mb-4 mt-2 text-2xl font-bold text-ink">Add product</h1>
+    <div className="v2 v2-embedded mx-auto max-w-2xl p-4 sm:p-6">
+      {/* The way back is a pill like every other verb, not a bare arrow-and-word. The heading goes:
+          this is the only screen at this URL, and "Add product" is already on the button that saves. */}
+      <div className="v2-head">
+        <Link href="/catalog" className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Catalogue</Link>
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />New product</p>
+        <s />
+      </div>
       <ProductForm onSubmit={create} submitLabel="Create product" />
     </div>
   )

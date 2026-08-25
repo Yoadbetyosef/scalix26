@@ -4,15 +4,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { Package, Download, Plus, Trash2, ExternalLink } from 'lucide-react'
 import { AVAILABILITY_LABELS, AVAILABILITY_STATUSES, type AvailabilityStatus, type CatalogPart } from '@/lib/catalog/types'
 import { useToast } from '@/components/admin/toast'
+import { useConfirm } from '@/components/v2/confirm'
 
 type PartWithQr = CatalogPart & { qr: { target: string; dataUrl: string | null } }
 type FormState = { name: string; image_url: string; price: string; availability_status: AvailabilityStatus; quantity: string }
 const empty: FormState = { name: '', image_url: '', price: '', availability_status: 'in_stock', quantity: '0' }
-const badge: Record<AvailabilityStatus, string> = {
-  in_stock: 'bg-emerald-50 text-emerald-700', out_of_stock: 'bg-red-50 text-red-700',
-  incoming: 'bg-amber-50 text-amber-700', special_order: 'bg-violet-50 text-violet-700',
+// The catalogue's rule, on a part too: in stock carries no colour.
+const HUE: Record<AvailabilityStatus, string> = {
+  in_stock: 'var(--v2-mute)', out_of_stock: 'var(--v2-red)',
+  incoming: 'var(--v2-amber)', special_order: 'var(--v2-t3)',
 }
-const input = 'h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm'
 
 export function PartsManager({ productId }: { productId: string }) {
   const [parts, setParts] = useState<PartWithQr[]>([])
@@ -22,6 +23,7 @@ export function PartsManager({ productId }: { productId: string }) {
   const [editForm, setEditForm] = useState<FormState>(empty)
   const [busy, setBusy] = useState(false)
   const { show, node: toast } = useToast()
+  const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -56,8 +58,14 @@ export function PartsManager({ productId }: { productId: string }) {
     } catch (e) { show((e as Error).message, 'err') } finally { setBusy(false) }
   }
 
-  async function remove(partId: string) {
-    if (!confirm('Delete this part?')) return
+  async function remove(part: PartWithQr) {
+    if (!(await ask({
+      title: 'Delete part',
+      body: <>Deleting <b>{part.name || 'this part'}</b> removes it and its QR code. The product itself is untouched.</>,
+      confirmLabel: 'Delete part',
+      danger: true,
+    }))) return
+    const partId = part.id
     setBusy(true)
     try {
       const res = await fetch(`/api/catalog/parts/${partId}`, { method: 'DELETE' })
@@ -72,75 +80,84 @@ export function PartsManager({ productId }: { productId: string }) {
   }
   const startEdit = (p: PartWithQr) => { setEditingId(p.id); setEditForm({ name: p.name, image_url: p.image_url || '', price: p.price?.toString() ?? '', availability_status: p.availability_status, quantity: String(p.quantity) }) }
 
-  const renderFields = (f: FormState, set: (patch: Partial<FormState>) => void) => (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <label className="col-span-2 block"><span className="mb-1 block text-xs text-subtle">Part name</span><input className={input} value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Left armrest" /></label>
-      <label className="block"><span className="mb-1 block text-xs text-subtle">Price</span><input className={input} type="number" min={0} step="0.01" value={f.price} onChange={(e) => set({ price: e.target.value })} placeholder="—" /></label>
-      <label className="block"><span className="mb-1 block text-xs text-subtle">Availability</span><select className={input} value={f.availability_status} onChange={(e) => set({ availability_status: e.target.value as AvailabilityStatus })}>{AVAILABILITY_STATUSES.map((a) => <option key={a} value={a}>{AVAILABILITY_LABELS[a]}</option>)}</select></label>
-      <label className="col-span-2 block sm:col-span-3"><span className="mb-1 block text-xs text-subtle">Photo (image URL)</span><input className={input} value={f.image_url} onChange={(e) => set({ image_url: e.target.value })} placeholder="Paste a direct image URL" /></label>
-      <label className="block"><span className="mb-1 block text-xs text-subtle">Quantity</span><input className={input} type="number" min={0} value={f.quantity} onChange={(e) => set({ quantity: e.target.value })} /></label>
+  const renderFields = (f: FormState, set: (patch: Partial<FormState>) => void, key: string) => (
+    <div className="v2-form">
+      <div className="v2-fld wide"><label htmlFor={`pt-${key}-name`}>Part name</label><input id={`pt-${key}-name`} value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Left armrest" /></div>
+      <div className="v2-fld"><label htmlFor={`pt-${key}-price`}>Price</label><input id={`pt-${key}-price`} type="number" min={0} step="0.01" value={f.price} onChange={(e) => set({ price: e.target.value })} placeholder="—" /></div>
+      <div className="v2-fld"><label htmlFor={`pt-${key}-avail`}>Availability</label><span className="v2-sel"><select id={`pt-${key}-avail`} value={f.availability_status} onChange={(e) => set({ availability_status: e.target.value as AvailabilityStatus })}>{AVAILABILITY_STATUSES.map((a) => <option key={a} value={a}>{AVAILABILITY_LABELS[a]}</option>)}</select></span></div>
+      <div className="v2-fld"><label htmlFor={`pt-${key}-img`}>Photo (image URL)</label><input id={`pt-${key}-img`} value={f.image_url} onChange={(e) => set({ image_url: e.target.value })} placeholder="Paste a direct image URL" /></div>
+      <div className="v2-fld"><label htmlFor={`pt-${key}-qty`}>Quantity</label><input id={`pt-${key}-qty`} type="number" min={0} value={f.quantity} onChange={(e) => set({ quantity: e.target.value })} /></div>
     </div>
   )
 
   return (
-    <div className="mt-4 rounded-xl border border-hairline-strong bg-white p-4">
+    <div style={{ marginTop: 30 }}>
       {toast}
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="font-semibold text-ink">Parts <span className="text-sm font-normal text-subtle">({parts.length})</span></h3>
-        {!form && <button onClick={() => setForm(empty)} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken"><Plus className="h-4 w-4" /> Add part</button>}
+      {dialog}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><i />Parts · {parts.length}</p>
+        <s />
+        {!form && <button onClick={() => setForm(empty)} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><Plus className="w-3.5 h-3.5" /> Add part</button>}
       </div>
 
       {form && (
-        <div className="mb-3 rounded-lg border border-accent/30 p-3">
-          {renderFields(form, (patch) => setForm((s) => ({ ...(s || empty), ...patch })))}
-          <div className="mt-3 flex gap-2">
-            <button onClick={addPart} disabled={busy} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Add part</button>
-            <button onClick={() => setForm(null)} className="rounded-lg border border-hairline-strong px-4 py-2 text-sm text-subtle">Cancel</button>
+        <div style={{ marginBottom: 24 }}>
+          {renderFields(form, (patch) => setForm((s2) => ({ ...(s2 || empty), ...patch })), 'new')}
+          <div className="v2-bar" style={{ marginTop: 18 }}>
+            <button onClick={addPart} disabled={busy} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>Add part</button>
+            <button onClick={() => setForm(null)} className="v2-act tap-target">Cancel</button>
           </div>
         </div>
       )}
 
-      {loading ? <p className="text-sm text-muted">Loading…</p> : parts.length === 0 && !form ? (
-        <p className="text-sm text-muted">No parts yet. Add the pieces this product is made of — each gets its own price, availability, and QR code.</p>
+      {loading ? <p className="v2-kick">Loading…</p> : parts.length === 0 && !form ? (
+        <div className="v2-card" data-empty>
+          <b>No parts yet</b>
+          <span>Add the pieces this product is made of — each gets its own price, availability and QR code.</span>
+        </div>
       ) : (
-        <ul className="divide-y divide-hairline">
+        <div className="v2-list">
           {parts.map((p) => editingId === p.id ? (
-            <li key={p.id} className="py-3">
-              {renderFields(editForm, (patch) => setEditForm((s) => ({ ...s, ...patch })))}
-              <div className="mt-3 flex gap-2">
-                <button onClick={() => saveEdit(p.id)} disabled={busy} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Save</button>
-                <button onClick={() => setEditingId(null)} className="rounded-lg border border-hairline-strong px-4 py-2 text-sm text-subtle">Cancel</button>
+            <div key={p.id} style={{ padding: '16px 0' }}>
+              {renderFields(editForm, (patch) => setEditForm((s2) => ({ ...s2, ...patch })), p.id)}
+              <div className="v2-bar" style={{ marginTop: 18 }}>
+                <button onClick={() => saveEdit(p.id)} disabled={busy} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>Save</button>
+                <button onClick={() => setEditingId(null)} className="v2-act tap-target">Cancel</button>
               </div>
-            </li>
+            </div>
           ) : (
-            <li key={p.id} className="flex items-center gap-3 py-3">
-              {p.image_url
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={p.image_url} alt="" className="h-14 w-14 flex-shrink-0 rounded-lg object-cover" />
-                : <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-muted"><Package className="h-5 w-5" /></span>}
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium text-ink">{p.name}</div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${badge[p.availability_status]}`}>{AVAILABILITY_LABELS[p.availability_status]}</span>
-                  {p.price !== null && <span className="text-sm font-semibold text-ink">${p.price.toLocaleString()}</span>}
-                  <span className="text-xs text-subtle">Qty {p.quantity}</span>
-                </div>
+            <div key={p.id} className="v2-row" style={{ ['--chan' as string]: HUE[p.availability_status] }}>
+              {/* The same two frames as the product itself, at row size: what the part looks like and
+                  the code that opens it. §35. */}
+              <span className="v2-shot" style={{ ['--shot' as string]: '52px' }}>
+                {p.image_url
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={p.image_url} alt="" />
+                  : <i><Package /></i>}
+              </span>
+              <div className="v2-m">
+                <p><span className="truncate">{p.name}</span><span className="v2-stat">{AVAILABILITY_LABELS[p.availability_status]}</span></p>
+                <span>{p.price !== null ? `$${p.price.toLocaleString()} · ` : ''}Qty {p.quantity}</span>
               </div>
               {p.qr.dataUrl && (
-                <button onClick={() => downloadQr(p)} title="Download QR" className="flex flex-col items-center">
+                <span className="v2-shot" data-code style={{ ['--shot' as string]: '52px' }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.qr.dataUrl} alt="Part QR" className="h-14 w-14 rounded border border-hairline" />
-                  <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-subtle"><Download className="h-3 w-3" /> QR</span>
-                </button>
+                  <img src={p.qr.dataUrl} alt={`QR code for ${p.name}`} />
+                </span>
               )}
-              <div className="flex flex-col gap-1">
-                <a href={p.qr.target} target="_blank" rel="noreferrer" title="Open public page" className="rounded p-1.5 text-subtle hover:bg-sunken hover:text-ink"><ExternalLink className="h-4 w-4" /></a>
-                <button onClick={() => startEdit(p)} className="rounded px-2 py-1 text-xs font-medium text-ink hover:bg-sunken">Edit</button>
-                <button onClick={() => remove(p.id)} className="rounded p-1.5 text-red-600 hover:bg-sunken"><Trash2 className="h-4 w-4" /></button>
+              {/* The download is a control beside the code, not the code itself: an image that turns
+                  out to be a button is a thing you have to discover. */}
+              <div className="flex items-center gap-1 flex-none">
+                {p.qr.dataUrl && (
+                  <button onClick={() => downloadQr(p)} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-t2)' }} title="Download QR" aria-label={`Download the QR code for ${p.name}`}><Download /></button>
+                )}
+                <a href={p.qr.target} target="_blank" rel="noreferrer" title="Open public page" aria-label="Open public page" className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><ExternalLink /></a>
+                <button onClick={() => startEdit(p)} className="v2-act tap-target">Edit</button>
+                <button onClick={() => remove(p)} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} title="Delete" aria-label={`Delete ${p.name}`}><Trash2 /></button>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

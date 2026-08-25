@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Factory, FileText, Receipt, ExternalLink, Download } from 'lucide-react'
+import { Factory, FileText, Receipt, ExternalLink, Download, QrCode } from 'lucide-react'
 import type { StudioProduct, StudioVariant, StudioDocument, StudioDocType } from '@/lib/studio/types'
 import { DOC_META, docNumber } from '@/lib/studio/types'
 import { VariantsPanel } from '@/components/studio/variants-panel'
@@ -40,12 +40,19 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
   if (!ready || !product) return null
 
   return (
-    <div className="mt-4 space-y-4">
-      {/* 3 actions */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <ActionButton icon={<Factory className="h-4 w-4" />} label="Send to production" hint="to supplier" onClick={() => setDocType('production')} />
-        <ActionButton icon={<FileText className="h-4 w-4" />} label="Quote" hint="for a client" onClick={() => setDocType('quote')} />
-        <ActionButton icon={<Receipt className="h-4 w-4" />} label="Invoice" hint="printable" onClick={() => setDocType('invoice')} />
+    <div style={{ marginTop: 30 }}>
+      {/* THE THREE STUDIO VERBS. Three bordered cards with an icon tile each became three pills on
+          one bar — the same action bar every other detail screen uses. The hint each carried ("to
+          supplier", "for a client", "printable") is the sub-line of a card, and these are not cards
+          any more; production goes to a supplier and a quote goes to a client whichever way you say
+          it, so the words go rather than being kept as a caption under a pill. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><i />Studio</p><s />
+      </div>
+      <div className="v2-bar">
+        <button type="button" onClick={() => setDocType('production')} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><Factory className="w-3.5 h-3.5" /> Send to production</button>
+        <button type="button" onClick={() => setDocType('quote')} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><FileText className="w-3.5 h-3.5" /> Quote</button>
+        <button type="button" onClick={() => setDocType('invoice')} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><Receipt className="w-3.5 h-3.5" /> Invoice</button>
       </div>
 
       {/* Sub-products */}
@@ -53,53 +60,46 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
 
       {/* Documents */}
       {documents.length > 0 && (
-        <section className="rounded-xl border border-hairline-strong bg-white p-4">
-          <h3 className="mb-2 font-semibold text-ink">Documents</h3>
-          <div className="divide-y divide-hairline">
+        <section style={{ marginTop: 30 }}>
+          <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Documents · {documents.length}</p><s /></div>
+          <div className="v2-list">
             {documents.map((d) => (
-              <a key={d.id} href={`/d/${d.token}`} target="_blank" rel="noreferrer" className="flex items-center justify-between py-2.5 hover:opacity-70">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink">{DOC_META[d.type].title} <span className="font-normal text-muted">#{docNumber(d)}</span></p>
-                  <p className="text-xs text-muted">{[d.party_name, new Date(d.created_at).toISOString().slice(0, 10)].filter(Boolean).join(' · ')}</p>
+              <a key={d.id} href={`/d/${d.token}`} target="_blank" rel="noreferrer" className="v2-row tap-target" data-click style={{ ['--chan' as string]: 'var(--v2-t3)' }}>
+                <div className="v2-m">
+                  <p><span className="truncate">{DOC_META[d.type].title}</span><span className="v2-stat">#{docNumber(d)}</span></p>
+                  <span>{[d.party_name, new Date(d.created_at).toISOString().slice(0, 10)].filter(Boolean).join(' · ')}</span>
                 </div>
-                <span className="flex-shrink-0 text-sm font-medium text-ink">{d.type !== 'production' ? `$${Number(d.subtotal).toLocaleString()}` : `${d.line_items.length} items`}</span>
+                <div className="v2-meta">
+                  <em style={{ fontVariantNumeric: 'tabular-nums' }}>{d.type !== 'production' ? `$${Number(d.subtotal).toLocaleString()}` : `${d.line_items.length} items`}</em>
+                </div>
               </a>
             ))}
           </div>
         </section>
       )}
 
-      {/* Public customer page + QR */}
-      <section className="rounded-xl border border-hairline-strong bg-white p-4">
-        <h3 className="mb-2 font-semibold text-ink">Customer page</h3>
-        <div className="flex items-center gap-4">
-          {qr?.dataUrl
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={qr.dataUrl} alt="Customer QR" className="h-24 w-24 rounded-lg border border-hairline" />
-            : <span className="flex h-24 w-24 items-center justify-center rounded-lg border border-hairline text-xs text-muted">QR n/a</span>}
-          <div className="space-y-2">
-            <p className="text-xs text-muted">The public, customer-facing product page (separate from the staff QR below).</p>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={downloadQr} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken"><Download className="h-4 w-4" /> Download</button>
-              {qr?.target && <a href={qr.target} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+      {/* THE CUSTOMER'S CODE. Same block as the staff one at the top of the page, which is exactly
+          why it has to say which is which: two identical QR frames on one screen that open different
+          pages is the one confusion this section can cause. The micro-label does that job. */}
+      <section style={{ marginTop: 30 }}>
+        <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Customer page</p><s /></div>
+        <div className="v2-shots">
+          <div className="v2-shot" data-code>
+            <b>Customer scan</b>
+            {qr?.dataUrl
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={qr.dataUrl} alt="QR code for the public customer page" />
+              : <i><QrCode /></i>}
+            <span>The public, customer-facing page — not the staff code at the top.</span>
+            <span className="v2-bar">
+              <button onClick={downloadQr} className="v2-act tap-target"><Download className="w-3.5 h-3.5" /> Download</button>
+              {qr?.target && <a href={qr.target} target="_blank" rel="noreferrer" className="v2-act tap-target"><ExternalLink className="w-3.5 h-3.5" /> View</a>}
+            </span>
           </div>
         </div>
       </section>
 
       {docType && <DocumentCreator product={product} variants={variants} type={docType} onClose={() => { setDocType(null); reloadDocs() }} />}
     </div>
-  )
-}
-
-function ActionButton({ icon, label, hint, onClick }: { icon: React.ReactNode; label: string; hint: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className="flex items-center gap-2 rounded-xl border border-hairline-strong bg-white px-4 py-3 text-left transition hover:border-accent hover:shadow-sm">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sunken text-ink">{icon}</span>
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold text-ink">{label}</span>
-        <span className="block text-xs text-muted">{hint}</span>
-      </span>
-    </button>
   )
 }

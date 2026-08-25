@@ -3,17 +3,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useSearchParams } from 'next/navigation'
-import { Package, Download } from 'lucide-react'
+import { Package, Download, ChevronLeft } from 'lucide-react'
 import { AVAILABILITY_LABELS, LOCATIONS, totalAvailable, type CatalogMovement, type CatalogProduct, type AvailabilityStatus, type MovementType } from '@/lib/catalog/types'
 import { ProductForm } from '@/components/catalog/product-form'
 import { StudioSections } from '@/components/studio/studio-sections'
 import type { FabricValue } from '@/components/studio/fabric-picker'
 import { PartsManager } from '@/components/catalog/parts-manager'
 import { useToast } from '@/components/admin/toast'
+import { useConfirm } from '@/components/v2/confirm'
 
-const badge: Record<AvailabilityStatus, string> = {
-  in_stock: 'bg-emerald-50 text-emerald-700', out_of_stock: 'bg-red-50 text-red-700',
-  incoming: 'bg-amber-50 text-amber-700', special_order: 'bg-violet-50 text-violet-700',
+// Same rule as the list: in stock is the absence of a problem and carries no colour, so a hue on
+// this page means something is off the norm. One source of truth would be better still; it is
+// duplicated rather than shared only because the list is a client page and this is too, and a third
+// module for four strings is not worth the indirection.
+const HUE: Record<AvailabilityStatus, string> = {
+  in_stock: 'var(--v2-mute)', out_of_stock: 'var(--v2-red)',
+  incoming: 'var(--v2-amber)', special_order: 'var(--v2-t3)',
 }
 const ACTIONS: { type: MovementType; label: string }[] = [
   { type: 'receive', label: 'Receive stock' }, { type: 'move', label: 'Move stock' },
@@ -36,6 +41,7 @@ export default function ProductDetailPage() {
   const [move, setMove] = useState<null | { type: MovementType; quantity: string; from_location: string; to_location: string; note: string }>(null)
   const [busy, setBusy] = useState(false)
   const { show, node: toast } = useToast()
+  const { ask, dialog } = useConfirm()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -68,7 +74,12 @@ export default function ProductDetailPage() {
   }
 
   async function markInactive() {
-    if (!product || !confirm('Mark this product inactive?')) return
+    if (!product) return
+    if (!(await ask({
+      title: 'Mark inactive',
+      body: <>Marking <b>{product.name}</b> inactive takes it out of what the AI will quote. Nothing is deleted, and you can make it active again from Edit.</>,
+      confirmLabel: 'Mark inactive',
+    }))) return
     await saveEdit({ ...product, status: 'inactive', tags: product.tags })
   }
 
@@ -77,133 +88,169 @@ export default function ProductDetailPage() {
     const a = document.createElement('a'); a.href = qr.dataUrl; a.download = `${product?.sku || product?.name || 'product'}-qr.png`; a.click()
   }
 
-  if (loading) return <div className="p-6 text-sm text-muted">Loading…</div>
-  if (!product) return <div className="p-6 text-sm text-muted">Not found. <Link href="/catalog" className="text-accent-strong hover:underline">Back</Link></div>
+  if (loading) return <div className="v2 v2-embedded p-4 sm:p-6"><p className="v2-kick">Loading…</p></div>
+  if (!product) return (
+    <div className="v2 v2-embedded p-4 sm:p-6">
+      <div className="v2-card" data-empty>
+        <b>That product isn’t here</b>
+        <span>It may have been deleted. <Link href="/catalog" style={{ color: 'var(--v2-ink)', textDecoration: 'underline' }}>Back to the catalogue</Link>.</span>
+      </div>
+    </div>
+  )
 
   if (editing) return (
-    <div className="mx-auto max-w-2xl p-4 sm:p-6">
+    <div className="v2 v2-embedded mx-auto max-w-2xl p-4 sm:p-6">
       {toast}
-      <button onClick={() => setEditing(false)} className="text-sm text-subtle hover:text-ink">← Cancel</button>
-      <h1 className="mb-4 mt-2 text-2xl font-bold text-ink">Edit product</h1>
+      <div className="v2-head">
+        <button onClick={() => setEditing(false)} className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Cancel</button>
+        <s />
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Editing {product.name}</p>
+      </div>
       <ProductForm initial={product} initialFabric={fabric || undefined} onSubmit={saveEdit} submitLabel="Save changes" justCreated={justCreated} />
     </div>
   )
 
   const loc = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
+  const hue = product.status === 'draft' ? 'var(--v2-t1)' : HUE[product.availability_status]
   return (
-    <div className="mx-auto max-w-3xl p-4 sm:p-6 max-md:pb-24">
+    <div className="v2 v2-embedded mx-auto max-w-3xl p-4 sm:p-6" style={{ paddingBottom: 'calc(24px + var(--v2-grab-h))' }}>
       {toast}
-      <Link href="/catalog" className="text-sm text-subtle hover:text-ink">← Catalog</Link>
+      {dialog}
 
-      {/* Summary */}
-      <div className="mt-2 rounded-xl border border-hairline-strong bg-white p-4">
-        <div className="flex gap-4">
-          {product.image_url
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={product.image_url} alt="" className="h-24 w-24 flex-shrink-0 rounded-lg object-cover" />
-            : <span className="flex h-24 w-24 flex-shrink-0 items-center justify-center rounded-lg bg-sunken text-muted"><Package className="h-7 w-7" /></span>}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <h1 className="text-xl font-bold text-ink">{product.name}</h1>
-              <button onClick={() => setEditing(true)} className="rounded-lg border border-hairline-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken">Edit</button>
-            </div>
-            <p className="text-sm text-subtle">{product.sku || '—'}{product.brand ? ` · ${product.brand}` : ''}{product.category ? ` · ${product.category}` : ''}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge[product.availability_status]}`}>{AVAILABILITY_LABELS[product.availability_status]}</span>
-              {product.price !== null && <span className="text-sm font-semibold text-ink">${product.price.toLocaleString()}</span>}
-              {product.status !== 'active' && <span className="rounded-full bg-sunken px-2 py-0.5 text-xs text-subtle capitalize">{product.status}</span>}
-              {product.tags?.map((t) => <span key={t} className="rounded bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent-strong">{t}</span>)}
-            </div>
+      {/* THE HEADER. The product's name IS the page, so it is the one place on a migrated screen that
+          keeps a real title — the rail says "Catalog", not which piece. Everything the summary card
+          used to box up sits on the header's own line: the identifiers as the sub-line, the state and
+          the price as chips beside them. */}
+      <div className="v2-head">
+        <Link href="/catalog" className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Catalogue</Link>
+        <s />
+        <button onClick={() => setEditing(true)} className="v2-act tap-target" data-solid>Edit</button>
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20, marginBottom: 26 }}>
+        {/* The kit's media and code block — the photograph a person recognises and the code a phone
+            reads, on one baseline. §35. */}
+        <div className="v2-shots">
+          <div className="v2-shot">
+            <b>Photo</b>
+            {product.image_url
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={product.image_url} alt={product.name} />
+              : <i><Package /></i>}
           </div>
+          {qr?.dataUrl && (
+            <div className="v2-shot" data-code>
+              <b>Scan</b>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr.dataUrl} alt={`QR code for ${product.name}`} />
+              <span>Opens this product for showroom and warehouse staff.</span>
+              <button onClick={downloadQr} className="v2-act tap-target"><Download className="w-3.5 h-3.5" /> Download</button>
+            </div>
+          )}
         </div>
-        {fabric?.fabric_name && (
-          <p className="mt-3 text-sm text-subtle">
-            <span className="font-medium text-ink">Fabric:</span> {[fabric.fabric_family, fabric.fabric_name].filter(Boolean).join(' · ')}
-            {fabric.fabric_composition ? ` — ${fabric.fabric_composition}` : ''}
+
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 650, letterSpacing: '-0.02em', lineHeight: 1.15, color: 'var(--v2-ink)' }}>{product.name}</h1>
+          <p className="v2-kick" style={{ marginTop: 8 }}>
+            {product.sku || '—'}{product.brand ? ` · ${product.brand}` : ''}{product.category ? ` · ${product.category}` : ''}
           </p>
-        )}
-        {product.description && <p className="mt-3 text-sm text-muted">{product.description}</p>}
-        {(product.measurements || product.fabric) && (
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            {product.measurements && <div><span className="text-subtle">Measurements: </span><span className="text-ink">{product.measurements}</span></div>}
-            {product.fabric && <div><span className="text-subtle">Fabric: </span><span className="text-ink">{product.fabric}</span></div>}
+          <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 12 }}>
+            <span className="v2-stat" style={{ ['--chan' as string]: hue }}>{product.status === 'draft' ? 'Needs pricing' : AVAILABILITY_LABELS[product.availability_status]}</span>
+            {product.price !== null && <span style={{ fontSize: 17, fontWeight: 600, color: 'var(--v2-ink)', fontVariantNumeric: 'tabular-nums' }}>${product.price.toLocaleString()}</span>}
+            {product.status !== 'active' && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)', textTransform: 'capitalize' }}>{product.status}</span>}
+            {product.tags?.map((t) => <span key={t} className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>{t}</span>)}
           </div>
-        )}
+          {product.description && <p style={{ marginTop: 14, fontSize: 14.5, lineHeight: 1.5, color: 'var(--v2-ink-72)' }}>{product.description}</p>}
+
+          {/* Fabric, measurements and location as the kit's fact list rather than three differently
+              punctuated sentences. */}
+          {(fabric?.fabric_name || product.measurements || product.fabric || product.location_notes) && (
+            <dl className="v2-facts" data-narrow style={{ marginTop: 16 }}>
+              {fabric?.fabric_name && (
+                <div><dt>Fabric</dt><dd>{[fabric.fabric_family, fabric.fabric_name].filter(Boolean).join(' · ')}{fabric.fabric_composition ? ` — ${fabric.fabric_composition}` : ''}</dd></div>
+              )}
+              {product.measurements && <div><dt>Measurements</dt><dd>{product.measurements}</dd></div>}
+              {product.fabric && <div><dt>Fabric note</dt><dd>{product.fabric}</dd></div>}
+              {product.location_notes && <div><dt>Location</dt><dd>{product.location_notes}</dd></div>}
+            </dl>
+          )}
+        </div>
       </div>
 
       {/* Studio experience — production/quote/invoice actions, sub-products, documents, customer page */}
       <StudioSections catalogId={id} />
 
-      {/* Quantities */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {[['Showroom', product.showroom_quantity], ['Warehouse', product.warehouse_quantity], ['Storage', product.storage_quantity], ['Incoming', product.incoming_quantity], ['Available', totalAvailable(product)]].map(([l, v]) => (
-          <div key={l as string} className="rounded-xl border border-hairline-strong bg-white p-3 text-center">
-            <div className="text-xs uppercase tracking-wide text-subtle">{l}</div>
-            <div className="text-xl font-bold text-ink">{v as number}</div>
-          </div>
-        ))}
+      {/* WHERE THE STOCK IS. Five boxed tiles became five figures on one rule: the number is the
+          content, the location is its mono label, and the last one is the sum of the rest so it is
+          the one set apart. Same component as the totals under an order's line items. */}
+      <div className="v2-head" style={{ marginTop: 30 }}>
+        <p className="v2-kick" style={{ ['--ghue' as string]: hue }}><i />Where it is</p>
+        <s />
+        {product.incoming_quantity > 0 && product.expected_arrival_date && (
+          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-amber)' }}>Next shipment {product.expected_arrival_date}</span>
+        )}
       </div>
-      {product.incoming_quantity > 0 && product.expected_arrival_date && <p className="mt-2 text-sm text-amber-600">Next shipment expected {product.expected_arrival_date}</p>}
-      {product.location_notes && <p className="mt-1 text-sm text-muted">Location: {product.location_notes}</p>}
-
-      {/* Actions */}
-      <div className="mt-4 flex flex-wrap gap-2">
-        {ACTIONS.map((a) => (
-          <button key={a.type} onClick={() => setMove({ type: a.type, quantity: '1', from_location: 'showroom', to_location: a.type === 'receive' ? 'warehouse' : 'showroom', note: '' })} className="rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-ink hover:bg-sunken">{a.label}</button>
+      <dl className="v2-tot" style={{ justifyContent: 'flex-start', padding: 0 }}>
+        {([['Showroom', product.showroom_quantity], ['Warehouse', product.warehouse_quantity], ['Storage', product.storage_quantity], ['Incoming', product.incoming_quantity]] as [string, number][]).map(([l, v]) => (
+          <div key={l}><dt>{l}</dt><dd>{v}</dd></div>
         ))}
-        <button onClick={markInactive} className="rounded-lg border border-hairline-strong px-3 py-2 text-sm font-medium text-red-600 hover:bg-sunken">Mark inactive</button>
+        <div><dt>Available</dt><dd style={{ fontWeight: 650 }}>{totalAvailable(product)}</dd></div>
+      </dl>
+
+      {/* The stock verbs. The separator marks where reversible stops: everything after it changes
+          what the AI will quote. */}
+      <div className="v2-bar" style={{ marginTop: 20 }}>
+        {ACTIONS.map((a) => (
+          <button key={a.type} onClick={() => setMove({ type: a.type, quantity: '1', from_location: 'showroom', to_location: a.type === 'receive' ? 'warehouse' : 'showroom', note: '' })} className="v2-act tap-target">{a.label}</button>
+        ))}
+        <hr />
+        <button onClick={markInactive} className="v2-act tap-target" data-danger>Mark inactive</button>
       </div>
 
       {/* Movement panel */}
       {move && (
-        <div className="mt-3 rounded-xl border border-accent/30 bg-white p-4">
-          <h3 className="mb-3 font-semibold text-ink capitalize">{move.type} stock</h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <label className="block"><span className="mb-1 block text-xs text-subtle">Quantity</span><input type="number" min={0} value={move.quantity} onChange={(e) => setMove({ ...move, quantity: e.target.value })} className="h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm" /></label>
+        <div style={{ marginTop: 24 }}>
+          <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t2)', textTransform: 'uppercase' }}><i />{move.type} stock</p><s /></div>
+          <div className="v2-form">
+            <div className="v2-fld"><label htmlFor="mv-qty">Quantity</label><input id="mv-qty" type="number" min={0} value={move.quantity} onChange={(e) => setMove({ ...move, quantity: e.target.value })} /></div>
             {(move.type === 'move' || move.type === 'sell') && (
-              <label className="block"><span className="mb-1 block text-xs text-subtle">From</span><select value={move.from_location} onChange={(e) => setMove({ ...move, from_location: e.target.value })} className="h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm">{LOCATIONS.map((l) => <option key={l} value={l}>{loc(l)}</option>)}</select></label>
+              <div className="v2-fld"><label htmlFor="mv-from">From</label><span className="v2-sel"><select id="mv-from" value={move.from_location} onChange={(e) => setMove({ ...move, from_location: e.target.value })}>{LOCATIONS.map((l) => <option key={l} value={l}>{loc(l)}</option>)}</select></span></div>
             )}
             {(move.type === 'move' || move.type === 'receive' || move.type === 'return' || move.type === 'adjust') && (
-              <label className="block"><span className="mb-1 block text-xs text-subtle">{move.type === 'adjust' ? 'Set location' : 'To'}</span><select value={move.to_location} onChange={(e) => setMove({ ...move, to_location: e.target.value })} className="h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm">{LOCATIONS.map((l) => <option key={l} value={l}>{loc(l)}</option>)}</select></label>
+              <div className="v2-fld"><label htmlFor="mv-to">{move.type === 'adjust' ? 'Set location' : 'To'}</label><span className="v2-sel"><select id="mv-to" value={move.to_location} onChange={(e) => setMove({ ...move, to_location: e.target.value })}>{LOCATIONS.map((l) => <option key={l} value={l}>{loc(l)}</option>)}</select></span></div>
             )}
-            <label className="block sm:col-span-1"><span className="mb-1 block text-xs text-subtle">Note</span><input value={move.note} onChange={(e) => setMove({ ...move, note: e.target.value })} className="h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm" /></label>
+            <div className="v2-fld"><label htmlFor="mv-note">Note</label><input id="mv-note" value={move.note} onChange={(e) => setMove({ ...move, note: e.target.value })} /></div>
           </div>
-          <div className="mt-3 flex gap-2">
-            <button onClick={submitMove} disabled={busy} className="rounded-lg bg-ink px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Apply</button>
-            <button onClick={() => setMove(null)} className="rounded-lg border border-hairline-strong px-4 py-2 text-sm text-subtle">Cancel</button>
+          <div className="v2-bar" style={{ marginTop: 18 }}>
+            <button onClick={submitMove} disabled={busy} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>Apply</button>
+            <button onClick={() => setMove(null)} className="v2-act tap-target">Cancel</button>
           </div>
         </div>
       )}
 
-      {/* QR + history */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-hairline-strong bg-white p-4">
-          <h3 className="mb-2 font-semibold text-ink">QR code</h3>
-          {qr?.dataUrl ? (
-            <div className="flex items-center gap-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qr.dataUrl} alt="Product QR" className="h-28 w-28 rounded-lg border border-hairline" />
-              <div>
-                <p className="text-xs text-subtle break-all">Opens the product page for showroom/warehouse staff.</p>
-                <button onClick={downloadQr} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong px-3 py-1.5 text-sm font-medium text-ink hover:bg-sunken"><Download className="h-4 w-4" /> Download QR</button>
+      {/* MOVEMENT HISTORY. Its own section rather than half of a two-card grid — the QR left that
+          grid to join the photo, and what remained was one card sized for a column that no longer
+          had a partner. */}
+      <div className="v2-head" style={{ marginTop: 30 }}>
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Movement history</p><s />
+      </div>
+      {movements.length === 0 ? (
+        <div className="v2-card" data-empty>
+          <b>Nothing has moved yet</b>
+          <span>Receiving, moving, selling or returning stock is recorded here with who did it and when.</span>
+        </div>
+      ) : (
+        <div className="v2-list" style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {movements.map((m) => (
+            <div key={m.id} className="v2-row" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>
+              <div className="v2-m">
+                <p><span style={{ textTransform: 'capitalize' }}>{m.movement_type}</span> {m.quantity}{m.from_location ? ` · from ${m.from_location}` : ''}{m.to_location ? ` → ${m.to_location}` : ''}</p>
+                <span>{m.created_by || '—'} · {fmt(m.created_at)}{m.note ? ` · ${m.note}` : ''}</span>
               </div>
             </div>
-          ) : <p className="text-sm text-muted">QR unavailable.</p>}
+          ))}
         </div>
-        <div className="rounded-xl border border-hairline-strong bg-white p-4">
-          <h3 className="mb-2 font-semibold text-ink">Movement history</h3>
-          {movements.length === 0 ? <p className="text-sm text-muted">No movements yet.</p> : (
-            <ul className="max-h-56 space-y-2 overflow-y-auto">
-              {movements.map((m) => (
-                <li key={m.id} className="border-l-2 border-hairline pl-3 text-sm">
-                  <div className="text-ink"><span className="font-medium capitalize">{m.movement_type}</span> {m.quantity}{m.from_location ? ` · from ${m.from_location}` : ''}{m.to_location ? ` → ${m.to_location}` : ''}</div>
-                  <div className="text-xs text-subtle">{m.created_by || '—'} · {fmt(m.created_at)}{m.note ? ` · ${m.note}` : ''}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Parts / pieces of this product */}
       <PartsManager productId={id} />

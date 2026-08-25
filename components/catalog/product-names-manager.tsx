@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Eye, EyeOff, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { Check, ClipboardPaste, Eye, EyeOff, Loader2, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import type { ProductNameRow } from '@/lib/catalog/product-names'
 
 // The business's own product list, editable by the business. Add one, paste a whole column out of a
@@ -10,7 +10,6 @@ import type { ProductNameRow } from '@/lib/catalog/product-names'
 // Deleting only removes a name from the suggestions. Products already in the catalog keep their own
 // name, so nothing here can damage what's already been created — which is what makes it safe to hand over.
 
-const inp = 'rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm'
 
 export function ProductNamesManager() {
   const [items, setItems] = useState<ProductNameRow[]>([])
@@ -59,43 +58,54 @@ export function ProductNamesManager() {
     return [...m.entries()]
   }, [shown])
 
-  if (loading) return <div className="flex items-center gap-2 p-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-  if (err) return <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>
+  if (loading) return <p className="v2-kick"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</p>
+  if (err) return (
+    <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)' }}>
+      <span className="v2-chip-sq"><X /></span>
+      <p>{err}</p>
+    </div>
+  )
 
   return (
-    <div className="space-y-5">
-      <p className="text-sm text-gray-600">
+    <div>
+      <p className="v2-hint" style={{ maxWidth: '62ch', marginBottom: 22 }}>
         These names appear as suggestions when you add a product, so nobody has to type them — or mistype them.
         Deleting one here only removes the suggestion; products already in your catalog are never touched.
       </p>
 
       <AddRow categories={categories} onChanged={load} />
 
-      <div className="flex items-center justify-between gap-3">
-        <label className="relative flex-1 max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search your list…" className={`${inp} w-full pl-8`} />
-        </label>
-        <span className="text-xs text-gray-500">
-          {shown.length === items.length ? `${items.length} names` : `${shown.length} of ${items.length}`}
-        </span>
+      <div className="v2-fld" style={{ position: 'relative', maxWidth: 320, margin: '26px 0 18px' }}>
+        <label htmlFor="names-q">Search your list</label>
+        <input id="names-q" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Name or category…" style={{ paddingRight: 24 }} />
+        <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-mute)' }} />
       </div>
 
-      {groups.length === 0 && <p className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">Nothing here yet — add your first product name above.</p>}
-
-      <div className="space-y-4">
-        {groups.map(([cat, rows]) => (
-          <div key={cat} className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-            <div className="flex items-baseline justify-between bg-gray-50 px-4 py-2">
-              <h3 className="text-sm font-semibold text-gray-900">{cat}</h3>
-              <span className="text-xs text-gray-400">{rows.length}</span>
+      {groups.length === 0 ? (
+        <div className="v2-card" data-empty>
+          <b>{items.length === 0 ? 'Nothing on the list yet' : `Nothing matches “${filter}”`}</b>
+          <span>{items.length === 0 ? 'Add your first product name above, or paste a whole column out of a spreadsheet.' : 'Clear the search to see all ' + items.length + ' names.'}</span>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 26 }}>
+          {/* A CATEGORY IS A SECTION, not a boxed card with a grey title bar. Same micro-label and
+              rule as every other group on this screen, with the count on the end where the header
+              already carries counts. */}
+          {groups.map(([cat, rows]) => (
+            <div key={cat}>
+              <div className="v2-head">
+                <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />{cat}</p>
+                <s />
+                <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>{rows.length}</span>
+              </div>
+              <ul className="v2-list">
+                {rows.map((it) => <Row key={it.id} item={it} onChanged={load} />)}
+              </ul>
             </div>
-            <ul className="divide-y divide-gray-100">
-              {rows.map((it) => <Row key={it.id} item={it} onChanged={load} />)}
-            </ul>
-          </div>
-        ))}
-      </div>
+          ))}
+          <p className="v2-kick">{shown.length === items.length ? `${items.length} names` : `${shown.length} of ${items.length}`}</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -134,56 +144,64 @@ function AddRow({ categories, onChanged }: { categories: string[]; onChanged: ()
   }
 
   const categoryInput = (
-    <input
-      list="product-name-categories" value={category} onChange={(e) => setCategory(e.target.value)}
-      placeholder="Category (optional)" className={`${inp} w-48`}
-    />
+    <div className="v2-fld" style={{ width: 190 }}>
+      <label htmlFor="pn-cat">Category</label>
+      <input id="pn-cat" list="product-name-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Optional" />
+    </div>
   )
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
+    <div>
       <datalist id="product-name-categories">{categories.map((c) => <option key={c} value={c} />)}</datalist>
 
       {!pasting ? (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={name} onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOne() } }}
-              placeholder="Product name" className={`${inp} min-w-[14rem] flex-1`}
-            />
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 18 }}>
+            <div className="v2-fld" style={{ flex: 1, minWidth: 220 }}>
+              <label htmlFor="pn-name">Product name</label>
+              <input
+                id="pn-name" value={name} onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOne() } }}
+                placeholder="e.g. Neomi Sofa"
+              />
+            </div>
             {categoryInput}
-            <button onClick={addOne} disabled={busy || !name.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
-              <Plus className="h-3.5 w-3.5" /> Add
+            <button onClick={addOne} disabled={busy || !name.trim()} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)', marginBottom: 4 }}>
+              <Plus className="w-3.5 h-3.5" /> Add
             </button>
           </div>
-          <button onClick={() => { setPasting(true); setErr(null); setMsg(null) }} className="mt-2 text-xs text-blue-600 hover:underline">
-            Or paste a list from a spreadsheet
+          {/* A real control, so it looks like one. As a micro-label it read as a caption on the row
+              above it and nobody would have tried clicking it. */}
+          <button onClick={() => { setPasting(true); setErr(null); setMsg(null) }} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t3)', marginTop: 16 }}>
+            <ClipboardPaste className="w-3.5 h-3.5" /> Paste a list from a spreadsheet
           </button>
         </>
       ) : (
         <>
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-900">Paste a list</span>
-            <button onClick={() => { setPasting(false); setBulk(''); setErr(null) }} className="text-gray-400 hover:text-gray-700"><X className="h-4 w-4" /></button>
+          <div className="v2-head">
+            <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Paste a list</p>
+            <s />
+            <button onClick={() => { setPasting(false); setBulk(''); setErr(null) }} aria-label="Close" className="v2-ico"><X /></button>
           </div>
-          <textarea
-            value={bulk} onChange={(e) => setBulk(e.target.value)} rows={6}
-            placeholder={'Copy a column out of Excel and paste it here.\nOne product name per line.'}
-            className={`${inp} w-full`}
-          />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="v2-fld">
+            <label htmlFor="pn-bulk">One name per line</label>
+            <textarea
+              id="pn-bulk" value={bulk} onChange={(e) => setBulk(e.target.value)} rows={6}
+              placeholder={'Copy a column out of Excel and paste it here.\nOne product name per line.'}
+            />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 18, marginTop: 18 }}>
             {categoryInput}
-            <button onClick={addMany} disabled={busy || !bulk.trim()} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
+            <button onClick={addMany} disabled={busy || !bulk.trim()} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)', marginBottom: 4 }}>
               {busy ? 'Adding…' : 'Add all'}
             </button>
-            <span className="text-xs text-gray-500">They all go into this one category. Names already on the list are skipped.</span>
+            <p className="v2-hint" style={{ flex: 1, minWidth: 200, marginBottom: 4 }}>They all go into this one category. Names already on the list are skipped.</p>
           </div>
         </>
       )}
 
-      {msg && <p className="mt-2 text-xs text-emerald-700">{msg}</p>}
-      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+      {msg && <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)', marginTop: 12 }}>{msg}</p>}
+      {err && <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-red)', marginTop: 12, color: 'var(--v2-red-ink)' }}>{err}</p>}
     </div>
   )
 }
@@ -212,34 +230,47 @@ function Row({ item, onChanged }: { item: ProductNameRow; onChanged: () => void 
   }
 
   return (
-    <li className="flex flex-wrap items-center gap-2 px-4 py-2">
+    <li className="v2-row" style={{ ['--chan' as string]: item.active ? 'var(--v2-t3)' : 'var(--v2-mute)' }}>
       {editing ? (
         <>
-          <input value={name} onChange={(e) => setName(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setName(item.name); setCategory(item.category ?? ''); setEditing(false) } }} className={`${inp} flex-1`} />
-          <input list="product-name-categories" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" className={`${inp} w-44`} />
-          <button onClick={save} className="text-emerald-600 hover:text-emerald-800" title="Save"><Check className="h-4 w-4" /></button>
-          <button onClick={() => { setName(item.name); setCategory(item.category ?? ''); setEditing(false) }} className="text-gray-400 hover:text-gray-700" title="Cancel"><X className="h-4 w-4" /></button>
+          <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+            <label htmlFor={`pn-e-${item.id}`}>Name</label>
+            <input id={`pn-e-${item.id}`} value={name} onChange={(e) => setName(e.target.value)} autoFocus
+                   onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setName(item.name); setCategory(item.category ?? ''); setEditing(false) } }} />
+          </div>
+          <div className="v2-fld" style={{ width: 160 }}>
+            <label htmlFor={`pn-c-${item.id}`}>Category</label>
+            <input id={`pn-c-${item.id}`} list="product-name-categories" value={category} onChange={(e) => setCategory(e.target.value)} />
+          </div>
+          <button onClick={save} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-t3)' }} title="Save" aria-label="Save"><Check /></button>
+          <button onClick={() => { setName(item.name); setCategory(item.category ?? ''); setEditing(false) }} className="v2-ico" title="Cancel" aria-label="Cancel"><X /></button>
         </>
       ) : (
         <>
-          <span className={`flex-1 text-sm ${item.active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{item.name}</span>
-          <button onClick={() => setEditing(true)} disabled={busy} className="text-gray-300 hover:text-gray-700" title="Rename or change category"><Pencil className="h-3.5 w-3.5" /></button>
+          <div className="v2-m">
+            <p><span className="truncate" style={item.active ? undefined : { textDecoration: 'line-through', color: 'var(--v2-mute)' }}>{item.name}</span></p>
+          </div>
+          <button onClick={() => setEditing(true)} disabled={busy} className="v2-ico" title="Rename or change category" aria-label="Rename or change category"><Pencil /></button>
           <button
             onClick={() => call({ method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ active: !item.active }) })}
-            disabled={busy} className="text-gray-300 hover:text-gray-700"
+            disabled={busy} className="v2-ico"
             title={item.active ? 'Hide from suggestions' : 'Show again'}
-          >{item.active ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</button>
+            aria-label={item.active ? 'Hide from suggestions' : 'Show again'}
+          >{item.active ? <Eye /> : <EyeOff />}</button>
+          {/* The inline two-step stays: this deletes one suggestion and touches no product, so it does
+              not warrant the modal the catalogue's own delete gets. The distinction is the point —
+              a dialog for every destructive act teaches people to dismiss dialogs. */}
           {confirm ? (
-            <span className="flex items-center gap-1">
-              <button onClick={() => call({ method: 'DELETE' })} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white">Delete</button>
-              <button onClick={() => setConfirm(false)} className="text-[10px] text-gray-500">Cancel</button>
+            <span className="flex items-center gap-1.5 flex-none">
+              <button onClick={() => call({ method: 'DELETE' })} className="v2-act" data-solid data-danger>Delete</button>
+              <button onClick={() => setConfirm(false)} className="v2-act">Cancel</button>
             </span>
           ) : (
-            <button onClick={() => setConfirm(true)} disabled={busy} className="text-gray-300 hover:text-red-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+            <button onClick={() => setConfirm(true)} disabled={busy} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} title="Delete" aria-label={`Delete ${item.name}`}><Trash2 /></button>
           )}
         </>
       )}
-      {err && <span className="w-full text-xs text-red-600">{err}</span>}
+      {err && <span className="v2-kick" style={{ width: '100%', color: 'var(--v2-red-ink)' }}>{err}</span>}
     </li>
   )
 }

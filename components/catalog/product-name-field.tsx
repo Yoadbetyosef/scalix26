@@ -14,7 +14,9 @@ import type { ProductNameSuggestion } from '@/lib/catalog/product-names'
 
 const LISTBOX_ID = 'catalog-product-name-list'
 
-export function ProductNameField({ value, category, onChange, className }: {
+export function ProductNameField({ id, value, category, onChange, className }: {
+  /** Forwarded to the input so the field's own <label htmlFor> points at a real control. */
+  id?: string
   value: string
   category: string | null
   onChange: (patch: { name: string; category?: string | null }) => void
@@ -79,60 +81,64 @@ export function ProductNameField({ value, category, onChange, className }: {
   }
 
   return (
-    <div ref={box} className="relative">
-      <div className="relative">
-        <input
-          className={className}
-          required
-          value={value}
-          onChange={(e) => { onChange({ name: e.target.value }); setOpen(true); setActive(0) }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-          placeholder={all.length ? 'Start typing, or open the list' : 'e.g. Neomi Sofa'}
-          autoComplete="off"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={LISTBOX_ID}
-          aria-autocomplete="list"
-        />
-        {all.length > 0 && (
-          <button
-            type="button" tabIndex={-1}
-            onClick={() => { setOpen((o) => !o); setActive(0) }}
-            aria-label="Show all products"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-          ><ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} /></button>
-        )}
-      </div>
+    <div ref={box} style={{ position: 'relative' }}>
+      <input
+        id={id}
+        className={className}
+        required
+        value={value}
+        onChange={(e) => { onChange({ name: e.target.value }); setOpen(true); setActive(0) }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+        placeholder={all.length ? 'Start typing, or open the list' : 'e.g. Neomi Sofa'}
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={LISTBOX_ID}
+        aria-autocomplete="list"
+        style={all.length > 0 ? { paddingRight: 22 } : undefined}
+      />
+      {all.length > 0 && (
+        <button
+          type="button" tabIndex={-1}
+          onClick={() => { setOpen((o) => !o); setActive(0) }}
+          aria-label="Show all products"
+          style={{ position: 'absolute', right: 0, bottom: 9, background: 'none', border: 0, cursor: 'pointer', color: 'var(--v2-mute)', lineHeight: 0 }}
+        ><ChevronDown className="w-4 h-4 transition-transform" style={{ transform: open ? 'rotate(180deg)' : undefined }} /></button>
+      )}
 
+      {/* The kit's typeahead popover — paper and one hairline, no shadow. What lifts a popover off
+          the page is that it overlaps, not that it is shadowed. */}
       {open && all.length > 0 && (
-        <ul ref={listRef} id={LISTBOX_ID} role="listbox" className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <ul ref={listRef} id={LISTBOX_ID} role="listbox" className="v2-pop" style={{ maxHeight: 288 }}>
           {matches.length === 0 && (
-            <li className="px-3 py-2 text-sm text-gray-500">
-              Nothing matches — <span className="font-medium text-gray-700">{value}</span> will be saved as typed.
+            <li style={{ padding: '9px 13px' }}>
+              <span className="v2-popn">Nothing matches — “{value}” will be saved as typed.</span>
             </li>
           )}
-          {rows.map(({ s, heading }, i) => {
-            return (
-              <li key={s.id}>
-                {heading && <div className="sticky top-0 bg-gray-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{heading}</div>}
-                <button
-                  type="button"
-                  data-active={i === active}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => pick(s)}
-                  className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-sm ${i === active ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
-                >
-                  <span className="capitalize text-gray-900">{s.name}</span>
-                  {value.trim().toLowerCase() === s.name.toLowerCase() && <Check className="h-3.5 w-3.5 text-emerald-600" />}
-                </button>
-              </li>
-            )
-          })}
+          {rows.map(({ s: sug, heading }, i) => (
+            <li key={sug.id}>
+              {heading && (
+                <p className="v2-kick" style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--v2-paper)', padding: '7px 13px 5px' }}>{heading}</p>
+              )}
+              <button
+                type="button"
+                data-active={i === active}
+                data-on={i === active || undefined}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(sug)}
+                className="v2-popr"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
+              >
+                <span className="v2-popn" style={{ textTransform: 'capitalize' }}>{sug.name}</span>
+                {value.trim().toLowerCase() === sug.name.toLowerCase() && <Check className="w-3.5 h-3.5" style={{ color: 'var(--v2-t3)' }} />}
+              </button>
+            </li>
+          ))}
           {/* Where the list itself is edited — findable from the moment someone wonders why a name is
               missing, rather than only from the catalog page. */}
-          <li className="sticky bottom-0 border-t border-gray-100 bg-white px-3 py-1.5">
-            <a href="/catalog/names" target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">Edit this list ↗</a>
+          <li style={{ position: 'sticky', bottom: 0, background: 'var(--v2-paper)', borderTop: '1px solid var(--v2-line)', padding: '8px 13px' }}>
+            <a href="/catalog/names" target="_blank" rel="noreferrer" className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>Edit this list ↗</a>
           </li>
         </ul>
       )}

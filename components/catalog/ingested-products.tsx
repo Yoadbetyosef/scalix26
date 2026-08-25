@@ -9,8 +9,8 @@ import { Search, ExternalLink, ImageOff, Loader2, Phone } from 'lucide-react'
 // does mid-call — a customer says a product name, the agent looks it up — so typing here shows the
 // answer a caller would get. That makes this a way to test the agent, not a receipt for an import.
 //
-// Read-only by construction: there is no write path from this component, and it sits inside the
-// website card, separate from the physical inventory list further down the page.
+// Read-only by construction: there is no write path from this component, and it sits under the
+// website section, separate from the physical inventory list further down the page.
 
 interface IngestedProduct {
   id: string
@@ -79,89 +79,88 @@ export function IngestedProducts() {
   const pct = (n: number) => (stats.total ? Math.round((n / stats.total) * 100) : 0)
 
   return (
-    <div className="border-t border-hairline px-4 py-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ink">What we found on your site</h3>
-        <span className="text-[11px] uppercase tracking-wide text-muted">Read-only · not your stock list</span>
+    <div className="mt-6">
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />What we found on your site</p>
+        <s />
+        <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>Read-only · not your stock list</span>
       </div>
 
       {/* The line that makes a bad sync obvious without searching for anything. */}
-      <p className="mb-3 text-xs text-subtle">
-        <strong className="font-semibold text-ink">{stats.total.toLocaleString()}</strong> products synced ·{' '}
-        <span className={stats.withPrice < stats.total ? 'text-ink' : ''}>
-          {stats.withPrice.toLocaleString()} with a price ({pct(stats.withPrice)}%)
-        </span>{' '}
-        · {stats.withImage.toLocaleString()} with an image ({pct(stats.withImage)}%)
+      <p className="v2-kick" style={{ marginBottom: 14 }}>
+        {stats.total.toLocaleString()} synced · {stats.withPrice.toLocaleString()} with a price ({pct(stats.withPrice)}%) · {stats.withImage.toLocaleString()} with an image ({pct(stats.withImage)}%)
       </p>
 
-      <div className="relative mb-3">
-        {searching
-          ? <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted" />
-          : <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />}
+      <div className="v2-fld mb-4" style={{ position: 'relative' }}>
+        <label htmlFor="ingested-q">Ask it the way a customer would</label>
         <input
+          id="ingested-q"
           value={q}
           onChange={(e) => onType(e.target.value)}
-          placeholder="Say it the way a customer would — “how much is the emerald cut halo ring”"
-          className="h-11 w-full rounded-lg border border-hairline-strong pl-9 pr-3 text-sm text-ink outline-none focus:border-accent"
+          placeholder="“how much is the emerald cut halo ring”"
+          style={{ paddingRight: 24 }}
         />
+        {searching
+          ? <Loader2 className="w-4 h-4 animate-spin" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-mute)' }} />
+          : <Search className="w-4 h-4" style={{ position: 'absolute', right: 0, bottom: 10, color: 'var(--v2-mute)' }} />}
       </div>
 
       {/* The answer the agent would give, first — because that is the thing being tested. The rows
-          below are the evidence behind it. */}
+          below are the evidence behind it. It is a quotation, so it is set as one: the kit's rule in
+          the margin, in the hue that says whether the agent actually resolved the question. */}
       {agent && (
-        <div className={`mb-3 rounded-lg border px-3 py-2.5 ${agent.resolved ? 'border-accent/30 bg-accent/5' : 'border-hairline-strong bg-sunken'}`}>
-          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-subtle">
-            <Phone className="h-3 w-3" /> What your AI would say on a call
+        <div className="mb-4" style={{ ['--chan' as string]: agent.resolved ? 'var(--v2-t3)' : 'var(--v2-mute)' }}>
+          <p className="v2-kick" style={{ ['--ghue' as string]: agent.resolved ? 'var(--v2-t3)' : 'var(--v2-mute)' }}>
+            <Phone className="w-3 h-3" /> What your AI would say on a call
           </p>
-          <p className="text-sm text-ink">&ldquo;{agent.say}&rdquo;</p>
-          <p className="mt-1.5 text-[11px] text-muted">
+          <p className="v2-quote">“{agent.say}”</p>
+          <p className="v2-kick" style={{ marginTop: 8 }}>
             {agent.matched} product{agent.matched === 1 ? '' : 's'} matched
-            {agent.groups.length > 0 && <> · grouped into {agent.groups.length}</>}
-            {agent.groups[0]?.axis && <> · asks about {agent.groups[0].axis}</>}
+            {agent.groups.length > 0 && ` · grouped into ${agent.groups.length}`}
+            {agent.groups[0]?.axis && ` · asks about ${agent.groups[0].axis}`}
             {' · '}{agent.latencyMs}ms{agent.timedOut && ' · timed out'}
           </p>
         </div>
       )}
 
       {!products.length ? (
-        <p className="py-6 text-center text-sm text-muted">
-          Nothing matches <strong className="text-ink">{q}</strong>. Your AI would come up empty on that too.
-        </p>
+        <div className="v2-card" data-empty>
+          <b>Nothing matches “{q}”</b>
+          <span>Your AI would come up empty on that too. Try the words a customer would actually use.</span>
+        </div>
       ) : (
         <>
-          {!q && <p className="mb-2 text-xs text-muted">Most recently synced</p>}
-          <ul className="grid gap-2 sm:grid-cols-2">
+          {!q && <p className="v2-kick" style={{ marginBottom: 6 }}>Most recently synced</p>}
+          <div className="v2-list">
             {products.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 rounded-lg border border-hairline px-3 py-2">
-                {p.image_url ? (
-                  // Hotlinked straight from the shop — nothing is copied into our storage.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image_url} alt="" loading="lazy" className="h-10 w-10 flex-shrink-0 rounded object-cover" />
-                ) : (
-                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded bg-sunken" title="No image on the site">
-                    <ImageOff className="h-4 w-4 text-muted" />
+              <div key={p.id} className="v2-row" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>
+                <span className="v2-shot" style={{ ['--shot' as string]: '40px' }}>
+                  {p.image_url
+                    // Hotlinked straight from the shop — nothing is copied into our storage.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={p.image_url} alt="" loading="lazy" />
+                    : <i title="No image on the site"><ImageOff /></i>}
+                </span>
+                <div className="v2-m">
+                  <p><span className="truncate" title={p.title}>{p.title}</span></p>
+                  <span>
+                    {money(p.price, p.currency) ?? 'no price'}
+                    {p.sku && ` · ${p.sku}`}
+                    {p.availability === 'out_of_stock' && ' · out of stock'}
                   </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink" title={p.title}>{p.title}</p>
-                  <p className="text-xs text-subtle">
-                    {money(p.price, p.currency) ?? <span className="text-muted">no price</span>}
-                    {p.sku && <span className="text-muted"> · {p.sku}</span>}
-                    {p.availability === 'out_of_stock' && <span className="text-muted"> · out of stock</span>}
-                  </p>
                 </div>
                 {p.product_url && (
                   <a
                     href={p.product_url} target="_blank" rel="noopener noreferrer"
-                    title="Open on your site"
-                    className="flex-shrink-0 rounded-lg p-2 text-muted hover:bg-sunken hover:text-ink"
+                    title="Open on your site" aria-label="Open on your site"
+                    className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    <ExternalLink />
                   </a>
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
         </>
       )}
     </div>

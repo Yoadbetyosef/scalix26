@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { cloneElement, isValidElement, useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { ChevronDown, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { commissionAmount, landedCost, margin, markupAmount, subtotalBeforeMarkup } from '@/lib/catalog/cost-math'
@@ -28,7 +28,6 @@ interface Provenance {
 }
 interface View { settings: Settings; price: number | null; cost: Cost | null; marginPercent: number | null; provenance?: Provenance | null }
 
-const input = 'h-10 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
 const num = (s: string): number | null => { const t = s.trim(); if (!t) return null; const n = Number(t); return Number.isFinite(n) && n >= 0 ? n : null }
 const fmt = (n: number | null, ccy: string) =>
   n === null ? '—' : `${n.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${ccy}`
@@ -53,9 +52,11 @@ export function splitLanded(
   return { shippingCost: total - recordedTariff, tariffCost: recordedTariff }
 }
 
-// Thin margins are the thing worth noticing on this screen, so they carry colour; healthy ones stay quiet.
-const marginTone = (m: number | null) =>
-  m === null ? 'text-muted' : m < 10 ? 'text-red-600' : m < 20 ? 'text-amber-600' : 'text-emerald-700'
+// Thin margins are the thing worth noticing on this screen, so they carry colour; healthy ones stay
+// quiet. --v2-red-ink rather than --v2-red because this is a figure made of words: the signal red is
+// a dot-and-tint colour and does not clear AA as text.
+const marginTone = (m: number | null): string | undefined =>
+  m === null ? 'var(--v2-mute)' : m < 10 ? 'var(--v2-red-ink)' : m < 20 ? 'var(--v2-hold-ink)' : undefined
 
 // One component for both a product and a sub-product. The only difference is which endpoint it talks
 // to, so that is the only thing parameterised — forking it would mean two copies of the permission
@@ -187,51 +188,54 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   }
 
   return (
-    <section className={compact ? 'rounded-lg border border-hairline bg-sunken/30' : 'rounded-xl border border-hairline-strong bg-white'}>
-      <button type="button" onClick={() => setOpen((o) => !o)} className={`flex w-full items-center justify-between text-left ${compact ? 'px-3 py-2' : 'p-4'}`}>
-        <span className="flex items-center gap-2">
-          <h2 className={compact ? 'text-xs font-semibold uppercase tracking-wide text-subtle' : 'font-semibold text-ink'}>Cost &amp; Margin</h2>
+    <section>
+      {/* THE SAME FOLD AS EVERY OTHER SECTION ON THIS FORM. v1 made it a bordered card whose header
+          was a button and whose body was a second bordered region — this is the micro-label, the
+          rule, and one rotating chevron, which is what a section header is here. `compact` — the
+          sub-product's copy of this card, nested inside a panel that already has a header — stays a
+          real distinction, but it is now subordination rather than a second surface: the mute hue
+          instead of the section colour, and no "only visible to you" note, because the panel it sits
+          in has already said that once. */}
+      <button type="button" onClick={() => setOpen((o) => !o)} style={{ display: 'block', width: '100%', background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+        <div className="v2-head" style={{ marginBottom: open ? undefined : 0 }}>
+          <p className="v2-kick" style={{ ['--ghue' as string]: compact ? 'var(--v2-mute)' : 'var(--v2-t2)' }}><i />Cost &amp; margin</p>
           {!open && view.cost?.computedCost != null && (
-            <span className="text-sm text-muted">
+            <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>
               {fmt(view.cost.computedCost, settings.baseCurrency)}
-              {view.marginPercent !== null && <span className={`ml-2 font-medium ${marginTone(view.marginPercent)}`}>{view.marginPercent.toFixed(1)}%</span>}
+              {view.marginPercent !== null && ` · ${view.marginPercent.toFixed(1)}%`}
             </span>
           )}
-        </span>
-        <span className="flex items-center gap-3">
-          <span className="hidden items-center gap-1 text-xs text-subtle sm:flex"><Lock className="h-3 w-3" /> Only visible to you</span>
-          <ChevronDown className={`h-4 w-4 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
-        </span>
+          <s />
+          {!compact && <span className="v2-kick max-sm:hidden"><Lock className="w-3 h-3" /> Only visible to you</span>}
+          <ChevronDown className="v2-fold-mark" style={{ transform: open ? 'rotate(180deg)' : undefined }} />
+        </div>
       </button>
 
       {open && (
-        <div className={`space-y-4 border-t border-hairline pt-3 ${compact ? 'px-3 pb-3' : 'px-4 pb-4'}`}>
+        <div style={{ display: 'grid', gap: 18 }}>
           {/* Reads as step two of making a product, and only until there is something to see. Not
               styled as a warning: nothing has gone wrong, and a product with no cost is fine. */}
           {draft ? (
-            <p className="text-sm text-subtle">
-              Saved with the product. Leave it blank and you can add it afterwards.
-            </p>
+            <p className="v2-hint">Saved with the product. Leave it blank and you can add it afterwards.</p>
           ) : justCreated && !saved && view.cost?.computedCost == null ? (
-            <p className="text-sm text-subtle">
-              Product created. Add what it costs you and the margin appears here.
-            </p>
+            <p className="v2-hint">Product created. Add what it costs you and the margin appears here.</p>
           ) : null}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+          <div className="v2-form">
             {/* FIRST on screen, and reference only. Order, not precedence: the supplier's invoice is
                 the piece of paper in front of the owner, so it is the first thing they type — but it
                 is never converted and never part of the total. cost_primary below still drives every
                 computed figure. Reordering this row must not be read as changing which one counts. */}
             {settings.secondaryCurrency && (
               <Field label={`Supplier invoice (${settings.secondaryCurrency})`}>
-                <input className={input} inputMode="decimal" value={f.secondary} placeholder="—"
+                <input inputMode="decimal" value={f.secondary} placeholder="—"
                   onChange={(e) => { setF((p) => ({ ...p, secondary: e.target.value })); setSaved(false) }} />
               </Field>
             )}
 
             {/* The figure everything is computed from. */}
             <Field label={`Cost (${settings.baseCurrency})`}>
-              <input className={input} inputMode="decimal" value={f.primary} placeholder="—"
+              <input inputMode="decimal" value={f.primary} placeholder="—"
                 onChange={(e) => { setF((p) => ({ ...p, primary: e.target.value })); setSaved(false) }} />
             </Field>
 
@@ -242,24 +246,26 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
                 figure gets copied off the EUR invoice and silently added as USD. */}
             {settings.combineShippingAndDuties ? (
               <Field label={`Shipping & duties (${settings.baseCurrency})`}>
-                <input className={input} inputMode="decimal" value={f.landed} placeholder="0"
+                <input inputMode="decimal" value={f.landed} placeholder="0"
                   onChange={(e) => { setF((p) => ({ ...p, landed: e.target.value })); setSaved(false) }} />
               </Field>
             ) : (
               <>
                 <Field label={`Shipping (${settings.baseCurrency})`}>
-                  <input className={input} inputMode="decimal" value={f.shipping} placeholder="0"
+                  <input inputMode="decimal" value={f.shipping} placeholder="0"
                     onChange={(e) => { setF((p) => ({ ...p, shipping: e.target.value })); setSaved(false) }} />
                 </Field>
                 <Field label={`Tariff (${settings.baseCurrency})`}>
-                  <input className={input} inputMode="decimal" value={f.tariff} placeholder="0"
+                  <input inputMode="decimal" value={f.tariff} placeholder="0"
                     onChange={(e) => { setF((p) => ({ ...p, tariff: e.target.value })); setSaved(false) }} />
                 </Field>
               </>
             )}
           </div>
 
-          <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg bg-sunken/60 px-3 py-2.5">
+          {/* The kit's totals row: mono labels, tabular figures, right-aligned so a column of money
+              lines up. v1 put them in a grey box, which is the one thing this language does not do. */}
+          <dl className="v2-tot" style={{ padding: '14px 0 0', borderTop: '1px solid var(--v2-line)' }}>
             {/* Commission sits directly under the product cost and BEFORE shipping, because it is a
                 percentage of the line above it while markup is a percentage of the running subtotal.
                 Listed after shipping, a reader computes 25% of 120 and gets 165 — the wrong answer.
@@ -277,30 +283,30 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
             <Readout label="Total cost" value={fmt(liveTotal, settings.baseCurrency)} strong />
             <Readout label="Selling price" value={fmt(price, settings.baseCurrency)} />
             <Readout label="Margin" value={liveMargin === null ? '—' : `${liveMargin.toFixed(1)}%`} tone={marginTone(liveMargin)} strong />
-          </div>
+          </dl>
 
           {/* Built as whole strings rather than JSX text interleaved with expressions: JSX drops the
               leading space of a text node that follows an expression, which rendered "The EURfigure". */}
           {settings.secondaryCurrency && (
-            <p className="text-xs text-subtle">
+            <p className="v2-hint">
               {`Enter the supplier’s invoice in ${settings.secondaryCurrency} first — it is a reference note only, `}
               {`never converted and never counted. Every figure the total is built from is recorded in ${settings.baseCurrency}.`}
             </p>
           )}
 
           {/* Where this number came from, and what it replaced.
-              
+
               The question an owner asks about a cost is "why did this change?", and until now the card
               could not answer it: a figure that arrived from a supplier invoice looked exactly like one
               typed by hand, and a reorder overwrote the previous one without trace. Both facts were
               already in the database and simply unread — see lib/catalog/cost-provenance.ts.
-              
+
               Absent for a hand-typed cost, which is most of them. Nothing is claimed when nothing is
               known. */}
           {view.provenance && (
-            <p className="text-xs text-subtle">
+            <p className="v2-hint">
               {'From '}
-              <Link href={`/landed-cost/${view.provenance.shipmentId}`} className="font-medium text-accent underline">
+              <Link href={`/landed-cost/${view.provenance.shipmentId}`} style={{ color: 'var(--v2-ink)', fontWeight: 500, textDecoration: 'underline' }}>
                 {view.provenance.reference
                   || [view.provenance.supplierName, view.provenance.invoiceNumber].filter(Boolean).join(' ')
                   || 'a supplier invoice'}
@@ -314,16 +320,20 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
             </p>
           )}
 
-          {err && <p className="text-xs text-red-600">{err}</p>}
+          {err && (
+            <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)' }}>
+              <span className="v2-chip-sq"><Lock /></span>
+              <p>{err}</p>
+            </div>
+          )}
           {/* No save of its own in draft mode: these values go with the product, in one transaction.
               A button here would promise a second, separate write — the exact thing this avoids. */}
           {!draft && (
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={save} disabled={saving}
-                className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
+            <div className="v2-bar">
+              <button type="button" onClick={save} disabled={saving} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: compact ? 'var(--v2-mute)' : 'var(--v2-t2)' }}>
                 {saving ? 'Saving…' : 'Save cost'}
               </button>
-              {saved && <span className="text-xs text-emerald-700">Saved.</span>}
+              {saved && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>Saved</span>}
             </div>
           )}
         </div>
@@ -332,20 +342,26 @@ export function ProductCostCard({ productId, variantId, compact, justCreated, dr
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// Same shape as the product form's: label and control as siblings, with the id put back so the
+// caption still points at the control it names.
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  const id = 'cost-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const child = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ id?: string }>, { id })
+    : children
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{label}</span>
-      {children}
-    </label>
+    <div className="v2-fld">
+      <label htmlFor={id}>{label}</label>
+      {child}
+    </div>
   )
 }
 
 function Readout({ label, value, tone, strong }: { label: string; value: string; tone?: string; strong?: boolean }) {
   return (
     <div>
-      <span className="block text-xs text-subtle">{label}</span>
-      <span className={`${strong ? 'text-base font-semibold' : 'text-sm'} ${tone ?? 'text-ink'}`}>{value}</span>
+      <dt>{label}</dt>
+      <dd style={{ color: tone, fontWeight: strong ? 600 : undefined }}>{value}</dd>
     </div>
   )
 }

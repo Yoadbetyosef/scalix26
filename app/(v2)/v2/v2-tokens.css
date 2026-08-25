@@ -1877,6 +1877,17 @@
 
 /* Save sits on its own, not inside a card: it acts on the whole screen rather than on a section. */
 .v2 .v2-savebar { display: flex; flex-wrap: wrap; gap: 8px; margin: 26px 0 8px; }
+/* ON A PHONE IT STAYS REACHABLE. The product form is nine hundred pixels long and v1 pinned its save
+   for exactly that reason; a form whose only save is off-screen is a form people abandon. Sticky
+   rather than fixed, so it stops being pinned the moment the form is short enough not to need it,
+   and offset by the swipe-up handle's own published height rather than a number guessed to clear
+   it. */
+@media (max-width: 719.98px) {
+  .v2 .v2-savebar[data-pin] {
+    position: sticky; z-index: 6; bottom: var(--v2-grab-h); margin: 26px -16px 0;
+    padding: 12px 16px; background: var(--v2-paper); border-top: 1px solid var(--v2-line);
+  }
+}
 
 /* THE DANGER ZONE. Solid red, no gradient anywhere, and no press accent — it must not read as one
    more row. The one destructive control in /v2 gets the one treatment nothing else uses. */
@@ -3813,7 +3824,11 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    lines. A boxed input is the one v1 thing that would survive into it, and forty boxed inputs on
    /catalog/new is what makes that screen look like software rather than like paper. */
 .v2-form { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 26px; }
-@media (max-width: 720px) { .v2-form { grid-template-columns: 1fr; } }
+/* A three-up row is an attribute rather than an inline style, so the narrow collapse below still
+   wins — an inline grid-template-columns beats any stylesheet rule that is not !important, and the
+   fabric picker's three selects would have stayed three across at 390px. */
+.v2-form[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 720px) { .v2-form, .v2-form[data-cols="3"] { grid-template-columns: 1fr; } }
 .v2-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .v2-fld.wide { grid-column: 1 / -1; }
 .v2-fld label {
@@ -3945,6 +3960,8 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    lost and rendered on desktop. It showed up as a row printing both the absolute date and the
    relative one, which squeezed the title to "+1…". Scoping the utility under .v2 makes it 0,2,0 and
    gives it back its authority everywhere in the migrated app, rather than one !important per site. */
+@media (max-width: 639.98px) { .v2 .max-sm\:hidden { display: none; } }
+@media (min-width: 640px)    { .v2 .sm\:hidden     { display: none; } }
 @media (max-width: 767.98px) { .v2 .max-md\:hidden { display: none; } }
 @media (min-width: 768px)    { .v2 .md\:hidden     { display: none; } }
 @media (max-width: 1023.98px) { .v2 .max-lg\:hidden { display: none; } }
@@ -4274,7 +4291,13 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
    on and nowhere else, as .v2-act — no new button. --shot sets the size, so a 112px detail block and a
    56px row thumbnail are the same component. */
 .v2-shots { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 22px; }
-.v2-shot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* flex: none so the frame keeps its size when the block is a child of a row rather than the whole
+   block — the catalogue's row thumbnail is this component at --shot: 36px. */
+.v2-shot { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: none; }
+/* A SUB-PRODUCT ROW belongs to the product above it and must not read as a peer. It gets the same
+   quiet ground in both renderings — the table's child row and the list's — so the two cannot drift. */
+.v2 .v2-tbl tbody tr[data-sub] td, .v2 .v2-row[data-sub] { background: var(--v2-hover-soft); }
+.v2 .v2-tbl tbody tr[data-sub] td:first-child::before { display: none; }
 .v2-shot > b {
   font-family: var(--v2-mono); font-weight: 400; font-size: 10px;
   letter-spacing: 0.16em; text-transform: uppercase; color: var(--v2-ink-45);
@@ -4296,3 +4319,32 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2-shot[data-code] > img { padding: 7px; background: #fff; }
 .v2-shot > span { max-width: 24ch; font-size: 12.5px; line-height: 1.45; color: var(--v2-ink-45); }
 .v2-shot > .v2-act { align-self: flex-start; }
+/* The caption is held to 24ch so it wraps like a caption; the actions under it must not inherit that
+   measure and stack one per line. The column simply grows to fit them. */
+.v2-shot > .v2-bar { flex-wrap: nowrap; }
+
+/* ── A FOLD ──────────────────────────────────────────────────────────────────────────────────────
+   Not a new component. A <details> in this language is a section whose header happens to be a
+   button: the summary carries .v2-head's micro-label and rule exactly as an unfolded section does,
+   and the platform's disclosure triangle is replaced by the chevron the list rows already use, so
+   open and closed differ by one rotated mark rather than by two different headers. */
+.v2 summary { cursor: pointer; list-style: none; }
+.v2 summary::-webkit-details-marker { display: none; }
+.v2 summary .v2-fold-mark {
+  width: 15px; height: 15px; flex: none; color: var(--v2-ink-45); transition: transform 0.18s;
+}
+.v2 details[open] > summary .v2-fold-mark { transform: rotate(90deg); }
+
+/* ── A STEPPER'S FIELD ───────────────────────────────────────────────────────────────────────────
+   The form language's input, narrowed and centred, sitting between two .v2-ico buttons. v1 drew
+   three bordered boxes in a row to ask "how many" — three surfaces for one number. The spinners go:
+   the two buttons beside it are the spinners, and the platform's pair inside the field is a second
+   set of controls doing the same job at half the size. */
+.v2 .v2-qty {
+  width: 44px; text-align: center; appearance: none; background: transparent; border: 0;
+  border-bottom: 1px solid var(--v2-line); border-radius: 0; padding: 5px 0 6px;
+  font: inherit; font-size: 15px; font-variant-numeric: tabular-nums; color: var(--v2-ink);
+}
+.v2 .v2-qty:focus { outline: none; border-bottom-color: var(--v2-t1); box-shadow: 0 1px 0 0 var(--v2-t1); }
+.v2 .v2-qty::-webkit-outer-spin-button,
+.v2 .v2-qty::-webkit-inner-spin-button { appearance: none; margin: 0; }

@@ -14,7 +14,6 @@ export const EMPTY_FABRIC: FabricValue = {
   fabric_category: null, fabric_family: null, fabric_name: null, fabric_composition: null, fabric_durability: null,
 }
 
-const sel = 'h-11 w-full rounded-lg border border-hairline-strong bg-white px-3 text-sm outline-none focus:border-accent disabled:opacity-50'
 
 // Cascading fabric selection: category → family → colour. Composition + durability auto-fill from the
 // chosen colour and are shown read-only. Emits the full FabricValue on every change.
@@ -35,32 +34,40 @@ export function FabricPicker({ value, onChange }: { value: FabricValue; onChange
   }
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Category</span>
-          <select className={sel} value={value.fabric_category || ''} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">— None —</option>
-            {FABRIC_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Fabric</span>
-          <select className={sel} disabled={!value.fabric_category} value={value.fabric_family || ''} onChange={(e) => setFamily(e.target.value)}>
-            <option value="">— Select —</option>
-            {families.map((f) => <option key={f.family} value={f.family}>{f.family}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Colour</span>
-          <select className={sel} disabled={!value.fabric_family} value={value.fabric_name || ''} onChange={(e) => setColor(e.target.value)}>
-            <option value="">— Select —</option>
-            {colors.map((c) => <option key={c.name} value={c.name}>{c.label}</option>)}
-          </select>
-        </label>
+    <div>
+      {/* Three cascading selects in the form language: a rule under each, the chevron drawn rather
+          than left to the platform, and a disabled one greyed by the field itself. */}
+      <div className="v2-form" data-cols="3">
+        <div className="v2-fld">
+          <label htmlFor="fab-cat">Category</label>
+          <span className="v2-sel">
+            <select id="fab-cat" value={value.fabric_category || ''} onChange={(e) => setCategory(e.target.value)}>
+              <option value="">— None —</option>
+              {FABRIC_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </span>
+        </div>
+        <div className="v2-fld">
+          <label htmlFor="fab-fam">Fabric</label>
+          <span className="v2-sel">
+            <select id="fab-fam" disabled={!value.fabric_category} value={value.fabric_family || ''} onChange={(e) => setFamily(e.target.value)}>
+              <option value="">— Select —</option>
+              {families.map((f) => <option key={f.family} value={f.family}>{f.family}</option>)}
+            </select>
+          </span>
+        </div>
+        <div className="v2-fld">
+          <label htmlFor="fab-col">Colour</label>
+          <span className="v2-sel">
+            <select id="fab-col" disabled={!value.fabric_family} value={value.fabric_name || ''} onChange={(e) => setColor(e.target.value)}>
+              <option value="">— Select —</option>
+              {colors.map((c) => <option key={c.name} value={c.name}>{c.label}</option>)}
+            </select>
+          </span>
+        </div>
       </div>
       {value.fabric_name && (value.fabric_composition || value.fabric_durability) && (
-        <p className="text-xs text-muted">
+        <p className="v2-hint" style={{ marginTop: 12 }}>
           {[value.fabric_composition, value.fabric_durability].filter(Boolean).join(' · ')}
         </p>
       )}
