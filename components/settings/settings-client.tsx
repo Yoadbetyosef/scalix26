@@ -3,11 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Tenant, Channel } from '@/types'
 import { useSettings } from './use-settings'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { toast } from 'sonner'
-import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook, MapPin, Smartphone, Mail, Check } from 'lucide-react'
+import { CreditCard, Phone, MessageSquare, Globe, Copy, Webhook, MapPin, Smartphone, Mail, Zap } from 'lucide-react'
+import { StatusPill } from '@/app/(v2)/v2/controls'
+import { channelHue, channelKey, CHANNEL_LABEL } from '@/app/(v2)/v2/channels'
 
 const CHANNEL_ICONS: Record<string, React.ElementType> = {
   voice: Phone,
@@ -17,11 +15,9 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
   facebook: Globe,
 }
 
-// Apple-style channel colors — the icon tile carries the channel identity.
-const CHANNEL_TONE: Record<string, string> = {
-  voice: 'bg-cyan-500', sms: 'bg-emerald-500', whatsapp: 'bg-green-500',
-  instagram: 'bg-pink-500', facebook: 'bg-blue-600', email: 'bg-violet-500',
-}
+// The hue comes from channelHue — the same value the chips, the table rows and the analytics bars
+// use. v1 kept a second map of Tailwind backgrounds here, which is how "whatsapp" ended up green in
+// one place and emerald in another.
 
 interface Props {
   tenant: Tenant
@@ -37,127 +33,114 @@ export function SettingsClient({ tenant, channels, hideBilling = false }: Props)
   const { openBillingPortal, upgrading, handleUpgrade, bookingUrl, copy } = useSettings(tenant)
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Settings</h1>
-        <p className="text-sm text-muted mt-1">Manage your business profile and integrations</p>
+    <div className="v2 v2-embedded p-4 sm:p-6 max-w-3xl max-md:pb-16">
+      {/* No page title: the rail says Settings. Business identity and availability & reviews are
+          edited on the AI Employee page — the single source of truth — not duplicated here. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Your business profile and integrations</p>
+        <s />
       </div>
 
-      {/* Business identity AND availability & reviews are now edited on the AI
-          Employee page — the single source of truth — not duplicated here. */}
-
-      {/* Connected Channels */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-indigo-500 text-white shadow-e1"><MessageSquare className="h-[18px] w-[18px]" strokeWidth={2} /></span>
-            Connected Channels
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+        <p className="v2-ghead"><i />Connected channels<s /></p>
+        <div className="v2-gcard">
           {channels.length === 0 ? (
-            <p className="text-sm text-subtle">No channels connected yet. Create an AI employee to add channels.</p>
-          ) : (
-            <div className="space-y-3">
-              {channels.map(ch => {
-                const Icon = CHANNEL_ICONS[ch.type] || MessageSquare
-                return (
-                  <div key={ch.id} className="flex items-center gap-3 p-3 rounded-xl bg-sunken">
-                    <div className={`w-8 h-8 rounded-lg ${CHANNEL_TONE[ch.type] || 'bg-slate-500'} flex items-center justify-center text-white shadow-e1`}>
-                      <Icon className="w-4 h-4" strokeWidth={2} />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-ink capitalize">{ch.type}</p>
-                      {ch.twilio_number && <p className="text-xs text-subtle">{ch.twilio_number}</p>}
-                    </div>
-                    <Badge variant={ch.status as 'connected' | 'disconnected' | 'pending'}>{ch.status}</Badge>
-                  </div>
-                )
-              })}
+            <div className="v2-grow" data-static>
+              <span className="v2-gchip"><MessageSquare /></span>
+              <span className="v2-glab">No channels connected yet. Create an AI employee to add channels.</span>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          ) : channels.map(ch => {
+            const Icon = CHANNEL_ICONS[ch.type] || MessageSquare
+            return (
+              <div key={ch.id} className="v2-grow" data-static style={{ ['--ghue' as string]: channelHue(ch.type) }}>
+                <span className="v2-gchip"><Icon /></span>
+                <span className="v2-glab">
+                  {/* CHANNEL_LABEL, not capitalize — the raw type title-cased renders "Sms", and
+                      the app spells it SMS everywhere else. */}
+                  <b style={{ fontWeight: 550 }}>{CHANNEL_LABEL[channelKey(ch.type) as keyof typeof CHANNEL_LABEL] ?? ch.type}</b>
+                  {ch.twilio_number && <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>{ch.twilio_number}</span>}
+                </span>
+                <span className="v2-gtrail">
+                  <StatusPill state={ch.status === 'connected' ? 'live' : ch.status === 'pending' ? 'pending' : 'off'}>{ch.status}</StatusPill>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </section>
 
-      {/* Lead Sources */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-orange-500 text-white shadow-e1"><Webhook className="h-[18px] w-[18px]" strokeWidth={2} /></span>
-            Lead Sources
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-            <p className="text-sm font-semibold text-blue-900 mb-1">Never Miss a Lead</p>
-            <p className="text-sm text-blue-700">
-              Every time someone requests your help — from any source — they get an automatic text within seconds. You&apos;re always first to respond.
-            </p>
+      <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+        <p className="v2-ghead"><i />Lead sources<s /></p>
+        <div className="v2-gcard">
+          <div className="v2-grow" data-static>
+            <span className="v2-gchip"><Webhook /></span>
+            <span className="v2-glab">
+              <b style={{ fontWeight: 550 }}>Never miss a lead</b>
+              <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>
+                Every time someone requests your help — from any source — they get an automatic text
+                within seconds. You are always first to respond.
+              </span>
+            </span>
           </div>
 
           {!bookingUrl ? (
-            <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full flex-shrink-0" />
-              <p className="text-sm text-yellow-700">Your lead sources are being set up. Refresh in a moment.</p>
+            <div className="v2-grow" data-static style={{ ['--ghue' as string]: 'var(--v2-amber)' }}>
+              <span className="v2-gchip"><Zap /></span>
+              <span className="v2-glab">Your lead sources are being set up. Refresh in a moment.</span>
             </div>
           ) : (
             <>
-              {/* Personal booking link — the star */}
-              <div className="rounded-2xl border border-accent/25 bg-accent/[0.06] p-5">
-                <p className="text-sm font-medium text-ink">Your Personal Booking Link</p>
-                <p className="text-xs text-subtle mt-1 mb-3">
-                  Share this link anywhere. When someone clicks it and fills in their info — they get a text from you within seconds. No website, no developer, no code needed.
-                </p>
-                <div className="flex gap-2">
-                  <code className="flex-1 min-w-0 truncate bg-white border border-hairline rounded-lg px-3 h-11 flex items-center text-xs sm:text-sm text-ink">
-                    {bookingUrl}
-                  </code>
-                  <Button className="h-11 px-4 flex-shrink-0" onClick={() => copy(bookingUrl, 'Link')}>
-                    <Copy className="w-4 h-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Copy Link</span>
-                  </Button>
+              {/* THE BOOKING LINK is the one thing on this screen a person came to copy, so it is a
+                  field with its verb beside it rather than a tinted panel with a heading. */}
+              <div className="v2-field">
+                <span className="v2-flab">Your personal booking link</span>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                  <input className="v2-finput" readOnly value={bookingUrl} style={{ fontFamily: 'var(--v2-mono)', fontSize: 13 }} aria-label="Your personal booking link" />
+                  <button onClick={() => copy(bookingUrl, 'Link')} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)', marginBottom: 6 }}>
+                    <Copy className="w-3.5 h-3.5" /> Copy
+                  </button>
                 </div>
-                <div className="mt-3 space-y-1.5 text-xs text-subtle">
-                  <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-muted" /> Paste it in your Google Business Profile</p>
-                  <p className="flex items-center gap-2"><Smartphone className="w-3.5 h-3.5 text-muted" /> Add it to your Instagram or Facebook bio</p>
-                  <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-muted" /> Include it in your email signature</p>
-                </div>
+                <em className="v2-fhint">
+                  Share it anywhere. When someone clicks it and fills in their details they get a text
+                  from you within seconds — no website, no developer, no code.
+                </em>
+                {/* Where to put it. Three places, as three facts rather than three icon lines. */}
+                <dl className="v2-facts" data-narrow style={{ marginTop: 14 }}>
+                  <div><dt><MapPin className="w-3.5 h-3.5" style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6 }} />Google</dt><dd>In your Business Profile</dd></div>
+                  <div><dt><Smartphone className="w-3.5 h-3.5" style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6 }} />Social</dt><dd>In your Instagram or Facebook bio</dd></div>
+                  <div><dt><Mail className="w-3.5 h-3.5" style={{ display: 'inline', verticalAlign: '-2px', marginRight: 6 }} />Email</dt><dd>In your signature</dd></div>
+                </dl>
               </div>
 
-              {/* Other sources */}
-              <div className="space-y-2.5">
-                {/* Missed calls — already automatic */}
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-hairline bg-sunken">
-                  <div className="w-9 h-9 rounded-lg bg-cyan-500 flex items-center justify-center text-white shadow-e1 flex-shrink-0">
-                    <Phone className="w-4 h-4" strokeWidth={2} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink">Missed Calls</p>
-                    <p className="text-xs text-subtle">If a call ever slips through, we automatically text them back within seconds so you never lose the job.</p>
-                  </div>
-                  <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium flex-shrink-0">Active</span>
-                </div>
+              <div className="v2-grow" data-static style={{ ['--ghue' as string]: channelHue('voice') }}>
+                <span className="v2-gchip"><Phone /></span>
+                <span className="v2-glab">
+                  <b style={{ fontWeight: 550 }}>Missed calls</b>
+                  <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>
+                    If a call ever slips through, we text them back within seconds so you never lose the job.
+                  </span>
+                </span>
+                <span className="v2-gtrail"><StatusPill state="live">Active</StatusPill></span>
               </div>
 
               {/* The private intake URL (/api/leads/inbound, for Zapier/Make) is hidden
                   from the UI — the route stays live; we may re-expose it for advanced users. */}
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      {/* Billing — hidden in operator mode (a White Label client never sees Scalix billing). */}
+      {/* BILLING — hidden in operator mode (a White Label client never sees Scalix billing).
+          RESKIN ONLY. Every handler, plan key, price, feature line and disabled condition below is
+          byte-for-byte what it was; openBillingPortal and handleUpgrade come from use-settings
+          untouched, and the id="billing" anchor stays because the rail and the trial widget both
+          deep-link to it. */}
       {!hideBilling && (
-      <Card id="billing" className="scroll-mt-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-emerald-600 text-white shadow-e1"><CreditCard className="h-[18px] w-[18px]" strokeWidth={2} /></span>
-            Billing & Subscription
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <section className="v2-group" id="billing" style={{ ['--ghue' as string]: 'var(--v2-t4)', scrollMarginTop: 24 }}>
+        <p className="v2-ghead"><i />Billing &amp; subscription<s /></p>
+        <div className="v2-gcard">
 
-          {/* Current plan banner */}
+          {/* Current plan */}
           {tenant.plan === 'trial' ? (
             (() => {
               const trialDaysLeft = tenant.trial_ends_at
@@ -165,85 +148,90 @@ export function SettingsClient({ tenant, channels, hideBilling = false }: Props)
                 : null
               const ended = trialDaysLeft === 0
               return (
-                <div className={`border rounded-xl p-4 ${ended ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-sm font-bold ${ended ? 'text-red-800' : 'text-yellow-800'}`}>Free Trial</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ended ? 'bg-red-200 text-red-800' : 'bg-yellow-200 text-yellow-800'}`}>
-                      {trialDaysLeft !== null ? `${trialDaysLeft} days left` : 'Active'}
+                <div className="v2-grow" data-static style={{ ['--ghue' as string]: ended ? 'var(--v2-red)' : 'var(--v2-amber)' }}>
+                  <span className="v2-gchip"><CreditCard /></span>
+                  <span className="v2-glab">
+                    <b style={{ fontWeight: 550 }}>Free trial</b>
+                    <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>
+                      {ended
+                        ? 'Trial ended — upgrade to keep your AI running 24/7.'
+                        : 'Upgrade before your trial ends to keep your AI running 24/7.'}
                     </span>
-                  </div>
-                  <p className={`text-sm ${ended ? 'text-red-700' : 'text-yellow-700'}`}>
-                    {ended
-                      ? 'Trial ended — upgrade to keep your AI running 24/7'
-                      : 'Upgrade before your trial ends to keep your AI running 24/7.'}
-                  </p>
+                  </span>
+                  <span className="v2-gtrail">
+                    <StatusPill state={ended ? 'off' : 'pending'}>
+                      {trialDaysLeft !== null ? `${trialDaysLeft} days left` : 'Active'}
+                    </StatusPill>
+                  </span>
                 </div>
               )
             })()
           ) : (
-            <div className="bg-accent/[0.08] border border-accent/20 rounded-2xl p-5 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-subtle mb-0.5">Current plan</p>
-                <p className="text-lg font-semibold text-ink capitalize">{tenant.plan}</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={openBillingPortal}>
-                <CreditCard className="w-4 h-4 mr-1.5" />
-                Manage
-              </Button>
+            <div className="v2-grow" data-static>
+              <span className="v2-gchip"><CreditCard /></span>
+              <span className="v2-glab">
+                <b style={{ fontWeight: 550, textTransform: 'capitalize' }}>{tenant.plan}</b>
+                <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>Your current plan</span>
+              </span>
+              <span className="v2-gtrail">
+                <button onClick={openBillingPortal} className="v2-act tap-target">
+                  <CreditCard className="w-3.5 h-3.5" /> Manage
+                </button>
+              </span>
             </div>
           )}
 
-          {/* Plans */}
-          <div className="space-y-3">
-            {[
-              { key: 'starter', name: 'Starter', price: '$297', period: '/mo', features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
-              { key: 'pro', name: 'Pro', price: '$397', period: '/mo', features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
-              { key: 'business', name: 'Business', price: '$597', period: '/mo', features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
-            ].map(plan => {
-              const isCurrent = tenant.plan === plan.key
-              return (
-                <div key={plan.key} className={`relative rounded-2xl border p-5 transition-all ${isCurrent ? 'border-accent/40 bg-accent/5 shadow-e1' : 'border-hairline bg-white hover:shadow-e2'}`}>
-                  {plan.popular && !isCurrent && (
-                    <span className="absolute -top-2.5 left-4 text-xs font-medium bg-ink text-white px-2.5 py-0.5 rounded-full">Most popular</span>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-ink">{plan.name}</p>
-                        {isCurrent && <span className="text-xs font-medium text-accent-strong bg-accent/10 px-2 py-0.5 rounded-full">Your plan</span>}
-                      </div>
-                      <p className="mt-0.5">
-                        <span className="text-xl font-semibold text-ink">{plan.price}</span>
-                        <span className="text-sm text-muted">{plan.period}</span>
-                      </p>
-                    </div>
-                    {!isCurrent && (
-                      <button
-                        onClick={() => handleUpgrade(plan.key)}
-                        disabled={upgrading !== null}
-                        className="h-11 px-5 text-sm font-medium bg-ink text-white rounded-button shadow-e1 hover:bg-ink/90 hover:shadow-e2 transition-all flex-shrink-0 disabled:opacity-60"
-                      >
-                        {upgrading === plan.key ? 'Starting…' : 'Upgrade'}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
-                    {plan.features.map(f => (
-                      <span key={f} className="text-xs text-subtle flex items-center gap-1"><Check className="w-3 h-3 text-green-500" /> {f}</span>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          {/* THE THREE PLANS. v1 gave each its own bordered card with a floating "Most popular" tab,
+              inside a card, inside a page — and the tab overlapped the border above it. They are three
+              rows: the name, what it costs, what it includes, and the one verb that acts on it. The
+              plan you are on is marked rather than boxed. */}
+          {[
+            { key: 'starter', name: 'Starter', price: '$297', period: '/mo', features: ['1 AI Employee', '500 conversations/mo', 'SMS + Voice'] },
+            { key: 'pro', name: 'Pro', price: '$397', period: '/mo', features: ['3 AI Employees', '2,000 conversations/mo', 'All channels'], popular: true },
+            { key: 'business', name: 'Business', price: '$597', period: '/mo', features: ['Unlimited AI Employees', 'Unlimited conversations', 'Priority support'] },
+          ].map(plan => {
+            const isCurrent = tenant.plan === plan.key
+            return (
+              <div key={plan.key} className="v2-grow" data-static style={isCurrent ? { ['--ghue' as string]: 'var(--v2-t4)' } : undefined}>
+                <span className="v2-gchip"><Zap /></span>
+                <span className="v2-glab">
+                  <span style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
+                    <b style={{ fontWeight: 550 }}>{plan.name}</b>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--v2-ink)', fontVariantNumeric: 'tabular-nums' }}>{plan.price}</span>
+                    <span className="v2-kick" style={{ marginBottom: 0 }}>{plan.period}</span>
+                    {isCurrent && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>Your plan</span>}
+                    {plan.popular && !isCurrent && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t1)' }}>Most popular</span>}
+                  </span>
+                  <span style={{ display: 'block', marginTop: 4, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>
+                    {plan.features.join(' · ')}
+                  </span>
+                </span>
+                {!isCurrent && (
+                  <span className="v2-gtrail">
+                    <button
+                      onClick={() => handleUpgrade(plan.key)}
+                      disabled={upgrading !== null}
+                      className="v2-act tap-target"
+                      data-solid
+                      style={{ ['--ghue' as string]: 'var(--v2-t4)' }}
+                    >
+                      {upgrading === plan.key ? 'Starting…' : 'Upgrade'}
+                    </button>
+                  </span>
+                )}
+              </div>
+            )
+          })}
 
           {tenant.plan !== 'trial' && (
-            <button onClick={openBillingPortal} className="w-full text-xs text-muted hover:text-subtle py-3.5 -my-2.5 flex items-center justify-center gap-1">
-              <CreditCard className="w-3.5 h-3.5" /> Manage billing & invoices
-            </button>
+            <div className="v2-bar" style={{ padding: '0 12px 12px' }}>
+              <button onClick={openBillingPortal} className="v2-act tap-target">
+                <CreditCard className="w-3.5 h-3.5" /> Manage billing &amp; invoices
+              </button>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
       )}
     </div>
   )

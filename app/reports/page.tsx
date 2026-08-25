@@ -1,19 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { redirect } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Download, Activity, Bot, TrendingUp, Calendar } from 'lucide-react'
+import { Activity, Bot, TrendingUp, Calendar } from 'lucide-react'
 import { ReportBuilder } from '@/components/reports/report-builder'
 import { REPORT_TEMPLATES } from '@/lib/reports/templates'
 
-// Names and descriptions come from lib/reports/templates.ts so /v2 lists the same four; the icon and
-// the tone stay here, because they are this screen's presentation and v2 draws its own.
-const TEMPLATE_STYLE: Record<string, { icon: typeof Activity; tone: string }> = {
-  platform_usage: { icon: Activity, tone: 'bg-blue-500' },
-  ai_productivity: { icon: Bot, tone: 'bg-violet-500' },
-  lead_generation: { icon: TrendingUp, tone: 'bg-emerald-500' },
-  appointment_report: { icon: Calendar, tone: 'bg-orange-500' },
+// The icon stays here because it is this screen's presentation; the id, name and description are the
+// report and live in lib/reports/templates so /v2 lists the same four. The `tone` that used to sit
+// beside each icon — four brand backgrounds for four filled tiles — went with the migration: one hue
+// per section, and the drawing tells them apart.
+const TEMPLATE_ICON: Record<string, typeof Activity> = {
+  platform_usage: Activity,
+  ai_productivity: Bot,
+  lead_generation: TrendingUp,
+  appointment_report: Calendar,
 }
 
 export default async function ReportsPage() {
@@ -25,46 +25,36 @@ export default async function ReportsPage() {
   // re-resolves + reads server-side; this just gates access and provides the id for the client prop.
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/auth/signup')
-  const tenant = { id: tenantId }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Reports</h1>
-        <p className="text-sm text-muted mt-1">Build and export custom reports</p>
+    <div className="v2 v2-embedded p-4 sm:p-6 max-w-3xl max-md:pb-16">
+      {/* No page title: the rail says Reports. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Ready to run · {REPORT_TEMPLATES.length}</p>
+        <s />
       </div>
 
-      {/* Templates */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sx-stagger">
-        {REPORT_TEMPLATES.map(template => {
-          const Icon = TEMPLATE_STYLE[template.id].icon
+      {/* THE FOUR TEMPLATES, AND NO BUTTONS ON THEM. Each card carried "View Report" and a download
+          icon; neither had a handler, so all eight controls did nothing. Rendering them as .v2-act
+          would have made eight dead verbs look like live ones — the behaviour is identical either
+          way, and this way the page stops promising what it never delivered. The one control that
+          does work is the exporter below, which is real and unchanged. Recorded as §37. */}
+      <div className="v2-list" style={{ marginBottom: 34 }}>
+        {REPORT_TEMPLATES.map((t) => {
+          const Icon = TEMPLATE_ICON[t.id] ?? Activity
           return (
-          <Card key={template.id} className="hover:shadow-e2 hover:-translate-y-0.5 transition-all">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <div className={`w-9 h-9 rounded-xl ${TEMPLATE_STYLE[template.id].tone} flex items-center justify-center text-white shadow-e1 flex-shrink-0`}>
-                  <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-medium text-ink text-sm">{template.name}</h3>
-                  <p className="text-xs text-muted mt-0.5">{template.description}</p>
-                </div>
+            <div key={t.id} className="v2-row" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>
+              <span className="v2-chip-sq" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><Icon /></span>
+              <div className="v2-m">
+                <p><span className="truncate">{t.name}</span></p>
+                <span>{t.description}</span>
               </div>
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" size="sm" className="flex-1">
-                  View Report
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Download className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
           )
         })}
       </div>
 
-      <ReportBuilder tenantId={tenant.id} />
+      <ReportBuilder tenantId={tenantId} />
     </div>
   )
 }

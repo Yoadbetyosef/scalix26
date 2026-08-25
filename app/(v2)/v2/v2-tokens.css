@@ -4509,3 +4509,134 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-clegend span { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--v2-ink-72); }
 .v2 .v2-clegend i { flex: none; width: 7px; height: 7px; border-radius: 2px; background: var(--ghue, var(--v2-t1)); }
 .v2 .v2-clegend em { font-style: normal; font-family: var(--v2-mono); font-size: 11px; color: var(--v2-ink-45); font-variant-numeric: tabular-nums; }
+
+/* ── REORDER ARROWS ──────────────────────────────────────────────────────────────────────────────
+   Order is meaning in a dropdown list, so the two arrows stay. Stacked at the row's head, where a
+   drag handle would be, and quiet until the row is under the pointer — a list of twelve options
+   should not read as twenty-four buttons. */
+.v2 .v2-ooarrows { display: flex; flex-direction: column; flex: none; }
+.v2 .v2-ooarrows button {
+  display: grid; place-items: center; width: 20px; height: 15px;
+  background: none; border: 0; cursor: pointer; color: var(--v2-ink-45);
+  opacity: 0.45; transition: opacity 0.14s, color 0.14s;
+}
+.v2 .v2-row:hover .v2-ooarrows button { opacity: 1; }
+.v2 .v2-ooarrows button:hover:not(:disabled) { color: var(--v2-ink); }
+.v2 .v2-ooarrows button:disabled { opacity: 0.18; cursor: default; }
+.v2 .v2-ooarrows svg { width: 12px; height: 12px; }
+
+/* ── THE FACE ON A CALL ──────────────────────────────────────────────────────────────────────────
+   /test-ai simulates a call, so it shows the employee at portrait size. The dome is the same one
+   every other surface shows; what this screen adds is the state ring — speaking in the accent,
+   listening in the live green — drawn AROUND the face rather than by recolouring it. v1 swapped the
+   disc's fill between three colours, which meant the employee itself changed colour depending on
+   whose turn it was to talk. */
+.v2 .v2-tface { position: relative; display: block; width: max-content; }
+.v2 .v2-tface::before {
+  content: ''; position: absolute; inset: -7px; border-radius: 50%;
+  border: 2px solid transparent; transition: border-color 0.2s;
+}
+.v2 .v2-tface[data-state="speaking"]::before { border-color: var(--v2-t1); }
+.v2 .v2-tface[data-state="listening"]::before { border-color: var(--v2-live); }
+.v2 .v2-tface[data-state]::after {
+  content: ''; position: absolute; inset: -7px; border-radius: 50%;
+  border: 2px solid currentColor; opacity: 0.28; animation: v2-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.v2 .v2-tface[data-state="speaking"] { color: var(--v2-t1); }
+.v2 .v2-tface[data-state="listening"] { color: var(--v2-live); }
+@keyframes v2-ping { 75%, 100% { transform: scale(1.22); opacity: 0; } }
+
+/* Three dots while the employee is composing a reply, inside its own bubble. */
+.v2 .v2-typing { display: inline-flex; align-items: center; gap: 4px; height: 8px; }
+.v2 .v2-typing i {
+  width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.55;
+  animation: v2-typing 1.1s ease-in-out infinite;
+}
+.v2 .v2-typing i:nth-child(2) { animation-delay: 0.15s; }
+.v2 .v2-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes v2-typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+/* ── A PICTURE TILE ──────────────────────────────────────────────────────────────────────────────
+   The studio's list is the one place in the product where the photograph IS the row: a maker
+   recognises a piece by looking at it, not by reading its name. So it keeps a grid of squares —
+   but as the card this language already has, with the media block's frame on top of it rather than
+   a grey box with rounded corners and a hover shadow.
+   NOT .v2-tile: that name belongs to /v2's figure tile on the home screen. */
+.v2 .v2-tiles2 { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.v2 .v2-tile2 {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: var(--v2-radius-card);
+  transition: border-color 0.14s;
+}
+.v2 .v2-tile2:hover { border-color: var(--v2-violet-edge); }
+.v2 .v2-tile2-img { display: block; aspect-ratio: 1; background: var(--v2-hover-soft); }
+.v2 .v2-tile2-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.v2 .v2-tile2-img i { display: grid; place-items: center; width: 100%; height: 100%; }
+.v2 .v2-tile2-img svg { width: 22px; height: 22px; stroke: var(--v2-ink-45); stroke-width: 1.5; fill: none; }
+.v2 .v2-tile2-body { display: block; padding: 11px 13px 13px; min-width: 0; }
+.v2 .v2-tile2-body b {
+  display: block; font-size: 14px; font-weight: 550; color: var(--v2-ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.v2 .v2-tile2-body > span { display: block; margin-top: 3px; font-size: 12.5px; color: var(--v2-ink-45); }
+.v2 .v2-tile2-body > .v2-stat { display: inline-flex; }
+
+/* ── COLOUR SWATCHES ─────────────────────────────────────────────────────────────────────────────
+   Picking the colour a printed document is signed in. The selected one is ringed rather than
+   outlined, because the swatch IS the colour and a border would sit between you and it. */
+.v2 .v2-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.v2 .v2-swatches > button {
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--v2-line-strong); padding: 0;
+  transition: box-shadow 0.14s;
+}
+.v2 .v2-swatches > button[data-on] { border-color: transparent; box-shadow: 0 0 0 2px var(--v2-paper), 0 0 0 4px var(--v2-ink); }
+.v2 .v2-swatch-custom {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-family: var(--v2-mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--v2-ink-45);
+}
+.v2 .v2-color, .v2 .v2-swatch-custom input[type="color"] {
+  width: 30px; height: 30px; padding: 0; cursor: pointer; background: transparent;
+  border: 1px solid var(--v2-line-strong); border-radius: 50%;
+}
+.v2 input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.v2 input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 50%; }
+
+/* ── LETTERHEAD PICKER ───────────────────────────────────────────────────────────────────────────
+   Two designs, told apart by a two-line sketch of the actual page rather than by their names — she
+   knows them by looking. The card is the language's own tile; only the sketch is bespoke, because
+   nothing else in the product draws a piece of paper. */
+.v2 .v2-lhpick { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.v2 .v2-lhpick > button {
+  text-align: left; padding: 10px; cursor: pointer;
+  background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: 12px;
+  transition: border-color 0.14s, background 0.14s;
+}
+.v2 .v2-lhpick > button:hover { border-color: var(--v2-violet-edge); }
+.v2 .v2-lhpick > button[data-on] { border-color: var(--v2-ink); background: var(--v2-hover-soft); }
+.v2 .v2-lhsketch {
+  display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+  height: 38px; margin-bottom: 9px; background: #fff;
+  border: 1px solid var(--v2-line); border-radius: 5px;
+}
+.v2 .v2-lhsketch > span { display: block; width: 100%; height: 10px; }
+.v2 .v2-lhpick b { display: block; font-size: 14px; font-weight: 550; color: var(--v2-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v2 .v2-lhpick em { display: block; margin-top: 2px; font-style: normal; font-size: 11.5px; line-height: 1.3; color: var(--v2-ink-45); }
+
+/* The figure in the middle of a ring. Absolutely placed rather than drawn as an SVG <text>, so it
+   takes the same face, the same tabular figures and the same ink as every other number on the page.
+   pointer-events: none so it never intercepts a slice's hover. */
+.v2 .v2-ring { position: relative; }
+.v2 .v2-ring-mid {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 2px; pointer-events: none;
+}
+.v2 .v2-ring-mid b {
+  font-size: 26px; font-weight: 500; letter-spacing: -0.02em; line-height: 1;
+  color: var(--v2-ink); font-variant-numeric: tabular-nums;
+}
+.v2 .v2-ring-mid em {
+  font-style: normal; font-family: var(--v2-mono); font-size: 9px;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--v2-ink-45);
+}

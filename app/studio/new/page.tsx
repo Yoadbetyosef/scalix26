@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
 import { ProductForm } from '@/components/studio/product-form'
 
 export default function NewStudioProductPage() {
@@ -13,9 +14,12 @@ export default function NewStudioProductPage() {
     router.push(`/studio/${d.product.id}`)
   }
   return (
-    <div className="mx-auto max-w-2xl p-4 sm:p-6">
-      <Link href="/studio" className="text-sm text-subtle hover:text-ink">← Catalog</Link>
-      <h1 className="mb-4 mt-2 text-2xl font-bold text-ink">Add product</h1>
+    <div className="v2 v2-embedded mx-auto max-w-2xl p-4 sm:p-6">
+      <div className="v2-head">
+        <Link href="/studio" className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Studio</Link>
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><i />New product</p>
+        <s />
+      </div>
       <ProductForm onSubmit={create} submitLabel="Create product" />
     </div>
   )

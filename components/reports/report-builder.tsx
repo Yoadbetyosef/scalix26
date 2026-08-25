@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -38,35 +36,30 @@ export function ReportBuilder({ tenantId }: Props) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2.5">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-indigo-500 text-white shadow-e1"><Download className="h-[18px] w-[18px]" strokeWidth={2} /></span>
-          Custom Report Builder
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-ink">Date Range</label>
-          <select
-            className="h-11 rounded-xl border border-hairline-strong bg-white px-3.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
-            value={dateRange}
-            onChange={e => setDateRange(e.target.value)}
-          >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-            <option value="365">Last year</option>
-          </select>
+    <section>
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Export</p><s />
+      </div>
+      <p className="v2-hint" style={{ maxWidth: '58ch', marginBottom: 20 }}>
+        Every conversation in the window, as a spreadsheet — one row each, with its channel, its
+        status and how long it took.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+        <div className="v2-fld" style={{ width: 190 }}>
+          <label htmlFor="rb-range">Date range</label>
+          <span className="v2-sel">
+            <select id="rb-range" value={dateRange} onChange={e => setDateRange(e.target.value)}>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last year</option>
+            </select>
+          </span>
         </div>
-
-        <div className="flex gap-2">
-          <Button onClick={exportCSV} loading={loading} variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        <button onClick={exportCSV} disabled={loading} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t4)', marginBottom: 4 }}>
+          <Download className="w-3.5 h-3.5" /> {loading ? 'Exporting…' : 'Export CSV'}
+        </button>
+      </div>
+    </section>
   )
 }

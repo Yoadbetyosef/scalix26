@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { ChevronLeft } from 'lucide-react'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { OrderOptionsManager } from '@/components/settings/order-options-manager'
 
@@ -12,11 +13,13 @@ export default async function OrderOptionsPage() {
   if (!a) notFound()
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-4"><Link href="/settings" className="text-sm text-gray-500 hover:underline">← Settings</Link></div>
-      <h1 className="text-2xl font-semibold text-gray-900">Order dropdowns</h1>
-      <p className="mt-1 text-sm text-gray-500">Stone quality, shapes, metals — the choices you pick from when writing an order.</p>
-      <div className="mt-6"><OrderOptionsManager /></div>
+    <div className="v2 v2-embedded mx-auto max-w-5xl p-4 sm:p-6 max-md:pb-16">
+      <div className="v2-head">
+        <Link href="/settings" className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Settings</Link>
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Order dropdowns</p>
+        <s />
+      </div>
+      <OrderOptionsManager />
     </div>
   )
 }

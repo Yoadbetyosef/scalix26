@@ -1,21 +1,12 @@
 'use client'
 
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, BarChart, Bar
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { TrendingUp, CheckCircle2, BarChart3 } from 'lucide-react'
 import { format, subDays } from 'date-fns'
-
-// Apple-style colored section tile for chart headers.
-function ChartIcon({ icon: Icon, tone }: { icon: typeof TrendingUp; tone: string }) {
-  return (
-    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-[10px] ${tone} text-white shadow-e1`}>
-      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-    </span>
-  )
-}
+import { ChartTip, ChartGradient } from '@/components/v2/chart-tip'
+import { channelHue, channelKey, CHANNEL_LABEL } from '@/app/(v2)/v2/channels'
 
 interface Conversation {
   channel: string
@@ -24,14 +15,14 @@ interface Conversation {
   duration_seconds: number | null
 }
 
-// Canonical channel colors — consistent with the channel tiles across the app.
-const CHANNEL_COLORS: Record<string, string> = {
-  voice: '#06b6d4',     // cyan
-  sms: '#10b981',       // emerald
-  email: '#8b5cf6',     // violet
-  whatsapp: '#22c55e',  // green
-  facebook: '#2563eb',  // blue
-  instagram: '#ec4899', // pink
+// THREE STATES, AND THE AI'S SHARE IS THE ONE THAT MATTERS. v1 coloured them emerald / blue / red,
+// which reads as good / neutral / bad — but a closed conversation is not a failure, it is a finished
+// one. Resolved takes the accent because it is the number the screen exists to report; the other two
+// are shades of the same neutral, told apart by position and by the legend beside them.
+const STATUS_HUE: Record<string, string> = {
+  'AI resolved': 'var(--v2-t1)',
+  Open: 'var(--v2-t4)',
+  Closed: 'var(--v2-mute)',
 }
 
 export function AnalyticsCharts({ conversations }: { tenantId: string; conversations: Conversation[] }) {
@@ -42,13 +33,18 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
     const count = conversations.filter(c => c.created_at.startsWith(dateStr)).length
     return { date: format(date, 'MMM d'), count }
   })
+  const anyInWindow = last14Days.some((d) => d.count > 0)
 
-  // Channel distribution
+  // Channel distribution. Keyed through channelKey so the labels and the hues are the same ones the
+  // chips carry everywhere else, rather than a second spelling of "whatsapp" that colours differently.
   const channelCounts = conversations.reduce<Record<string, number>>((acc, c) => {
-    acc[c.channel] = (acc[c.channel] || 0) + 1
+    const k = channelKey(c.channel)
+    if (k) acc[k] = (acc[k] || 0) + 1
     return acc
   }, {})
-  const channelData = Object.entries(channelCounts).map(([channel, count]) => ({ channel, count }))
+  const channelData = Object.entries(channelCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([key, count]) => ({ key, channel: CHANNEL_LABEL[key as keyof typeof CHANNEL_LABEL] ?? key, count }))
 
   // Status distribution
   const statusCounts = conversations.reduce<Record<string, number>>((acc, c) => {
@@ -56,79 +52,104 @@ export function AnalyticsCharts({ conversations }: { tenantId: string; conversat
     return acc
   }, {})
   const statusData = [
-    { name: 'AI Resolved', value: statusCounts['resolved'] || 0, color: '#10b981' },
-    { name: 'Open', value: statusCounts['open'] || 0, color: '#3b82f6' },
-    { name: 'Closed', value: statusCounts['closed'] || 0, color: '#ef4444' },
-  ]
+    { name: 'AI resolved', value: statusCounts['resolved'] || 0 },
+    { name: 'Open', value: statusCounts['open'] || 0 },
+    { name: 'Closed', value: statusCounts['closed'] || 0 },
+  ].filter((s) => s.value > 0)
+  const statusTotal = statusData.reduce((n, s) => n + s.value, 0)
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <Card className="lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5"><ChartIcon icon={TrendingUp} tone="bg-blue-500" /> Conversations Over Time</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={last14Days}>
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="count"
-                stroke="#5B6CF0"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5"><ChartIcon icon={CheckCircle2} tone="bg-emerald-500" /> Resolution Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {conversations.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-muted text-sm">No data yet</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={statusData} cx="50%" cy="50%" outerRadius={70} dataKey="value">
-                  {statusData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
+    <div style={{ display: 'grid', gap: 34, marginTop: 34 }}>
+      <section>
+        <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Conversations, day by day</p><s /></div>
+        {/* A FORTNIGHT OF ZEROES IS NOT A CHART. v1 drew a flat line along the floor, which looks
+            like a measurement and is the absence of one. */}
+        {!anyInWindow ? (
+          <div className="v2-card" data-empty>
+            <b>Nothing in the last fortnight</b>
+            <span>The moment someone calls, texts, emails or messages your business, the day it happened appears here.</span>
+          </div>
+        ) : (
+          <div className="v2-chart">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={last14Days} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
+                <ChartGradient id="an-line" />
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="date" interval="preserveStartEnd" />
+                <YAxis width={40} allowDecimals={false} />
+                <Tooltip content={<ChartTip />} />
+                <Line type="monotone" dataKey="count" stroke="url(#an-line)" strokeWidth={2} dot={false}
+                      activeDot={{ r: 3, strokeWidth: 0, fill: 'var(--v2-t3)' }} />
+              </LineChart>
             </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5"><ChartIcon icon={BarChart3} tone="bg-violet-500" /> Channel Distribution</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div style={{ display: 'grid', gap: 34, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+        <section>
+          <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />How they ended</p><s /></div>
+          {statusData.length === 0 ? (
+            <div className="v2-card" data-empty>
+              <b>Nothing to break down</b>
+              <span>Once conversations start arriving, this shows how many the AI settled on its own.</span>
+            </div>
+          ) : (
+            <>
+              {/* A RING RATHER THAN A DISC, and the hole carries the total — a solid pie spends its
+                  centre on nothing, and the one number a reader wants beside the proportions is what
+                  they are proportions OF. */}
+              <div className="v2-chart v2-ring">
+                <ResponsiveContainer width="100%" height={190}>
+                  <PieChart>
+                    <Pie data={statusData} cx="50%" cy="50%" innerRadius={54} outerRadius={78} paddingAngle={2} dataKey="value" stroke="none">
+                      {statusData.map((e) => <Cell key={e.name} fill={STATUS_HUE[e.name]} />)}
+                    </Pie>
+                    <Tooltip content={<ChartTip labelFrom={(x) => x.name} />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <span className="v2-ring-mid" aria-hidden>
+                  <b>{statusTotal.toLocaleString()}</b>
+                  <em>total</em>
+                </span>
+              </div>
+              {/* The pie is the one shape whose axis cannot name its parts, so it is the one that
+                  gets a legend. */}
+              <div className="v2-clegend">
+                {statusData.map((e) => (
+                  <span key={e.name} style={{ ['--ghue' as string]: STATUS_HUE[e.name] }}>
+                    <i />{e.name}<em>{statusTotal > 0 ? `${Math.round((e.value / statusTotal) * 100)}%` : '—'}</em>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        <section>
+          <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Where it came from</p><s /></div>
           {channelData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-muted text-sm">No data yet</div>
+            <div className="v2-card" data-empty>
+              <b>No channel has spoken yet</b>
+              <span>Each channel you connect appears here as soon as it carries its first conversation.</span>
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={channelData} barSize={28}>
-                <XAxis dataKey="channel" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {channelData.map((entry) => (
-                    <Cell key={entry.channel} fill={CHANNEL_COLORS[entry.channel] || '#5B6CF0'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="v2-chart">
+              <ResponsiveContainer width="100%" height={190}>
+                <BarChart data={channelData} barSize={26} margin={{ top: 4, right: 4, bottom: 0, left: -18 }}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis dataKey="channel" />
+                  <YAxis width={40} allowDecimals={false} />
+                  <Tooltip content={<ChartTip />} cursor={{ fill: 'var(--v2-hover)' }} />
+                  <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                    {channelData.map((e) => <Cell key={e.key} fill={channelHue(e.key)} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </section>
+      </div>
     </div>
   )
 }

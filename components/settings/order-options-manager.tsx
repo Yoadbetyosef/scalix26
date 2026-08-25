@@ -39,23 +39,27 @@ export function OrderOptionsManager() {
     return () => { alive = false }
   }, [])
 
-  if (loading) return <div className="flex items-center gap-2 p-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-  if (err) return <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>
+  if (loading) return <p className="v2-kick"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading…</p>
+  if (err) return (
+    <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)' }}>
+      <span className="v2-chip-sq"><X /></span><p>{err}</p>
+    </div>
+  )
 
   // No lists at all — offer a starter set for the trade, or a blank list to build from scratch. This is
   // the only path that ever creates lists, so nothing is assumed about what business this is.
   if (!lists.length) return <EmptyState onChanged={load} />
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-600">
+    <div>
+      <p className="v2-hint" style={{ maxWidth: '64ch', marginBottom: 26 }}>
         These are the choices that appear in the dropdowns when you build an order. Change them whenever you like —
         past orders keep whatever was chosen at the time, so nothing you do here can alter an order already placed.
       </p>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div style={{ display: 'grid', gap: 30, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
         {lists.map((list) => <ListCard key={`${list.id}-${version}`} list={list} onChanged={load} />)}
       </div>
-      <NewListButton onChanged={load} />
+      <div style={{ marginTop: 26 }}><NewListButton onChanged={load} /></div>
     </div>
   )
 }
@@ -89,27 +93,31 @@ function EmptyState({ onChanged }: { onChanged: () => void }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-6">
-        <h3 className="text-sm font-semibold text-gray-900">No dropdowns yet</h3>
-        <p className="mt-1 text-sm text-gray-600">
+    <div>
+      <div className="v2-card" data-empty style={{ marginBottom: 26 }}>
+        <b>No dropdowns yet</b>
+        <span>
           Start from a set built for your trade, or make your own list from scratch. Either way everything stays
           yours to rename, reorder and delete afterwards.
-        </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        </span>
+      </div>
+
+      {templates.length > 0 && (
+        <div className="v2-list" style={{ marginBottom: 20 }}>
           {templates.map((t) => (
-            <div key={t.id} className="rounded-lg border border-gray-200 bg-white p-3">
-              <p className="text-sm font-semibold text-gray-900">{t.name}</p>
-              <p className="mt-0.5 text-xs text-gray-500">{t.description}</p>
-              <p className="mt-2 text-xs text-gray-400">{t.lists.map((l) => `${l.label} (${l.count})`).join(' · ')}</p>
-              <button onClick={() => apply(t.id)} disabled={!!busy} className="mt-3 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
+            <div key={t.id} className="v2-row" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>
+              <div className="v2-m">
+                <p><span className="truncate">{t.name}</span></p>
+                <span>{t.description} · {t.lists.map((l) => `${l.label} (${l.count})`).join(' · ')}</span>
+              </div>
+              <button onClick={() => apply(t.id)} disabled={!!busy} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
                 {busy === t.id ? 'Setting up…' : `Use ${t.name}`}
               </button>
             </div>
           ))}
         </div>
-        {err && <p className="mt-3 text-xs text-red-600">{err}</p>}
-      </div>
+      )}
+      {err && <p className="v2-kick" style={{ color: 'var(--v2-red-ink)', marginBottom: 14 }}>{err}</p>}
       <NewListButton onChanged={onChanged} />
     </div>
   )
@@ -134,26 +142,25 @@ function NewListButton({ onChanged }: { onChanged: () => void }) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-        <Plus className="h-3.5 w-3.5" /> New dropdown list
+      <button onClick={() => setOpen(true)} className="v2-act tap-target">
+        <Plus className="w-3.5 h-3.5" /> New dropdown list
       </button>
     )
   }
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <label className="block text-xs text-gray-500">
-        What is this list called?
+    <div style={{ maxWidth: 420 }}>
+      <div className="v2-fld">
+        <label htmlFor="ool-new">What is this list called?</label>
         <input
-          value={label} onChange={(e) => setLabel(e.target.value)} autoFocus
+          id="ool-new" value={label} onChange={(e) => setLabel(e.target.value)} autoFocus
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); create() } if (e.key === 'Escape') setOpen(false) }}
           placeholder="e.g. Lock type, Wood species, Fabric grade"
-          className="mt-0.5 w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
         />
-      </label>
-      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-      <div className="mt-2 flex gap-2">
-        <button onClick={create} disabled={busy || !label.trim()} className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">{busy ? 'Creating…' : 'Create'}</button>
-        <button onClick={() => { setOpen(false); setErr(null) }} disabled={busy} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm">Cancel</button>
+      </div>
+      {err && <p className="v2-kick" style={{ color: 'var(--v2-red-ink)', marginTop: 10 }}>{err}</p>}
+      <div className="v2-bar" style={{ marginTop: 16 }}>
+        <button onClick={create} disabled={busy || !label.trim()} className="v2-act tap-target" data-solid>{busy ? 'Creating…' : 'Create'}</button>
+        <button onClick={() => { setOpen(false); setErr(null) }} disabled={busy} className="v2-act tap-target">Cancel</button>
       </div>
     </div>
   )
@@ -196,36 +203,41 @@ function ListCard({ list, onChanged }: { list: OrderOptionList; onChanged: () =>
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
+    <section>
+      {/* A LIST IS A SECTION, not a boxed card in a grid of boxed cards. The header carries the name,
+          how many are in use, and the two things you can do to the list itself. */}
+      <div className="v2-head">
         {renaming ? (
           <input
             value={listLabel} onChange={(e) => setListLabel(e.target.value)} autoFocus
+            aria-label="List name"
             onKeyDown={(e) => {
               if (e.key === 'Enter') { setRenaming(false); if (listLabel.trim() && listLabel !== list.label) call(() => fetch(`/api/orders/options/lists/${list.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: listLabel }) })) }
               if (e.key === 'Escape') { setListLabel(list.label); setRenaming(false) }
             }}
             onBlur={() => { setRenaming(false); setListLabel(list.label) }}
-            className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm font-semibold"
+            className="v2-finput"
+            style={{ flex: 1, minWidth: 0, minHeight: 32 }}
           />
         ) : (
-          <h3 className="flex-1 text-sm font-semibold text-gray-900">{list.label}</h3>
+          <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />{list.label}</p>
         )}
-        <span className="flex shrink-0 items-center gap-2">
-          <span className="text-xs text-gray-400">{options.filter((o) => o.active).length} in use</span>
-          <button onClick={() => setRenaming(true)} disabled={busy} className="text-gray-300 hover:text-gray-700" title="Rename this list"><Pencil className="h-3.5 w-3.5" /></button>
-          {confirmDeleteList ? (
-            <span className="flex items-center gap-1">
-              <button onClick={() => call(() => fetch(`/api/orders/options/lists/${list.id}`, { method: 'DELETE' }))} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white">Delete list</button>
-              <button onClick={() => setConfirmDeleteList(false)} className="text-[10px] text-gray-500">Cancel</button>
-            </span>
-          ) : (
-            <button onClick={() => setConfirmDeleteList(true)} disabled={busy} className="text-gray-300 hover:text-red-600" title="Delete this whole list"><Trash2 className="h-3.5 w-3.5" /></button>
-          )}
-        </span>
+        <s />
+        <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>{options.filter((o) => o.active).length} in use</span>
+        <button onClick={() => setRenaming(true)} disabled={busy} className="v2-ico" title="Rename this list" aria-label={`Rename ${list.label}`}><Pencil /></button>
+        {/* The inline two-step, kept: it deletes one dropdown list and no order that ever used it,
+            which is not the weight the modal is for. */}
+        {confirmDeleteList ? (
+          <span className="flex items-center gap-1.5 flex-none">
+            <button onClick={() => call(() => fetch(`/api/orders/options/lists/${list.id}`, { method: 'DELETE' }))} className="v2-act" data-solid data-danger>Delete list</button>
+            <button onClick={() => setConfirmDeleteList(false)} className="v2-act">Cancel</button>
+          </span>
+        ) : (
+          <button onClick={() => setConfirmDeleteList(true)} disabled={busy} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} title="Delete this whole list" aria-label={`Delete the ${list.label} list`}><Trash2 /></button>
+        )}
       </div>
 
-      <ul className="divide-y divide-gray-100">
+      <ul className="v2-list">
         {options.map((o, i) => (
           <OptionRow
             key={o.id} option={o} busy={busy}
@@ -236,22 +248,25 @@ function ListCard({ list, onChanged }: { list: OrderOptionList; onChanged: () =>
             onDelete={() => call(() => fetch(`/api/orders/options/${o.id}`, { method: 'DELETE' }))}
           />
         ))}
-        {!options.length && <li className="py-3 text-sm text-gray-400">Nothing here yet — add your first option below.</li>}
+        {!options.length && <li className="v2-row"><div className="v2-m"><p style={{ color: 'var(--v2-ink-45)' }}>Nothing here yet — add your first option below.</p></div></li>}
       </ul>
 
-      <div className="mt-3 flex gap-2">
-        <input
-          value={adding} onChange={(e) => setAdding(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-          placeholder="Add an option…"
-          className="flex-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm"
-        />
-        <button onClick={add} disabled={busy || !adding.trim()} className="inline-flex items-center gap-1 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-40">
-          <Plus className="h-3.5 w-3.5" /> Add
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 16 }}>
+        <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+          <label htmlFor={`ool-add-${list.id}`}>Add an option</label>
+          <input
+            id={`ool-add-${list.id}`}
+            value={adding} onChange={(e) => setAdding(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+            placeholder="e.g. Brushed brass"
+          />
+        </div>
+        <button onClick={add} disabled={busy || !adding.trim()} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)', marginBottom: 4 }}>
+          <Plus className="w-3.5 h-3.5" /> Add
         </button>
       </div>
-      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
-    </div>
+      {err && <p className="v2-kick" style={{ color: 'var(--v2-red-ink)', marginTop: 10 }}>{err}</p>}
+    </section>
   )
 }
 
@@ -275,36 +290,41 @@ function OptionRow({ option, busy, canMoveUp, canMoveDown, onMove, onRename, onT
   }
 
   return (
-    <li className="flex items-center gap-1.5 py-1.5">
-      <div className="flex flex-col">
-        <button onClick={() => onMove(-1)} disabled={!canMoveUp || busy} className="text-gray-300 hover:text-gray-700 disabled:opacity-30" title="Move up"><ArrowUp className="h-3 w-3" /></button>
-        <button onClick={() => onMove(1)} disabled={!canMoveDown || busy} className="text-gray-300 hover:text-gray-700 disabled:opacity-30" title="Move down"><ArrowDown className="h-3 w-3" /></button>
-      </div>
+    <li className="v2-row" style={{ ['--chan' as string]: option.active ? 'var(--v2-t3)' : 'var(--v2-mute)' }}>
+      {/* Order matters in a dropdown, so the two arrows stay — stacked, at the row's head, where a
+          drag handle would be. */}
+      <span className="v2-ooarrows">
+        <button onClick={() => onMove(-1)} disabled={!canMoveUp || busy} title="Move up" aria-label="Move up"><ArrowUp /></button>
+        <button onClick={() => onMove(1)} disabled={!canMoveDown || busy} title="Move down" aria-label="Move down"><ArrowDown /></button>
+      </span>
 
       {editing ? (
         <>
           <input
             value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus
+            aria-label="Option name"
             onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(option.label); setEditing(false) } }}
-            className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+            className="v2-finput" style={{ flex: 1, minWidth: 0, minHeight: 32 }}
           />
-          <button onClick={commit} className="text-emerald-600 hover:text-emerald-800" title="Save"><Check className="h-3.5 w-3.5" /></button>
-          <button onClick={() => { setDraft(option.label); setEditing(false) }} className="text-gray-400 hover:text-gray-700" title="Cancel"><X className="h-3.5 w-3.5" /></button>
+          <button onClick={commit} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-t3)' }} title="Save" aria-label="Save"><Check /></button>
+          <button onClick={() => { setDraft(option.label); setEditing(false) }} className="v2-ico" title="Cancel" aria-label="Cancel"><X /></button>
         </>
       ) : (
         <>
-          <span className={`flex-1 text-sm ${option.active ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{option.label}</span>
-          <button onClick={() => setEditing(true)} disabled={busy} className="text-gray-300 hover:text-gray-700" title="Rename"><Pencil className="h-3.5 w-3.5" /></button>
-          <button onClick={onToggle} disabled={busy} className="text-gray-300 hover:text-gray-700" title={option.active ? 'Hide from new orders' : 'Show again'}>
-            {option.active ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          <div className="v2-m">
+            <p><span className="truncate" style={option.active ? undefined : { textDecoration: 'line-through', color: 'var(--v2-mute)' }}>{option.label}</span></p>
+          </div>
+          <button onClick={() => setEditing(true)} disabled={busy} className="v2-ico" title="Rename" aria-label={`Rename ${option.label}`}><Pencil /></button>
+          <button onClick={onToggle} disabled={busy} className="v2-ico" title={option.active ? 'Hide from new orders' : 'Show again'} aria-label={option.active ? `Hide ${option.label} from new orders` : `Show ${option.label} again`}>
+            {option.active ? <Eye /> : <EyeOff />}
           </button>
           {confirmDelete ? (
-            <span className="flex items-center gap-1">
-              <button onClick={onDelete} className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white">Delete</button>
-              <button onClick={() => setConfirmDelete(false)} className="text-[10px] text-gray-500">Cancel</button>
+            <span className="flex items-center gap-1.5 flex-none">
+              <button onClick={onDelete} className="v2-act" data-solid data-danger>Delete</button>
+              <button onClick={() => setConfirmDelete(false)} className="v2-act">Cancel</button>
             </span>
           ) : (
-            <button onClick={() => setConfirmDelete(true)} disabled={busy} className="text-gray-300 hover:text-red-600" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+            <button onClick={() => setConfirmDelete(true)} disabled={busy} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} title="Delete" aria-label={`Delete ${option.label}`}><Trash2 /></button>
           )}
         </>
       )}

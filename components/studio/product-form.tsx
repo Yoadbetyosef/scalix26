@@ -1,21 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
+import { ChevronRight, Plus, X } from 'lucide-react'
 import { STUDIO_PRODUCT_STATUSES, STUDIO_STATUS_LABELS, type StudioProduct } from '@/lib/studio/types'
 import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
 
 export type ProductInput = Partial<StudioProduct>
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, children, wide }: { label: string; hint?: string; children: ReactNode; wide?: boolean }) {
+  // Same shape as the catalogue's: .v2-fld needs the label and the control as SIBLINGS, and the id
+  // is cloned onto the child so the caption still points at the control it names.
+  const id = 'sp-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const child = isValidElement(children) ? cloneElement(children as ReactElement<{ id?: string }>, { id }) : children
   return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{label}</span>
-      {children}
-      {hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
-    </label>
+    <div className={wide ? 'v2-fld wide' : 'v2-fld'}>
+      <label htmlFor={id}>{label}</label>
+      {child}
+      {hint && <span className="v2-hint">{hint}</span>}
+    </div>
   )
 }
-const input = 'h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
 
 export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Partial<StudioProduct>; onSubmit: (p: Record<string, unknown>) => Promise<void>; submitLabel: string }) {
   const [f, setF] = useState<ProductInput>({
@@ -55,61 +59,83 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
   }
 
   return (
-    <form onSubmit={submit} className="space-y-5">
-      {err && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{err}</div>}
+    <form onSubmit={submit} style={{ display: 'grid', gap: 30 }}>
+      {err && (
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)' }}>
+          <span className="v2-chip-sq"><X /></span><p>{err}</p>
+        </div>
+      )}
 
       {/* The essentials — this is all most products need. */}
-      <section className="rounded-xl border border-hairline-strong bg-white p-4 space-y-3">
-        <Field label="Name"><input className={input} required value={f.name || ''} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Halden Lounge Chair" /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Collection" hint="Optional — groups products"><input className={input} value={f.category || ''} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Nordic 2026" /></Field>
-          <Field label="Base price"><input className={input} type="number" step="0.01" value={f.base_price ?? ''} onChange={(e) => set('base_price', e.target.value)} placeholder="0.00" /></Field>
+      <section>
+        <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><i />The essentials</p><s /></div>
+        <div className="v2-form">
+          <Field label="Name" wide><input required value={f.name || ''} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Halden Lounge Chair" /></Field>
+          <Field label="Collection" hint="Optional — groups products"><input value={f.category || ''} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Nordic 2026" /></Field>
+          <Field label="Base price"><input type="number" step="0.01" value={f.base_price ?? ''} onChange={(e) => set('base_price', e.target.value)} placeholder="0.00" /></Field>
+          <Field label="Details / spec" wide><textarea rows={3} value={f.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="Materials, dimensions, finish…" /></Field>
         </div>
-        <Field label="Details / spec"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={3} value={f.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="Materials, dimensions, finish…" /></Field>
       </section>
 
       {/* Fabric (default for the product; sub-products can override) */}
-      <section className="rounded-xl border border-hairline-strong bg-white p-4 space-y-3">
-        <h2 className="font-semibold text-ink">Fabric</h2>
+      <section>
+        <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Fabric</p><s /></div>
         <FabricPicker value={fabric} onChange={setFabric} />
       </section>
 
-      {/* Photos */}
-      <section className="rounded-xl border border-hairline-strong bg-white p-4 space-y-3">
-        <h2 className="font-semibold text-ink">Photos</h2>
+      {/* Photos. The frames are the media block's, so what you are adding looks like what the list
+          and the product page will show — and the first one is marked, because it is the cover. */}
+      <section>
+        <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Photos{photos.length ? ` · ${photos.length}` : ''}</p><s /></div>
         {photos.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="v2-shots" style={{ gap: 14, marginBottom: 20 }}>
             {photos.map((url, i) => (
-              <div key={i} className="relative">
+              <div key={i} className="v2-shot" style={{ ['--shot' as string]: '80px', position: 'relative' }}>
+                <b>{i === 0 ? 'Cover' : `Photo ${i + 1}`}</b>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="h-20 w-20 rounded-lg border border-hairline object-cover" />
-                <button type="button" onClick={() => removePhoto(i)} className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-xs text-white">×</button>
-                {i === 0 && <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">Cover</span>}
+                <img src={url} alt="" />
+                <button type="button" onClick={() => removePhoto(i)} aria-label={`Remove photo ${i + 1}`} className="v2-ico"
+                        style={{ ['--ghue' as string]: 'var(--v2-red)', position: 'absolute', right: -8, top: 14, background: 'var(--v2-paper)' }}><X /></button>
               </div>
             ))}
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <input className={input} value={photoDraft} onChange={(e) => setPhotoDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhoto() } }} placeholder="Paste an image URL and press +" />
-          <button type="button" onClick={addPhoto} className="h-11 flex-shrink-0 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-ink hover:bg-sunken">+ Add</button>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+          <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+            <label htmlFor="sp-photo">Add a photo</label>
+            <input id="sp-photo" value={photoDraft} onChange={(e) => setPhotoDraft(e.target.value)}
+                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhoto() } }}
+                   placeholder="Paste an image URL" />
+          </div>
+          <button type="button" onClick={addPhoto} disabled={!photoDraft.trim()} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t1)', marginBottom: 4 }}>
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
         </div>
       </section>
 
       {/* Optional — supplier (used later by "Send to production") + status + internal notes */}
-      <details className="rounded-xl border border-hairline-strong bg-white p-4">
-        <summary className="cursor-pointer font-semibold text-ink">More (supplier, status, notes)</summary>
-        <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Supplier name"><input className={input} value={f.supplier_name || ''} onChange={(e) => set('supplier_name', e.target.value)} /></Field>
-            <Field label="Supplier email"><input className={input} type="email" value={f.supplier_email || ''} onChange={(e) => set('supplier_email', e.target.value)} placeholder="factory@example.com" /></Field>
+      <details>
+        <summary>
+          <div className="v2-head" style={{ marginBottom: 0 }}>
+            <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />More — supplier, status, notes</p>
+            <s />
+            <ChevronRight className="v2-fold-mark" />
           </div>
-          <Field label="Status"><select className={input} value={f.status} onChange={(e) => set('status', e.target.value)}>{STUDIO_PRODUCT_STATUSES.map((s) => <option key={s} value={s}>{STUDIO_STATUS_LABELS[s]}</option>)}</select></Field>
-          <Field label="Internal notes (staff only)"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={f.internal_notes || ''} onChange={(e) => set('internal_notes', e.target.value)} /></Field>
+        </summary>
+        <div className="v2-form" style={{ marginTop: 22 }}>
+          <Field label="Supplier name"><input value={f.supplier_name || ''} onChange={(e) => set('supplier_name', e.target.value)} /></Field>
+          <Field label="Supplier email"><input type="email" value={f.supplier_email || ''} onChange={(e) => set('supplier_email', e.target.value)} placeholder="factory@example.com" /></Field>
+          <Field label="Status">
+            <span className="v2-sel">
+              <select value={f.status} onChange={(e) => set('status', e.target.value)}>{STUDIO_PRODUCT_STATUSES.map((st) => <option key={st} value={st}>{STUDIO_STATUS_LABELS[st]}</option>)}</select>
+            </span>
+          </Field>
+          <Field label="Internal notes — staff only" wide><textarea rows={2} value={f.internal_notes || ''} onChange={(e) => set('internal_notes', e.target.value)} /></Field>
         </div>
       </details>
 
-      <div className="sticky bottom-0 -mx-4 border-t border-hairline bg-white/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
-        <button type="submit" disabled={busy} className="h-12 w-full rounded-lg bg-ink text-sm font-semibold text-white disabled:opacity-50 sm:w-auto sm:px-6">{busy ? 'Saving…' : submitLabel}</button>
+      <div className="v2-savebar" data-pin>
+        <button type="submit" disabled={busy} className="v2-act tap-target" data-solid data-wide style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>{busy ? 'Saving…' : submitLabel}</button>
       </div>
     </form>
   )

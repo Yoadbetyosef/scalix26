@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Upload, FileText, AlertTriangle, ChevronRight, Ship } from 'lucide-react'
+import { Upload, AlertTriangle, ChevronRight, Ship } from 'lucide-react'
 import { readJson } from '@/lib/http/read-response'
 import { INVOICE_ACCEPT_ATTR, invoiceFileError, type DuplicateWarning, type Shipment, type SupplierInvoice } from '@/lib/invoices/types'
 
@@ -10,12 +10,15 @@ import { INVOICE_ACCEPT_ATTR, invoiceFileError, type DuplicateWarning, type Ship
 
 type Row = Shipment & { invoice: SupplierInvoice | null }
 
-const STATUS: Record<Shipment['status'], { label: string; tone: string }> = {
-  draft: { label: 'Draft', tone: 'bg-sunken text-subtle' },
-  extracting: { label: 'Reading…', tone: 'bg-violet-50 text-violet-700' },
-  review: { label: 'Needs review', tone: 'bg-amber-50 text-amber-700' },
-  applied: { label: 'Applied', tone: 'bg-emerald-50 text-emerald-700' },
-  failed: { label: 'Failed', tone: 'bg-red-50 text-red-700' },
+// Five states, and only two of them need a person: one that wants reviewing and one that failed.
+// A draft and an applied shipment are both finished business, so they are mute — the same rule the
+// catalogue's shelf states follow.
+const STATUS: Record<Shipment['status'], { label: string; hue: string }> = {
+  draft: { label: 'Draft', hue: 'var(--v2-mute)' },
+  extracting: { label: 'Reading…', hue: 'var(--v2-t3)' },
+  review: { label: 'Needs review', hue: 'var(--v2-amber)' },
+  applied: { label: 'Applied', hue: 'var(--v2-mute)' },
+  failed: { label: 'Failed', hue: 'var(--v2-red)' },
 }
 
 const money = (n: number, ccy: string) =>
@@ -71,86 +74,89 @@ export default function LandedCostPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink"><Ship className="h-6 w-6 text-accent" /> Shipments</h1>
-          <p className="mt-1 text-sm text-muted">
-            Upload a supplier invoice and its freight and duty are spread across the products it carried.
-          </p>
-        </div>
-        <div>
-          <input ref={fileRef} type="file" accept={INVOICE_ACCEPT_ATTR} className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }} />
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
-            className="flex h-10 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">
-            <Upload className="h-4 w-4" />
-            {busy ? 'Reading the invoice…' : 'Upload invoice'}
-          </button>
-        </div>
-      </header>
+    <div className="v2 v2-embedded mx-auto max-w-5xl p-4 sm:p-6 max-md:pb-16">
+      {/* No page title: the rail says Supplier bills. The micro-label carries the count. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+          <i />Shipments{rows.length ? ` · ${rows.length}` : ''}
+        </p>
+        <s />
+        <input ref={fileRef} type="file" accept={INVOICE_ACCEPT_ATTR} className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }} />
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+          className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+          <Upload className="w-3.5 h-3.5" /> {busy ? 'Reading the invoice…' : 'Upload invoice'}
+        </button>
+      </div>
+      <p className="v2-hint" style={{ maxWidth: '60ch', marginBottom: 22 }}>
+        Upload a supplier invoice and its freight and duty are spread across the products it carried.
+      </p>
 
-      {err && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+      {err && (
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-red)', marginBottom: 18 }}>
+          <span className="v2-chip-sq"><AlertTriangle /></span><p>{err}</p>
+        </div>
+      )}
 
+      {/* THE DUPLICATE WARNING. Shown, never used to block — re-uploading after a failed extraction
+          is legitimate, and the owner is the one who knows which of the two they meant. */}
       {dupe && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="flex items-center gap-2 text-sm font-medium text-amber-900">
-            <AlertTriangle className="h-4 w-4" />
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-amber)', alignItems: 'flex-start', marginBottom: 18 }}>
+          <span className="v2-chip-sq"><AlertTriangle /></span>
+          <p>
             {dupe.reason === 'same_file'
               ? 'You have uploaded this exact file before.'
               : `You already have invoice ${dupe.invoiceNumber} from ${dupe.supplierName}.`}
+            <span style={{ display: 'block', marginTop: 4, fontSize: 13, fontWeight: 400, color: 'var(--v2-ink-45)' }}>
+              {dupe.appliedAt
+                ? `That one was applied on ${new Date(dupe.appliedAt).toLocaleDateString()}. Applying this one as well would add its freight to the same products a second time.`
+                : 'That one has not been applied yet.'}
+            </span>
+            <span className="v2-bar" style={{ marginTop: 12 }}>
+              <Link href={`/landed-cost/${dupe.shipmentId}`} className="v2-act tap-target">See the earlier one</Link>
+              <button type="button" onClick={() => setDupe(null)} className="v2-act tap-target">Keep both</button>
+            </span>
           </p>
-          <p className="mt-1 text-sm text-amber-800">
-            {dupe.appliedAt
-              ? `That one was applied on ${new Date(dupe.appliedAt).toLocaleDateString()}. Applying this one as well would add its freight to the same products a second time.`
-              : 'That one has not been applied yet.'}
-          </p>
-          <div className="mt-2 flex gap-4 text-sm">
-            <Link href={`/landed-cost/${dupe.shipmentId}`} className="font-medium text-amber-900 underline">See the earlier one</Link>
-            <button type="button" onClick={() => setDupe(null)} className="font-medium text-amber-900 underline">
-              Keep both
-            </button>
-          </div>
         </div>
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Loading…</p>
+        <p className="v2-kick">Loading…</p>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-hairline-strong px-6 py-12 text-center">
-          <FileText className="mx-auto h-8 w-8 text-muted" />
-          <p className="mt-3 font-medium text-ink">No shipments yet</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted">
-            Upload a supplier invoice as a PDF or a photo. Nothing is written to your products until you have seen the result and approved it.
-          </p>
+        <div className="v2-card" data-empty>
+          <b>No shipments yet</b>
+          <span>
+            Upload a supplier invoice as a PDF or a photo. Nothing is written to your products until you
+            have seen the result and approved it.
+          </span>
         </div>
       ) : (
-        <ul className="divide-y divide-hairline rounded-xl border border-hairline-strong bg-white">
-          {rows.map((s) => {
-            const status = STATUS[s.status]
-            const charges = s.freightTotal + s.dutiesTotal + s.otherTotal
+        <div className="v2-list">
+          {rows.map((s2) => {
+            const status = STATUS[s2.status]
+            const charges = s2.freightTotal + s2.dutiesTotal + s2.otherTotal
             return (
-              <li key={s.id}>
-                <Link href={`/landed-cost/${s.id}`} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-sunken/40">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-ink">{s.reference || s.invoice?.fileName || 'Untitled shipment'}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted">
-                      {[
-                        s.invoice?.invoiceDate && new Date(s.invoice.invoiceDate).toLocaleDateString(),
-                        charges > 0 && `${money(charges, s.currency)} freight & duty`,
-                        s.invoice?.status === 'failed' && s.invoice.extractionError,
-                      ].filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${status.tone}`}>{status.label}</span>
-                    <ChevronRight className="h-4 w-4 text-muted" />
+              <Link key={s2.id} href={`/landed-cost/${s2.id}`} className="v2-row tap-target" data-click
+                    style={{ ['--chan' as string]: status.hue }}>
+                <span className="v2-chip-sq" style={{ ['--ghue' as string]: status.hue }}><Ship /></span>
+                <div className="v2-m">
+                  <p>
+                    <span className="truncate">{s2.reference || s2.invoice?.fileName || 'Untitled shipment'}</span>
+                    <span className="v2-stat">{status.label}</span>
+                  </p>
+                  <span>
+                    {[
+                      s2.invoice?.invoiceDate && new Date(s2.invoice.invoiceDate).toLocaleDateString(),
+                      charges > 0 && `${money(charges, s2.currency)} freight & duty`,
+                      s2.invoice?.status === 'failed' && s2.invoice.extractionError,
+                    ].filter(Boolean).join(' · ')}
                   </span>
-                </Link>
-              </li>
+                </div>
+                <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--v2-mute)' }} />
+              </Link>
             )
           })}
-        </ul>
+        </div>
       )}
     </div>
   )

@@ -1,13 +1,21 @@
 'use client'
 
-import { useState } from 'react'
+import { cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
+import { Plus, X } from 'lucide-react'
 import type { StudioVariant } from '@/lib/studio/types'
 import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
 
-const input = 'h-11 w-full rounded-lg border border-hairline-strong px-3 text-sm outline-none focus:border-accent'
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">{label}</span>{children}</label>
+// Label and control as siblings, with the id cloned on — the same Field the two product forms use.
+function Field({ label, hint, children, wide }: { label: string; hint?: string; children: ReactNode; wide?: boolean }) {
+  const id = 'spv-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  const child = isValidElement(children) ? cloneElement(children as ReactElement<{ id?: string }>, { id }) : children
+  return (
+    <div className={wide ? 'v2-fld wide' : 'v2-fld'}>
+      <label htmlFor={id}>{label}</label>
+      {child}
+      {hint && <span className="v2-hint">{hint}</span>}
+    </div>
+  )
 }
 
 // A sub-product is a full product in its own right (name, photos, description, price) + a chosen fabric.
@@ -41,47 +49,52 @@ export function SubProductForm({ initial, onSubmit, submitLabel, onCancel }: {
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-hairline-strong bg-sunken/40 p-3">
-      {err && <p className="text-xs text-red-600">{err}</p>}
+    <div>
+      {err && <p className="v2-kick" style={{ color: 'var(--v2-red-ink)', marginBottom: 12 }}>{err}</p>}
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div className="sm:col-span-2"><Field label="Name"><input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. 2-seater" /></Field></div>
-        <Field label="Price"><input className={input} type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="default = product" /></Field>
+      <div className="v2-form">
+        <Field label="Name" wide><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. 2-seater" /></Field>
+        <Field label="Price" hint="Leave blank to inherit the product's"><input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="—" /></Field>
+        <Field label="SKU (optional)"><input value={sku} onChange={(e) => setSku(e.target.value)} /></Field>
+        <Field label="Details" wide><textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Anything specific to this variant…" /></Field>
       </div>
 
-      {/* Fabric selection — the new dropdown */}
-      <div>
-        <span className="mb-1 block text-xs font-semibold text-ink">Fabric</span>
+      <div style={{ marginTop: 22 }}>
+        <p className="v2-kick">Fabric</p>
         <FabricPicker value={fabric} onChange={setFabric} />
       </div>
 
-      <Field label="Details"><textarea className="w-full rounded-lg border border-hairline-strong p-3 text-sm outline-none focus:border-accent" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Anything specific to this variant…" /></Field>
-
-      {/* Photos */}
-      <div>
-        <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-subtle">Photos</span>
+      <div style={{ marginTop: 22 }}>
+        <p className="v2-kick">Photos{photos.length ? ` · ${photos.length}` : ''}</p>
         {photos.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className="v2-shots" style={{ gap: 12, marginBottom: 16 }}>
             {photos.map((url, i) => (
-              <div key={i} className="relative">
+              <div key={i} className="v2-shot" style={{ ['--shot' as string]: '64px', position: 'relative' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="h-16 w-16 rounded-lg border border-hairline object-cover" />
-                <button type="button" onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))} className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-ink text-xs text-white">×</button>
+                <img src={url} alt="" />
+                <button type="button" onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                        aria-label={`Remove photo ${i + 1}`} className="v2-ico"
+                        style={{ ['--ghue' as string]: 'var(--v2-red)', position: 'absolute', right: -8, top: -8, background: 'var(--v2-paper)' }}><X /></button>
               </div>
             ))}
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <input className={input} value={photoDraft} onChange={(e) => setPhotoDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhoto() } }} placeholder="Paste an image URL and press +" />
-          <button type="button" onClick={addPhoto} className="h-11 flex-shrink-0 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-ink hover:bg-white">+ Add</button>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+          <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+            <label htmlFor="spv-photo">Add a photo</label>
+            <input id="spv-photo" value={photoDraft} onChange={(e) => setPhotoDraft(e.target.value)}
+                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhoto() } }}
+                   placeholder="Paste an image URL" />
+          </div>
+          <button type="button" onClick={addPhoto} disabled={!photoDraft.trim()} className="v2-act tap-target" style={{ marginBottom: 4 }}>
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
         </div>
       </div>
 
-      <Field label="SKU (optional)"><input className={input} value={sku} onChange={(e) => setSku(e.target.value)} /></Field>
-
-      <div className="flex gap-2">
-        <button onClick={submit} disabled={busy} className="h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? 'Saving…' : submitLabel}</button>
-        <button onClick={onCancel} className="h-10 rounded-lg border border-hairline-strong px-4 text-sm font-medium text-ink">Cancel</button>
+      <div className="v2-bar" style={{ marginTop: 22 }}>
+        <button onClick={submit} disabled={busy} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>{busy ? 'Saving…' : submitLabel}</button>
+        <button onClick={onCancel} className="v2-act tap-target">Cancel</button>
       </div>
     </div>
   )
