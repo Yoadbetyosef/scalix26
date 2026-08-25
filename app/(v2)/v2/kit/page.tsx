@@ -4,6 +4,9 @@ import QRCode from 'qrcode'
 import { CreditCard, Download, FileText, Image as ImageIcon, Info, Upload } from 'lucide-react'
 import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { ModalDemo } from './modal-demo'
+import { ChartV1, ChartV2 } from './chart-demo'
+import { readAnalytics } from '@/lib/analytics/read'
+import { channelKey, CHANNEL_LABEL } from '../channels'
 import '../v2-tokens.css'
 import './kit.css'
 
@@ -57,7 +60,29 @@ async function load() {
   const qrTarget = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.scalix26.com'}/catalog/${(product as { id?: string } | undefined)?.id ?? ''}`
   let qr: string | null = null
   try { qr = await QRCode.toDataURL(qrTarget, { margin: 1, width: 240 }) } catch { /* non-fatal */ }
-  return { contacts: contacts ?? [], product, msgs: thread, qr, qrTarget }
+
+  // The chart pair runs on the SAME read /analytics uses, over the tenant that actually has traffic —
+  // a hand-made series would have hidden the two things this pair exists to test: how the axis reads
+  // when a fortnight is mostly zeroes, and whether six channel hues stay tellable apart as bars.
+  const an = await readAnalytics(busiest ?? '')
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(Date.now() - (13 - i) * 86400000)
+    const iso = d.toISOString().slice(0, 10)
+    return {
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      count: an.conversations.filter((c) => (c.created_at ?? '').startsWith(iso)).length,
+    }
+  })
+  const counts = new Map<string, number>()
+  for (const c of an.conversations) {
+    const k = channelKey(c.channel)
+    if (k) counts.set(k, (counts.get(k) ?? 0) + 1)
+  }
+  const channels = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, count]) => ({ channel: CHANNEL_LABEL[k as keyof typeof CHANNEL_LABEL], count }))
+
+  return { contacts: contacts ?? [], product, msgs: thread, qr, qrTarget, days, channels }
 }
 
 const Pair = ({ title, note, v1, v2 }: { title: string; note: string; v1: React.ReactNode; v2: React.ReactNode }) => (
@@ -73,7 +98,7 @@ const Pair = ({ title, note, v1, v2 }: { title: string; note: string; v1: React.
 
 export default async function Kit() {
   if (process.env.NODE_ENV === 'production') notFound()
-  const { contacts, product, msgs, qr, qrTarget } = await load()
+  const { contacts, product, msgs, qr, days, channels } = await load()
   const money = (n?: number) => (typeof n === 'number' ? `$${n.toLocaleString()}` : '—')
 
   return (
@@ -542,9 +567,18 @@ export default async function Kit() {
           }
         />
 
+        {/* 16 · CHART FRAME — /analytics */}
+        <Pair
+          title="Chart frame · /analytics"
+          note="Recharts defaults to a grey grid, black axis text in the browser's face, and a white tooltip with a border and a shadow — three vocabularies this design does not use, on the one screen whose whole job is legibility. The frame restates them in the tokens: the axis labels are the mono micro-label, the grid is horizontal only because a vertical grid on a fourteen-point series draws fourteen lines to help you read three, the axis lines go because the grid already says where the floor is, and the tooltip is the popover. The line takes the signature gradient — a real <linearGradient>, since CSS cannot paint an SVG stroke — and each bar takes its own channel's hue, the same one that channel's chip carries everywhere else. No legend on the bars: the axis names every column."
+          v1={<ChartV1 days={days} channels={channels} />}
+          v2={<ChartV2 days={days} channels={channels} />}
+        />
+
         <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Not yet designed</p><s /></div>
         <p className="v2k-note">
-          Nothing outstanding. All four the detail pages surfaced have been answered: the <b>media and
+          Nothing outstanding. The <b>chart frame</b> immediately above was the last one, added for
+          /analytics. Before it, all four the detail pages surfaced were answered: the <b>media and
           code block</b> is the pair immediately above; the <b>activity timeline</b> on /contacts/[id]
           turned out to need no new component — it is the list row, one per event, which is what a
           timeline is once the drawn spine is taken off it; the <b>tabs</b> on

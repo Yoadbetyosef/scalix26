@@ -4454,3 +4454,58 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   font-style: normal; font-family: var(--v2-mono); font-size: 9.5px;
   letter-spacing: 0.12em; text-transform: uppercase; color: var(--v2-ink-45);
 }
+
+/* ── A CHART ─────────────────────────────────────────────────────────────────────────────────────
+   v1 gave each of the three a white card, a heading, and a filled icon tile in a different brand
+   colour — three surfaces and three more colours on a screen whose whole job is to make four numbers
+   and three shapes legible. A chart here is a section like any other: the micro-label, the rule, and
+   the plot underneath.
+
+   What is actually new is the plot's own drawing. Recharts defaults to a grey grid, black axis text
+   at the browser's default face, and a white tooltip with a border and a drop shadow — three
+   vocabularies this design does not use. Everything below restates them in the tokens:
+
+     · the axis labels are the mono micro-label, at the size every other label on the page is
+     · the grid is horizontal only, in --v2-line, because a vertical grid on a 14-point series draws
+       fourteen lines to help you read three
+     · the axis lines themselves go: the grid already says where the floor is
+     · the tooltip is paper and one hairline, like the popover — no shadow, because what lifts it off
+       the page is that it overlaps
+
+   Series colour is passed per chart rather than fixed here: a channel breakdown must use the same
+   hues the channel chips use, and the one line chart takes the signature gradient. */
+.v2 .v2-chart { width: 100%; }
+.v2 .v2-chart .recharts-cartesian-axis-line,
+.v2 .v2-chart .recharts-cartesian-axis-tick-line { display: none; }
+.v2 .v2-chart .recharts-cartesian-axis-tick-value {
+  font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.08em; fill: var(--v2-ink-45);
+}
+.v2 .v2-chart .recharts-cartesian-grid-horizontal line { stroke: var(--v2-line); }
+.v2 .v2-chart .recharts-cartesian-grid-vertical line { display: none; }
+/* Recharts paints its own cursor rectangle behind the tooltip; the row highlight everything else in
+   this language uses is --v2-hover, so it uses that. */
+.v2 .v2-chart .recharts-tooltip-cursor { fill: var(--v2-hover); stroke: var(--v2-line); }
+.v2 .v2-chart .recharts-default-legend { display: none; }
+.v2 .v2-chart .recharts-surface:focus { outline: none; }
+
+/* The tooltip, rendered by components/v2/chart-tip. */
+.v2 .v2-ctip {
+  background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: 10px;
+  padding: 8px 11px; min-width: 96px;
+}
+.v2 .v2-ctip b {
+  display: block; font-family: var(--v2-mono); font-weight: 400; font-size: 9.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--v2-ink-45);
+}
+.v2 .v2-ctip span {
+  display: flex; align-items: baseline; gap: 7px; margin-top: 5px;
+  font-size: 15px; color: var(--v2-ink); font-variant-numeric: tabular-nums;
+}
+.v2 .v2-ctip i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ghue, var(--v2-t1)); }
+
+/* A LEGEND, when a shape needs one. The pie does; the bars do not, because their axis already names
+   every column. Same dot-and-word as a channel chip, at caption size. */
+.v2 .v2-clegend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; }
+.v2 .v2-clegend span { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--v2-ink-72); }
+.v2 .v2-clegend i { flex: none; width: 7px; height: 7px; border-radius: 2px; background: var(--ghue, var(--v2-t1)); }
+.v2 .v2-clegend em { font-style: normal; font-family: var(--v2-mono); font-size: 11px; color: var(--v2-ink-45); font-variant-numeric: tabular-nums; }
