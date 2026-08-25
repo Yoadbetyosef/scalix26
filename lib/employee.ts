@@ -1,22 +1,16 @@
 // ── The AI employee's identity (single source of truth) ─────────────────────────
-// The face of an AI employee is the official headshot of the voice the customer
-// actually hears. Same employee → same face, everywhere in the product. No stock
-// photos, no per-screen switching between an initial, an icon and a photo.
+// The face of an AI employee is THE ROBOT — one face, everywhere in the product:
+// the dashboard hero, the inbox rows, Ask Amy, and the employee list. It is drawn
+// by components/brand/robot-avatar from the persona's own still.
+//
+// It used to be the official headshot of the chosen TTS voice, and `voiceAvatar`
+// lived here to look one up. That is gone: a voice is a setting, so the employee's
+// face changed whenever the dropdown did, and a human portrait beside the robot on
+// the next screen made one employee read as two beings. The voice PICKER still
+// shows those headshots — see lib/voices.ts — because there you are choosing whose
+// voice to use, and that is a different question from who the employee is.
 
 export type EmployeeStatus = 'on_duty' | 'busy' | 'attention' | 'paused'
-
-const VOICE_AVATAR: Record<string, string> = {
-  'aura-2-asteria-en': '/avatars/asteria.png',
-  'aura-2-andromeda-en': '/avatars/andromeda.png',
-  'aura-2-thalia-en': '/avatars/thalia.png',
-  'aura-2-odysseus-en': '/avatars/odysseus.png',
-  'aura-2-arcas-en': '/avatars/arcas.png',
-}
-
-/** The headshot for a voice, or null for a legacy/unknown voice (→ monogram fallback). */
-export function voiceAvatar(voice?: string | null): string | null {
-  return voice ? VOICE_AVATAR[voice] ?? null : null
-}
 
 /** Map the stored agent status to the employee presence system. */
 export function employeeStatus(status?: string | null): EmployeeStatus {

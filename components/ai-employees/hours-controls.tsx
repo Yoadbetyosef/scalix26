@@ -1,6 +1,5 @@
 'use client'
 
-import { Switch } from '@/components/ui/switch'
 import { DayHours } from '@/lib/appointments'
 
 // TimeSelect, WeeklyHoursGrid and the TIME_SLOTS they read, moved here VERBATIM from
@@ -33,39 +32,43 @@ export const DAY_LABELS: Record<typeof DAYS[number], string> = {
 }
 
 export function TimeSelect({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel: string }) {
+  // The form language's select: a rule under it, not a box around it. Wrapped in .v2-sel so the
+  // chevron is drawn rather than left to the platform, which renders a boxed control on macOS.
   return (
-    <select
-      aria-label={ariaLabel}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="h-11 min-w-[110px] flex-1 rounded-xl border border-hairline-strong bg-white px-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)] sm:h-10 sm:min-w-0 sm:flex-none"
-    >
-      {TIME_SLOTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-    </select>
+    <span className="v2-sel" style={{ flex: 1, minWidth: 0 }}>
+      <select className="v2-finput" aria-label={ariaLabel} value={value} onChange={e => onChange(e.target.value)}>
+        {TIME_SLOTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+      </select>
+    </span>
   )
 }
 export function WeeklyHoursGrid({ hours, onUpdate }: {
   hours: Record<string, DayHours>
   onUpdate: (day: string, next: Partial<DayHours>) => void
 }) {
+  // SEVEN ROWS, ONE HAIRLINE EACH — inside a section that is already a bordered card, so no second
+  // border of its own. A closed day says "Closed" where its times would be rather than collapsing,
+  // so the seven rows stay the same shape whatever the week looks like.
   return (
-    <div className="mt-3 rounded-xl border border-hairline divide-y divide-hairline">
+    <div>
       {DAYS.map(day => {
         const { isOpen, open, close } = hours[day]
         return (
-          <div key={day} className="flex flex-col gap-2 px-3 sm:px-4 py-3 min-h-[52px] sm:flex-row sm:items-center sm:gap-3 sm:min-h-0">
-            <div className="flex items-center gap-2.5 w-28 sm:w-36 shrink-0">
-              <Switch checked={isOpen} onCheckedChange={v => onUpdate(day, { isOpen: v })} aria-label={`${DAY_LABELS[day]} open`} />
-              <span className="text-sm font-medium text-ink">{DAY_LABELS[day]}</span>
-            </div>
+          <div key={day} className="v2-hrow">
+            <button
+              type="button" role="switch" aria-checked={isOpen} aria-label={`${DAY_LABELS[day]} open`}
+              className="v2-toggle" data-on={isOpen || undefined}
+              onClick={() => onUpdate(day, { isOpen: !isOpen })}
+            ><i /></button>
+            <span className="v2-hday">{DAY_LABELS[day]}</span>
             {isOpen ? (
-              <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="v2-htimes">
                 <TimeSelect value={open} onChange={v => onUpdate(day, { open: v })} ariaLabel={`${DAY_LABELS[day]} opening time`} />
-                <span className="text-xs text-muted">to</span>
+                <em>to</em>
                 <TimeSelect value={close} onChange={v => onUpdate(day, { close: v })} ariaLabel={`${DAY_LABELS[day]} closing time`} />
-              </div>
+              </span>
             ) : (
-              <span className="flex-1 text-sm text-muted italic">Closed</span>
+              <span className="v2-hclosed">Closed</span>
             )}
           </div>
         )

@@ -1,8 +1,7 @@
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { getActiveTenantId } from '@/lib/workspace'
 import { readAgentEditorData } from '@/lib/agents/editor-read'
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
 import { AIEmployeeEditClient } from '@/components/ai-employees/ai-employee-edit-client'
 import { BusinessIntelligenceProgress } from '@/components/ai-employees/business-intelligence-progress'
 
@@ -20,9 +19,10 @@ export default async function AIEmployeeEditPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Admin client (operator-safe; createServiceClient would RLS-scope to the partner's own tenant) +
-  // server-validated tenantId on every query.
-  const serviceSupabase = createAdminClient()
+  // Operator-safe by construction: readAgentEditorData opens its own admin client (not
+  // createServiceClient, which would RLS-scope to the partner's own tenant) and takes the
+  // server-validated tenantId as its sole scope. An unused createAdminClient() binding sat here
+  // before the migration; it went with the import rather than staying to fail lint.
   const tenantId = await getActiveTenantId()
   if (!tenantId) redirect('/setup')
   // Moved to lib/agents/editor-read.ts so /v2's agent screen reads the same rows. Same queries, same

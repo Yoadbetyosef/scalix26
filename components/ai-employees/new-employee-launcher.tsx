@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { AlertTriangle } from 'lucide-react'
 import { AiThinking } from '@/components/brand/ai-thinking'
 
 // New Employee uses the SAME full edit page as onboarding: create + provision a number
@@ -37,13 +37,16 @@ export function NewEmployeeLauncher() {
 
   if (error) {
     return (
-      <div className="p-6 max-w-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-hairline shadow-sm p-6 text-center">
-          <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-4">{error}</p>
-          <div className="mt-4 flex gap-2 justify-center">
-            <Link href="/ai-employees"><Button variant="outline" size="sm">Back</Button></Link>
-            <Link href="/settings#billing"><Button size="sm">Upgrade plan</Button></Link>
-          </div>
+      <div className="v2 v2-embedded p-4 sm:p-6 max-w-xl mx-auto">
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-amber)', alignItems: 'flex-start' }}>
+          <span className="v2-chip-sq"><AlertTriangle /></span>
+          <p>
+            {error}
+            <span className="v2-bar" style={{ marginTop: 12 }}>
+              <Link href="/ai-employees" className="v2-act tap-target">Back</Link>
+              <Link href="/settings#billing" className="v2-act tap-target" data-solid>Upgrade plan</Link>
+            </span>
+          </p>
         </div>
       </div>
     )

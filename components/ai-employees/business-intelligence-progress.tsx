@@ -36,20 +36,37 @@ export function BusinessIntelligenceProgress({ agentId, name }: { agentId: strin
   const summary = p ? realSummary(p) : ''
 
   return (
-    <div className="block rounded-2xl bg-white p-4 shadow-e1 ring-1 ring-hairline">
-      <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent-strong"><Brain className="h-5 w-5" /></span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-ink">{name}’s business memory</span>
-            {p && <span className="ml-auto text-xs tabular-nums text-subtle">{p.percent}%</span>}
+    <div className="v2 v2-embedded">
+      {/* The memory bar. Not a card: this is a status line about the employee below it, and boxing it
+          made it read as the first of fourteen sections rather than as the page's own preamble. The
+          fill is the same gradient rule the tabs and the sync progress use. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span className="v2-chip-sq" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><Brain /></span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <p className="v2-kick" style={{ marginBottom: 0, ['--ghue' as string]: 'var(--v2-t3)' }}><i />{name}’s business memory</p>
+            <s style={{ flex: 1 }} />
+            {p && <span className="v2-kick" style={{ marginBottom: 0, fontVariantNumeric: 'tabular-nums' }}>{p.percent}%</span>}
           </div>
-          <div className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-sunken">
-            <div className="relative h-full rounded-full bg-gradient-to-r from-accent via-[#7E9DEF] to-[#A855F7] transition-[width] duration-[1200ms] ease-out" style={{ width: `${Math.max(3, fill)}%` }}>
-              {learning && <span className="bip-shimmer absolute inset-0" />}
+          <div style={{ position: 'relative', marginTop: 8, height: 2, borderRadius: 2, background: 'var(--v2-line)', overflow: 'hidden' }}>
+            <div
+              className="relative h-full"
+              style={{
+                borderRadius: 2,
+                background: 'linear-gradient(90deg, var(--v2-t1), var(--v2-t3) 60%, var(--v2-t4))',
+                width: `${Math.max(3, fill)}%`,
+                transition: 'width 1200ms ease-out',
+              }}
+            >
+              {/* The shimmer is an OVERLAY, never the fill itself: .bip-shimmer sets its own
+                  background and animates translateX(-100% → 220%), so putting it on the bar
+                  replaced the gradient and slid the whole bar off to the right. */}
+              {learning && <span className="bip-shimmer absolute inset-0" style={{ borderRadius: 2 }} />}
             </div>
           </div>
-          <p className={cn('mt-1.5 truncate text-xs', p ? 'text-muted' : 'text-muted')}>{p ? summary : 'Reading your business…'}</p>
+          <p className="v2-fhint" style={{ marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {p ? summary : 'Reading your business…'}
+          </p>
         </div>
       </div>
     </div>

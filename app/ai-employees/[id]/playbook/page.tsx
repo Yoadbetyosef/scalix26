@@ -22,13 +22,13 @@ export default async function PlaybookPage({ params }: { params: Promise<{ id: s
   if (!employee) notFound()
 
   return (
-    <div className="p-4 sm:p-6 max-w-3xl">
-      <Link
-        href={`/ai-employees/${id}`}
-        className="mb-4 inline-flex items-center gap-1 text-sm text-subtle transition-colors hover:text-ink"
-      >
-        <ChevronLeft className="h-4 w-4" /> Back to {employee.name || 'AI employee'}
-      </Link>
+    <div className="v2 v2-embedded p-4 sm:p-6 max-w-3xl">
+      <div className="v2-head">
+        <Link href={`/ai-employees/${id}`} className="v2-act tap-target">
+          <ChevronLeft className="w-3.5 h-3.5" /> {employee.name || 'AI employee'}
+        </Link>
+        <s />
+      </div>
       <PlaybookClient agentId={employee.id} agentName={employee.name || 'Amy'} />
     </div>
   )

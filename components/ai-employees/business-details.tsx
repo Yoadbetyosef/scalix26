@@ -4,18 +4,16 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { DollarSign, MapPin, Ban } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+import { GlassInput } from '@/app/(v2)/v2/controls'
 
 // Each field is stored as a knowledge_base entry (source 'template') scoped to
 // THIS agent, so it loads on the agent's calls/texts but not other agents'.
-// Brand icon tiles (no emoji) — colored to match meaning: pricing = green, areas =
-// accent/blue, don't-do = danger/red.
+// The third field is the only one that carries a hue: "what we don't do" is a boundary, and it is
+// the one of the three where getting it wrong makes the AI promise something you cannot deliver.
 const FIELDS = [
-  { title: 'Pricing', label: 'Pricing', Icon: DollarSign, tile: 'bg-emerald-50 text-emerald-600', placeholder: 'e.g. Standard lockout: $95, Car lockout: $125, Key duplication: $45' },
-  { title: 'Service Areas', label: 'Service Areas', Icon: MapPin, tile: 'bg-accent/10 text-accent-strong', placeholder: 'e.g. Bergen County, Passaic County, Hudson County NJ' },
-  { title: "What We Don't Do", label: "What we don’t do", Icon: Ban, tile: 'bg-danger/10 text-danger', placeholder: 'e.g. No BMW key programming, No safe cracking' },
+  { title: 'Pricing', label: 'Pricing', Icon: DollarSign, hue: 'var(--v2-t2)', placeholder: 'e.g. Standard lockout: $95, Car lockout: $125, Key duplication: $45' },
+  { title: 'Service Areas', label: 'Service areas', Icon: MapPin, hue: 'var(--v2-t2)', placeholder: 'e.g. Bergen County, Passaic County, Hudson County NJ' },
+  { title: "What We Don't Do", label: "What we don’t do", Icon: Ban, hue: 'var(--v2-red)', placeholder: 'e.g. No BMW key programming, No safe cracking' },
 ] as const
 
 export function BusinessDetails({
@@ -51,18 +49,26 @@ export function BusinessDetails({
   }
 
   return (
-    <div className="space-y-4">
+    <div>
       {FIELDS.map((f) => (
-        <div key={f.title}>
-          <Label className="flex items-center gap-2 text-sm font-medium text-ink">
-            <span className={`flex h-6 w-6 items-center justify-center rounded-md ${f.tile}`}><f.Icon className="h-3.5 w-3.5" /></span>
-            {f.label}
-          </Label>
-          <Textarea className="mt-1.5" rows={3} placeholder={f.placeholder}
-            value={values[f.title]} onChange={(e) => setValues((v) => ({ ...v, [f.title]: e.target.value }))} />
+        <div key={f.title} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span className="v2-chip-sq" style={{ ['--ghue' as string]: f.hue, marginTop: 14 }}><f.Icon /></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <GlassInput
+              label={f.label}
+              multiline
+              placeholder={f.placeholder}
+              value={values[f.title]}
+              onChange={(v) => setValues((prev) => ({ ...prev, [f.title]: v }))}
+            />
+          </div>
         </div>
       ))}
-      <Button onClick={save} loading={saving} className="w-full sm:w-auto">Save Business Details</Button>
+      <div className="v2-bar" style={{ marginTop: 14 }}>
+        <button type="button" onClick={save} disabled={saving} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+          {saving ? 'Saving…' : 'Save business details'}
+        </button>
+      </div>
     </div>
   )
 }

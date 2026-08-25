@@ -1804,8 +1804,10 @@
 /* A field. The label is mono and small; the input is Inter Tight, because what a person types is
    prose. */
 .v2 .v2-field { display: block; padding: 12px; position: relative; }
-.v2 .v2-field + .v2-field::before,
-.v2 .v2-ctlrow + .v2-field::before, .v2 .v2-field + .v2-ctlrow::before {
+/* NO DIVIDER ABOVE A FIELD ANY MORE. The field draws its own rule underneath now, so a separator
+   between two stacked fields put two hairlines eight pixels apart. A toggle row has no rule of its
+   own, so the pair that still needs one is toggle-above-field — and only in that direction. */
+.v2 .v2-field + .v2-ctlrow::before {
   content: ''; position: absolute; top: 0; left: 12px; right: 0; height: 1px; background: rgba(0, 0, 0, 0.06);
 }
 .v2 .v2-flab {
@@ -1813,15 +1815,33 @@
   font-family: var(--v2-mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--v2-ink-42);
 }
+/* A RULE, NOT A BOX — the same field .v2-fld has, so the product has one of them and not two.
+   This was a bordered 12px-radius box with a 4px violet focus ring, designed for the /v2 agent
+   prototype before the kit's form language existed. Every migrated screen since — contacts, orders,
+   appointments, catalog — uses the rule, and the kit is explicit that "the point is no box"; leaving
+   this as it was would have made /ai-employees the one screen in the product with boxed inputs.
+   The row structure stays exactly as it was: .v2-field keeps its padding and the hairline it draws
+   between stacked rows, which is what makes a section card read as a list rather than a form. */
 .v2 .v2-finput {
-  width: 100%; min-height: 44px; padding: 10px 13px;
-  border: 1px solid var(--v2-line-strong); border-radius: 12px; background: #fff;
-  font-family: var(--v2-sans); font-size: 15px; color: #111; outline: none;
+  appearance: none; width: 100%; min-height: 40px; padding: 8px 0 9px;
+  border: 0; border-bottom: 1px solid var(--v2-line); border-radius: 0; background: transparent;
+  font-family: var(--v2-sans); font-size: 15px; color: var(--v2-ink); outline: none;
   transition: border-color 0.16s, box-shadow 0.16s;
 }
-.v2 textarea.v2-finput { line-height: 1.45; resize: vertical; }
-.v2 .v2-finput::placeholder { color: var(--v2-ink-42); }
-.v2 .v2-finput:focus { border-color: var(--v2-violet-edge); box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.14); }
+.v2 textarea.v2-finput { line-height: 1.45; resize: vertical; min-height: 76px; }
+.v2 .v2-finput::placeholder { color: var(--v2-ink-45); }
+/* The rule thickens rather than a ring appearing — a focus ring is a box, and the point is no box. */
+.v2 .v2-finput:focus { border-bottom-color: var(--v2-t1); box-shadow: 0 1px 0 0 var(--v2-t1); }
+.v2 .v2-finput:disabled { color: var(--v2-ink-45); }
+/* A select drawn by the platform is a boxed control on macOS whatever the CSS says, so the chevron
+   is drawn and the native one suppressed — same treatment .v2-fld gives its own selects. */
+.v2 select.v2-finput { padding-right: 20px; }
+.v2 .v2-field:has(> select.v2-finput) { position: relative; }
+.v2 .v2-field:has(> select.v2-finput)::after {
+  content: ''; position: absolute; right: 16px; bottom: 22px; width: 7px; height: 7px;
+  border-right: 1.5px solid var(--v2-ink-45); border-bottom: 1.5px solid var(--v2-ink-45);
+  transform: rotate(45deg); pointer-events: none;
+}
 .v2 .v2-fhint { display: block; margin-top: 6px; font-style: normal; font-size: 12.5px; color: var(--v2-ink-46); }
 
 /* Mutually exclusive choices — the email reply mode and anything like it. */
@@ -4317,7 +4337,12 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 /* A QR is edge-to-edge modules; without a quiet zone inside the frame the hairline reads as part of
    the code. White under it too, because a scanner wants white and --v2-paper is not promised to be. */
 .v2-shot[data-code] > img { padding: 7px; background: #fff; }
-.v2-shot > span { max-width: 24ch; font-size: 12.5px; line-height: 1.45; color: var(--v2-ink-45); }
+/* THE CAPTION, AND ONLY THE CAPTION. `.v2-shot > span` is (0,1,1) and beats `.v2-act` at (0,1,0),
+   so a bare child selector painted the Download pill's label in caption grey — 2.64:1 on its own
+   tint, and invisible in review because on the real pages the control happens to be a <button>
+   while in the kit it is a <span>. Captions carry no class; every control here does. Same failure
+   mode as `.v2-row .v2-m span` reaching the chips inside a row title, and the same fix. */
+.v2-shot > span:not([class]) { max-width: 24ch; font-size: 12.5px; line-height: 1.45; color: var(--v2-ink-45); }
 .v2-shot > .v2-act { align-self: flex-start; }
 /* The caption is held to 24ch so it wraps like a caption; the actions under it must not inherit that
    measure and stack one per line. The column simply grows to fit them. */
@@ -4348,3 +4373,84 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-qty:focus { outline: none; border-bottom-color: var(--v2-t1); box-shadow: 0 1px 0 0 var(--v2-t1); }
 .v2 .v2-qty::-webkit-outer-spin-button,
 .v2 .v2-qty::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+/* ── THE STICKY SAVE ─────────────────────────────────────────────────────────────────────────────
+   The agent editor is fourteen sections long, so Save has to be reachable from anywhere in it. v1
+   had TWO of these — an always-on bar on mobile and a second "unsaved changes" bar that replaced it
+   — both pinned at bottom-[calc(4.5rem+env(safe-area-inset-bottom))], where 4.5rem was the height
+   of the bottom tab bar that no longer exists.
+   One bar now, in both states: quiet while everything is saved, and carrying the amber "unsaved
+   changes" label when it is not. It clears --v2-grab-h, the swipe-up handle's own published height,
+   so it sits above whatever the handle actually is rather than above a number that used to be right. */
+/* Offset past the notification bell, which is fixed in the same corner: 44px at right-3 on a phone,
+   56px at right-4 on a desktop. A save that lands under the bell is a save nobody can press. */
+.v2 .v2-sticky-save {
+  position: fixed; z-index: 40; right: 66px; bottom: calc(12px + var(--v2-grab-h));
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px 8px 16px; border-radius: 999px;
+  background: var(--v2-paper); border: 1px solid var(--v2-line);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.09);
+}
+/* On a wide screen the handle is not there, so the bar sits where a floating bar normally does. */
+@media (min-width: 768px) {
+  .v2 .v2-sticky-save { right: 84px; bottom: 20px; }
+}
+
+/* ── A WEEK OF HOURS ─────────────────────────────────────────────────────────────────────────────
+   Seven rows: the switch, the day, and the two times. It lives inside a section that is already a
+   bordered card, so it has no border of its own — v1 drew one, which put a box inside a box inside
+   a card. A closed day keeps its row and says "Closed" where the times would be, so the week is the
+   same seven-row shape whatever it says. */
+.v2 .v2-hrow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-top: 1px solid var(--v2-line);
+}
+.v2 .v2-hrow:first-child { border-top: 0; }
+.v2 .v2-hday { flex: none; width: 92px; font-size: 14px; color: var(--v2-ink); }
+.v2 .v2-htimes { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.v2 .v2-htimes em {
+  flex: none; font-style: normal; font-family: var(--v2-mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--v2-ink-45);
+}
+.v2 .v2-hclosed { flex: 1; font-size: 14px; color: var(--v2-ink-45); }
+/* The select inside a time cell has no label above it, so it gets the field's rule and nothing else. */
+.v2 .v2-htimes .v2-finput { min-height: 40px; }
+/* The time cells have no label above them, so the chevron sits on the field's own baseline rather
+   than at .v2-fld's offset. */
+.v2 .v2-htimes .v2-sel { position: relative; }
+.v2 .v2-htimes .v2-sel::after {
+  content: ''; position: absolute; right: 2px; bottom: 15px; width: 7px; height: 7px;
+  border-right: 1.5px solid var(--v2-ink-45); border-bottom: 1.5px solid var(--v2-ink-45);
+  transform: rotate(45deg); pointer-events: none;
+}
+.v2 .v2-htimes select.v2-finput { padding-right: 18px; }
+@media (max-width: 719.98px) {
+  .v2 .v2-hrow { flex-wrap: wrap; }
+  .v2 .v2-hday { width: auto; flex: 1; }
+  .v2 .v2-htimes, .v2 .v2-hclosed { flex: 1 0 100%; }
+}
+
+/* ── A VOICE OPTION ──────────────────────────────────────────────────────────────────────────────
+   Five portraits to choose between. v1 marked the chosen one with a 2px accent border and a tinted
+   fill — a third selected-state vocabulary on a screen that already has chips and tabs. Here the
+   ring is on the portrait itself, where the choice actually is, and the tile stays paper.
+   The portraits are the exception to the one-face rule and are meant to be: the employee's face is
+   the robot, and this is the separate question of whose voice it speaks in. */
+.v2 .v2-vopt {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  flex: 1 1 96px; max-width: 132px; padding: 12px 8px; cursor: pointer;
+  background: var(--v2-paper); border: 1px solid var(--v2-line); border-radius: var(--v2-radius-card);
+  transition: border-color 0.16s, background 0.16s;
+}
+.v2 .v2-vopt:hover { border-color: var(--v2-violet-edge); }
+.v2 .v2-vopt img {
+  width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #fff;
+  box-shadow: 0 0 0 1px var(--v2-line); transition: box-shadow 0.16s;
+}
+.v2 .v2-vopt[data-on] { background: color-mix(in srgb, var(--v2-t4) 7%, transparent); border-color: transparent; }
+.v2 .v2-vopt[data-on] img { box-shadow: 0 0 0 2px var(--v2-t4); }
+.v2 .v2-vopt b { font-size: 13.5px; font-weight: 550; color: var(--v2-ink); }
+.v2 .v2-vopt em {
+  font-style: normal; font-family: var(--v2-mono); font-size: 9.5px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--v2-ink-45);
+}

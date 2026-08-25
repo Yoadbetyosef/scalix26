@@ -5,10 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { ArrowLeft, Star } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { GlassInput, GlassToggle } from '@/app/(v2)/v2/controls'
 
 // Weekly Hours now live on the AI employee page (Weekly Hours section), backed by
 // the appointment_slots table — the single source of truth the booking logic reads.
@@ -45,34 +42,50 @@ export function AvailabilityClient({
     }
   }
 
+  // MIGRATED WHOLE, not just the embedded half. This renders in two places — inside the AI employee
+  // screen and as the standalone /settings Reviews page — and reskinning only the embedded branch
+  // would have put a v2 section inside v1 page chrome. The standalone route was not in this pass's
+  // scope; it is thirty lines and finishing it was cheaper than leaving a mixed screen behind.
   const content = (
-    <Card>
-      <CardHeader><CardTitle className="flex items-center gap-2.5"><span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-yellow-500 text-white shadow-e1"><Star className="h-[18px] w-[18px]" strokeWidth={2} /></span> Google Reviews</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <Label>Google review link</Label>
-          <Input className="mt-1.5" placeholder="https://g.page/r/..." value={reviewUrl} onChange={(e) => setReviewUrl(e.target.value)} />
+    <section className="v2-group" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+      <p className="v2-ghead"><i />Google reviews<s /></p>
+      <div className="v2-gcard">
+        <div className="v2-grow" data-static>
+          <span className="v2-gchip"><Star /></span>
+          <span className="v2-glab">A review request goes out after the job is done, from your own number, with your link in it.</span>
         </div>
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input type="checkbox" checked={autoReview} onChange={(e) => setAutoReview(e.target.checked)} className="accent-[#5B6CF0] w-4 h-4" />
-          Auto-send a review request 3 hours after each appointment
-        </label>
-        <Button onClick={saveReviews} loading={savingReview} className="w-full sm:w-auto">Save Review Settings</Button>
-      </CardContent>
-    </Card>
-  )
-
-  // Embedded on the AI employee page → just the card. Standalone → full page chrome.
-  if (embedded) return <div className="space-y-5">{content}</div>
-  return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-3xl">
-      <div className="flex items-center gap-2">
-        <Link href="/settings" className="text-muted hover:text-ink transition-colors"><ArrowLeft className="w-5 h-5" /></Link>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-light tracking-tight text-ink">Reviews</h1>
-          <p className="text-sm text-muted mt-1">Automate Google review requests after appointments.</p>
+        <GlassInput
+          label="Google review link"
+          value={reviewUrl}
+          onChange={setReviewUrl}
+          placeholder="https://g.page/r/…"
+        />
+        <GlassToggle
+          label="Send automatically"
+          hint="Three hours after each appointment."
+          checked={autoReview}
+          onChange={setAutoReview}
+        />
+        <div className="v2-bar" style={{ padding: '0 12px 12px' }}>
+          <button type="button" onClick={saveReviews} disabled={savingReview} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+            {savingReview ? 'Saving…' : 'Save review settings'}
+          </button>
         </div>
       </div>
+    </section>
+  )
+
+  // Embedded on the AI employee page → just the section, since that page already carries .v2.
+  // Standalone → the same section under this route's own header.
+  if (embedded) return content
+  return (
+    <div className="v2 v2-embedded p-4 sm:p-6 max-w-3xl">
+      <div className="v2-head">
+        <Link href="/settings" className="v2-act tap-target"><ArrowLeft className="w-3.5 h-3.5" /> Settings</Link>
+        <s />
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Reviews</p>
+      </div>
+      <p className="v2-hint" style={{ marginBottom: 22 }}>Automate Google review requests after appointments.</p>
       {content}
     </div>
   )

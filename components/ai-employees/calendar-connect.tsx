@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Calendar, Check, Link2Off } from 'lucide-react'
+import { StatusPill, GlassSelect } from '@/app/(v2)/v2/controls'
+import { Calendar, Link2Off } from 'lucide-react'
 
 type Status = {
   connected: boolean
@@ -66,56 +66,56 @@ export function CalendarConnect({ agentId }: { agentId: string }) {
     }
   }
 
+  const label = status?.connected ? (status.provider === 'microsoft' ? 'Outlook Calendar' : 'Google Calendar') : 'Calendar'
+
   return (
-    <div className="mt-4 rounded-xl border border-hairline-strong p-4">
-      <div className="flex items-center gap-2">
-        <Calendar className="w-4 h-4 text-subtle" />
-        <span className="font-semibold text-ink text-sm">{status?.connected ? (status.provider === 'microsoft' ? 'Outlook Calendar' : 'Google Calendar') : 'Calendar'}</span>
-        {status?.connected && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-            <Check className="w-3 h-3" /> Connected
+    <div style={{ marginTop: 18 }}>
+      {/* A CONNECTION IS A ROW, not a card inside a card. This sits inside the Appointment
+          Availability section, which is already a bordered surface with a header; boxing each of the
+          three integrations inside it made four nested borders before a sentence. */}
+      <div className="v2-grow" data-static>
+        <span className="v2-chip-sq" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><Calendar /></span>
+        <span className="v2-glab">
+          <b style={{ fontWeight: 550 }}>{label}</b>
+          <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>
+            {status === null
+              ? 'Checking…'
+              : !status.connected
+                ? 'Connect a calendar and booked appointments become calendar events. Optional — booking works either way.'
+                : <>Booked appointments are added to your calendar{status.email ? ` · ${status.email}` : ''}.</>}
           </span>
-        )}
+        </span>
+        <span className="v2-gtrail">
+          {status?.connected
+            ? <StatusPill state="live">Connected</StatusPill>
+            : status === null ? null : <StatusPill state="off">Not connected</StatusPill>}
+        </span>
       </div>
 
-      {status === null ? (
-        <p className="text-xs text-muted mt-2">Checking…</p>
-      ) : !status.connected ? (
-        <div className="mt-2">
-          <p className="text-xs text-subtle mb-3">Connect a calendar to automatically add booked appointments as calendar events. Optional — booking works either way.</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => { window.location.href = `/api/auth/google/calendar/connect?agentId=${encodeURIComponent(agentId)}` }}>
-              Connect Google Calendar
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => { window.location.href = `/api/auth/microsoft/calendar/connect?agentId=${encodeURIComponent(agentId)}` }}>
-              Connect Outlook Calendar
-            </Button>
-          </div>
+      {status !== null && !status.connected && (
+        <div className="v2-bar" style={{ marginTop: 12 }}>
+          <button type="button" className="v2-act tap-target" onClick={() => { window.location.href = `/api/auth/google/calendar/connect?agentId=${encodeURIComponent(agentId)}` }}>Connect Google Calendar</button>
+          <button type="button" className="v2-act tap-target" onClick={() => { window.location.href = `/api/auth/microsoft/calendar/connect?agentId=${encodeURIComponent(agentId)}` }}>Connect Outlook Calendar</button>
         </div>
-      ) : (
-        <div className="mt-2 space-y-3">
-          <p className="text-xs text-subtle">
-            Booked appointments are added to your calendar{status.email ? <> · <span className="text-ink">{status.email}</span></> : null}.
-          </p>
+      )}
+
+      {status?.connected && (
+        <>
           {status.calendars && status.calendars.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-subtle mb-1">Calendar for new appointments</label>
-              <select
-                value={status.calendarId || 'primary'}
-                disabled={busy}
-                onChange={(e) => selectCalendar(e.target.value)}
-                className="h-10 w-full max-w-xs rounded-lg border border-hairline-strong bg-white px-2.5 text-sm text-ink focus:border-[#5B6CF0] focus:outline-none focus:ring-1 focus:ring-[#5B6CF0]"
-              >
-                {status.calendars.map((c) => (
-                  <option key={c.id} value={c.id}>{c.summary}{c.primary ? ' (primary)' : ''}</option>
-                ))}
-              </select>
-            </div>
+            <GlassSelect
+              label="Calendar for new appointments"
+              value={status.calendarId || 'primary'}
+              disabled={busy}
+              onChange={selectCalendar}
+              options={status.calendars.map((c) => ({ value: c.id, label: `${c.summary}${c.primary ? ' (primary)' : ''}` }))}
+            />
           )}
-          <Button type="button" variant="outline" size="sm" onClick={disconnect} disabled={busy}>
-            <Link2Off className="w-3.5 h-3.5 mr-1.5" /> Disconnect
-          </Button>
-        </div>
+          <div className="v2-bar" style={{ marginTop: 12 }}>
+            <button type="button" onClick={disconnect} disabled={busy} className="v2-act tap-target" data-danger>
+              <Link2Off className="w-3.5 h-3.5" /> Disconnect
+            </button>
+          </div>
+        </>
       )}
     </div>
   )

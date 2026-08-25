@@ -34,6 +34,15 @@ describe('.v2-shots — media and code', () => {
     expect(css).not.toMatch(/\.v2-shot > i svg \{[^}]*--v2-ink-24/)
   })
 
+  it('does not let the caption rule paint a control', () => {
+    // `.v2-shot > span` is (0,1,1) and .v2-act is (0,1,0), so a bare child selector wins and the
+    // Download pill's label came out in caption grey at 2.64:1. The live contrast sweep caught it
+    // on /v2/kit only, because there the control is a <span> and on the real pages it is a
+    // <button>. Captions carry no class; controls do.
+    expect(css).toContain('.v2-shot > span:not([class])')
+    expect(css).not.toMatch(/\n\.v2-shot > span \{/)
+  })
+
   it('still has no definition for --v2-ink-24, so this test fails when someone adds one', () => {
     // Not a defect to fix silently: defining it lightens 23 places at once, several
     // of them mono micro-labels that would land near 2:1. When it is defined, the

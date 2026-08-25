@@ -1,20 +1,11 @@
 'use client'
-import { TimeSelect, WeeklyHoursGrid } from './hours-controls'
-import { useAgentEditor, META_ERRORS, GOOGLE_ERRORS, type Channel } from './use-agent-editor'
+import { WeeklyHoursGrid } from './hours-controls'
+import { useAgentEditor, type Channel } from './use-agent-editor'
 
-import { useState, useEffect, type ElementType } from 'react'
-import { useRouter } from 'next/navigation'
-import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
-import { ArrowLeft, Phone, Trash2, Link2Off, Share2, MessageCircle, Mail, Building2, BookOpen, Clock, Bot, Mic, Wand2, Briefcase } from 'lucide-react'
+import { ChevronLeft, Phone, Trash2, Link2Off, Mail, Building2, BookOpen, Clock, Bot, Mic, Wand2, Briefcase, CalendarCheck, Globe, Zap } from 'lucide-react'
 import { FacebookIcon, InstagramIcon } from '@/components/icons/brand-icons'
 import Link from 'next/link'
+import { GlassInput, GlassSelect, GlassChoice, StatusPill } from '@/app/(v2)/v2/controls'
 import { VoiceDemo } from '@/components/ai-employees/voice-demo'
 import { EmployeeAvatar } from '@/components/ai-employees/employee-avatar'
 import { employeeStatus } from '@/lib/employee'
@@ -26,25 +17,36 @@ import { AvailabilityClient } from '@/components/settings/availability-client'
 import { CalendarConnect } from '@/components/ai-employees/calendar-connect'
 import { StripeConnect } from '@/components/ai-employees/stripe-connect'
 import { QuickbooksConnect } from '@/components/ai-employees/quickbooks-connect'
-import { slotsToHours, businessHoursToDayHours, dayHoursToBusinessHours, type DayHours } from '@/lib/appointments'
 import { Sparkles } from 'lucide-react'
+import type { ElementType, ReactNode } from 'react'
 
-
-// Shared dropdown+toggle grid used by BOTH the informational Business Hours section
-// (stored in ai_employees.business_hours) and the Appointment Availability section
-// (stored in appointment_slots). 30-min options, 12h labels.
-// Apple-style colored section tile — gives every section its own living identity on a
-// calm white canvas. Color is the element, not decoration.
-function SectionIcon({ icon: Icon, tone }: { icon: ElementType; tone: string }) {
+// A SECTION. This screen has fourteen of them, and v1 gave each one a white card with a filled
+// icon tile in its own colour — fourteen surfaces and fourteen brand colours on one page, which is
+// why it read as a settings dump rather than one employee.
+//
+// .v2-group is /v2's own section, already designed for exactly this screen (see
+// app/(v2)/v2/agents/[id]/client.tsx, which prototyped it): a micro-label with a dot in the
+// section's hue, a rule to the edge, and one bordered card holding the rows. The hue cycles through
+// the four accent samples rather than reaching for a fifth colour per section.
+function Group({ hue, title, children, danger }: { hue?: string; title: string; children: ReactNode; danger?: boolean }) {
   return (
-    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-[10px] ${tone} text-white shadow-e1`}>
-      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
-    </span>
+    <section className="v2-group" data-danger={danger || undefined} style={hue ? { ['--ghue' as string]: hue } : undefined}>
+      <p className="v2-ghead" data-danger={danger || undefined}><i />{title}<s /></p>
+      <div className="v2-gcard">{children}</div>
+    </section>
   )
 }
 
-
-
+// A row inside a section: the chip, what it says, and whatever sits on the end.
+function Row({ icon: Icon, children, trail, danger }: { icon: ElementType; children: ReactNode; trail?: ReactNode; danger?: boolean }) {
+  return (
+    <div className="v2-grow" data-static>
+      <span className="v2-gchip" data-danger={danger || undefined}><Icon /></span>
+      <span className="v2-glab">{children}</span>
+      {trail && <span className="v2-gtrail">{trail}</span>}
+    </div>
+  )
+}
 
 export interface Props {
   employee: {
@@ -111,625 +113,378 @@ function relativeTime(iso: string): string {
 
 export function AIEmployeeEditClient({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccounts = [], googleConnected, googleError, onboarding, skills, availabilitySlots, googleReviewUrl, reviewEnabled }: Props) {
   // Moved to use-agent-editor.ts so a second surface can drive the SAME machine. Every state var and
-  // every handler went with it — see that file's header.
+  // every handler went with it — see that file's header. Only what this render actually reads is
+  // destructured; the previous list pulled every export and left seventeen unused bindings behind.
   const {
-    router, saving, setSaving, form, setForm, businessHours, setBusinessHours, updateBusinessHours, appointmentHours, setAppointmentHours, editedSnapshot, savedSnapshot, setSavedSnapshot, isDirty, emailBusy, setEmailBusy, disconnectMailbox, setPrimaryMailbox, scanningWebsite, setScanningWebsite, scanWebsite, channels, setChannels, provisioningPhone, setProvisioningPhone, releasingPhone, setReleasingPhone, phoneChannel, smsChannel, fbChannel, igChannel, scannedUrl, websiteVal, websiteConnected, websiteChanged, kbCount, updateAppointmentHours, handleSave, finishing, setFinishing, finishSetup, handleDelete, toggleStatus, provisionPhone, releasePhone, disconnectChannel,
+    saving, form, setForm, businessHours, updateBusinessHours, appointmentHours, setAppointmentHours, isDirty, emailBusy, disconnectMailbox, setPrimaryMailbox, scanningWebsite, scanWebsite, provisioningPhone, releasingPhone, phoneChannel, smsChannel, fbChannel, igChannel, websiteVal, websiteConnected, websiteChanged, kbCount, updateAppointmentHours, handleSave, finishing, finishSetup, handleDelete, toggleStatus, provisionPhone, releasePhone, disconnectChannel,
   } = useAgentEditor({ employee, tenantId, tenantSlug, businessDetails, knowledgeBase, metaConnected, metaError, emailAccounts, googleConnected, googleError, onboarding, skills, availabilitySlots, googleReviewUrl, reviewEnabled })
+  // Typed against the hook's own form shape, so a field name that does not exist fails to compile
+  // rather than silently writing a key nobody reads.
+  type FormShape = typeof form
+  const set = (k: keyof FormShape) => (v: string) => setForm((f) => ({ ...f, [k]: v }))
+  const live = form.status === 'active'
+
   return (
-    <div className={`agent-edit-root max-md:order-1 w-full max-w-full overflow-x-clip space-y-5 p-4 sm:p-6 ${isDirty && !onboarding ? 'sm:pb-24' : ''} ${!onboarding ? 'max-md:pb-40' : ''}`}>
-      {/* Onboarding welcome banner */}
+    <div className={`v2 v2-embedded agent-edit-root max-md:order-1 w-full max-w-full overflow-x-clip p-4 sm:p-6 ${!onboarding ? 'max-md:pb-40 sm:pb-24' : ''}`}>
+      {/* Onboarding welcome banner. One notice, in the language's own notice component, rather than a
+          tinted panel in a brand blue that appears nowhere else. */}
       {onboarding && (
-        <div className="rounded-2xl border border-[#5B6CF0]/30 bg-[#5B6CF0]/10 p-4 sm:p-5">
-          <h2 className="text-base font-light tracking-tight text-ink">Your AI employee is live — your number is already answering.</h2>
-          <p className="text-sm text-subtle mt-1">Finish the quick setup — business details, voice, channels, and website — to start protecting your business from missed calls, messages, and lost customers.</p>
-          <Button onClick={finishSetup} loading={finishing} className="mt-3">Finish setup →</Button>
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t3)', alignItems: 'flex-start', marginBottom: 22 }}>
+          <span className="v2-chip-sq"><Zap /></span>
+          <p>
+            Your AI employee is live — your number is already answering.
+            <span style={{ display: 'block', marginTop: 4, fontSize: 13, fontWeight: 400, color: 'var(--v2-ink-45)' }}>
+              Finish the quick setup — business details, voice, channels and website — to start protecting your business from missed calls, messages and lost customers.
+            </span>
+            <span className="v2-bar" style={{ marginTop: 12 }}>
+              <button onClick={finishSetup} disabled={finishing} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+                {finishing ? 'Finishing…' : 'Finish setup'}
+              </button>
+            </span>
+          </p>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          {onboarding ? (
-            <>
-              <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
-              <h1 className="min-w-0 truncate text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
-            </>
-          ) : (
-            <>
-              <Link href="/ai-employees" className="flex-shrink-0">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="w-4 h-4 mr-1" /> Back
-                </Button>
-              </Link>
-              <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
-              <div className="min-w-0">
-                <h1 className="truncate text-xl sm:text-2xl font-light tracking-tight text-ink">{employee.name}</h1>
-                <Badge variant={form.status as 'active' | 'draft'} className="mt-0.5">{form.status}</Badge>
-              </div>
-            </>
-          )}
-        </div>
-        <div className="flex w-full gap-2 sm:w-auto sm:flex-shrink-0">
+      {/* THE HEADER. The employee's name is the page — the rail says "AI Employees", not which one.
+          The face is the robot, the same one the dashboard hero and the inbox rows show. */}
+      <div className="v2-head">
+        {!onboarding && (
+          <Link href="/ai-employees" className="v2-act tap-target"><ChevronLeft className="w-3.5 h-3.5" /> Employees</Link>
+        )}
+        <s />
+        <div className="v2-bar">
           {!onboarding && (
-            <Button variant="outline" onClick={toggleStatus} className="flex-1 sm:flex-none">
-              {form.status === 'active' ? 'Pause' : 'Go Live'}
-            </Button>
+            <button onClick={toggleStatus} className="v2-act tap-target">{live ? 'Pause' : 'Go live'}</button>
           )}
-          <Button onClick={handleSave} loading={saving} variant={onboarding ? 'outline' : undefined} className={`flex-1 sm:flex-none ${onboarding ? '' : 'max-md:hidden'}`}>Save Changes</Button>
           {onboarding && (
-            <Button onClick={finishSetup} loading={finishing} className="flex-1 sm:flex-none">Finish setup</Button>
+            <button onClick={finishSetup} disabled={finishing} className="v2-act tap-target" data-solid>{finishing ? 'Finishing…' : 'Finish setup'}</button>
           )}
         </div>
       </div>
 
-      {/* Business Identity */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Building2} tone="bg-blue-500" /> Business Identity</CardTitle>
-          <p className="text-sm text-subtle">This agent represents a separate business identity with its own contact info.</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Business Name</Label>
-              <Input className="mt-1.5" placeholder="Smith's Locksmith" value={form.business_name} onChange={e => setForm(f => ({ ...f, business_name: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Industry / Business Type</Label>
-              <Input className="mt-1.5" placeholder="Locksmith" value={form.industry} onChange={e => setForm(f => ({ ...f, industry: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Business Phone</Label>
-              <Input className="mt-1.5" type="tel" placeholder="(555) 123-4567" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Business Email</Label>
-              <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-            </div>
-            <div>
-              <Label>City</Label>
-              <Input className="mt-1.5" placeholder="New York" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
-            </div>
-            <div>
-              <Label>State</Label>
-              <Input className="mt-1.5" placeholder="NY" value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} />
-            </div>
-            <div>
-              <Label>ZIP</Label>
-              <Input className="mt-1.5" placeholder="10001" inputMode="numeric" maxLength={5} value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value.replace(/\D/g, '').slice(0, 5) }))} />
-            </div>
-            <div className="sm:col-span-2">
-              <div className="flex items-center gap-2">
-                <Label>Website</Label>
-                {websiteConnected && <Badge variant="connected">Connected</Badge>}
-              </div>
-              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input type="url" className="min-w-0" placeholder="https://yourbusiness.com" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
-                <Button type="button" variant="outline" size="sm" disabled={scanningWebsite || !websiteVal} onClick={scanWebsite} className="w-full sm:w-auto sm:flex-shrink-0">
-                  {scanningWebsite ? 'Scanning…' : websiteConnected ? 'Re-scan' : 'Scan website'}
-                </Button>
-              </div>
-              {scanningWebsite ? (
-                <p className="text-xs text-accent-strong mt-1.5 inline-flex items-center gap-2">
-                  <span className="flex items-end gap-[2px] h-3" aria-hidden="true">
-                    {[0, 1, 2].map((i) => <span key={i} className="sx-wavebar w-[2px] h-full rounded-full bg-accent" style={{ animationDelay: `${i * 0.15}s` }} />)}
-                  </span>
-                  Scanning your business…
-                </p>
-              ) : websiteConnected ? (
-                <p className="text-xs text-subtle mt-1">Last scanned {relativeTime(employee.website_scanned_at!)} · {kbCount} item{kbCount === 1 ? '' : 's'} added.</p>
-              ) : websiteChanged ? (
-                <p className="text-xs text-amber-600 mt-1">Website changed — scan to update the agent&apos;s knowledge.</p>
-              ) : (
-                <p className="text-xs text-muted mt-1">Optional. We&apos;ll read your site and add services, pricing, service areas, and hours to the agent&apos;s knowledge below. Nothing is invented — anything not on your site, you can fill in manually.</p>
-              )}
-            </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>
+        <EmployeeAvatar name={form.name || employee.name} voice={form.voice} status={employeeStatus(form.status)} size="md" />
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 650, letterSpacing: '-0.02em', lineHeight: 1.15, color: 'var(--v2-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{employee.name}</h1>
+          <p className="v2-kick" style={{ marginTop: 6, marginBottom: 0, ['--ghue' as string]: live ? 'var(--v2-live)' : 'var(--v2-mute)' }}>
+            <i />{live ? 'On duty · answering right now' : 'Paused · nothing is being answered'}
+          </p>
+        </div>
+      </div>
+
+      {/* The one line that says what the whole screen is for, and whether anything is outstanding. */}
+      <p className="v2-lin" style={{ marginBottom: 26 }}>
+        <span>This is how {form.name || 'this employee'} introduces itself and what it knows about you. </span>
+        {isDirty ? <b>You have unsaved changes.</b> : <span>Everything here is saved.</span>}
+      </p>
+
+      <div className="sx-stagger">
+        <Group hue="var(--v2-t1)" title="Business identity">
+          <Row icon={Building2}>This agent represents a separate business identity, with its own contact details.</Row>
+          <GlassInput label="Business name" value={form.business_name} onChange={set('business_name')} placeholder="Smith’s Locksmith" />
+          <GlassInput label="Industry / business type" value={form.industry} onChange={set('industry')} placeholder="Locksmith" />
+          <GlassInput label="Business phone" value={form.phone} onChange={set('phone')} type="tel" placeholder="(555) 123-4567" />
+          <GlassInput label="Business email" value={form.email} onChange={set('email')} type="email" placeholder="info@yourbusiness.com" />
+          <GlassInput label="City" value={form.city} onChange={set('city')} placeholder="New York" />
+          <GlassInput label="State" value={form.state} onChange={set('state')} placeholder="NY" />
+          <GlassInput label="ZIP" value={form.zip} onChange={(v) => setForm((f) => ({ ...f, zip: v.replace(/\D/g, '').slice(0, 5) }))} placeholder="10001" />
+        </Group>
+
+        <Group hue="var(--v2-t2)" title="Website">
+          <Row icon={Globe} trail={<StatusPill state={websiteConnected ? 'live' : 'off'}>{websiteConnected ? 'Scanned' : 'Not scanned'}</StatusPill>}>
+            {scanningWebsite
+              ? 'Reading your site…'
+              : websiteConnected
+                ? `Last scanned ${relativeTime(employee.website_scanned_at!)} · ${kbCount} item${kbCount === 1 ? '' : 's'} added.`
+                : websiteChanged
+                  ? 'Website changed — scan again to update what the agent knows.'
+                  : 'Optional. We read your site and add services, pricing, service areas and hours below. Nothing is invented — anything not on your site, you fill in yourself.'}
+          </Row>
+          <GlassInput label="Website" value={form.website} onChange={set('website')} type="url" placeholder="https://yourbusiness.com" />
+          <div className="v2-bar" style={{ padding: '0 14px 14px' }}>
+            <button type="button" disabled={scanningWebsite || !websiteVal} onClick={scanWebsite} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+              {scanningWebsite ? 'Scanning…' : websiteConnected ? 'Re-scan' : 'Scan website'}
+            </button>
           </div>
+        </Group>
 
-          {/* SECTION 1 — Business Hours (informational; answers "what are your hours?") */}
-          <div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-subtle" />
-              <Label className="text-base font-semibold">Business Hours</Label>
+        {/* SECTION 1 — Business Hours (informational; answers "what are your hours?") */}
+        <Group hue="var(--v2-t3)" title="Business hours">
+          <Row icon={Clock}>When a customer asks what hours you are open, this is what the AI tells them. It does not control appointment booking.</Row>
+          <div className="v2-hours"><WeeklyHoursGrid hours={businessHours} onUpdate={updateBusinessHours} /></div>
+        </Group>
+
+        {/* Channels — phone */}
+        <Group hue="var(--v2-t4)" title="Phone">
+          <Row icon={Phone} trail={<StatusPill state={phoneChannel ? 'live' : 'off'}>{phoneChannel ? 'Connected' : 'Not connected'}</StatusPill>}>
+            {phoneChannel
+              ? <>Answering on <b style={{ fontWeight: 600, letterSpacing: '0.02em' }}>{phoneChannel.twilio_number}</b>. Use it as your business number, or forward your existing one to it — either way your own phone rings first.</>
+              : 'No number yet. Provision a dedicated line for this agent — it handles inbound calls and SMS.'}
+          </Row>
+
+          {phoneChannel ? (
+            <>
+              {/* How it works — matches the real ring-through behaviour. Three numbered facts, as a
+                  fact list rather than a tinted blue box with an ordered list inside it. */}
+              <div style={{ padding: '0 14px 4px' }}>
+                <dl className="v2-facts" data-narrow>
+                  <div><dt>1</dt><dd>A customer calls your AI line</dd></div>
+                  <div><dt>2</dt><dd>Your phone rings first, four rings</dd></div>
+                  <div><dt>3</dt><dd>If you are busy, your AI answers — no lead lost</dd></div>
+                </dl>
+              </div>
+
+              {/* A4: texting (SMS / A2P) status — calls are instant; texting needs carrier verification. */}
+              {smsChannel && (() => {
+                const st = smsChannel.sms_status || 'pending_verification'
+                const state = st === 'active' ? 'live' : st === 'failed' ? 'off' : 'pending'
+                return (
+                  <Row icon={Phone} trail={<StatusPill state={state}>{st === 'active' ? 'Active' : st === 'failed' ? 'Needs attention' : 'Verifying'}</StatusPill>}>
+                    {st === 'active'
+                      ? 'Texting is active.'
+                      : st === 'failed'
+                        ? 'Carrier verification for texting did not complete. We will reach out to finish it.'
+                        : 'Calls are live now. Texting is being verified and will activate soon.'}
+                  </Row>
+                )
+              })()}
+
+              <GlassInput
+                label="Your phone number"
+                value={form.forward_to_phone}
+                onChange={set('forward_to_phone')}
+                type="tel"
+                placeholder="(555) 987-6543"
+                hint={form.forward_to_phone.trim()
+                  ? 'Your phone rings first; your AI catches anything you miss.'
+                  : 'Your cell or office number. Leave it blank and your AI answers every call directly.'}
+              />
+              <div className="v2-bar" style={{ padding: '0 14px 14px' }}>
+                <button type="button" onClick={releasePhone} disabled={releasingPhone} className="v2-act tap-target" data-danger>
+                  <Link2Off className="w-3.5 h-3.5" /> Release number
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="v2-bar" style={{ padding: '0 14px 14px' }}>
+              <button type="button" onClick={provisionPhone} disabled={provisioningPhone} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+                <Phone className="w-3.5 h-3.5" /> {provisioningPhone ? 'Provisioning…' : 'Get a phone number'}
+              </button>
             </div>
-            <p className="text-xs text-muted mt-1">When a customer asks what hours you&apos;re open, this is what the AI tells them. (This does not control appointment booking.)</p>
-            <WeeklyHoursGrid hours={businessHours} onUpdate={updateBusinessHours} />
-          </div>
-        </CardContent>
-      </Card>
+          )}
+        </Group>
 
-      {/* Channels */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Share2} tone="bg-indigo-500" /> Channels</CardTitle>
-          <p className="text-sm text-subtle">Connect any combination of channels. Each channel is optional — the agent handles whatever is connected.</p>
-        </CardHeader>
-        <CardContent className="space-y-5">
+        {/* Facebook + Instagram — one OAuth flow connects both */}
+        <Group hue="var(--v2-t1)" title="Facebook & Instagram">
+          <Row
+            icon={FacebookIcon}
+            trail={fbChannel
+              ? <span className="flex items-center gap-1.5"><StatusPill state="live">Connected</StatusPill><a href={`/api/auth/meta/connect?agentId=${employee.id}`} className="v2-act tap-target">Switch page</a><button onClick={() => disconnectChannel('facebook')} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} aria-label="Disconnect Facebook"><Link2Off /></button></span>
+              : <a href={`/api/auth/meta/connect?agentId=${employee.id}`} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t1)' }}>Connect</a>}
+          >
+            {fbChannel
+              ? ((fbChannel.credentials as Record<string, string>)?.page_name || fbChannel.meta_page_id)
+              : 'No Facebook Page connected. One sign-in connects the Page and, if it is linked, Instagram with it.'}
+          </Row>
+          <Row
+            icon={InstagramIcon}
+            trail={igChannel
+              ? <span className="flex items-center gap-1.5"><StatusPill state="live">Connected</StatusPill><button onClick={() => disconnectChannel('instagram')} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} aria-label="Disconnect Instagram"><Link2Off /></button></span>
+              : <a href={`/api/auth/meta/connect?agentId=${employee.id}`} className="v2-act tap-target">Connect</a>}
+          >
+            {igChannel
+              ? ((igChannel.credentials as Record<string, string>)?.username ? `@${(igChannel.credentials as Record<string, string>).username}` : igChannel.meta_page_id)
+              : 'Not connected — link Instagram to your Facebook Page first, then connect again.'}
+          </Row>
+        </Group>
 
-          {/* Phone (calls + SMS) */}
-          <div className="p-5 rounded-2xl border border-hairline space-y-3">
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-subtle" />
-              <span className="font-semibold text-ink">Phone (calls + SMS)</span>
-              {phoneChannel && <Badge variant="connected">Connected</Badge>}
-            </div>
+        {/* Email — channel order: Phone → Facebook/Instagram → Email */}
+        <Group hue="var(--v2-t3)" title="Email">
+          <Row icon={Mail} trail={<span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>{emailAccounts.length}/3 mailboxes</span>}>
+            Connect your inbox and the AI reads new customer emails and replies natively from your address.
+          </Row>
 
-            {phoneChannel ? (
-              <div className="space-y-3">
-                {/* How it works — matches the real ring-through behavior */}
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
-                  <p className="text-sm font-semibold text-blue-900 mb-1.5">How it works</p>
-                  <ol className="text-sm text-blue-700 space-y-1">
-                    <li>1. A customer calls your AI line</li>
-                    <li>2. Your phone rings first (4 rings)</li>
-                    <li>3. If you&apos;re busy, your AI answers — no lead lost</li>
-                  </ol>
-                </div>
-
-                {/* Your AI line */}
-                <div className="bg-sunken rounded-xl p-3">
-                  <p className="text-xs text-subtle mb-0.5">Your AI line</p>
-                  <p className="text-lg font-light tracking-tight text-ink tracking-wider">{phoneChannel.twilio_number}</p>
-                  <p className="text-xs text-muted mt-1.5">This is the line your AI receptionist answers on. Use it as your business number, or forward your existing number to it — either way, your own phone always rings first.</p>
-                </div>
-
-                {/* A4: texting (SMS / A2P) status — calls are instant; texting needs carrier verification. */}
-                {smsChannel && (() => {
-                  const s = smsChannel.sms_status || 'pending_verification'
-                  if (s === 'active') {
-                    return <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-xl p-3"><span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" /> Texting: active</div>
-                  }
-                  if (s === 'failed') {
-                    return <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl p-3"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 mt-1.5" /> Texting needs attention — carrier verification didn&apos;t complete. We&apos;ll reach out to finish it.</div>
-                  }
-                  return <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-xl p-3"><span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" /> 📞 Calls are live now. 💬 Texting is being verified and will activate soon.</div>
-                })()}
-
-                {/* Your phone number (rings first) */}
-                <div>
-                  <Label className="text-sm">Your phone number</Label>
-                  <p className="text-xs text-muted mb-1.5">Enter your cell or office number. When a customer calls, your phone rings first — if you don&apos;t answer within 4 rings, your AI receptionist picks up so you never miss a lead.</p>
-                  <Input
-                    className="h-11 text-sm"
-                    type="tel"
-                    placeholder="(555) 987-6543"
-                    value={form.forward_to_phone}
-                    onChange={e => setForm(f => ({ ...f, forward_to_phone: e.target.value }))}
-                  />
-                  {form.forward_to_phone.trim() ? (
-                    <p className="text-xs text-green-600 mt-1.5">✓ Connected — your phone rings first, your AI catches anything you miss.</p>
-                  ) : (
-                    <p className="text-xs text-subtle mt-1.5">No number yet — your AI answers every call directly.</p>
+          {/* Connected mailboxes (up to 3 — all feed the same shared inbox). */}
+          {emailAccounts.map((acct) => (
+            <Row
+              key={acct.id}
+              icon={Mail}
+              trail={
+                <span className="flex items-center gap-1.5">
+                  {acct.is_primary && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>Primary</span>}
+                  <StatusPill state={acct.status === 'connected' ? 'live' : 'off'}>{acct.status === 'connected' ? 'Connected' : 'Reconnect'}</StatusPill>
+                  {acct.status === 'error' && (
+                    <a href={`/api/auth/${acct.provider === 'microsoft' ? 'microsoft' : 'google'}/connect?agentId=${employee.id}`} className="v2-act tap-target">Reconnect</a>
                   )}
-                </div>
+                  {!acct.is_primary && acct.status === 'connected' && emailAccounts.length > 1 && (
+                    <button type="button" disabled={emailBusy} onClick={() => setPrimaryMailbox(acct.id)} className="v2-act tap-target">Set primary</button>
+                  )}
+                  <button type="button" disabled={emailBusy} onClick={() => disconnectMailbox(acct.id)} aria-label="Disconnect mailbox" className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }}><Link2Off /></button>
+                </span>
+              }
+            >
+              <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 13 }}>{acct.email_address}</span>
+            </Row>
+          ))}
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={releasePhone}
-                  loading={releasingPhone}
-                  className="text-red-600 border-red-200 hover:bg-red-50"
-                >
-                  <Link2Off className="w-3.5 h-3.5 mr-1.5" />
-                  Release Number
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-subtle">No phone number assigned. Provision a dedicated number for this agent — handles both inbound calls and SMS.</p>
-                <Button onClick={provisionPhone} loading={provisioningPhone} size="sm">
-                  <Phone className="w-3.5 h-3.5 mr-1.5" />
-                  {provisioningPhone ? 'Provisioning...' : 'Get Phone Number'}
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {/* Facebook + Instagram — one OAuth flow connects both */}
-          <div className="p-5 rounded-2xl border border-hairline space-y-3">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="flex items-center gap-1">
-                <FacebookIcon className="w-4 h-4" />
-                <InstagramIcon className="w-4 h-4" />
-              </span>
-              <span className="font-semibold text-ink">Facebook & Instagram</span>
-              {fbChannel && <Badge variant="connected">FB Connected</Badge>}
-              {igChannel && <Badge variant="connected">IG Connected</Badge>}
-              {!fbChannel && !igChannel && <Badge variant="disconnected">Not connected</Badge>}
+          {emailAccounts.length < 3 ? (
+            <div className="v2-bar" style={{ padding: '0 14px 14px' }}>
+              <a href={`/api/auth/google/connect?agentId=${employee.id}`} className="v2-act tap-target" data-solid={emailAccounts.length ? undefined : true} style={{ ['--ghue' as string]: 'var(--v2-t3)' }}>
+                {emailAccounts.length ? 'Add Gmail' : 'Connect Gmail'}
+              </a>
+              <a href={`/api/auth/microsoft/connect?agentId=${employee.id}`} className="v2-act tap-target">
+                {emailAccounts.length ? 'Add Outlook' : 'Connect Outlook'}
+              </a>
             </div>
-
-            {(fbChannel || igChannel) ? (
-              <div className="space-y-3">
-                {/* Facebook row */}
-                <div className="bg-sunken rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-subtle mb-0.5 flex items-center gap-1">
-                      <FacebookIcon className="w-3 h-3" /> Facebook Page
-                    </p>
-                    <p className="text-sm font-medium text-ink truncate">
-                      {fbChannel
-                        ? ((fbChannel.credentials as Record<string, string>)?.page_name || fbChannel.meta_page_id)
-                        : <span className="text-muted italic">Not connected</span>}
-                    </p>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
-                      <Button size="sm" variant="outline">
-                        {fbChannel ? 'Switch Page' : 'Connect'}
-                      </Button>
-                    </a>
-                    {fbChannel && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => disconnectChannel('facebook')}
-                        className="text-red-600 border-red-200 hover:bg-red-50 px-2"
-                      >
-                        <Link2Off className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Instagram row */}
-                <div className="bg-sunken rounded-xl p-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-subtle mb-0.5 flex items-center gap-1">
-                      <InstagramIcon className="w-3 h-3" /> Instagram Account
-                    </p>
-                    {igChannel ? (
-                      <p className="text-sm font-medium text-ink truncate">
-                        {(igChannel.credentials as Record<string, string>)?.username
-                          ? `@${(igChannel.credentials as Record<string, string>).username}`
-                          : igChannel.meta_page_id}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted">
-                        Not connected — link Instagram to your Facebook page first, then reconnect.
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    {!igChannel && (
-                      <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
-                        <Button size="sm" variant="outline">Connect</Button>
-                      </a>
-                    )}
-                    {igChannel && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => disconnectChannel('instagram')}
-                        className="text-red-600 border-red-200 hover:bg-red-50 px-2"
-                      >
-                        <Link2Off className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-sm text-subtle">
-                  Connect your Facebook Page and Instagram Business Account with one click.
-                  If your page has Instagram linked, both channels connect automatically.
-                </p>
-                <a href={`/api/auth/meta/connect?agentId=${employee.id}`}>
-                  {/* Meta Facebook Login brand guidelines: official blue #1877F2, white "f". */}
-                  <Button size="sm" className="bg-[#1877F2] hover:bg-[#166fe0] text-white">
-                    <FacebookIcon className="w-3.5 h-3.5 mr-1.5" color="#FFFFFF" />
-                    Continue with Facebook
-                  </Button>
-                </a>
-                <p className="text-xs text-muted">
-                  You&apos;ll be redirected to Facebook to choose which page to connect.
-                </p>
-              </div>
-            )}
-          </div>
-
-        </CardContent>
-      </Card>
-
-      {/* Email — channel order: Phone → Facebook/Instagram → Email */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Mail} tone="bg-violet-500" /> Email</CardTitle></CardHeader>
-        <CardContent className="space-y-5">
-          <p className="text-sm text-subtle">Connect your inbox and the AI reads new customer emails and replies natively from your address.</p>
-
-          {/* Option B — Connect your own inbox (Gmail OAuth). Recommended. */}
-          <div className="rounded-2xl border border-hairline p-5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-ink flex items-center gap-2">
-                <Mail className="w-4 h-4" /> Connect your inbox
-                <span className="text-[11px] font-medium text-[#4338CA] bg-[#eef1fd] rounded px-1.5 py-0.5">Recommended</span>
-              </span>
-              <span className="text-xs text-muted">{emailAccounts.length}/3 mailboxes</span>
-            </div>
-
-            {/* Connected mailboxes (up to 3 — all feed the same shared inbox). */}
-            {emailAccounts.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {emailAccounts.map((acct) => (
-                  <div key={acct.id} className="flex items-center justify-between gap-2 rounded-xl border border-hairline bg-sunken px-3 py-2.5">
-                    <div className="min-w-0">
-                      <p className="text-sm text-ink font-mono truncate">{acct.email_address}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {acct.status === 'connected'
-                          ? <Badge variant="connected">Connected</Badge>
-                          : <Badge variant="disconnected">Reconnect needed</Badge>}
-                        {acct.is_primary && <span className="text-[11px] font-medium text-subtle bg-white border border-hairline rounded px-1.5 py-0.5">Primary</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      {acct.status === 'error' && (
-                        <a href={`/api/auth/${acct.provider === 'microsoft' ? 'microsoft' : 'google'}/connect?agentId=${employee.id}`}>
-                          <Button type="button" size="sm" variant="outline">Reconnect</Button>
-                        </a>
-                      )}
-                      {!acct.is_primary && acct.status === 'connected' && emailAccounts.length > 1 && (
-                        <Button type="button" size="sm" variant="outline" disabled={emailBusy} onClick={() => setPrimaryMailbox(acct.id)}>Set primary</Button>
-                      )}
-                      <Button type="button" size="sm" variant="outline" disabled={emailBusy} onClick={() => disconnectMailbox(acct.id)} aria-label="Disconnect mailbox">
-                        <Link2Off className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {emailAccounts.length < 3 ? (
-              <div className="mt-3">
-                <p className="text-sm text-subtle mb-2">{emailAccounts.length === 0 ? 'Connect Gmail/Google Workspace or Outlook/Microsoft 365 — the AI replies from your own address, with full threading.' : 'Add another mailbox (up to 3). Both feed the same shared inbox.'}</p>
-                <div className="flex items-center gap-2">
-                  <a href={`/api/auth/google/connect?agentId=${employee.id}`}>
-                    <Button type="button" size="sm" variant={emailAccounts.length ? 'outline' : undefined}>{emailAccounts.length ? 'Add Gmail' : 'Connect Gmail'}</Button>
-                  </a>
-                  <a href={`/api/auth/microsoft/connect?agentId=${employee.id}`}>
-                    <Button type="button" size="sm" variant="outline">{emailAccounts.length ? 'Add Outlook' : 'Connect Outlook'}</Button>
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-muted mt-3">You&apos;ve reached the limit of 3 mailboxes. Disconnect one to add another.</p>
-            )}
-          </div>
-
-          {/* Option A — Forward to our Resend inbound address. HIDDEN from the UI for now
-              (backend inbound webhook + reply path stay fully active; we'll re-expose
-              this per-brand later). Render-gated only — do not delete. */}
-          {false && (
-          <div className="rounded-2xl border border-hairline p-5">
-            <span className="font-semibold text-ink flex items-center gap-2"><Share2 className="w-4 h-4" /> Or forward your email</span>
-            <p className="text-sm text-subtle mt-1">No inbox connection — just forward your business email to the address below and the AI handles replies.</p>
-            <div className="flex items-center gap-2 mt-3">
-              <Input readOnly value={`${tenantSlug}@mail.mylocksmithai.com`} className="bg-sunken font-mono text-sm" />
-              <Button type="button" variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(`${tenantSlug}@mail.mylocksmithai.com`); toast.success('Copied') }}>Copy</Button>
-            </div>
-            <div className="mt-3">
-              <Label>Reply-from email (optional)</Label>
-              <Input className="mt-1.5" type="email" placeholder="info@yourbusiness.com" value={form.reply_from_email} onChange={e => setForm(f => ({ ...f, reply_from_email: e.target.value }))} />
-              <p className="text-xs text-muted mt-1">Emails appear to come from this address (its domain must be verified in Resend). Blank = sent from our address.</p>
-            </div>
-          </div>
+          ) : (
+            <p className="v2-fhint" style={{ padding: '0 14px 14px' }}>You have reached the limit of 3 mailboxes. Disconnect one to add another.</p>
           )}
 
           {/* One mutually-exclusive choice mapped to the two existing booleans:
               manual → email_auto_reply=false
               first  → email_auto_reply=true,  email_handoff_after_first_reply=true
               whole  → email_auto_reply=true,  email_handoff_after_first_reply=false
-              Derived from the current field values on load (null treated as false). */}
-          {(() => {
-            const autoReply = form.email_auto_reply === true
-            const handoff = form.email_handoff_after_first_reply === true
-            const selected: 'manual' | 'first' | 'whole' = !autoReply ? 'manual' : handoff ? 'first' : 'whole'
-            const setMode = (mode: 'manual' | 'first' | 'whole') => setForm(f => ({
+              Derived from the current field values on load (null treated as false).
+              Three visible options rather than a select: a reply policy is a decision, and a select
+              would hide two thirds of it behind a tap. */}
+          <GlassChoice
+            label="How it replies"
+            value={form.email_auto_reply !== true ? 'manual' : form.email_handoff_after_first_reply === true ? 'first' : 'whole'}
+            onChange={(v) => setForm((f) => ({
               ...f,
-              email_auto_reply: mode !== 'manual',
-              email_handoff_after_first_reply: mode === 'first',
-            }))
-            const options: { value: 'manual' | 'first' | 'whole'; title: string; help: string; recommended?: boolean }[] = [
-              { value: 'manual', title: "Don't reply automatically — emails go to my inbox", help: 'The AI reads emails into your Inbox but never replies automatically. You handle every reply yourself.' },
-              { value: 'first', title: 'Reply to the first email, then hand the thread to me', help: "The AI sends one reply to acknowledge, then hands the conversation to you — it won't send anything else in that thread.", recommended: true },
-              { value: 'whole', title: 'Reply to the whole email conversation', help: 'The AI handles the entire email thread automatically, back and forth.' },
-            ]
-            return (
-              <div className="space-y-2">
-                {options.map(opt => (
-                  <label
-                    key={opt.value}
-                    htmlFor={`email_mode_${opt.value}`}
-                    className={`flex gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${selected === opt.value ? 'border-accent/40 bg-accent/5 shadow-e1' : 'border-hairline hover:border-hairline-strong hover:bg-sunken/50'}`}
-                  >
-                    <input
-                      id={`email_mode_${opt.value}`}
-                      type="radio"
-                      name="email_mode"
-                      checked={selected === opt.value}
-                      onChange={() => setMode(opt.value)}
-                      className="accent-[#5B6CF0] w-4 h-4 mt-0.5 flex-shrink-0"
-                    />
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-ink">{opt.title}</span>
-                        {opt.recommended && <span className="text-[10px] font-semibold uppercase tracking-wide text-[#4338CA] bg-[#5B6CF0]/15 px-1.5 py-0.5 rounded">Recommended</span>}
-                      </div>
-                      <p className="text-xs text-muted mt-0.5">{opt.help}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )
-          })()}
-        </CardContent>
-      </Card>
-
-      {/* Basic Info */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Bot} tone="bg-pink-500" /> AI Persona</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label>Agent Name</Label>
-            <Input className="mt-1.5" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          </div>
-          <div>
-            <Label>Greeting Message</Label>
-            <Textarea
-              className="mt-1.5"
-              rows={3}
-              value={form.greeting}
-              onChange={e => setForm(f => ({ ...f, greeting: e.target.value }))}
-              placeholder="Hi! Thank you for contacting us. How can I help you today?"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-
-      {/* Voice */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Mic} tone="bg-cyan-500" /> Voice</CardTitle></CardHeader>
-        <CardContent className="space-y-5">
-          <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} />
-          <div>
-            <Label>Call language</Label>
-            <select
-              value={form.voice_language}
-              onChange={e => setForm(f => ({ ...f, voice_language: e.target.value }))}
-              className="mt-1.5 w-full rounded-xl border border-hairline-strong bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition-shadow duration-200 focus:border-ink/15 focus:shadow-[0_0_0_4px_rgba(26,31,54,0.04)]"
-            >
-              <option value="en">English</option>
-              <option value="es">Spanish (Español)</option>
-              <option value="bilingual">Bilingual (English + Spanish)</option>
-            </select>
-            <p className="text-xs text-muted mt-1">
-              Language the agent understands and speaks on phone calls. Bilingual auto-detects and switches between English and Spanish. (Text channels already reply in the caller&apos;s language.)
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Custom Instructions */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Wand2} tone="bg-amber-500" /> Custom Instructions</CardTitle></CardHeader>
-        <CardContent>
-          <Textarea
-            rows={5}
-            value={form.system_prompt}
-            onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))}
-            placeholder="Add specific instructions for this AI agent. E.g.: Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
+              email_auto_reply: v !== 'manual',
+              email_handoff_after_first_reply: v === 'first',
+            }))}
+            options={[
+              { value: 'first', label: 'First reply only', hint: 'It acknowledges, then hands the thread to you.' },
+              { value: 'whole', label: 'The whole conversation', hint: 'It handles the thread back and forth.' },
+              { value: 'manual', label: 'Never', hint: 'Email arrives in your Inbox and waits for you.' },
+            ]}
           />
-        </CardContent>
-      </Card>
+        </Group>
 
-      {/* Business Details */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Briefcase} tone="bg-emerald-500" /> Business Details</CardTitle></CardHeader>
-        <CardContent>
-          <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
-        </CardContent>
-      </Card>
+        <Group hue="var(--v2-t1)" title="AI persona">
+          <Row icon={Bot}>Its name, and the first thing it says on every call and message.</Row>
+          <GlassInput label="Agent name" value={form.name} onChange={set('name')} />
+          <GlassInput label="Greeting message" value={form.greeting} onChange={set('greeting')} multiline
+            placeholder="Hi! Thank you for contacting us. How can I help you today?" />
+        </Group>
 
-      {/* Skills */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Sparkles} tone="bg-fuchsia-500" /> Skills</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-sm text-subtle mb-3">What your AI can do on calls and messages. Toggles save instantly.</p>
-          <SkillsEditor agentId={employee.id} initial={skills || []} />
-          <PaymentCollection agentId={employee.id} />
-        </CardContent>
-      </Card>
-
-      {/* SECTION 2 — Appointment Availability (drives booking; backed by appointment_slots) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2.5"><SectionIcon icon={Clock} tone="bg-sky-500" /> Appointment Availability</CardTitle>
-          <p className="text-sm text-subtle">When you&apos;ll take appointments. The AI only books inside these windows — separate from your open hours.</p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={() => setAppointmentHours({ ...businessHours })}>
-              Copy from Business Hours
-            </Button>
+        <Group hue="var(--v2-t4)" title="Voice">
+          <Row icon={Mic}>How it sounds, and the language it answers calls in.</Row>
+          <div style={{ padding: '0 14px 4px' }}>
+            <VoiceDemo value={form.voice} onChange={(v) => setForm(f => ({ ...f, voice: v }))} />
           </div>
-          <WeeklyHoursGrid hours={appointmentHours} onUpdate={updateAppointmentHours} />
-          <CalendarConnect agentId={employee.id} />
-          <StripeConnect agentId={employee.id} />
-          <QuickbooksConnect agentId={employee.id} />
-        </CardContent>
-      </Card>
+          <GlassSelect
+            label="Call language"
+            value={form.voice_language}
+            onChange={set('voice_language')}
+            options={[
+              { value: 'en', label: 'English' },
+              { value: 'es', label: 'Spanish (Español)' },
+              { value: 'bilingual', label: 'Bilingual (English + Spanish)' },
+            ]}
+            hint="Bilingual auto-detects and switches per caller. Text channels already reply in the caller’s language."
+          />
+        </Group>
 
-      {/* Google review automation. */}
-      <AvailabilityClient
-        tenantId={tenantId}
-        embedded
-        googleReviewUrl={googleReviewUrl || ''}
-        reviewEnabled={reviewEnabled ?? true}
-      />
+        <Group hue="var(--v2-t2)" title="Custom instructions">
+          <Row icon={Wand2}>Rules this agent follows on every call and message.</Row>
+          <GlassInput
+            label="Instructions"
+            value={form.system_prompt}
+            onChange={set('system_prompt')}
+            multiline
+            placeholder="Always mention our 24/7 emergency line. Never quote prices over $500 without manager approval."
+          />
+        </Group>
 
-      {/* Knowledge Base */}
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2.5"><SectionIcon icon={BookOpen} tone="bg-orange-500" /> Knowledge Base</CardTitle></CardHeader>
-        <CardContent>
-          <p className="text-sm text-subtle mb-3">Extra facts the AI uses to answer customers. Saved instantly.</p>
-          <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />
-        </CardContent>
-      </Card>
-
-      {/* Bottom Save — in its own card so it clearly reads as "save the whole agent"
-          (a bare floating button looked like it saved just the section above). The
-          green primary action lives HERE, not in the red Danger Zone. In onboarding
-          it's "Finish setup"; when editing it's "Save Changes". */}
-      <Card>
-        <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-4">
-          <p className="text-sm text-subtle">
-            {onboarding ? 'Finish setting up this AI employee.' : 'Save all changes to this AI employee.'}
-          </p>
-          {onboarding ? (
-            <Button onClick={finishSetup} loading={finishing} className="w-full sm:w-auto">Finish setup</Button>
-          ) : (
-            <Button onClick={handleSave} loading={saving} className="w-full sm:w-auto">Save Changes</Button>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Danger Zone — destructive actions only. The green primary action moved up
-          to the Save card above so it never sits beside the red Delete. */}
-      <Card className="border-danger/20">
-        <CardHeader><CardTitle className="text-danger">Danger Zone</CardTitle></CardHeader>
-        <CardContent>
-          <Button variant="destructive" onClick={handleDelete}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete Agent
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* A1 — MOBILE-ONLY always-on Save bar. On mobile the top-header Save is hidden
-          (max-md:hidden), so Save must always be reachable here. Hidden when the dirty
-          bar below is showing (to avoid stacking two bars) and on desktop (md:hidden).
-          Same handleSave/payload/loading state. */}
-      {!onboarding && !isDirty && (
-        <div className="md:hidden fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-3 pointer-events-none">
-          <div className="pointer-events-auto flex w-full items-center justify-end gap-3 rounded-full border border-hairline bg-white shadow-e3 px-5 py-2.5">
-            <Button onClick={handleSave} loading={saving} size="sm" className="flex-shrink-0 min-h-[44px]">Save Changes</Button>
+        <Group hue="var(--v2-t3)" title="Business details">
+          <Row icon={Briefcase}>The facts the AI quotes when a customer asks about how you work.</Row>
+          <div style={{ padding: '0 14px 14px' }}>
+            <BusinessDetails tenantId={tenantId} agentId={employee.id} initial={businessDetails} />
           </div>
+        </Group>
+
+        <Group hue="var(--v2-t1)" title="Skills">
+          <Row icon={Sparkles}>What your AI can do on calls and messages. Toggles save instantly.</Row>
+          <div style={{ padding: '0 14px 14px' }}>
+            <SkillsEditor agentId={employee.id} initial={skills || []} />
+            <PaymentCollection agentId={employee.id} />
+          </div>
+        </Group>
+
+        {/* SECTION 2 — Appointment Availability (drives booking; backed by appointment_slots) */}
+        <Group hue="var(--v2-t4)" title="Appointment availability">
+          <Row
+            icon={CalendarCheck}
+            trail={<button type="button" onClick={() => setAppointmentHours({ ...businessHours })} className="v2-act tap-target">Copy from business hours</button>}
+          >
+            When you will take appointments. The AI only books inside these windows — separate from your open hours.
+          </Row>
+          <div className="v2-hours"><WeeklyHoursGrid hours={appointmentHours} onUpdate={updateAppointmentHours} /></div>
+          <div style={{ padding: '0 14px 14px' }}>
+            <CalendarConnect agentId={employee.id} />
+            <StripeConnect agentId={employee.id} />
+            <QuickbooksConnect agentId={employee.id} />
+          </div>
+        </Group>
+
+        {/* Google review automation. */}
+        <AvailabilityClient
+          tenantId={tenantId}
+          embedded
+          googleReviewUrl={googleReviewUrl || ''}
+          reviewEnabled={reviewEnabled ?? true}
+        />
+
+        <Group hue="var(--v2-t2)" title="Knowledge base">
+          <Row icon={BookOpen}>Extra facts the AI uses to answer customers. Saved instantly.</Row>
+          <div style={{ padding: '0 14px 14px' }}>
+            <KnowledgeBaseEditor tenantId={tenantId} agentId={employee.id} initialEntries={knowledgeBase} />
+          </div>
+        </Group>
+
+        {/* SAVE. The filled pill only when there is something to save — otherwise the one strong
+            control on the screen points at a no-op. v1 put this in a card of its own to make it read
+            as "save the whole agent"; the bar does that without a fifteenth surface. */}
+        <div className="v2-savebar">
+          <button
+            type="button"
+            onClick={onboarding ? finishSetup : handleSave}
+            disabled={onboarding ? finishing : (saving || !isDirty)}
+            className="v2-act tap-target"
+            data-solid={onboarding || isDirty || undefined}
+          >
+            {onboarding
+              ? (finishing ? 'Finishing…' : 'Finish setup')
+              : saving ? 'Saving…' : isDirty ? 'Save changes' : 'Saved'}
+          </button>
         </div>
-      )}
 
-      {/* Sticky save bar — appears only when there are unsaved changes. On mobile it also
-          serves as the Save bar (replacing the always-on bar above). Same
-          handleSave/payload/loading state as the header + bottom buttons. */}
-      {isDirty && !onboarding && (
-        <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-50 flex justify-center px-3 pointer-events-none sm:bottom-4 sm:px-4">
-          <div className="pointer-events-auto flex w-full items-center justify-between gap-3 rounded-full border border-hairline bg-white shadow-e3 px-5 py-2.5 sm:w-auto sm:justify-start">
-            <span className="inline-flex items-center gap-2 text-sm text-subtle">
-              <span className="h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
-              Unsaved changes
+        {/* DANGER ZONE — destructive actions only, in the one hue reserved for them. handleDelete
+            keeps its own confirmation exactly as it is. */}
+        <Group title="Danger zone" danger>
+          <Row icon={Trash2} danger trail={<button type="button" onClick={handleDelete} className="v2-danger">Delete agent</button>}>
+            Deleting this agent removes its number, its channels and everything it has learned.
+          </Row>
+        </Group>
+      </div>
+
+      {/* THE STICKY SAVE. v1 pinned it at bottom-[calc(4.5rem+safe-area)] — 4.5rem was the height of
+          the bottom tab bar, which is gone. --v2-grab-h is the swipe-up handle's own published
+          height, so the bar clears whatever the handle actually is rather than a number that used to
+          be right. Same handleSave, same payload, same loading state as the button above. */}
+      {!onboarding && (
+        <div className="v2-sticky-save" data-dirty={isDirty || undefined}>
+          {isDirty && (
+            <span className="v2-kick" style={{ marginBottom: 0, ['--ghue' as string]: 'var(--v2-amber)' }}>
+              <i />Unsaved changes
             </span>
-            <Button onClick={handleSave} loading={saving} size="sm" className="flex-shrink-0">Save Changes</Button>
-          </div>
+          )}
+          <button onClick={handleSave} disabled={saving} className="v2-act tap-target" data-solid>
+            {saving ? 'Saving…' : 'Save changes'}
+          </button>
         </div>
       )}
     </div>

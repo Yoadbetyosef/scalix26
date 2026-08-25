@@ -1,10 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
+import { AlertTriangle, Check, Plus, X } from 'lucide-react'
+import { StatusPill } from '@/app/(v2)/v2/controls'
 import {
   type OwnerPlaybook,
   type PlaybookExample,
@@ -133,46 +131,46 @@ export function PlaybookClient({ agentId, agentName }: { agentId: string; agentN
 
   const update = (next: OwnerPlaybook) => { setPlaybook(next); setDirty(true) }
 
-  if (loading) return <div className="py-16 text-center text-sm text-muted">Loading {agentName}’s playbook…</div>
+  if (loading) return <p className="v2-kick" style={{ padding: '40px 0' }}>Loading {agentName}’s playbook…</p>
 
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="text-2xl font-light tracking-tight text-ink">AI Training</h1>
-        <p className="mt-1 text-sm text-subtle">
-          Teach {agentName} how you sell, schedule, and handle customers — then she answers every channel like you would.
-        </p>
-      </header>
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />AI training</p><s />
+      </div>
+      <p className="v2-hint" style={{ maxWidth: '62ch', marginBottom: 22 }}>
+        Teach {agentName} how you sell, schedule and handle customers — then she answers every channel like you would.
+      </p>
 
       {!migrated && (
-        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          The playbook tables aren’t set up yet. Run <code className="font-mono">supabase/migrations/add_owner_playbook.sql</code> and
-          <code className="font-mono"> add_playbook_suggestions.sql</code> in the Supabase SQL editor, then reload.
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-amber)', alignItems: 'flex-start', marginBottom: 20 }}>
+          <span className="v2-chip-sq"><AlertTriangle /></span>
+          <p>
+            The playbook tables are not set up yet.
+            <span style={{ display: 'block', marginTop: 4, fontSize: 13, fontWeight: 400, color: 'var(--v2-ink-45)' }}>
+              Run <code className="v2-mono">supabase/migrations/add_owner_playbook.sql</code> and{' '}
+              <code className="v2-mono">add_playbook_suggestions.sql</code> in the Supabase SQL editor, then reload.
+            </span>
+          </p>
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="mb-5 flex gap-1 border-b border-hairline">
-        {([['playbook', 'Playbook'], ['train', 'Train'], ['suggestions', `Suggestions${suggestions.length ? ` (${suggestions.length})` : ''}`]] as [Tab, string][]).map(([t, label]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'relative px-3 py-2 text-sm font-medium transition-colors',
-              tab === t ? 'text-ink' : 'text-muted hover:text-ink',
-            )}
-          >
-            {label}
-            {tab === t && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-ink" />}
-          </button>
+      {/* THE TABS, in the approved form: the mono micro-label used as a control, with a gradient
+          underline on the selected one. v1 marked it with a solid ink bar and a heavier weight —
+          two signals for one state, in a vocabulary the rail already owns. */}
+      <div className="v2-tabs" style={{ marginBottom: 22 }}>
+        {([['playbook', 'Playbook'], ['train', 'Train'], ['suggestions', `Suggestions${suggestions.length ? ` · ${suggestions.length}` : ''}`]] as [Tab, string][]).map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)} className="v2-tab" data-on={tab === t || undefined}>{label}</button>
         ))}
-        <div className="ml-auto flex items-center pb-2">
-          <StatusPill status={status} />
-        </div>
+        <span style={{ flex: 1 }} />
+        <span style={{ paddingBottom: 9 }}><PlaybookStatusPill status={status} /></span>
       </div>
 
       {banner && (
-        <div className="mb-4 rounded-xl bg-sunken px-4 py-3 text-sm text-subtle">{banner}</div>
+        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t3)', marginBottom: 18 }}>
+          <span className="v2-chip-sq"><Check /></span>
+          <p>{banner}</p>
+        </div>
       )}
 
       {tab === 'train' && (
@@ -186,28 +184,35 @@ export function PlaybookClient({ agentId, agentName }: { agentId: string; agentN
       {tab === 'playbook' && (
         <div>
           {!playbook ? (
-            <div className="rounded-2xl border border-dashed border-hairline-strong p-10 text-center">
-              <p className="text-sm text-ink">No playbook yet.</p>
-              <p className="mt-1 text-xs text-muted">Generate one from your website scan, profile, and onboarding answers.</p>
-              <div className="mt-4 flex justify-center gap-2">
-                <Button loading={busy === 'generate'} onClick={() => generate()}>Generate playbook</Button>
-                <Button variant="outline" onClick={() => setTab('train')}>Answer interview first</Button>
-              </div>
+            <div className="v2-card" data-empty>
+              <b>No playbook yet</b>
+              <span>Generate one from your website scan, your profile and your onboarding answers — or answer the interview first and generate from that.</span>
+              <span className="v2-bar" style={{ marginTop: 8 }}>
+                <button disabled={busy === 'generate'} onClick={() => generate()} className="v2-act tap-target" data-solid>
+                  {busy === 'generate' ? 'Generating…' : 'Generate playbook'}
+                </button>
+                <button onClick={() => setTab('train')} className="v2-act tap-target">Answer interview first</button>
+              </span>
             </div>
           ) : (
             <>
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Button loading={busy === 'approve'} onClick={approve}>
-                  {status === 'approved' ? 'Re-approve & update live' : 'Approve & go live'}
-                </Button>
-                <Button variant="outline" loading={busy === 'save'} disabled={!dirty} onClick={saveDraft}>
-                  {dirty ? 'Save draft' : 'Saved'}
-                </Button>
-                <Button variant="ghost" loading={busy === 'generate'} onClick={() => generate()}>Regenerate</Button>
-                <Button variant="ghost" onClick={() => setPlaybook(emptyPlaybook())}>Clear</Button>
+              {/* The separator marks where reversible stops: approving publishes this to every
+                  channel, and Clear empties the whole playbook. */}
+              <div className="v2-bar" style={{ marginBottom: 22 }}>
+                <button disabled={busy === 'approve'} onClick={approve} className="v2-act tap-target" data-solid>
+                  {busy === 'approve' ? 'Approving…' : status === 'approved' ? 'Re-approve & update live' : 'Approve & go live'}
+                </button>
+                <button disabled={busy === 'save' || !dirty} onClick={saveDraft} className="v2-act tap-target">
+                  {busy === 'save' ? 'Saving…' : dirty ? 'Save draft' : 'Saved'}
+                </button>
+                <button disabled={busy === 'generate'} onClick={() => generate()} className="v2-act tap-target">
+                  {busy === 'generate' ? 'Generating…' : 'Regenerate'}
+                </button>
+                <hr />
+                <button onClick={() => setPlaybook(emptyPlaybook())} className="v2-act tap-target" data-danger>Clear</button>
               </div>
 
-              <div className="space-y-4">
+              <div style={{ display: 'grid', gap: 26 }}>
                 {PLAYBOOK_SECTIONS.map((s) => (
                   <SectionCard
                     key={s.key as string}
@@ -226,13 +231,13 @@ export function PlaybookClient({ agentId, agentName }: { agentId: string; agentN
   )
 }
 
-function StatusPill({ status }: { status: PlaybookStatus }) {
-  const map = {
-    none: { t: 'Not set up', c: 'bg-sunken text-muted' },
-    draft: { t: 'Draft — not live', c: 'bg-amber-100 text-amber-800' },
-    approved: { t: 'Live on all channels', c: 'bg-emerald-100 text-emerald-800' },
-  }[status]
-  return <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-medium', map.c)}>{map.t}</span>
+function PlaybookStatusPill({ status }: { status: PlaybookStatus }) {
+  // 'none' is not a state worth a pill — nothing has gone wrong and nothing is live; the empty state
+  // below already says so. Draft is the one that needs a person, so it is the one that carries amber.
+  if (status === 'none') return <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>Not set up</span>
+  return <StatusPill state={status === 'approved' ? 'live' : 'pending'}>
+    {status === 'approved' ? 'Live on all channels' : 'Draft — not live'}
+  </StatusPill>
 }
 
 function SectionCard({
@@ -247,54 +252,66 @@ function SectionCard({
   onChange: (v: string | string[] | PlaybookExample[]) => void
 }) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-e1 ring-1 ring-hairline">
-      <h3 className="mb-2 text-sm font-medium text-ink">{label}</h3>
+    <section>
+      <div className="v2-head"><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />{label}</p><s /></div>
       {kind === 'text' && (
-        <Textarea value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} className="min-h-[60px]" />
+        <div className="v2-fld">
+          <label htmlFor={`pb-${label}`}>What to say</label>
+          <textarea id={`pb-${label}`} value={(value as string) || ''} onChange={(e) => onChange(e.target.value)} rows={3} />
+        </div>
       )}
-      {kind === 'list' && <ListEditor items={(value as string[]) || []} onChange={onChange} />}
+      {kind === 'list' && <ListEditor items={(value as string[]) || []} onChange={onChange} label={label} />}
       {kind === 'examples' && <ExamplesEditor items={(value as PlaybookExample[]) || []} onChange={onChange} />}
-    </div>
+    </section>
   )
 }
 
-function ListEditor({ items, onChange }: { items: string[]; onChange: (v: string[]) => void }) {
+function ListEditor({ items, onChange, label }: { items: string[]; onChange: (v: string[]) => void; label: string }) {
   return (
-    <div className="space-y-2">
+    <div style={{ display: 'grid', gap: 14 }}>
       {items.map((it, idx) => (
-        <div key={idx} className="flex items-center gap-2">
-          <Input
-            value={it}
-            onChange={(e) => { const next = [...items]; next[idx] = e.target.value; onChange(next) }}
-          />
-          <button onClick={() => onChange(items.filter((_, i) => i !== idx))} className="text-muted hover:text-danger" aria-label="Remove">✕</button>
+        <div key={idx} style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
+            <label htmlFor={`pb-${label}-${idx}`}>Line {idx + 1}</label>
+            <input
+              id={`pb-${label}-${idx}`}
+              value={it}
+              onChange={(e) => { const next = [...items]; next[idx] = e.target.value; onChange(next) }}
+            />
+          </div>
+          <button onClick={() => onChange(items.filter((_, i) => i !== idx))} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} aria-label={`Remove line ${idx + 1}`}><X /></button>
         </div>
       ))}
-      <button onClick={() => onChange([...items, ''])} className="text-xs font-medium text-subtle hover:text-ink">+ Add</button>
+      <div className="v2-bar">
+        <button onClick={() => onChange([...items, ''])} className="v2-act tap-target"><Plus className="w-3.5 h-3.5" /> Add</button>
+      </div>
     </div>
   )
 }
 
 function ExamplesEditor({ items, onChange }: { items: PlaybookExample[]; onChange: (v: PlaybookExample[]) => void }) {
   return (
-    <div className="space-y-3">
+    <div style={{ display: 'grid', gap: 22 }}>
       {items.map((it, idx) => (
-        <div key={idx} className="rounded-xl bg-sunken p-3">
-          <Input
-            placeholder="Customer says…"
-            value={it.customer}
-            onChange={(e) => { const next = [...items]; next[idx] = { ...it, customer: e.target.value }; onChange(next) }}
-          />
-          <Input
-            placeholder="Ideal reply…"
-            value={it.reply}
-            className="mt-2"
-            onChange={(e) => { const next = [...items]; next[idx] = { ...it, reply: e.target.value }; onChange(next) }}
-          />
-          <button onClick={() => onChange(items.filter((_, i) => i !== idx))} className="mt-2 text-xs text-muted hover:text-danger">Remove</button>
+        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <div className="v2-form" style={{ flex: 1, minWidth: 0, gap: '14px 26px' }}>
+            <div className="v2-fld wide">
+              <label htmlFor={`pb-ex-${idx}-c`}>Customer says</label>
+              <input id={`pb-ex-${idx}-c`} value={it.customer}
+                onChange={(e) => { const next = [...items]; next[idx] = { ...it, customer: e.target.value }; onChange(next) }} />
+            </div>
+            <div className="v2-fld wide">
+              <label htmlFor={`pb-ex-${idx}-r`}>Ideal reply</label>
+              <input id={`pb-ex-${idx}-r`} value={it.reply}
+                onChange={(e) => { const next = [...items]; next[idx] = { ...it, reply: e.target.value }; onChange(next) }} />
+            </div>
+          </div>
+          <button onClick={() => onChange(items.filter((_, i) => i !== idx))} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)', marginTop: 20 }} aria-label={`Remove example ${idx + 1}`}><X /></button>
         </div>
       ))}
-      <button onClick={() => onChange([...items, { customer: '', reply: '' }])} className="text-xs font-medium text-subtle hover:text-ink">+ Add example</button>
+      <div className="v2-bar">
+        <button onClick={() => onChange([...items, { customer: '', reply: '' }])} className="v2-act tap-target"><Plus className="w-3.5 h-3.5" /> Add example</button>
+      </div>
     </div>
   )
 }

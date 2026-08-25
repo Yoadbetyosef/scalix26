@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { channelHue } from '@/app/(v2)/v2/channels'
 import { PLAYBOOK_SECTIONS } from '@/lib/playbook/types'
 
 export interface Suggestion {
@@ -67,44 +67,50 @@ export function SuggestionsQueue({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-medium text-ink">Suggested improvements</h3>
-          <p className="text-xs text-muted">Learned from your real conversations. Nothing changes until you approve it.</p>
-        </div>
-        <Button variant="outline" size="sm" loading={scanning} onClick={scan}>
-          Scan conversations
-        </Button>
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />Suggested improvements</p>
+        <s />
+        <button disabled={scanning} onClick={scan} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+          {scanning ? 'Scanning…' : 'Scan conversations'}
+        </button>
       </div>
+      <p className="v2-hint" style={{ maxWidth: '60ch', marginBottom: 18 }}>
+        Learned from your real conversations. Nothing changes until you approve it.
+      </p>
 
-      {msg && <p className="mb-3 text-xs text-subtle">{msg}</p>}
+      {msg && <p className="v2-kick" style={{ marginBottom: 14 }}>{msg}</p>}
 
       {items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-hairline-strong p-8 text-center">
-          <p className="text-sm text-muted">No pending suggestions. Run a scan after your AI has handled some conversations.</p>
+        <div className="v2-card" data-empty>
+          <b>No pending suggestions</b>
+          <span>Run a scan once your AI has handled some conversations — it proposes changes from what actually happened, never from guesses.</span>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <div style={{ display: 'grid', gap: 22 }}>
           {items.map((s) => (
-            <li key={s.id} className="rounded-2xl bg-white p-4 shadow-e1 ring-1 ring-hairline">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-sunken px-2 py-0.5 text-[11px] font-medium text-subtle">{labelOf(s.section)}</span>
+            <section key={s.id}>
+              <div className="v2-head">
+                <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><i />{labelOf(s.section)}</p>
+                <s />
                 {s.channels.slice(0, 4).map((c) => (
-                  <span key={c} className="text-[11px] text-muted">{c}</span>
+                  <span key={c} className="v2-stat" style={{ ['--chan' as string]: channelHue(c) }}>{c}</span>
                 ))}
-                <span className="ml-auto text-[11px] text-muted">{Math.round(s.confidence * 100)}% sure</span>
+                <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>{Math.round(s.confidence * 100)}% sure</span>
               </div>
-              <p className="mt-2 text-sm text-ink">{s.observation}</p>
-              <p className="mt-1 rounded-lg bg-sunken px-3 py-2 text-[13px] text-subtle">
+              <p style={{ fontSize: 14.5, lineHeight: 1.45, color: 'var(--v2-ink)' }}>{s.observation}</p>
+              {/* What it would add, set as the quotation it is. */}
+              <p className="v2-quote" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>
                 {s.proposed.text || (s.proposed.customer ? `“${s.proposed.customer}” → “${s.proposed.reply}”` : '')}
               </p>
-              <div className="mt-3 flex items-center gap-2">
-                <Button size="sm" loading={busy === s.id} onClick={() => act(s.id, 'approve')}>Add to playbook</Button>
-                <Button variant="ghost" size="sm" disabled={busy === s.id} onClick={() => act(s.id, 'reject')}>Dismiss</Button>
+              <div className="v2-bar" style={{ marginTop: 14 }}>
+                <button disabled={busy === s.id} onClick={() => act(s.id, 'approve')} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+                  {busy === s.id ? 'Adding…' : 'Add to playbook'}
+                </button>
+                <button disabled={busy === s.id} onClick={() => act(s.id, 'reject')} className="v2-act tap-target">Dismiss</button>
               </div>
-            </li>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

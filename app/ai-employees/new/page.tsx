@@ -11,8 +11,6 @@ export default async function NewAIEmployeePage() {
   if (!user) redirect('/auth/login')
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa]">
-      <NewEmployeeLauncher />
-    </div>
+    <NewEmployeeLauncher />
   )
 }

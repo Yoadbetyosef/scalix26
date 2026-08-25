@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 
 // High-leverage owner-interview questions — vertical-agnostic. The question text is the
 // stable key stored in ai_employees.onboarding_answers, so it flows straight into playbook
@@ -53,52 +51,55 @@ export function OwnerInterview({
   }
 
   return (
-    <div className="mx-auto max-w-xl">
-      <div className="mb-4 flex items-center justify-between text-xs text-muted">
-        <span>Question {i + 1} of {INTERVIEW_QUESTIONS.length}</span>
-        <span>{answered} answered</span>
+    <div style={{ maxWidth: 620 }}>
+      {/* THE PROGRESS RULE, not a bar in a track. Same 2px gradient as the tab underline and the
+          website sync — one way of saying "this far along" for the whole product. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
+        <p className="v2-kick" style={{ marginBottom: 0 }}>Question {i + 1} of {INTERVIEW_QUESTIONS.length}</p>
+        <s style={{ flex: 1 }} />
+        <p className="v2-kick" style={{ marginBottom: 0 }}>{answered} answered</p>
       </div>
-      <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-sunken">
-        <div className="h-full rounded-full bg-ink transition-all" style={{ width: `${((i + 1) / INTERVIEW_QUESTIONS.length) * 100}%` }} />
+      <div style={{ height: 2, borderRadius: 2, background: 'var(--v2-line)', overflow: 'hidden', marginBottom: 26 }}>
+        <div style={{
+          height: '100%', borderRadius: 2,
+          background: 'linear-gradient(90deg, var(--v2-t1), var(--v2-t3) 60%, var(--v2-t4))',
+          width: `${((i + 1) / INTERVIEW_QUESTIONS.length) * 100}%`, transition: 'width 0.3s',
+        }} />
       </div>
 
-      <div className="rounded-3xl bg-white p-6 shadow-e2 ring-1 ring-hairline">
-        <h3 className="text-lg font-light leading-snug text-ink">{current.q}</h3>
-        <p className="mt-1 text-xs text-muted">{current.hint}</p>
-        <Textarea
+      {/* One question at a time, and it is the only thing on the screen — so it is set as a question,
+          not as the title of a card. v1 wrapped it in a 24px-radius surface with a second shadow. */}
+      <h3 style={{ fontSize: 20, fontWeight: 500, lineHeight: 1.3, letterSpacing: '-0.015em', color: 'var(--v2-ink)' }}>{current.q}</h3>
+      <p className="v2-hint" style={{ marginTop: 6, marginBottom: 18 }}>{current.hint}</p>
+
+      <div className="v2-fld">
+        <label htmlFor="oi-answer">Your answer</label>
+        <textarea
+          id="oi-answer"
           autoFocus
+          rows={4}
           value={answers[current.q] || ''}
           onChange={(e) => setAnswers((a) => ({ ...a, [current.q]: e.target.value }))}
-          placeholder="Type how you'd handle it…"
-          className="mt-4 min-h-[110px]"
+          placeholder="Type how you’d handle it…"
         />
-
-        <div className="mt-5 flex items-center justify-between">
-          <Button variant="ghost" size="sm" disabled={i === 0 || saving} onClick={() => setI((n) => Math.max(0, n - 1))}>
-            Back
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" disabled={saving} onClick={() => (isLast ? save(true) : setI((n) => n + 1))}>
-              Skip
-            </Button>
-            {isLast ? (
-              <Button size="sm" loading={saving} onClick={() => save(true)}>
-                Build playbook
-              </Button>
-            ) : (
-              <Button size="sm" disabled={saving} onClick={() => setI((n) => n + 1)}>
-                Next
-              </Button>
-            )}
-          </div>
-        </div>
       </div>
 
-      <div className="mt-4 text-center">
-        <button onClick={() => save(true)} disabled={saving} className="text-xs font-medium text-muted transition-colors hover:text-ink">
-          Skip the rest & build from what I’ve answered
+      <div className="v2-bar" style={{ marginTop: 22 }}>
+        <button disabled={i === 0 || saving} onClick={() => setI((n) => Math.max(0, n - 1))} className="v2-act tap-target">Back</button>
+        <s style={{ flex: 1 }} />
+        <button disabled={saving} onClick={() => (isLast ? save(true) : setI((n) => n + 1))} className="v2-act tap-target">Skip</button>
+        {isLast ? (
+          <button disabled={saving} onClick={() => save(true)} className="v2-act tap-target" data-solid>{saving ? 'Building…' : 'Build playbook'}</button>
+        ) : (
+          <button disabled={saving} onClick={() => setI((n) => n + 1)} className="v2-act tap-target" data-solid>Next</button>
+        )}
+      </div>
+
+      <p style={{ marginTop: 20 }}>
+        <button onClick={() => save(true)} disabled={saving} className="v2-act tap-target">
+          Skip the rest &amp; build from what I’ve answered
         </button>
-      </div>
+      </p>
     </div>
   )
 }

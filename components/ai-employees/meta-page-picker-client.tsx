@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { CheckCircle2, Share2, MessageCircle } from 'lucide-react'
+import { CheckCircle2, Share2 } from 'lucide-react'
 
 interface MetaPageData {
   id: string
@@ -52,70 +51,44 @@ export function MetaPagePickerClient({ agentId, pages }: Props) {
   }
 
   return (
-    <div className="w-full max-w-md">
-      <div className="bg-white rounded-2xl shadow-sm border border-hairline p-6 sm:p-8">
-        <div className="flex justify-center mb-5">
-          <div className="w-10 h-10 bg-[#5B6CF0] rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">S</span>
-          </div>
-        </div>
+    <div className="v2 v2-embedded" style={{ width: '100%', maxWidth: 460 }}>
+      {/* No product monogram at the top. This page is reached mid-flow from Facebook, inside the
+          app, with the rail already saying where you are — a logo here was the only place in the
+          product that reintroduced itself to a signed-in owner. */}
+      <div className="v2-head">
+        <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />Choose a Facebook Page</p><s />
+      </div>
+      <p className="v2-hint" style={{ marginBottom: 18 }}>
+        Which page should this agent answer for? If the page has an Instagram Business Account linked,
+        that connects with it automatically.
+      </p>
 
-        <h1 className="text-xl font-bold text-ink mb-1">Choose a Facebook Page</h1>
-        <p className="text-sm text-subtle mb-6">
-          Select which page to connect to this agent. If the page has an Instagram Business Account linked, it will be connected automatically.
-        </p>
-
-        <div className="space-y-3 mb-6">
-          {pages.map(page => (
-            <button
-              key={page.id}
-              type="button"
-              onClick={() => setSelected(page.id)}
-              className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                selected === page.id
-                  ? 'border-[#5B6CF0] bg-[#5B6CF0]/5'
-                  : 'border-hairline-strong hover:border-hairline-strong'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-ink truncate">{page.name}</p>
-                  <div className="flex items-center gap-3 mt-1 flex-wrap">
-                    <span className="flex items-center gap-1 text-xs text-blue-600">
-                      <Share2 className="w-3 h-3" /> Facebook
-                    </span>
-                    {page.instagram && (
-                      <span className="flex items-center gap-1 text-xs text-pink-500 min-w-0">
-                        <MessageCircle className="w-3 h-3 flex-shrink-0" /> <span className="truncate">@{page.instagram.username}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {selected === page.id && (
-                  <CheckCircle2 className="w-5 h-5 text-[#5B6CF0] flex-shrink-0" />
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => router.push(`/ai-employees/${agentId}`)}
+      <div className="v2-list" style={{ marginBottom: 20 }}>
+        {pages.map(page => (
+          <button
+            key={page.id}
+            type="button"
+            onClick={() => setSelected(page.id)}
+            className="v2-row tap-target"
+            data-click
+            aria-pressed={selected === page.id}
+            style={{ ['--chan' as string]: 'var(--v2-t1)', textAlign: 'left', width: '100%', background: selected === page.id ? 'var(--v2-hover)' : undefined }}
           >
-            Cancel
-          </Button>
-          <Button
-            className="flex-1"
-            disabled={!selected}
-            loading={connecting}
-            onClick={handleConnect}
-          >
-            Connect Page
-          </Button>
-        </div>
+            <span className="v2-chip-sq" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><Share2 /></span>
+            <div className="v2-m">
+              <p><span className="truncate">{page.name}</span></p>
+              <span>Facebook{page.instagram ? ` · @${page.instagram.username}` : ''}</span>
+            </div>
+            {selected === page.id && <CheckCircle2 className="w-5 h-5 flex-none" style={{ color: 'var(--v2-t1)' }} />}
+          </button>
+        ))}
+      </div>
+
+      <div className="v2-bar">
+        <button type="button" className="v2-act tap-target" onClick={() => router.push(`/ai-employees/${agentId}`)}>Cancel</button>
+        <button type="button" className="v2-act tap-target" data-solid disabled={!selected || connecting} onClick={handleConnect}>
+          {connecting ? 'Connecting…' : 'Connect page'}
+        </button>
       </div>
     </div>
   )

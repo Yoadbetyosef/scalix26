@@ -3,9 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Pencil, X, Check } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
+import { GlassChoice } from '@/app/(v2)/v2/controls'
 
 export type KBEntry = { id: string; title: string; content: string; shared: boolean }
 type Draft = { title: string; content: string; shared: boolean }
@@ -68,23 +66,26 @@ export function KnowledgeBaseEditor({
   }
 
   return (
-    <div className="space-y-3">
+    <div>
       {entries.map((e) =>
         editingId === e.id ? (
           <EntryForm key={e.id} draft={draft} setDraft={setDraft} onSave={save} onCancel={cancel} saving={saving} />
         ) : (
-          <div key={e.id} className="border border-hairline rounded-lg p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-ink">{e.title}</p>
-                <span className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${e.shared ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{e.shared ? 'Shared with all AI Employees' : 'Only this AI Employee'}</span>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button onClick={() => startEdit(e)} className="text-muted hover:text-ink p-1"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => remove(e.id)} className="text-muted hover:text-red-500 p-1"><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-            <p className="text-xs text-subtle mt-1 whitespace-pre-wrap line-clamp-3">{e.content}</p>
+          <div key={e.id} className="v2-grow" data-static>
+            <span className="v2-glab">
+              <b style={{ fontWeight: 550 }}>{e.title}</b>
+              {/* Scope is the one fact about an entry that changes what it does, so it is the one
+                  thing on the row that carries a hue: violet for shared across every employee,
+                  mute for this one only. */}
+              <span className="v2-stat" style={{ ['--chan' as string]: e.shared ? 'var(--v2-t3)' : 'var(--v2-mute)', marginLeft: 8 }}>
+                {e.shared ? 'All AI employees' : 'This one only'}
+              </span>
+              <span style={{ display: 'block', marginTop: 4, fontSize: 12.5, lineHeight: 1.45, color: 'var(--v2-ink-45)', whiteSpace: 'pre-wrap' }}>{e.content}</span>
+            </span>
+            <span className="v2-gtrail">
+              <button onClick={() => startEdit(e)} className="v2-ico" aria-label={`Edit ${e.title}`}><Pencil /></button>
+              <button onClick={() => remove(e.id)} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} aria-label={`Delete ${e.title}`}><X /></button>
+            </span>
           </div>
         ),
       )}
@@ -92,9 +93,9 @@ export function KnowledgeBaseEditor({
       {editingId === 'new' && <EntryForm draft={draft} setDraft={setDraft} onSave={save} onCancel={cancel} saving={saving} />}
 
       {editingId !== 'new' && (
-        <Button variant="outline" size="sm" onClick={startAdd}>
-          <Plus className="w-4 h-4 mr-1.5" /> Add Entry
-        </Button>
+        <div className="v2-bar" style={{ marginTop: 14 }}>
+          <button onClick={startAdd} className="v2-act tap-target"><Plus className="w-3.5 h-3.5" /> Add entry</button>
+        </div>
       )}
     </div>
   )
@@ -110,19 +111,29 @@ function EntryForm({
   saving: boolean
 }) {
   return (
-    <div className="border-2 border-[#5B6CF0]/40 rounded-lg p-3 space-y-2">
-      <Input placeholder="Title (e.g. Pricing, Service Area)" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-      <Textarea rows={3} placeholder="Details the AI should know…" value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} />
-      <div>
-        <p className="text-xs font-medium text-muted mb-1">Who can use this?</p>
-        <div className="inline-flex rounded-lg border border-hairline overflow-hidden text-xs">
-          <button type="button" onClick={() => setDraft({ ...draft, shared: true })} className={`px-2.5 py-1.5 ${draft.shared ? 'bg-emerald-600 text-white' : 'text-muted hover:bg-hover'}`}>Shared with all AI Employees</button>
-          <button type="button" onClick={() => setDraft({ ...draft, shared: false })} className={`px-2.5 py-1.5 border-l border-hairline ${!draft.shared ? 'bg-amber-600 text-white' : 'text-muted hover:bg-hover'}`}>Only this AI Employee</button>
-        </div>
+    <div style={{ padding: '14px 0' }}>
+      <div className="v2-fld" style={{ marginBottom: 18 }}>
+        <label htmlFor="kb-title">Title</label>
+        <input id="kb-title" placeholder="e.g. Pricing, Service area" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
       </div>
-      <div className="flex gap-2">
-        <Button size="sm" onClick={onSave} loading={saving}><Check className="w-4 h-4 mr-1" /> Save</Button>
-        <Button size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
+      <div className="v2-fld" style={{ marginBottom: 18 }}>
+        <label htmlFor="kb-content">Details the AI should know</label>
+        <textarea id="kb-content" rows={3} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} />
+      </div>
+      {/* Two mutually exclusive options, in the kit's choice control — v1 used a segmented pair
+          filled emerald and amber, which read as good-and-warning rather than as two scopes. */}
+      <GlassChoice
+        label="Who can use this?"
+        value={draft.shared ? 'all' : 'one'}
+        onChange={(v) => setDraft({ ...draft, shared: v === 'all' })}
+        options={[
+          { value: 'all', label: 'All AI employees', hint: 'Every employee can quote it.' },
+          { value: 'one', label: 'Only this one', hint: 'Nobody else sees it.' },
+        ]}
+      />
+      <div className="v2-bar" style={{ marginTop: 18 }}>
+        <button onClick={onSave} disabled={saving} className="v2-act tap-target" data-solid><Check className="w-3.5 h-3.5" /> {saving ? 'Saving…' : 'Save'}</button>
+        <button onClick={onCancel} className="v2-act tap-target">Cancel</button>
       </div>
     </div>
   )

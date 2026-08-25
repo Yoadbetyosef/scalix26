@@ -78,11 +78,12 @@ export function VoiceDemo({ value, onChange }: { value: string; onChange: (voice
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm font-medium text-ink">Choose your AI voice</p>
-
-      {/* Voice picker */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+    <div>
+      {/* THE VOICE PICKER KEEPS ITS PORTRAITS, and that is not a breach of the one-face rule. The
+          employee's face is the robot; this is the question "whose voice should it speak in", and a
+          voice belongs to a person. The employee's own avatar is fifty pixels up the page in its
+          robot form, so the two never claim to be the same thing. */}
+      <div className="flex flex-wrap gap-2" style={{ marginBottom: 18 }}>
         {VOICES.map((v) => {
           const isSel = active === v.id
           return (
@@ -90,40 +91,33 @@ export function VoiceDemo({ value, onChange }: { value: string; onChange: (voice
               key={v.id}
               type="button"
               onClick={() => onChange(v.id)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-colors ${
-                isSel ? 'border-[#5B6CF0] bg-[#5B6CF0]/10' : 'border-hairline-strong hover:border-hairline-strong'
-              }`}
+              aria-pressed={isSel}
+              className="v2-vopt"
+              data-on={isSel || undefined}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={avatarUrl(v.name)} alt={v.name} className="w-12 h-12 rounded-full object-cover bg-white border border-hairline" />
-              <span className="text-sm font-semibold text-ink">{v.name}</span>
-              <span className="text-[11px] text-muted leading-tight text-center">{v.gender}</span>
+              <img src={avatarUrl(v.name)} alt="" />
+              <b>{v.name}</b>
+              <em>{v.gender}</em>
             </button>
           )
         })}
       </div>
 
-      {/* Demo stage */}
-      <div className="rounded-xl border-2 border-[#5B6CF0] bg-[#5B6CF0]/5 p-5">
-        <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={avatarUrl(selected.name)} alt={selected.name} className="w-12 h-12 rounded-full object-cover bg-white border border-hairline" />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-ink">{selected.name}</p>
-            <p className="text-xs text-subtle">{selected.description} • {selected.gender}</p>
-          </div>
+      {/* The one selected, and the button that plays it. */}
+      <div className="v2-grow" data-static style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={avatarUrl(selected.name)} alt="" style={{ width: 40, height: 40, flex: 'none', borderRadius: '50%', objectFit: 'cover', background: '#fff', border: '1px solid var(--v2-line)' }} />
+        <span className="v2-glab">
+          <b style={{ fontWeight: 550 }}>{selected.name}</b>
+          <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>{selected.description} · {selected.gender}</span>
+        </span>
+        <span className="v2-gtrail">
           <WaveViz level={0} mode="idle" />
-        </div>
-
-        <div className="flex items-center gap-2 mt-4">
-          <button
-            type="button"
-            onClick={() => preview(active)}
-            className="tap-target inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-ink text-white hover:bg-ink/90"
-          >
-            <Play className="w-4 h-4" /> Preview
+          <button type="button" onClick={() => preview(active)} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t4)' }}>
+            <Play className="w-3.5 h-3.5" /> Preview
           </button>
-        </div>
+        </span>
       </div>
     </div>
   )

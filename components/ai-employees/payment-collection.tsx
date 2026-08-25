@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Switch } from '@/components/ui/switch'
-import { Button } from '@/components/ui/button'
-import { CreditCard, Lock, Check, X } from 'lucide-react'
+import { GlassToggle } from '@/app/(v2)/v2/controls'
+import { channelHue } from '@/app/(v2)/v2/channels'
+import { CreditCard, Lock, X } from 'lucide-react'
 
 interface Settings {
   require_approval: boolean
@@ -80,97 +80,107 @@ export function PaymentCollection({ agentId }: { agentId: string }) {
   // Locked until Stripe Connect is connected.
   if (connected === false) {
     return (
-      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-        <div className="flex items-center gap-2">
-          <CreditCard className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-700">Payment Collection</span>
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600"><Lock className="h-3 w-3" /> Locked</span>
+      <div style={{ marginTop: 18 }}>
+        <div className="v2-grow" data-static>
+          <span className="v2-chip-sq" style={{ ['--ghue' as string]: 'var(--v2-mute)' }}><CreditCard /></span>
+          <span className="v2-glab">
+            <b style={{ fontWeight: 550 }}>Payment collection</b>
+            <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, color: 'var(--v2-ink-45)' }}>
+              Let the AI send customers secure Stripe payment links. Connect Stripe first — it is in
+              the Appointment availability section — to switch this on.
+            </span>
+          </span>
+          <span className="v2-gtrail">
+            <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}><Lock className="w-3 h-3" /> Locked</span>
+          </span>
         </div>
-        <p className="mt-2 text-xs text-gray-500">Let the AI send customers secure Stripe payment links. <span className="font-medium text-gray-700">Connect Stripe first</span> (in the Payments section above) to enable this skill.</p>
       </div>
     )
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-hairline p-4">
-      <div className="flex items-start gap-3">
-        <span className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] bg-emerald-500 text-white shadow-e1"><CreditCard className="h-[18px] w-[18px]" /></span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-ink">Payment Collection</p>
-          <p className="text-xs text-subtle">Creates and sends secure Stripe payment links to customers.</p>
+    <div style={{ marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <span className="v2-chip-sq" style={{ ['--ghue' as string]: 'var(--v2-t2)', marginTop: 10 }}><CreditCard /></span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <GlassToggle
+            label="Payment collection"
+            hint="Creates and sends secure Stripe payment links to customers."
+            checked={active}
+            onChange={toggleSkill}
+          />
         </div>
-        <Switch checked={active} onCheckedChange={toggleSkill} className="mt-1 flex-shrink-0" />
       </div>
 
       {active && s && (
-        <div className="mt-4 space-y-3 border-t border-hairline pt-4">
-          <Row label="Require owner approval before sending" hint="Recommended — you approve each link before it goes out.">
-            <Switch checked={s.require_approval} onCheckedChange={(v) => upd({ require_approval: v })} />
-          </Row>
-          <Row label="Allow predefined Stripe products">
-            <Switch checked={s.allow_products} onCheckedChange={(v) => upd({ allow_products: v })} />
-          </Row>
-          <Row label="Allow custom amount">
-            <Switch checked={s.allow_custom_amount} onCheckedChange={(v) => upd({ allow_custom_amount: v })} />
-          </Row>
-          <Row label="Deposit">
-            <div className="flex items-center gap-2">
-              <select value={s.deposit_type} onChange={(e) => upd({ deposit_type: e.target.value as Settings['deposit_type'] })}
-                className="rounded-md border border-hairline bg-white px-2 py-1 text-xs text-ink">
-                <option value="none">None</option>
-                <option value="fixed">Fixed $</option>
-                <option value="percent">% of price</option>
-              </select>
-              {s.deposit_type !== 'none' && (
-                <input type="number" min={0} value={s.deposit_value} onChange={(e) => upd({ deposit_value: Math.max(0, Number(e.target.value) || 0) })}
-                  className="w-20 rounded-md border border-hairline px-2 py-1 text-xs" placeholder={s.deposit_type === 'fixed' ? '$' : '%'} />
-              )}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--v2-line)' }}>
+          <GlassToggle
+            label="Require owner approval before sending"
+            hint="Recommended — you approve each link before it goes out."
+            checked={s.require_approval}
+            onChange={(v) => upd({ require_approval: v })}
+          />
+          <GlassToggle label="Allow predefined Stripe products" checked={s.allow_products} onChange={(v) => upd({ allow_products: v })} />
+          <GlassToggle label="Allow a custom amount" checked={s.allow_custom_amount} onChange={(v) => upd({ allow_custom_amount: v })} />
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, marginTop: 6 }}>
+            <div className="v2-fld" style={{ width: 160 }}>
+              <label htmlFor="pc-dtype">Deposit</label>
+              <span className="v2-sel">
+                <select id="pc-dtype" value={s.deposit_type} onChange={(e) => upd({ deposit_type: e.target.value as Settings['deposit_type'] })}>
+                  <option value="none">None</option>
+                  <option value="percent">Percent</option>
+                  <option value="fixed">Fixed</option>
+                </select>
+              </span>
             </div>
-          </Row>
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-ink">Channels allowed</p>
-            <div className="flex flex-wrap gap-2">
-              {(['sms', 'email', 'whatsapp'] as const).map((c) => (
-                <button key={c} type="button" onClick={() => updCh({ [c]: !s.channels[c] })}
-                  className={`rounded-full border px-3 py-1 text-xs capitalize ${s.channels[c] ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-hairline text-subtle'}`}>
-                  {s.channels[c] && <Check className="mr-1 inline h-3 w-3" />}{c === 'sms' ? 'SMS' : c}
-                </button>
-              ))}
-            </div>
+            {s.deposit_type !== 'none' && (
+              <div className="v2-fld" style={{ width: 110 }}>
+                <label htmlFor="pc-dval">{s.deposit_type === 'percent' ? 'Percent' : 'Amount'}</label>
+                <input id="pc-dval" type="number" min={0} value={s.deposit_value ?? 0} onChange={(e) => upd({ deposit_value: Number(e.target.value) })} />
+              </div>
+            )}
           </div>
-          <Button size="sm" onClick={saveSettings} loading={saving}>Save payment settings</Button>
+
+          <p className="v2-kick" style={{ marginTop: 20, marginBottom: 8 }}>Channels allowed</p>
+          <div className="flex flex-wrap gap-2">
+            {(['sms', 'email', 'whatsapp'] as const).map((c) => (
+              <button key={c} type="button" onClick={() => updCh({ [c]: !s.channels[c] })} className="v2-chip" data-on={s.channels[c] || undefined}>
+                <i className="v2-gdot" style={{ ['--ghue' as string]: channelHue(c) }} />
+                {c === 'sms' ? 'SMS' : c === 'whatsapp' ? 'WhatsApp' : 'Email'}
+              </button>
+            ))}
+          </div>
+
+          <div className="v2-bar" style={{ marginTop: 18 }}>
+            <button onClick={saveSettings} disabled={saving} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+              {saving ? 'Saving…' : 'Save payment settings'}
+            </button>
+          </div>
         </div>
       )}
 
       {active && pending.length > 0 && (
-        <div className="mt-4 border-t border-hairline pt-4">
-          <p className="mb-2 text-xs font-semibold text-ink">Pending approval ({pending.length})</p>
-          <div className="space-y-2">
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--v2-line)' }}>
+          <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-amber)' }}><i />Pending your approval · {pending.length}</p>
+          <div className="v2-list">
             {pending.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 rounded-lg border border-hairline p-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-ink">{p.product_name || 'Payment'} · {money(p.amount, p.currency)}</p>
-                  <p className="truncate text-[11px] text-subtle">{p.customer_email || p.customer_phone || 'customer'}{p.channel ? ` · ${p.channel}` : ''}</p>
+              <div key={p.id} className="v2-row" style={{ ['--chan' as string]: 'var(--v2-amber)' }}>
+                <div className="v2-m">
+                  <p><span className="truncate">{p.product_name || 'Payment'}</span><span className="v2-stat">{money(p.amount, p.currency)}</span></p>
+                  <span>{p.customer_email || p.customer_phone || 'customer'}{p.channel ? ` · ${p.channel}` : ''}</span>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => decide(p.id, 'reject')} disabled={busy === p.id}><X className="h-3.5 w-3.5" /></Button>
-                <Button size="sm" onClick={() => decide(p.id, 'approve')} loading={busy === p.id}>Approve &amp; send</Button>
+                <div className="flex items-center gap-1 flex-none">
+                  <button onClick={() => decide(p.id, 'reject')} disabled={busy === p.id} className="v2-ico" style={{ ['--ghue' as string]: 'var(--v2-red)' }} aria-label="Reject this payment request"><X /></button>
+                  <button onClick={() => decide(p.id, 'approve')} disabled={busy === p.id} className="v2-act tap-target" data-solid style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+                    {busy === p.id ? 'Sending…' : 'Approve & send'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-ink">{label}</p>
-        {hint && <p className="text-[11px] text-subtle">{hint}</p>}
-      </div>
-      <div className="flex-shrink-0">{children}</div>
     </div>
   )
 }

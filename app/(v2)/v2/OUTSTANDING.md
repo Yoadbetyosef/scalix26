@@ -1484,3 +1484,76 @@ declaration text. **Not fixed here on purpose:** defining the token would lighte
 the exact thing §34 just spent a pass removing. It needs a decision about what
 each site should be, not a one-line define. The new rule uses `--v2-ink-45`, the
 same stroke `.v2-drop`'s icon uses.
+
+## §36 — /catalog and /ai-employees
+
+Both pairs done: eighteen routes now report zero v1 classes in the page column at
+1440 and 390×844, measured against the kit with real probe-tenant data.
+
+### The one-face rule reaches the place the face is set
+
+`EmployeeAvatar` rendered `voiceAvatar(voice)` — the stock headshot of whichever
+TTS voice the tenant had picked. It is the single identity primitive, used by the
+employee list, the editor, the weekly-win card and Ask Amy, so **a voice dropdown
+was changing an employee's face in four places at once**, and the portrait sat
+beside the robot that the dashboard hero and the inbox rows already show. It is
+`RobotAvatar` now, with the presence dot unchanged. `lib/employee`'s
+`voiceAvatar` and its five-entry map went with it, and the file's header — which
+declared "the face of an AI employee is the headshot of the voice" as the single
+source of truth — now says what is actually true.
+
+The **voice picker keeps its five portraits** and that is deliberate: choosing
+whose voice the employee speaks in is a different question from who the employee
+is, and `lib/voices.voiceHeadshot` still owns it. `components/ai-employees/one-face.test.ts`
+pins both halves.
+
+### One field language, not two
+
+`.v2-finput` — the /v2 agent prototype's field — was a bordered 12px box with a
+4px violet focus ring, designed before the kit's form language existed. Every
+migrated screen since uses `.v2-fld`'s rule, and the kit is explicit that "the
+point is no box". Adopting the prototype's screen without this would have made
+/ai-employees the one place in the product with boxed inputs. `.v2-finput` is now
+the same rule, with the same focus behaviour; `.v2-field` keeps its padding, and
+the divider it drew above a stacked field went, because the field's own rule was
+already there and two hairlines eight pixels apart is what that produced.
+
+### What the sweep caught
+
+**`.v2-shot > span` (0,1,1) beat `.v2-act` (0,1,0)** and painted the Download
+pill's label in caption grey at 2.64:1. It only showed on /v2/kit, because there
+the control is a `<span>` and on the real pages it is a `<button>` — the live
+contrast sweep found it, review would not have. Captions carry no class; every
+control does, so the rule is `:not([class])` now. Same failure mode as
+`.v2-row .v2-m span` reaching the chips in a row title (§34).
+
+**`.bip-shimmer` was applied to the progress fill instead of an overlay child.**
+It sets its own background and animates `translateX(-100% → 220%)`, so the
+business-memory bar lost its gradient and slid 316px right of its track. Measured,
+not eyeballed.
+
+**Both sticky save bars were pinned at `bottom-[calc(4.5rem+safe)]`** — 4.5rem
+being the height of the bottom tab bar that no longer exists. One bar now, offset
+from `--v2-grab-h`, and moved clear of the notification bell, which is fixed in
+the same corner: a Save that lands under the bell is a Save nobody can press.
+
+### 206 chips across 18 pages, worst 4.92:1
+
+### Two decisions worth naming
+
+**In stock carries no colour.** v1 painted it green, so every ordinary row in a
+catalogue of hundreds wore a coloured badge and nothing stood out. Green is
+reserved for transient state and this palette avoids the traffic-light set; in
+stock is the absence of a problem, so colour marks the exception — out of stock,
+incoming, special order, needs pricing — and the ordinary shelf is mute.
+
+**The catalogue's floating add button is gone.** It sat at `bottom-[86px]`, a
+position chosen for the bottom tab bar. Four `.v2-act` pills wrap onto two lines
+at 390px, which beats a fifth thing hovering over the swipe-up sheet.
+
+### Widened scope, deliberately
+
+`components/settings/availability-client.tsx` renders in two places — embedded in
+the AI employee screen and as the standalone /settings Reviews page. Migrating
+only the embedded branch would have left a v2 section inside v1 page chrome, so
+both went. That route was not in this pass's scope; it is thirty lines.
