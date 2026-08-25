@@ -31,7 +31,13 @@ import { join } from 'node:path'
 // 750d82a fixed — in the same terms: the title is what yields, and the buttons keep their width. It
 // was asserted as `flex: none` in a string match, which is the habit this file exists to break.
 //
-// It skips when there is no Chrome. A guard that cannot run is better than a suite that cannot.
+// It skips when there is no Chrome. A guard that cannot run is better than a suite that cannot — and
+// that has to include the case where Chrome IS installed but could not be driven. This spawns a
+// browser during COLLECTION, so a timeout took the whole file down and four tests with it; it showed
+// up as an intermittent red suite whenever the machine was already busy running Playwright. A launch
+// that never produced a page is a fact about the machine, not about the header, so it skips with a
+// reason. A launch that DID produce a page and then measured something wrong still fails — that
+// distinction is the whole point, and it is why this does not simply swallow every error.
 
 const CHROMES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -116,8 +122,26 @@ document.getElementById('out').textContent=JSON.stringify(out)
   return JSON.parse(json.replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
 }
 
-describe.skipIf(!chrome)('the header button contains its own content', () => {
-  const m = measure()
+// Collected once. `null` means the browser could not be driven at all.
+let measured: Record<string, Box> | null = null
+let launchFailure: string | null = null
+if (chrome) {
+  try {
+    measured = measure()
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException & { signal?: string }
+    // ETIMEDOUT / a kill signal / a non-zero exit before any DOM: the browser never got there.
+    // Anything else — a page that rendered and produced no <pre>, say — is a real failure.
+    if (err.code === 'ETIMEDOUT' || err.signal || err.code === 'ENOENT') {
+      launchFailure = `headless Chrome could not be driven (${err.code || err.signal})`
+    } else {
+      throw e
+    }
+  }
+}
+
+describe.skipIf(!chrome || !!launchFailure)('the header button contains its own content', () => {
+  const m = measured as Record<string, Box>
 
   it('nothing sticks out of the New button', () => {
     // The whole assertion, in the only terms that describe the symptom: the box is as wide as what
