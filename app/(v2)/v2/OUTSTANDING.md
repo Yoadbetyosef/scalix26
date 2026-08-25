@@ -1558,7 +1558,7 @@ the AI employee screen and as the standalone /settings Reviews page. Migrating
 only the embedded branch would have left a v2 section inside v1 page chrome, so
 both went. That route was not in this pass's scope; it is thirty lines.
 
-## §37 — /reports had eight controls that did nothing
+## §37 — /reports had eight controls that did nothing — APPROVED, they stay gone
 
 Each of the four template cards carried a "View Report" button and a download
 icon. Neither had an `onClick`, an `href`, or a handler of any kind: clicking any
@@ -1571,10 +1571,10 @@ changed is that the page stopped promising something it never delivered. The
 templates stay as rows, because the four reports are real and named, and the one
 control that works — the CSV exporter — is unchanged.
 
-If they should come back as real buttons, that is a feature with an endpoint
-behind it, not a line of CSS.
+**Approved by Yoad, 2026-08-25:** they stay gone. If they come back it is as a
+feature with an endpoint behind it, not a line of CSS.
 
-## §38 — the migration is finished
+## §38 — the migration is finished — ACCEPTED by Yoad, 2026-08-25
 
 **29 routes × 2 widths = 58 measurements. Zero v1 classes in the page column on
 every one.** The only v1 left anywhere in the app is `shadow-e2` in the SHELL
