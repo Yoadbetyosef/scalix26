@@ -1557,3 +1557,56 @@ at 390px, which beats a fifth thing hovering over the swipe-up sheet.
 the AI employee screen and as the standalone /settings Reviews page. Migrating
 only the embedded branch would have left a v2 section inside v1 page chrome, so
 both went. That route was not in this pass's scope; it is thirty lines.
+
+## §37 — /reports had eight controls that did nothing
+
+Each of the four template cards carried a "View Report" button and a download
+icon. Neither had an `onClick`, an `href`, or a handler of any kind: clicking any
+of the eight did nothing at all, and had since the screen shipped.
+
+Rendering them as `.v2-act` would have made eight dead verbs look like eight live
+ones — the pill in this language reads as a real verb in a way a v1 outline
+button did not. **They are gone.** The behaviour is identical either way; what
+changed is that the page stopped promising something it never delivered. The
+templates stay as rows, because the four reports are real and named, and the one
+control that works — the CSV exporter — is unchanged.
+
+If they should come back as real buttons, that is a feature with an endpoint
+behind it, not a line of CSS.
+
+## §38 — the migration is finished
+
+**29 routes × 2 widths = 58 measurements. Zero v1 classes in the page column on
+every one.** The only v1 left anywhere in the app is `shadow-e2` in the SHELL
+column, which is the notification bell — a held item, not a page.
+
+640 rendered chips measured across those routes with colours resolved through a
+canvas; the worst clears 4.5:1 at 4.92:1.
+
+### Two routes that were not on anybody's list
+
+**`/landed-cost` and `/landed-cost/[id]`** were never in a round's scope and are
+a row in the rail, so leaving them would have put a hole in this table. The
+detail screen is 695 lines of currency rates, freight allocation and per-line
+landed cost — the one screen in the app where a careless edit misreads money —
+so it was reskinned by replacing class names and wrappers only. No expression,
+no handler and no piece of arithmetic was touched.
+
+**`/studio/[id]`** became reachable for the first time (§24) and so had to be
+migrated too: shipping a fixed link to an unmigrated screen is not a fix.
+
+### What is deliberately NOT in the table
+
+The **admin plane** (`/admin/*`), the **Partner OS** (`/partner/*`), **auth**,
+**onboarding/setup**, the **public token pages** (`/d`, `/e`, `/i`, `/m`, `/p`,
+`/q`, `/approval`, `/f`, `/l`), `/marketplace` and the **order document views**
+(§25, permanently out of scope). None of them is the customer app: none renders
+inside AppShell, and none was in any round's scope. They are separate products
+or print artefacts, and migrating them is a decision, not a leftover.
+
+### Still open
+
+**`--v2-ink-24`** (§35) is referenced 23 times in the tokens and defined nowhere.
+Left undefined by decision, with `media-block.test.ts` failing if anyone defines
+it without checking the contrast of all 23 sites. Revisit now that the migration
+is done.
