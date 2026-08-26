@@ -44,6 +44,11 @@ export const STAGE_COLORS: Record<OrderStage, StageColor> = {
   delivered:                  { bar: '#B69B54', bg: '#F7F5ED', text: '#6B5B2E', border: '#EAE3D2' }, // h44  s40 l52 — amber
   completed:                  { bar: '#B8B1C3', bg: '#F5F3F6', text: '#665B76', border: '#E5E2E9' }, // h264 s13 l73 — settled: the plum, gone pale
   finished:                   { bar: '#D3CEC5', bg: '#F6F5F3', text: '#766D5B', border: '#E9E7E2' }, // h40  s13 l80 — settled: warm grey
+  // Quoted and not taken. The palest of the settled four and the least saturated of them all: it is
+  // the most COMMON outcome — ~30 estimates a day and a handful convert — so a list of them must read
+  // as ordinary business rather than as a wall of something gone wrong. Nearest the plum in hue,
+  // because it is still one of hers; furthest from it in strength, because nothing happened.
+  closed_no_sale:             { bar: '#C9C4D0', bg: '#F7F6F8', text: '#6B6476', border: '#EAE8EC' }, // h264 s9  l79 — settled: the palest plum
   cancelled:                  { bar: '#A4ADB7', bg: '#F4F5F6', text: '#5C6875', border: '#E2E5E9' }, // h212 s12 l68 — settled: cool grey
 }
 

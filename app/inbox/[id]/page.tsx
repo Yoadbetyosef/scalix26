@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Mail, MessageCircle, Phone, User } from 'lucide-react'
 import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { formatDateTime, formatDate, formatDuration, contactIdentifier, looksLikeName, isSocialChannel } from '@/lib/utils'
+import { contactDisplayName } from '@/lib/contacts/names'
 import { formatPhone } from '@/lib/format'
 import { readConversation } from '@/lib/inbox/conversation-read'
 
@@ -41,11 +42,12 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   if (!read) notFound()
   const { tz, conv, messages } = read
 
-  const contact = conv.contact as { id: string; name?: string; phone?: string; email?: string; address?: string } | null
+  const contact = conv.contact as { id: string; name?: string; company_name?: string; phone?: string; email?: string; address?: string } | null
 
   const contactInfo = {
     id: contact?.id,
     name: contact?.name,
+    companyName: contact?.company_name,
     phone: contact?.phone,
     email: contact?.email,
     channel: conv.channel,
@@ -66,7 +68,9 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   //  • voice/sms/whatsapp → formatPhone(number) (G4)
   //  • email → email address
   //  • else → "Unknown"
-  const headerTitle = looksLikeName(contact?.name)
+  const headerTitle = contact?.company_name
+    ? contactDisplayName(contact)
+    : looksLikeName(contact?.name)
     ? contact!.name
     : isSocialChannel(conv.channel)
       ? `${CHANNEL_LABELS[conv.channel] || conv.channel} lead`

@@ -5,14 +5,15 @@
 export const ORDER_STAGES = [
   'new', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved',
   'waiting_customer_approval', 'customer_changes_requested', 'customer_approved',
-  'production', 'ready', 'delivered', 'completed', 'finished', 'cancelled',
+  'production', 'ready', 'delivered', 'completed', 'finished', 'closed_no_sale', 'cancelled',
 ] as const
 export type OrderStage = typeof ORDER_STAGES[number]
 
 export const STAGE_LABELS: Record<OrderStage, string> = {
   new: 'New Order', waiting_factory_approval: 'Waiting for Factory Approval', factory_changes_requested: 'Factory Changes Requested',
   factory_approved: 'Factory Approved', waiting_customer_approval: 'Waiting for Customer Approval', customer_changes_requested: 'Customer Changes Requested',
-  customer_approved: 'Customer Approved', production: 'Production', ready: 'Ready', delivered: 'Delivered', completed: 'Completed', finished: 'Finished', cancelled: 'Cancelled',
+  customer_approved: 'Customer Approved', production: 'Production', ready: 'Ready', delivered: 'Delivered', completed: 'Completed', finished: 'Finished',
+  closed_no_sale: 'Closed – No Sale', cancelled: 'Cancelled',
 }
 
 // Stages whose entry/exit is governed by the approval workflow — never draggable.
@@ -28,7 +29,36 @@ export const isProtectedStage = (s: OrderStage): boolean => PROTECTED_STAGES.has
 //               collected; work that never went near a factory. Marking those 'completed' would have
 //               the board claim production that did not happen.
 //   cancelled — it is not happening.
+//
+// 'closed_no_sale' is NOT one of them, and that is the whole reason it exists. See below.
 export const isTerminalStage = (s: OrderStage): boolean => s === 'completed' || s === 'finished' || s === 'cancelled'
+
+// ── CLOSED, NO SALE: AT REST, NOT OVER ──────────────────────────────────────────────────────────
+//
+// An estimate the customer did not take. TG writes ~30 a day and a handful convert; the rest are
+// neither cancelled work nor finished work, and every one has to stay in that customer's history
+// because the customer comes back.
+//
+// The three stages above are one-way because the thing they describe HAPPENED. This one describes an
+// absence, and an absence can end. So it is deliberately not terminal:
+//
+//   · it is not work in progress — the board and the default list leave it out, like the terminal three
+//   · it is not an error — nothing was lost and nothing went wrong, which is why it is muted rather
+//     than red, and why the confirmation does not warn
+//   · it REOPENS — the only move out is back to 'new', restoring the estimate exactly as it was.
+//     Reopening does not advance it, because coming back is not progress, it is a second chance.
+//
+// Being non-terminal also means canEditWorkflow stays true here, which is right: a customer who
+// returns usually returns wanting a change, and an estimate you cannot edit is one you have to retype.
+export const isAtRestStage = (s: OrderStage): boolean => s === 'closed_no_sale'
+
+/**
+ * No column on the board. NOT the same as terminal: 'completed' is terminal and keeps its column,
+ * because it is the end of the forward chain and the drag target out of 'delivered'. These three are
+ * places work LEAVES the board for, so a column of them would grow forever and never be worked from.
+ */
+export const hasNoBoardColumn = (s: OrderStage): boolean =>
+  s === 'cancelled' || s === 'finished' || s === 'closed_no_sale'
 
 // ── WHAT A TERMINAL ORDER STILL ACCEPTS, AND WHY CANCELLED IS NOT THE SAME THING ────────────────
 //
@@ -96,14 +126,29 @@ export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected'
 // finish are both allowed from any non-terminal stage.
 const MANUAL_FORWARD: Partial<Record<OrderStage, OrderStage[]>> = {
   production: ['ready'], ready: ['delivered'], delivered: ['completed'],
+  // THE ONE MOVE BACK IN THE WHOLE MACHINE. Reopening restores the estimate to where it was and no
+  // further: a customer returning is not the job advancing.
+  closed_no_sale: ['new'],
 }
+/** The piece is being made. Walking away from one of these is a cancellation, not a lost quote. */
+const IN_FLIGHT = new Set<OrderStage>(['production', 'ready', 'delivered'])
+
 export function canManualTransition(from: OrderStage, to: OrderStage): boolean {
   if (from === to) return false
   // FINISH AND CANCEL ARE REACHABLE FROM ANYWHERE, and that is what the forward chain above cannot do.
   // A job at 'new' had exactly one move available — Cancel — so the only way to record a finished
   // repair was to cancel it or to march it through factory approval into production first. Both of
   // those put something false on the board.
-  if (to === 'cancelled' || to === 'finished') return !isTerminalStage(from)
+  // AT REST IS EXCLUDED HERE TOO, and the first version of this forgot it. 'closed_no_sale' is not
+  // terminal, so cancel and finish were both offered out of it — which meant one stray tap turned a
+  // reversible close into a permanent one, on the stage whose whole promise is that it comes back.
+  // Getting out of a no-sale is Reopen, and then whatever you meant. Two honest steps.
+  if (to === 'cancelled' || to === 'finished') return !isTerminalStage(from) && !isAtRestStage(from)
+  // Closing as no-sale is a thing you do to a LIVE estimate, so it is offered wherever cancel is —
+  // except out of a stage where the piece is already being made. An order in production that the
+  // customer walks away from is a cancellation, with a factory to tell; calling that a no-sale would
+  // file real, abandoned work under "they never bought".
+  if (to === 'closed_no_sale') return !isTerminalStage(from) && !isAtRestStage(from) && !IN_FLIGHT.has(from)
   if (isProtectedStage(to)) return false // entering an approval stage is action-only
   return (MANUAL_FORWARD[from] ?? []).includes(to)
 }

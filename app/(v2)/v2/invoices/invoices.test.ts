@@ -329,15 +329,19 @@ describe('a customer can be reached', () => {
     expect(nw).toContain('createContactFor({ name, email, phone })')
   })
 
-  it('any ONE of name, email or phone is enough — matching what createContact requires', () => {
+  it('any ONE identifier is enough — matching what createContact requires', () => {
     expect(nw).toContain('const ready = (!!picked || !!name.trim() || !!email.trim() || !!phone.trim()) && usable.length > 0')
-    expect(store).toContain("if (!name && !email && !phone) return { ok: false, error: 'Enter at least a name, email, or phone number.' }")
+    // The guard, not its wording. It gained a company when B2B contacts arrived — a business with a
+    // number and no named person is reachable, and refusing it was the old rule's blind spot.
+    expect(store).toMatch(/if \(!name && !company && !email && !phone\) return \{ ok: false, error:/)
   })
 
   it('an email already in the book offers that person rather than creating a second row', () => {
     // Twice over: the type-ahead ors across all three columns, and createContact dedupes on the
     // normalised email as well as the phone.
-    expect(store).toContain('name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%')
+    // company_name joined the or() so a caller who says the firm is found; the three that were
+    // always there are still there.
+    for (const col of ['name', 'email', 'phone']) expect(store).toContain(`${col}.ilike.%\${safe}%`)
     expect(store).toContain('const dupe = (e && byEmail.get(e)) || (p && byPhone.get(p)) || null')
     expect(pick).toContain('Search by name, email or phone')
   })

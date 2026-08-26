@@ -10,7 +10,7 @@ import { Pencil } from 'lucide-react'
 // prompted this: the detail screen renders every field conditionally, so a missing one renders
 // NOTHING. There was no empty box to click, and no way to learn that the field existed.
 //
-// So this form shows ALL SIX FIELDS, always, whether or not they hold anything. An empty row you can
+// So this form shows EVERY FIELD, always, whether or not it holds anything. An empty row you can
 // click is what tells someone the field is there.
 //
 // ── IT IS THE SAME ROUTE THE v2 SHEET USES ──────────────────────────────────────────────────────
@@ -35,6 +35,9 @@ import { Pencil } from 'lucide-react'
 // is a decision and must be recorded as one.
 
 export interface ContactEditValues {
+  company_name: string | null
+  first_name: string | null
+  last_name: string | null
   name: string | null
   email: string | null
   phone: string | null
@@ -44,7 +47,13 @@ export interface ContactEditValues {
 }
 
 const FIELDS: Array<{ key: keyof ContactEditValues; label: string; type?: string; rows?: number; hint?: string }> = [
-  { key: 'name', label: 'Name' },
+  // COMPANY FIRST, because for a B2B customer it is the name of the customer. The two parts of the
+  // person's name follow it; `name` stays on the form as the single field every existing contact
+  // already has, and is re-derived from the parts whenever either is edited (lib/contacts/store).
+  { key: 'company_name', label: 'Company', hint: 'A business customer. Leave empty for a private one.' },
+  { key: 'first_name', label: 'First name' },
+  { key: 'last_name', label: 'Last name' },
+  { key: 'name', label: 'Full name', hint: 'Filled in from the two above when you use them.' },
   { key: 'email', label: 'Email', type: 'email' },
   { key: 'phone', label: 'Phone', type: 'tel' },
   { key: 'address', label: 'Address' },

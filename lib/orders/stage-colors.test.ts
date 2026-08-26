@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ORDER_STAGES, isTerminalStage } from './stages'
+import { ORDER_STAGES, isTerminalStage, isAtRestStage } from './stages'
 import { STAGE_COLORS } from './stage-colors'
 
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
@@ -35,12 +35,18 @@ describe('Order board stage colours', () => {
     }
   })
 
-  // The point of the terminal stages is that they stop asking for attention. Enforced rather than
+  // The point of the settled stages is that they stop asking for attention. Enforced rather than
   // trusted: a later hand reaching for a louder "cancelled" red has to argue with this test first.
-  it('keeps terminal stages paler than any live one', () => {
-    const livePalest = Math.max(...ORDER_STAGES.filter((s) => !isTerminalStage(s)).map((s) => lightness(STAGE_COLORS[s].bar)))
-    for (const s of ORDER_STAGES.filter(isTerminalStage)) {
-      expect(lightness(STAGE_COLORS[s].bar), s).toBeGreaterThan(livePalest)
+  //
+  // SETTLED, not terminal. The two were the same set until 'closed_no_sale' arrived — a stage that
+  // is not terminal (it reopens) and is not work either (nobody is making anything). It belongs on
+  // the quiet side of this line, and it is the palest of the four, because it is the most common
+  // outcome the business has: ~30 estimates a day, a handful convert.
+  const settled = (s: typeof ORDER_STAGES[number]) => isTerminalStage(s) || isAtRestStage(s)
+  it('keeps settled stages paler than any stage that is still work', () => {
+    const workingPalest = Math.max(...ORDER_STAGES.filter((s) => !settled(s)).map((s) => lightness(STAGE_COLORS[s].bar)))
+    for (const s of ORDER_STAGES.filter(settled)) {
+      expect(lightness(STAGE_COLORS[s].bar), s).toBeGreaterThan(workingPalest)
     }
   })
 })

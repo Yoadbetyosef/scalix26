@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Plus, Upload } from 'lucide-react'
 import { ImportContacts } from './import-contacts'
 
-const empty = { name: '', email: '', phone: '', address: '', currency: '', notes: '' }
+// The keys are the API's, not the form's. This posts `f` verbatim, so a friendlier local spelling
+// would be dropped by the schema on the way in — which is exactly what happened once.
+const empty = { company_name: '', first_name: '', last_name: '', name: '', email: '', phone: '', address: '', currency: '', notes: '' }
 
 // The two ways contacts get into the book by hand: one at a time, or a whole file at once.
 // Everything else in the address book is created automatically from conversations.
@@ -59,12 +61,22 @@ export function ContactActions() {
               <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />New contact</p>
               <s />
             </div>
-            <p className="v2-hint" style={{ marginBottom: 16 }}>A name, email or phone is enough — the rest can be filled in later.</p>
+            <p className="v2-hint" style={{ marginBottom: 16 }}>A name, company, email or phone is enough — the rest can be filled in later.</p>
 
             <div className="v2-form">
+              {/* A business customer leads with the business. Optional, and empty on most contacts —
+                  which is why it is not the autofocused field: the common case is still a person. */}
               <div className="v2-fld wide">
-                <label htmlFor="nc-name">Name</label>
-                <input id="nc-name" value={f.name} onChange={set('name')} autoFocus />
+                <label htmlFor="nc-company">Company</label>
+                <input id="nc-company" value={f.company_name} onChange={set('company_name')} placeholder="Optional — for a business customer" />
+              </div>
+              <div className="v2-fld">
+                <label htmlFor="nc-first">First name</label>
+                <input id="nc-first" value={f.first_name} onChange={set('first_name')} autoFocus />
+              </div>
+              <div className="v2-fld">
+                <label htmlFor="nc-last">Last name</label>
+                <input id="nc-last" value={f.last_name} onChange={set('last_name')} />
               </div>
               <div className="v2-fld">
                 <label htmlFor="nc-email">Email</label>

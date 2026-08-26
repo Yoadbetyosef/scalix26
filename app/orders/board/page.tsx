@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders } from '@/lib/orders/store'
-import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, type OrderStage } from '@/lib/orders/stages'
+import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, hasNoBoardColumn, type OrderStage } from '@/lib/orders/stages'
 import { Lock } from 'lucide-react'
 import { stageColor, stageHue, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-colors'
 
@@ -36,7 +36,10 @@ export default async function OrdersBoardPage() {
           board read as a wall of boxes with the hue reduced to a 3px rule. The hue is the column
           now — a tinted header on paper, one hairline, and the cards inside are the kit's rows. */}
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {ORDER_STAGES.filter((s) => s !== 'cancelled' && s !== 'finished').map((s) => {
+        {/* The exclusion is a rule now rather than two stage names written here: 'closed_no_sale'
+            is the third place work leaves the board for, and a board that grew a column of thirty
+            lost quotes a day would be a board nobody could work from. See hasNoBoardColumn. */}
+        {ORDER_STAGES.filter((s) => !hasNoBoardColumn(s)).map((s) => {
           const c = stageColor(s)
           const rows = byStage(s)
           return (

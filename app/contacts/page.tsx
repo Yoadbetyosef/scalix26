@@ -7,19 +7,20 @@ import { Phone, MessageCircle, ChevronRight, ChevronLeft, Search } from 'lucide-
 import { ContactActions } from '@/components/contacts/new-contact'
 import { formatDate, isSocialChannel } from '@/lib/utils'
 import { channelHue } from '@/app/(v2)/v2/channels'
+import { contactDisplayOrIdentifier, contactInitial, isBusinessContact } from '@/lib/contacts/names'
 
 const PAGE_SIZE = 50
-
-interface ContactRow {
-  id: string; name: string | null; email: string | null; phone: string | null
-  channel: string | null; total_conversations: number; last_interaction: string | null
-}
 
 // CT2: a contact the AI created from one inbound email or call has nothing but that address or
 // number, and calling them "Unknown" hides the one thing we DO know about them. Whatever identifies
 // them is the title instead, and drives the avatar letter. Display-only — no data changes.
-const displayTitle = (c: ContactRow): string => c.name || c.email || c.phone || 'Unknown'
-const displayInitial = (c: ContactRow): string => displayTitle(c)[0] || '?'
+//
+// Both helpers moved to lib/contacts/names.ts when companies arrived: the same ladder, plus the
+// company, in the ONE place every screen reads it from. They were inline here and inline again on
+// /v2's copy of this list, which is exactly how two screens end up disagreeing about what to call
+// somebody.
+const displayTitle = contactDisplayOrIdentifier
+const displayInitial = contactInitial
 
 export default async function ContactsPage({
   searchParams,
@@ -122,6 +123,12 @@ export default async function ContactsPage({
                 <div className="v2-m">
                   <p className="flex items-center gap-2 min-w-0">
                     <span className="truncate">{displayTitle(contact)}</span>
+                    {/* A business is worth marking, because how you talk to one differs from how you
+                        talk to a private customer. Mute, not coloured: being a company is a fact
+                        about the contact, not a state that needs anybody. */}
+                    {isBusinessContact(contact) && (
+                      <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>Business</span>
+                    )}
                     {contact.channel && <span className="v2-stat">{contact.channel}</span>}
                   </p>
                   {contact.total_conversations > 0 && (
@@ -142,6 +149,7 @@ export default async function ContactsPage({
             <table className="v2-tbl">
               <thead>
                 <tr>
+                  <th>Company</th>
                   <th>Name</th>
                   <th>Phone</th>
                   <th className="max-lg:hidden">Email</th>
@@ -153,9 +161,18 @@ export default async function ContactsPage({
               <tbody>
                 {contacts.map((contact) => (
                   <tr key={contact.id} style={{ ['--chan' as string]: channelHue(contact.channel) }}>
+                    {/* THE TABLE SPLITS THEM, the row joins them. A table has columns and sorting a
+                        column of "Company — Person" strings sorts on neither; the mobile row has no
+                        columns, so there the composed name is the only way to say both. */}
                     <td>
-                      <Link href={`/contacts/${contact.id}`} className="block truncate" style={{ color: 'var(--v2-ink)', fontWeight: 500 }}>
-                        {displayTitle(contact)}
+                      {contact.company_name
+                        ? <Link href={`/contacts/${contact.id}`} className="block truncate" style={{ color: 'var(--v2-ink)', fontWeight: 500 }}>{contact.company_name}</Link>
+                        : <span style={{ color: 'var(--v2-mute)' }}>—</span>}
+                    </td>
+                    <td>
+                      <Link href={`/contacts/${contact.id}`} className="block truncate"
+                            style={{ color: contact.company_name ? 'var(--v2-ink-72)' : 'var(--v2-ink)', fontWeight: contact.company_name ? 400 : 500 }}>
+                        {contact.name || (contact.company_name ? '—' : displayTitle(contact))}
                       </Link>
                     </td>
                     <td>

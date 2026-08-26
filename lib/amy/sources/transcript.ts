@@ -20,7 +20,7 @@ export const transcriptSource: ContextSource = {
       const like = `%${term}%`
       const { data: cs } = await ctx.db
         .from('contacts').select('id').eq('tenant_id', ctx.tenantId)
-        .or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`).limit(5)
+        .or(`name.ilike.${like},company_name.ilike.${like},phone.ilike.${like},email.ilike.${like}`).limit(5)
       contactIds = (cs || []).map((c) => c.id)
       if (!contactIds.length) return `No conversations with anyone matching "${term}".`
     }

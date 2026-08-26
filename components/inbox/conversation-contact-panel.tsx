@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Info, X, Phone, MessageSquare, MessageCircle, User } from 'lucide-react'
+import { Info, X, Phone, MessageSquare, MessageCircle, User, Building2 } from 'lucide-react'
 import { contactIdentifier } from '@/lib/utils'
 import { channelHue } from '@/app/(v2)/v2/channels'
 import Link from 'next/link'
@@ -11,6 +11,7 @@ import { ConversationActions } from '@/components/inbox/conversation-actions'
 interface ContactInfo {
   id?: string
   name?: string
+  companyName?: string
   phone?: string
   email?: string
   channel: string
@@ -217,6 +218,15 @@ export function ConversationContactPanel({ contact, profile, conversationId, cur
             </section>
 
             <section className="space-y-3">
+              {/* The company sits above the person's name, in the same fact list. On this panel
+                  there is room for both lines, so it is not composed with a dash the way a one-line
+                  row has to be. */}
+              {contact.companyName && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Building2 className="w-4 h-4 text-muted flex-shrink-0" />
+                  <span className="text-ink font-medium">{contact.companyName}</span>
+                </div>
+              )}
               {contact.name && (
                 <div className="flex items-center gap-3 text-sm">
                   <User className="w-4 h-4 text-muted flex-shrink-0" />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canManualTransition, canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, canSendToProduction, isProtectedStage, isTerminalStage, canEditWorkflow, canEditDocumentFacts,
+import { canManualTransition, canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, canSendToProduction, isProtectedStage, isTerminalStage, isAtRestStage, canEditWorkflow, canEditDocumentFacts,
   DOCUMENT_FACT_FIELDS, refusedFields, ORDER_STAGES, STAGE_LABELS } from './stages'
 import { orderNumberFromBytes, generateOrderNumber } from './order-number'
 
@@ -86,13 +86,19 @@ describe('Order number (non-sequential, unguessable)', () => {
 })
 
 describe('finishing a job, without claiming it was produced', () => {
-  it('is reachable from every non-terminal stage, including new', () => {
+  it('is reachable from every stage where the job is still live, including new', () => {
     // The fault: from 'new' the only manual move was Cancel, so recording a finished repair meant
     // cancelling it or marching it through factory approval into production first.
+    //
+    // Written as "every non-terminal stage" when terminal-or-not was the only distinction there was.
+    // 'closed_no_sale' is neither: it is at rest, and the one move out of it is Reopen — offering
+    // Finish there would let a stray tap convert a reversible close into a permanent one, on the one
+    // stage whose whole promise is that it comes back.
     for (const s of ORDER_STAGES) {
-      if (isTerminalStage(s)) continue
+      if (isTerminalStage(s) || isAtRestStage(s)) continue
       expect(canManualTransition(s, 'finished'), s).toBe(true)
     }
+    expect(canManualTransition('closed_no_sale', 'finished')).toBe(false)
   })
 
   it('and nothing moves out of it', () => {

@@ -7,6 +7,7 @@ import { RobotAvatar } from '@/components/brand/robot-avatar'
 import { channelHue } from '@/app/(v2)/v2/channels'
 import { formatDateTime, formatDuration, truncate, looksLikeName, formatPhone } from '@/lib/utils'
 import { relativeTime } from '@/lib/format'
+import { contactDisplayName } from '@/lib/contacts/names'
 import { getBusinessTimezone } from '@/lib/timezone'
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -47,7 +48,7 @@ export default async function InboxPage({
 
   let query = service
     .from('conversations')
-    .select('*, contact:contacts(name, phone, email)')
+    .select('*, contact:contacts(name, company_name, phone, email)')
     .eq('tenant_id', tenant.id)
     .order('updated_at', { ascending: false })
     .limit(50)
@@ -60,6 +61,7 @@ export default async function InboxPage({
   const filtered = q
     ? (conversations || []).filter(c =>
         c.contact?.name?.toLowerCase().includes(q.toLowerCase()) ||
+        (c.contact as { company_name?: string } | null)?.company_name?.toLowerCase().includes(q.toLowerCase()) ||
         c.contact?.phone?.includes(q) ||
         c.summary?.toLowerCase().includes(q.toLowerCase())
       )
@@ -142,12 +144,18 @@ export default async function InboxPage({
         ) : (
           <div className="v2-list sx-stagger">
             {filtered.map((conv) => {
-              const contact = conv.contact as { name?: string; phone?: string; email?: string } | null
+              const contact = conv.contact as { name?: string; company_name?: string; phone?: string; email?: string } | null
               const channelLabel = CHANNEL_LABELS[conv.channel] || conv.channel
               // I3 — mobile display-only title: never show raw platform IDs. If no real
               // name, Instagram → "Instagram lead"; Voice/SMS → formatPhone(number);
               // Email → email. Falls back to a friendly channel label, never an ID.
-              const mobileTitle = looksLikeName(contact?.name)
+              // A B2B CALLER IS THE BUSINESS FIRST. "M&P Yacht Centre — Irina Gavala" tells you who
+              // is ringing and on whose behalf; the name alone tells you neither when three people
+              // at the same firm call. Falls through to exactly the old ladder when there is no
+              // company, so nothing about a private customer's row changes.
+              const mobileTitle = contact?.company_name
+                ? contactDisplayName(contact)
+                : looksLikeName(contact?.name)
                 ? contact!.name
                 : conv.channel === 'instagram' || conv.channel === 'facebook'
                   ? `${channelLabel} lead`

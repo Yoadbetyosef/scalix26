@@ -16,7 +16,7 @@ export const contactsSource: ContextSource = {
       .from('contacts')
       .select('id, name, phone, email, channel, total_conversations, last_interaction, notes')
       .eq('tenant_id', ctx.tenantId)
-      .or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`)
+      .or(`name.ilike.${like},company_name.ilike.${like},phone.ilike.${like},email.ilike.${like}`)
       .order('last_interaction', { ascending: false })
       .limit(5)
     if (!data?.length) return `No contact matches "${term}".`

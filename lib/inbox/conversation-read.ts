@@ -48,7 +48,7 @@ export interface ConversationRead {
 // asserts every declared field appears in the select list it is read from. A name that is not a
 // column now fails at the query, loudly, instead of being quietly undefined for a year.
 export const CONV_COLS = 'id, channel, status, summary, recap, duration_seconds, human_takeover, sentiment, created_at, updated_at, ai_employee_id'
-export const CONTACT_COLS = 'id, name, phone, email, address'
+export const CONTACT_COLS = 'id, name, company_name, phone, email, address'
 export const AGENT_COLS = 'name, persona'
 export const MESSAGE_COLS = 'id, conversation_id, role, content, timestamp, channel, delivery_status, error_code'
 
@@ -67,7 +67,7 @@ export interface ConversationRow {
   created_at: string
   updated_at: string | null
   ai_employee_id: string | null
-  contact: { id: string; name: string | null; phone: string | null; email: string | null; address: string | null } | null
+  contact: { id: string; name: string | null; company_name: string | null; phone: string | null; email: string | null; address: string | null } | null
   /** `persona` is joined because the thread paints in that employee's own colours. */
   ai_employee: { name: string | null; persona: string | null } | null
 }

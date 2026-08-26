@@ -8,13 +8,28 @@ export { parseDelimited, detectDelimiter }
 
 export type ContactField = keyof ImportRow
 export const CONTACT_FIELDS: Array<{ key: ContactField; label: string }> = [
-  { key: 'name', label: 'Name' }, { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
+  { key: 'company_name', label: 'Company' },
+  { key: 'first_name', label: 'First name' }, { key: 'last_name', label: 'Last name' },
+  { key: 'name', label: 'Full name' }, { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' },
   { key: 'address', label: 'Address' }, { key: 'currency', label: 'Currency' }, { key: 'notes', label: 'Notes' },
 ]
 
 // Header spellings we recognise without asking. Anything unmatched is left for the user to map by hand.
+//
+// ── 'first name' MOVED, AND IT WAS A BUG ────────────────────────────────────────────────────────
+//
+// It used to be an alias for `name`. A spreadsheet with First Name and Last Name columns — which is
+// what a B2B address book exports — mapped First Name onto the single name field and left Last Name
+// with nowhere to go, so every surname in the file was silently dropped at import. The columns are
+// real fields now and the alias belongs to the one it names.
+//
+// Order matters: autoMapHeaders claims fields first-come, and these are declared before `name` so a
+// file carrying both "First Name" and "Name" fills the parts rather than the whole.
 const HEADER_ALIASES: Record<ContactField, string[]> = {
-  name: ['name', 'full name', 'fullname', 'customer', 'customer name', 'client', 'client name', 'contact', 'contact name', 'first name'],
+  company_name: ['company', 'company name', 'business', 'business name', 'organisation', 'organization', 'org', 'account', 'account name', 'firm'],
+  first_name: ['first name', 'firstname', 'first', 'given name', 'forename'],
+  last_name: ['last name', 'lastname', 'last', 'surname', 'family name'],
+  name: ['name', 'full name', 'fullname', 'customer', 'customer name', 'client', 'client name', 'contact', 'contact name'],
   email: ['email', 'e-mail', 'email address', 'mail'],
   phone: ['phone', 'phone number', 'telephone', 'tel', 'mobile', 'cell', 'cell phone', 'contact number'],
   address: ['address', 'street', 'street address', 'mailing address', 'location'],

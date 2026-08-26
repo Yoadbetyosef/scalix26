@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { CONTACT_FIELDS, type ContactFieldValues } from './schema'
+import { personName } from './names'
+import { withCompanyColumns, writeError } from './company-column'
 
 // Contact book writes: manual creation, bulk import, and the type-ahead that backs the order form's
 // customer picker. Read paths elsewhere query contacts directly; everything here is tenant-scoped through
@@ -9,9 +11,18 @@ import { CONTACT_FIELDS, type ContactFieldValues } from './schema'
 export interface ContactSummary {
   id: string; name: string | null; email: string | null; phone: string | null
   address: string | null; currency: string | null
+  // The B2B half. Carried on the summary because the order form's picker shows it: choosing between
+  // two people called Irina is impossible unless the list says which company each one is from.
+  companyName: string | null
 }
+// SNAKE_CASE, DELIBERATELY. The route hands `contactFieldsSchema.safeParse(...).data` straight to
+// createContact, so this interface has to be spelled the way the schema is or the fields arrive as
+// undefined. They were camelCase for one commit and every field silently vanished on save: TypeScript
+// could not catch it because all of these are optional, so an object with the WRONG optional keys is
+// still assignable. contacts-write.test.ts now catches it instead.
 export interface ContactInput {
   name?: string | null; email?: string | null; phone?: string | null
+  company_name?: string | null; first_name?: string | null; last_name?: string | null
   address?: string | null; currency?: string | null; notes?: string | null
 }
 
@@ -34,7 +45,13 @@ export const escapeSearchTerm = (term: string): string => term.replace(/[%,()\\]
 const summary = (r: Record<string, unknown>): ContactSummary => ({
   id: r.id as string, name: (r.name as string) ?? null, email: (r.email as string) ?? null,
   phone: (r.phone as string) ?? null, address: (r.address as string) ?? null, currency: (r.currency as string) ?? null,
+  companyName: (r.company_name as string) ?? null,
 })
+
+/** The columns every read here needs. One list, because five selects had drifted to four spellings. */
+const COLS = 'id, name, company_name, email, phone, address, currency'
+/** The same list before add_contact_company.sql is run — see lib/contacts/company-column.ts. */
+const COLS_LEGACY = 'id, name, email, phone, address, currency'
 
 // Type-ahead for the order form. Matches name, email or phone; archived and merged-away contacts are
 // excluded so the picker never offers a record that shouldn't be reused.
@@ -45,23 +62,35 @@ export async function searchContacts(q: string, limit = 8): Promise<ContactSumma
   const sb = await createClient()
   const safe = escapeSearchTerm(term)
   if (!safe) return []
-  const { data } = await sb.from('contacts')
-    .select('id, name, email, phone, address, currency')
-    .eq('tenant_id', c.tenantId)
-    .is('archived_at', null).is('merged_into_id', null)
-    .or(`name.ilike.%${safe}%,email.ilike.%${safe}%,phone.ilike.%${safe}%`)
-    .order('last_interaction', { ascending: false, nullsFirst: false })
-    .limit(limit)
-  return ((data as Array<Record<string, unknown>> | null) ?? []).map(summary)
+  const { data } = await withCompanyColumns<Array<Record<string, unknown>>>(COLS, COLS_LEGACY, async (cols) => {
+    const company = cols === COLS ? `company_name.ilike.%${safe}%,` : ''
+    // company_name is in here because the caller says the company: "it's the yacht centre" has to
+    // find Irina, and before this it found nothing at all.
+    const { data: d, error } = await sb.from('contacts')
+      .select(cols)
+      .eq('tenant_id', c.tenantId)
+      .is('archived_at', null).is('merged_into_id', null)
+      .or(`name.ilike.%${safe}%,${company}email.ilike.%${safe}%,phone.ilike.%${safe}%`)
+      .order('last_interaction', { ascending: false, nullsFirst: false })
+      .limit(limit)
+    return { data: d as Array<Record<string, unknown>> | null, error }
+  })
+  return (data ?? []).map(summary)
 }
 
 // Every live contact for the tenant, used to detect duplicates before an import writes anything.
 async function loadExisting(tenantId: string): Promise<ContactSummary[]> {
   const sb = await createClient()
-  const { data } = await sb.from('contacts')
-    .select('id, name, email, phone, address, currency')
-    .eq('tenant_id', tenantId).is('merged_into_id', null).limit(10000)
-  return ((data as Array<Record<string, unknown>> | null) ?? []).map(summary)
+  // NOT allowed to fail quietly. This list is the duplicate index: if it comes back empty because a
+  // column was missing, every row in an import looks new and the book fills with duplicates.
+  const { data, error } = await withCompanyColumns<Array<Record<string, unknown>>>(COLS, COLS_LEGACY, async (cols) => {
+    const { data: d, error: e } = await sb.from('contacts')
+      .select(cols)
+      .eq('tenant_id', tenantId).is('merged_into_id', null).limit(10000)
+    return { data: d as Array<Record<string, unknown>> | null, error: e }
+  })
+  if (error) throw new Error(`Could not read existing contacts: ${error.message ?? 'unknown error'}`)
+  return (data ?? []).map(summary)
 }
 
 const buildIndex = (rows: ContactSummary[]) => {
@@ -75,10 +104,18 @@ const buildIndex = (rows: ContactSummary[]) => {
 
 export async function createContact(input: ContactInput): Promise<{ ok: boolean; error?: string; contact?: ContactSummary; duplicateOf?: ContactSummary }> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
-  const name = (input.name ?? '').trim()
+  const first = (input.first_name ?? '').trim()
+  const last = (input.last_name ?? '').trim()
+  const company = (input.company_name ?? '').trim()
+  // `name` is DERIVED from the two parts when they are given, and only falls back to whatever was
+  // typed into a single field. That is what keeps every screen which knows nothing about companies
+  // showing something true — see lib/contacts/names.ts.
+  const name = personName(first, last) ?? (input.name ?? '').trim()
   const email = (input.email ?? '').trim()
   const phone = (input.phone ?? '').trim()
-  if (!name && !email && !phone) return { ok: false, error: 'Enter at least a name, email, or phone number.' }
+  // A company on its own is enough to identify a contact — "M&P Yacht Centre" with a number and no
+  // named person is a real customer, and refusing it was the old rule's blind spot.
+  if (!name && !company && !email && !phone) return { ok: false, error: 'Enter at least a name, company, email, or phone number.' }
 
   // Refuse to create a second record for someone already in the book — that's the duplicate problem
   // this whole feature exists to solve. The caller shows the existing contact instead.
@@ -90,18 +127,24 @@ export async function createContact(input: ContactInput): Promise<{ ok: boolean;
   const sb = await createClient()
   const { data, error } = await sb.from('contacts').insert({
     tenant_id: c.tenantId, name: name || null, email: email || null, phone: phone || null,
+    company_name: company || null, first_name: first || null, last_name: last || null,
     address: (input.address ?? '').trim() || null, currency: (input.currency ?? '').trim() || null,
     notes: (input.notes ?? '').trim() || null,
     normalized_email: e, normalized_phone: p,
     total_conversations: 0,
-  }).select('id, name, email, phone, address, currency').single()
-  if (error) return { ok: false, error: error.message }
+  }).select(COLS).single()
+  if (error) return { ok: false, error: writeError(error) ?? error.message }
   return { ok: true, contact: summary(data as Record<string, unknown>) }
 }
 
 // ── Bulk import ─────────────────────────────────────────────────────────────────────────────────────
 
-export interface ImportRow { name?: string; email?: string; phone?: string; address?: string; currency?: string; notes?: string }
+export interface ImportRow {
+  name?: string; email?: string; phone?: string; address?: string; currency?: string; notes?: string
+  // A spreadsheet that HAS these columns is the common case for a B2B book, and until now the
+  // importer read "First Name" into `name` and dropped "Last Name" on the floor. See lib/contacts/csv.
+  company_name?: string; first_name?: string; last_name?: string
+}
 export interface ImportPreview {
   toCreate: ImportRow[]
   duplicates: Array<{ row: ImportRow; existing: ContactSummary; reason: 'email' | 'phone' }>
@@ -117,9 +160,13 @@ export async function previewImport(rows: ImportRow[]): Promise<ImportPreview | 
   const out: ImportPreview = { toCreate: [], duplicates: [], skipped: [] }
 
   for (const row of rows) {
-    const name = (row.name ?? '').trim()
+    // Whatever identifies the row: a single name, the two parts, or the company on its own. The old
+    // rule read `name` only, so a spreadsheet of businesses with a Company column and no contact
+    // person was reported as entirely empty and skipped row by row.
+    const name = personName(row.first_name, row.last_name) ?? (row.name ?? '').trim()
+    const company = (row.company_name ?? '').trim()
     const e = normalizeEmail(row.email); const p = normalizePhone(row.phone)
-    if (!name && !e && !p) { out.skipped.push({ row, reason: 'No name, email, or phone' }); continue }
+    if (!name && !company && !e && !p) { out.skipped.push({ row, reason: 'No name, company, email, or phone' }); continue }
     if (e && byEmail.has(e)) { out.duplicates.push({ row, existing: byEmail.get(e)!, reason: 'email' }); continue }
     if (p && byPhone.has(p)) { out.duplicates.push({ row, existing: byPhone.get(p)!, reason: 'phone' }); continue }
     if ((e && seenEmail.has(e)) || (p && seenPhone.has(p))) { out.skipped.push({ row, reason: 'Repeated earlier in this file' }); continue }
@@ -139,7 +186,11 @@ export async function commitImport(rows: ImportRow[]): Promise<{ ok: boolean; cr
   const sb = await createClient()
   const payload = preview.toCreate.map((r) => ({
     tenant_id: c.tenantId,
-    name: (r.name ?? '').trim() || null, email: (r.email ?? '').trim() || null, phone: (r.phone ?? '').trim() || null,
+    // Same derivation the form uses: two columns become the person's name, one column stays as it is.
+    name: personName(r.first_name, r.last_name) ?? ((r.name ?? '').trim() || null),
+    company_name: (r.company_name ?? '').trim() || null,
+    first_name: (r.first_name ?? '').trim() || null, last_name: (r.last_name ?? '').trim() || null,
+    email: (r.email ?? '').trim() || null, phone: (r.phone ?? '').trim() || null,
     address: (r.address ?? '').trim() || null, currency: (r.currency ?? '').trim() || null, notes: (r.notes ?? '').trim() || null,
     normalized_email: normalizeEmail(r.email), normalized_phone: normalizePhone(r.phone),
     total_conversations: 0,
@@ -148,7 +199,7 @@ export async function commitImport(rows: ImportRow[]): Promise<{ ok: boolean; cr
   let created = 0
   for (let i = 0; i < payload.length; i += 500) {
     const { error, data } = await sb.from('contacts').insert(payload.slice(i, i + 500)).select('id')
-    if (error) return { ok: false, created, error: error.message }
+    if (error) return { ok: false, created, error: writeError(error) ?? error.message }
     created += (data as unknown[] | null)?.length ?? 0
   }
   return { ok: true, created }
@@ -166,7 +217,7 @@ export async function updateContact(id: string, patch: ContactFieldValues): Prom
   const sb = await createClient()
 
   const { data: existing } = await sb.from('contacts')
-    .select('id, name, email, phone, address, currency, notes, manual_fields')
+    .select('id, name, company_name, first_name, last_name, email, phone, address, currency, notes, manual_fields')
     .eq('id', id).eq('tenant_id', c.tenantId).maybeSingle()
   if (!existing) return { ok: false, error: 'not_found' }
 
@@ -178,11 +229,24 @@ export async function updateContact(id: string, patch: ContactFieldValues): Prom
   const next: Record<string, string | null> = {}
   for (const f of touched) next[f] = ((patch[f] ?? '') as string).trim() || null
 
+  // Editing either part of the person's name re-derives `name` from BOTH — otherwise clearing a
+  // surname would leave the old composed string behind and the row would disagree with itself.
+  // Untouched rows keep whatever single name they already had: nothing is split retroactively.
+  if (touched.includes('first_name') || touched.includes('last_name')) {
+    const ex = existing as Record<string, string | null>
+    const derived = personName(
+      'first_name' in next ? next.first_name : ex.first_name,
+      'last_name' in next ? next.last_name : ex.last_name,
+    )
+    if (derived) next.name = derived
+  }
+
   const merged = { ...(existing as Record<string, unknown>), ...next } as Record<string, string | null>
   // Computed against the MERGED row, not the patch: an edit must not be able to leave a contact with
-  // no way to identify them at all.
-  if (!merged.name && !merged.email && !merged.phone) {
-    return { ok: false, error: 'Keep at least a name, email, or phone number.' }
+  // no way to identify them at all. A company counts — a business with a number and nobody named is
+  // still a contact you can reach.
+  if (!merged.name && !merged.company_name && !merged.email && !merged.phone) {
+    return { ok: false, error: 'Keep at least a name, company, email, or phone number.' }
   }
 
   // The same duplicate rule create enforces, against everybody EXCEPT this record. Retyping a phone
@@ -207,8 +271,8 @@ export async function updateContact(id: string, patch: ContactFieldValues): Prom
       updated_at: new Date().toISOString(),
     })
     .eq('id', id).eq('tenant_id', c.tenantId)
-    .select('id, name, email, phone, address, currency')
+    .select(COLS)
     .single()
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: writeError(error) ?? error.message }
   return { ok: true, contact: summary(data as Record<string, unknown>) }
 }

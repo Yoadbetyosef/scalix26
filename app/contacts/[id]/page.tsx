@@ -7,6 +7,7 @@ import { ArrowLeft, Phone, Mail, MapPin, MessageCircle, Globe, Calendar, Clock }
 import { Chip } from '@/components/inbox/conversation-contact-panel'
 import { channelHue } from '@/app/(v2)/v2/channels'
 import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
+import { contactDisplayOrIdentifier, contactInitial } from '@/lib/contacts/names'
 
 // Status wears the same chip as the channel, in its own hue — identical to /inbox/[id], because a
 // conversation's status means the same thing on whichever screen it is listed.
@@ -62,8 +63,10 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
   const ident = contactIdentifier(contact.channel, contact.phone)
   const IdentIcon = ident?.isPhone ? Phone : MessageCircle
 
-  // Same rule as the list (CT2): identify them by whatever we actually have rather than by "Unknown".
-  const title = contact.name || contact.email || contact.phone || 'Unknown contact'
+  // Same rule as the list (CT2), from the same helper: identify them by whatever we actually have
+  // rather than by "Unknown". For a B2B customer the company leads and the person follows it — see
+  // lib/contacts/names.ts for why the em dash and why that order.
+  const title = contactDisplayOrIdentifier(contact)
 
   const chanHue = channelHue(contact.channel)
 
@@ -78,11 +81,18 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
           className="v2-chip-sq"
           style={{ ['--ghue' as string]: chanHue, width: 42, height: 42, borderRadius: 13, fontFamily: 'var(--v2-mono)', fontSize: 16, textTransform: 'uppercase', color: chanHue, flex: 'none' }}
         >
-          {title[0] || '?'}
+          {contactInitial(contact)}
         </span>
         <div className="min-w-0" style={{ flex: 1 }}>
-          <h1 className="text-lg font-semibold tracking-tight truncate" style={{ color: 'var(--v2-ink)' }}>{title}</h1>
-          {contact.channel && <p className="v2-kick" style={{ marginTop: 2 }}>{contact.channel}</p>}
+          {/* THE HEADING SPLITS WHAT THE LIST JOINED. On a row you get one line and the composed
+              name is the only way to say both; here there is room, so the company is the title and
+              the person is who you actually speak to — which is the thing you came to check. */}
+          <h1 className="text-lg font-semibold tracking-tight truncate" style={{ color: 'var(--v2-ink)' }}>
+            {contact.company_name || title}
+          </h1>
+          <p className="v2-kick" style={{ marginTop: 2 }}>
+            {[contact.company_name && contact.name, contact.channel].filter(Boolean).join(' · ') || contact.channel}
+          </p>
         </div>
       </div>
 
@@ -96,6 +106,8 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
               <ContactEdit
                 contactId={contact.id}
                 initial={{
+                  company_name: contact.company_name ?? null,
+                  first_name: contact.first_name ?? null, last_name: contact.last_name ?? null,
                   name: contact.name ?? null, email: contact.email ?? null, phone: contact.phone ?? null,
                   address: contact.address ?? null, currency: contact.currency ?? null, notes: contact.notes ?? null,
                 }}

@@ -106,14 +106,21 @@ describe('a name is a name, at every door', () => {
 })
 
 describe('editing a contact', () => {
-  it('writes the same six fields create does, from one schema', () => {
-    expect([...CONTACT_FIELDS]).toEqual(['name', 'email', 'phone', 'address', 'currency', 'notes'])
+  it('writes the same fields create does, from one schema', () => {
+    // The list itself is not the point and pinning it made every new field a test edit — it grew
+    // three when companies arrived. What must hold is that create and edit read the SAME list, so a
+    // field added to one is never missing from the other.
     expect(create).toContain('const schema = contactFieldsSchema')
     expect(route).toContain('contactFieldsSchema.safeParse')
     // Not channel/language/total_conversations — derived or dead, and a form offering them invites
     // the owner to fight the system.
     for (const f of ['channel', 'language', 'total_conversations', 'last_interaction']) {
       expect(CONTACT_FIELDS as readonly string[]).not.toContain(f)
+    }
+    // Every field the shared list names is a key the shared schema validates. That is the real
+    // invariant the list assertion was standing in for.
+    for (const f of CONTACT_FIELDS) {
+      expect(contactFieldsSchema.shape as Record<string, unknown>).toHaveProperty(f)
     }
   })
 
@@ -134,8 +141,12 @@ describe('editing a contact', () => {
   })
 
   it('cannot leave a contact with no way to identify them', () => {
-    // Checked against the MERGED row, not the patch.
-    expect(store).toContain('if (!merged.name && !merged.email && !merged.phone)')
+    // Checked against the MERGED row, not the patch — that is the part worth pinning, and the only
+    // part that was ever load-bearing. The list of what counts as identifying grew a company when
+    // B2B contacts arrived: "M&P Yacht Centre" with a phone number and nobody named is a real
+    // customer, and the old guard refused it.
+    expect(store).toContain('const merged = { ...(existing as Record<string, unknown>), ...next }')
+    expect(store).toMatch(/if \(!merged\.name && !merged\.company_name && !merged\.email && !merged\.phone\)/)
   })
 
   it('refuses a collision with 409 and the record it clashed with', () => {

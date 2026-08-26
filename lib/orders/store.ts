@@ -222,6 +222,12 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
 }
 
 // Manual stage change (drag / explicit set) — approval stages are rejected here; use the workflow actions.
+/** Which file teaches the database a stage. Only the ones added after the original CHECK are here. */
+const STAGE_MIGRATION: Partial<Record<OrderStage, string>> = {
+  finished: 'add_order_finished_stage.sql',
+  closed_no_sale: 'add_order_closed_no_sale_stage.sql',
+}
+
 export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: boolean; error?: string }> {
   const c = await ctx(); if (!c) return { ok: false, error: 'unauthorized' }
   const sb = await createClient()
@@ -238,8 +244,11 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
   if (error) {
     return {
       ok: false,
+      // Naming the RIGHT file. This said add_order_finished_stage.sql for every stage, which was
+      // true when 'finished' was the only one the database had to be told about and became wrong the
+      // moment a second one arrived — sending the owner to a migration that is already run.
       error: error.code === '23514'
-        ? `The database does not know the stage "${to}" yet — if this is a new install, run add_order_finished_stage.sql.`
+        ? `The database does not know the stage "${to}" yet — run ${STAGE_MIGRATION[to] ?? 'the latest orders migration'} in the Supabase SQL editor.`
         : error.message,
     }
   }

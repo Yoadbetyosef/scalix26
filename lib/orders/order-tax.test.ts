@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { hasNoBoardColumn } from './stages'
 
 const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8')
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ')
@@ -144,17 +145,33 @@ describe('the orders list stopped calling a link a status', () => {
 })
 
 describe('a refused stage write is no longer silent', () => {
-  it('the update error is read, not discarded', () => {
+  it('the update error is read, not discarded, and names the right migration', () => {
     // It returned ok on a refused update: the screen refreshed and the stage was simply unchanged.
-    // 'finished' makes it reachable, because the DATABASE has to be told about that stage.
+    // 'finished' made it reachable, because the DATABASE has to be told about that stage.
     expect(store).toContain("const { error } = await sb.from('orders').update({ stage: to")
     expect(store).toContain("error.code === '23514'")
-    expect(store).toContain('run add_order_finished_stage.sql')
+    // The FILENAME used to be hard-coded, which was true while 'finished' was the only stage the
+    // database had to be told about and sent the owner to an already-run migration the moment a
+    // second one arrived. It is a lookup now, and every stage in it names its own file.
+    expect(store).toContain('STAGE_MIGRATION[to]')
+    expect(store).toContain("finished: 'add_order_finished_stage.sql'")
+    expect(store).toContain("closed_no_sale: 'add_order_closed_no_sale_stage.sql'")
   })
 
-  it('and the board gives terminal stages no column', () => {
+  it('and the board gives no column to a stage work only accumulates in', () => {
     // A column that only ever accumulates is a list, not a stage of work.
-    expect(read('../../app/orders/board/page.tsx')).toContain("s !== 'cancelled' && s !== 'finished'")
+    //
+    // This used to pin the literal `s !== 'cancelled' && s !== 'finished'`, which broke the moment a
+    // third such stage arrived and had to be added to it — the string was never the rule. The rule
+    // is hasNoBoardColumn, and it is asserted here as a rule: the board filters by it, and the
+    // predicate says the right thing about the four stages that are arguable.
+    expect(read('../../app/orders/board/page.tsx')).toContain('hasNoBoardColumn(s)')
+    expect(hasNoBoardColumn('cancelled')).toBe(true)
+    expect(hasNoBoardColumn('finished')).toBe(true)
+    expect(hasNoBoardColumn('closed_no_sale')).toBe(true)
+    // 'completed' is terminal and KEEPS its column: it is the end of the forward chain and the drag
+    // target out of 'delivered'. A predicate built on isTerminalStage would have taken it away.
+    expect(hasNoBoardColumn('completed')).toBe(false)
   })
 
   it('finishing does not forbid invoicing later', () => {
