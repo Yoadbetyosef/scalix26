@@ -82,6 +82,38 @@ export const MAX_REQUEST_BODY_BYTES = 4_500_000
  */
 export const MAX_INVOICE_BYTES = 4 * 1024 * 1024
 
+/**
+ * WHAT AN ORDER ATTACHMENT MAY ACTUALLY BE, video included.
+ *
+ * The same number as MAX_INVOICE_BYTES and for the same reason: every upload in this app streams its
+ * bytes through a function, and the edge refuses a body over MAX_REQUEST_BODY_BYTES before any code
+ * here runs. 4 MB leaves room for the multipart boundary, part headers and the filename.
+ *
+ * ── WHY THIS NOW EXISTS RATHER THAN MAX_ATTACHMENT_BYTES BEING CHECKED ──────────────────────────
+ *
+ * MAX_ATTACHMENT_BYTES is 50 MB — the BUCKET's limit — and it was what the upload checked. So a file
+ * between 4.5 and 50 MB passed our check, uploaded, and died at the edge with "Request Entity Too
+ * Large": plain text, not JSON, thrown before routing, uncatchable by anything in this repository.
+ * The person had already waited for the upload.
+ *
+ * That was a latent problem while attachments were mostly photographs. Video makes it the common
+ * case — thirty seconds off a phone is 15-40 MB — so the limit is now the one the platform actually
+ * keeps, stated before the upload starts rather than discovered after it.
+ *
+ * The honest fix for real video is a direct-to-storage signed upload that never passes through a
+ * function. Until that exists, this number is the truth. See lib/invoices/OUTSTANDING.md §8.
+ */
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+
+/** Said the same way wherever a file is refused for size, so the advice does not drift. */
+export function tooLargeMessage(bytes: number, isVideo: boolean): string {
+  const mb = (bytes / 1024 / 1024).toFixed(1)
+  const limit = MAX_UPLOAD_BYTES / 1024 / 1024
+  return isVideo
+    ? `That video is ${mb} MB and the limit is ${limit} MB — roughly 15 seconds from a phone. Trim it, or record at a lower resolution, and it will go through.`
+    : `That file is ${mb} MB — the limit is ${limit} MB.`
+}
+
 export const extensionOf = (fileName: string): string => {
   const i = fileName.lastIndexOf('.')
   return i > 0 ? fileName.slice(i + 1).toLowerCase() : ''

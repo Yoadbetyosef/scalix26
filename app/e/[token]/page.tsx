@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { PrintButton } from '@/components/studio/print-button'
 import { OrderDocumentBody } from '@/components/orders/document-body'
 import { loadOrderDocument } from '@/lib/orders/document-data'
-import { resolveShare } from '@/lib/orders/shares'
+import { resolveShare, shareLinkRevoked } from '@/lib/orders/shares'
 import { ORDER_DOC_META } from '@/lib/orders/documents'
 
 // The customer's copy of a document, at a token URL.
@@ -35,11 +35,34 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   }
 }
 
+// A LINK THE BUSINESS WITHDREW SAYS SO. AN UNKNOWN ONE STILL DOES NOT.
+//
+// The rule used to be one 404 for every failure, on the reasoning that naming the cause helps
+// somebody guessing tokens. That holds for a token that resolves to nothing and fails for one that
+// resolves: reaching this branch with a matching token proves the caller was given it, so the only
+// person it can inform is the named recipient. Telling them "invalid" when the truth is "withdrawn"
+// sends them to the jeweller convinced her software is broken.
+//
+// Nothing else can put them here. There is no expiry on a shared document and never has been.
+function Withdrawn() {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f6f7f9', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ maxWidth: 440, padding: 28, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, textAlign: 'center' }}>
+        <h1 style={{ fontSize: 18, margin: '0 0 8px', color: '#111827' }}>This link was withdrawn</h1>
+        <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>The business that sent you this document has since withdrawn the link. Please contact them if you still need a copy.</p>
+      </div>
+    </div>
+  )
+}
+
 export default async function SharedDocumentPage({ params }: { params: Promise<{ token: string }> }) {
-  const share = await resolveShare((await params).token)
-  // One 404 for every failure — malformed, unknown, revoked, expired. Telling an anonymous caller
-  // which it was is free information for somebody guessing tokens.
-  if (!share) notFound()
+  const token = (await params).token
+  const share = await resolveShare(token)
+  if (!share) {
+    // The second lookup runs ONLY when the first failed, so the ordinary case still costs one query.
+    if (await shareLinkRevoked(token)) return <Withdrawn />
+    notFound()
+  }
 
   const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType)
   if (!data) notFound()

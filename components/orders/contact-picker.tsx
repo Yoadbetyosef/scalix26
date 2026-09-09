@@ -11,8 +11,16 @@ import { Search, X } from 'lucide-react'
 
 export interface PickedContact {
   id: string | null; name: string; email: string; phone: string; address: string; currency: string
+  /**
+   * THE BUSINESS, when the customer is one — the TG Designs half of the book.
+   *
+   * `name` keeps meaning the PERSON in both cases: a retail buyer, or the contact at the firm. That
+   * is the same split the address book made, and keeping the two fields aligned is what lets a
+   * contact picked here fill both without either meaning two things.
+   */
+  company: string
 }
-interface Match { id: string; name: string | null; email: string | null; phone: string | null; address: string | null; currency: string | null }
+interface Match { id: string; name: string | null; companyName: string | null; email: string | null; phone: string | null; address: string | null; currency: string | null }
 
 
 export function ContactPicker({ value, onChange }: { value: PickedContact; onChange: (v: PickedContact) => void }) {
@@ -49,7 +57,7 @@ export function ContactPicker({ value, onChange }: { value: PickedContact; onCha
 
   const pick = (m: Match) => {
     onChange({
-      id: m.id, name: m.name ?? '', email: m.email ?? '', phone: m.phone ?? '',
+      id: m.id, name: m.name ?? '', company: m.companyName ?? '', email: m.email ?? '', phone: m.phone ?? '',
       address: m.address ?? '', currency: m.currency ?? value.currency,
     })
     setOpen(false); setMatches([])
@@ -69,18 +77,37 @@ export function ContactPicker({ value, onChange }: { value: PickedContact; onCha
 
   return (
     <div className="space-y-4">
+      {/* ── BUSINESS NAME AND CONTACT NAME ARE TWO FIELDS ────────────────────────────────────────
+          On the TG Designs side the customer is the firm and `Customer` below is the person to
+          reach at it. Typing "M&P Yacht Centre" into the name box — which is what the live address
+          book already contains — loses the person entirely and puts a company in a field the AI
+          writes personal names into off live phone calls.
+
+          It is offered on every order rather than behind a B2B toggle: a retail order simply leaves
+          it blank, and a toggle would be a second thing to get wrong before the form can be used. */}
+      <div className="v2-fld">
+        <label htmlFor="cp-company">Business name <span className="v2-kick" style={{ marginLeft: 6 }}>if this is for a company</span></label>
+        <input
+          id="cp-company"
+          value={value.company}
+          onChange={(e) => onChange({ ...value, company: e.target.value })}
+          placeholder="e.g. M&P Yacht Centre"
+          autoComplete="off"
+        />
+      </div>
+
       <div ref={box} className="relative">
         {/* Rule, not box — and the search icon sits on the baseline rather than inside a field,
             because there is no field to sit inside any more. Same treatment /inbox's search got. */}
         <div className="v2-fld" style={{ position: 'relative' }}>
-          <label htmlFor="cp-name">Customer</label>
+          <label htmlFor="cp-name">{value.company.trim() ? 'Contact name' : 'Customer'}</label>
           <input
             id="cp-name"
             value={value.name}
             onChange={(e) => { onChange({ ...value, id: null, name: e.target.value }); setOpen(true) }}
             onFocus={() => setOpen(true)}
             onKeyDown={onKeyDown}
-            placeholder="Start typing a name…"
+            placeholder={value.company.trim() ? 'Who to reach at the business…' : 'Start typing a name…'}
             autoComplete="off"
             role="combobox"
             aria-expanded={showList}
@@ -118,8 +145,12 @@ export function ContactPicker({ value, onChange }: { value: PickedContact; onCha
                   className="v2-popr"
                   data-on={i === active || undefined}
                 >
-                  <span className="v2-popn">{m.name || m.email || m.phone || 'Unnamed contact'}</span>
-                  {(m.email || m.phone) && <span className="v2-kick">{[m.email, m.phone].filter(Boolean).join(' · ')}</span>}
+                  {/* The firm leads when there is one: choosing between two people called Irina is
+                      impossible unless the row says which company each is from. */}
+                  <span className="v2-popn">{m.companyName || m.name || m.email || m.phone || 'Unnamed contact'}</span>
+                  {(m.companyName && m.name) || m.email || m.phone
+                    ? <span className="v2-kick">{[m.companyName && m.name ? m.name : null, m.email, m.phone].filter(Boolean).join(' · ')}</span>
+                    : null}
                 </button>
               </li>
             ))}

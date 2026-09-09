@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
-import { ALLOWED_EXTENSIONS, MAX_ATTACHMENT_BYTES, extensionOf } from './attachment-types'
+import { ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, extensionOf, tooLargeMessage } from './attachment-types'
 import { addEvent } from './store'
 
 // Private order attachments. The bucket is never public; files are reached only via short-lived signed URLs
@@ -10,7 +10,7 @@ export const ORDER_BUCKET = 'order-attachments'
 
 // Size caps and the extension allowlist live in ./attachment-types (isomorphic) so the upload UI can
 // enforce exactly the same rules — this module reaches next/headers and can't be imported by a client.
-export { ALLOWED_EXTENSIONS, ACCEPT_ATTR, MAX_ATTACHMENT_BYTES, INVOICE_EXTENSIONS, MAX_INVOICE_BYTES } from './attachment-types'
+export { ALLOWED_EXTENSIONS, ACCEPT_ATTR, MAX_ATTACHMENT_BYTES, MAX_UPLOAD_BYTES, INVOICE_EXTENSIONS, MAX_INVOICE_BYTES } from './attachment-types'
 
 export type Visibility = 'internal' | 'public'
 export interface OrderAttachment { id: string; orderId: string; storagePath: string; fileName: string; mimeType: string; fileSize: number; visibility: Visibility; uploadedBy: string | null; createdAt: string }
@@ -30,8 +30,13 @@ export async function signedUrlFor(storagePath: string, expiresIn = 300): Promis
   return data?.signedUrl ?? null
 }
 
-/** An attachment the customer may see, with a URL that will still resolve when they print. */
-export interface DocumentImage { id: string; url: string; fileName: string }
+/**
+ * An attachment the customer may see, with a URL that will still resolve when they print.
+ *
+ * `kind` was added when video arrived. It is derived from the stored MIME type rather than stored, so
+ * there is nothing to migrate and nothing that can disagree with the file itself.
+ */
+export interface DocumentImage { id: string; url: string; fileName: string; kind: 'image' | 'video' }
 
 /**
  * The images a CUSTOMER-facing document may show, for a tenant given EXPLICITLY.
@@ -63,13 +68,34 @@ export async function publicDocumentImagesForTenant(tenantId: string, orderId: s
     .eq('tenant_id', tenantId).eq('order_id', orderId).eq('visibility', 'public')
     .order('created_at')
 
-  const images = ((data as Array<Record<string, unknown>> | null) ?? [])
-    .map(row)
-    .filter((a) => a.mimeType.startsWith('image/'))
+  // ── VIDEO IS ADMITTED HERE, AND NOWHERE ELSE HAD TO CHANGE ──────────────────────────────────────
+  //
+  // Video has been an accepted UPLOAD since the attachment allowlist was written (mp4, mov, webm,
+  // m4v). What stopped it reaching a customer was this one filter: `mimeType.startsWith('image/')`.
+  // So a jeweller could attach a turning shot of a ring, see it on her own order, mark it public, and
+  // it would silently never appear on the document — the failure mode this function's own comment
+  // warns about, one line below where it was happening.
+  //
+  // The visibility rule is untouched and is doing the same job for video that it does for a photo:
+  // 'internal' is filtered out above, in the query, so a supplier's invoice video could no more reach
+  // an estimate than a supplier's invoice PDF can.
+  //
+  // HEIC/HEIF stay out of the picture set for the same reason they always were — no browser renders
+  // them — and everything else (PDF, CAD, ZIP) still has no thumbnail and is still excluded.
+  const kindOf = (mime: string): 'image' | 'video' | null => {
+    if (mime.startsWith('video/')) return 'video'
+    if (mime.startsWith('image/') && mime !== 'image/heic' && mime !== 'image/heif') return 'image'
+    return null
+  }
 
-  const signed = await Promise.all(images.map(async (a) => {
+  const media = ((data as Array<Record<string, unknown>> | null) ?? [])
+    .map(row)
+    .map((a) => ({ a, kind: kindOf(a.mimeType) }))
+    .filter((x): x is { a: OrderAttachment; kind: 'image' | 'video' } => x.kind !== null)
+
+  const signed = await Promise.all(media.map(async ({ a, kind }) => {
     const url = await signedUrlFor(a.storagePath, 1800)
-    return url ? { id: a.id, url, fileName: a.fileName } : null
+    return url ? { id: a.id, url, fileName: a.fileName, kind } : null
   }))
   return signed.filter((x): x is DocumentImage => x !== null)
 }
@@ -86,7 +112,9 @@ export async function uploadAttachment(orderId: string, file: File): Promise<{ o
   const ext = extensionOf(file.name)
   const storedType = ALLOWED_EXTENSIONS[ext]
   if (!storedType) return { ok: false, error: `Can't accept a .${ext || 'unknown'} file. Photos, PDFs, videos and CAD files (STL, OBJ, 3DM, STEP, ZIP…) are all supported.` }
-  if (file.size > MAX_ATTACHMENT_BYTES) return { ok: false, error: `That file is ${(file.size / 1024 / 1024).toFixed(0)} MB — the limit is ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB.` }
+  // The limit the PLATFORM keeps, not the bucket's — a file between the two uploaded and then died
+  // at the edge with an uncatchable plain-text 413. See MAX_UPLOAD_BYTES.
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: tooLargeMessage(file.size, storedType.startsWith('video/')) }
   // Confirm the order belongs to this tenant before writing anything.
   const sb = await createClient()
   const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()

@@ -106,9 +106,19 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
           </header>
 
           <section className="mb-6 grid gap-3 sm:grid-cols-2">
+            {/* ── WHO THIS IS FOR, WHEN "WHO" IS A COMPANY ──────────────────────────────────────
+                The BUSINESS is the customer and the person is who to reach at it — a B2B document is
+                addressed to M&P Yacht Centre, attention Irina, not to Irina personally. So the firm
+                takes the prominent line and the contact goes underneath, labelled.
+
+                A retail order has no company and renders exactly as it always did: one name, then
+                the email and phone. Nothing about the existing documents moves. */}
             <div className="rounded-lg border border-neutral-200 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Prepared for</p>
-              <p className="text-sm font-medium">{o.customerName ?? '—'}</p>
+              <p className="text-sm font-medium">{o.customerCompany || o.customerName || '—'}</p>
+              {o.customerCompany && o.customerName && (
+                <p className="text-sm text-neutral-500">Attn: {o.customerName}</p>
+              )}
               {o.customerEmail && <p className="text-sm text-neutral-500">{o.customerEmail}</p>}
               {o.customerPhone && <p className="text-sm text-neutral-500">{o.customerPhone}</p>}
             </div>
@@ -120,21 +130,51 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
             </div>
           </section>
 
-          {/* THE PIECE — above the line items, because a customer looks before they read. Public image
-              attachments only; break-inside-avoid keeps a photo off a page boundary. */}
+          {/* THE PIECE — above the line items, because a customer looks before they read. Public
+              attachments only; break-inside-avoid keeps a photo off a page boundary.
+
+              ── VIDEO SITS IN THE SAME GALLERY ────────────────────────────────────────────────────
+              For custom work a turning shot says what a still cannot, and it is the same kind of
+              thing as the photograph beside it: something to look at before reading the price. So it
+              shares the grid rather than getting a section of its own.
+
+              ON PAPER IT IS A STILL AND A SENTENCE. A <video> printed by Chrome is a poster frame at
+              best and an empty box at worst, with no indication that anything is missing. Rather than
+              print a blank rectangle, the element is hidden at print time and replaced with a line
+              saying a video is attached and where to see it — which is the honest thing a printed
+              copy of a page containing video can say. */}
           {images.length > 0 && (
             <section className="mb-6 break-inside-avoid">
               <div className={images.length === 1 ? '' : 'grid grid-cols-2 gap-3 sm:grid-cols-3'}>
                 {images.map((img) => (
-                  // eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset
-                  <img
-                    key={img.id}
-                    src={img.url}
-                    alt={img.fileName}
-                    className={images.length === 1
-                      ? 'max-h-80 w-full rounded-lg border border-neutral-200 object-contain'
-                      : 'h-40 w-full rounded-lg border border-neutral-200 object-cover'}
-                  />
+                  img.kind === 'video' ? (
+                    <div key={img.id}>
+                      <video
+                        src={img.url}
+                        controls
+                        playsInline
+                        // No autoplay and no loop: this is a document, and a document that starts
+                        // moving on open is an advertisement.
+                        preload="metadata"
+                        className={images.length === 1
+                          ? 'max-h-80 w-full rounded-lg border border-neutral-200 bg-black object-contain print:hidden'
+                          : 'h-40 w-full rounded-lg border border-neutral-200 bg-black object-cover print:hidden'}
+                      />
+                      <p className="hidden text-xs text-neutral-500 print:block">
+                        A video of this piece ({img.fileName}) is included with the online copy of this document.
+                      </p>
+                    </div>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static asset
+                    <img
+                      key={img.id}
+                      src={img.url}
+                      alt={img.fileName}
+                      className={images.length === 1
+                        ? 'max-h-80 w-full rounded-lg border border-neutral-200 object-contain'
+                        : 'h-40 w-full rounded-lg border border-neutral-200 object-cover'}
+                    />
+                  )
                 ))}
               </div>
             </section>

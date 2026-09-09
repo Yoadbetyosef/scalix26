@@ -11,6 +11,32 @@ const badge: Record<AvailabilityStatus, string> = {
   incoming: 'bg-amber-100 text-amber-800', special_order: 'bg-violet-100 text-violet-800',
 }
 
+// THE PAGE TITLE IS THE TENANT'S, AND ONLY THE TENANT'S.
+//
+// This route had no generateMetadata at all, so it inherited the root layout's — and the root layout
+// only neutralises paths that lib/documents/routes.ts recognises, which this one was not. The host
+// brand therefore resolved, and on app.scalix26.com the browser tab over a jeweller's own part read
+// "Scalix26 — AI Employee Platform". A customer scanning a QR code in her shop is not our customer.
+//
+// Failure here is a bare title rather than a platform one: every path out returns '' at worst.
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const bare = { title: '', robots: { index: false, follow: false } }
+  try {
+    const db = createAdminClient()
+    const { data: part } = await db.from('catalog_product_parts')
+      .select('name, tenant_id').eq('qr_code_token', (await params).token).maybeSingle()
+    if (!part) return bare
+    const { data: tenant } = await db.from('tenants')
+      .select('business_name').eq('id', part.tenant_id).maybeSingle()
+    return {
+      ...bare,
+      title: [tenant?.business_name, part.name].filter(Boolean).join(' · ') || '',
+    }
+  } catch {
+    return bare
+  }
+}
+
 export default async function PublicPartPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const db = createAdminClient()

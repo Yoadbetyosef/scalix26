@@ -13,10 +13,34 @@ import { isCustomerDocumentPath, NEUTRAL_BRAND } from './routes'
 //
 // A comment saying "don't do that" would not have caught it. These assertions are the mechanism.
 
+// ── ALL EIGHT, BECAUSE THREE WAS THE BUG ────────────────────────────────────────────────────────
+//
+// This list held three routes and stayed green through a live leak. Four customer-reachable pages
+// were added after it was written and none of their authors came back here, which is not a criticism
+// of them — the list gave no reason to. A route that omits its own title does not fail; it silently
+// inherits the host brand, and the only symptom is our name in the tab over somebody else's
+// customer's document.
+//
+// So the list is now every path lib/documents/routes.ts claims, and the two are asserted against each
+// other below: adding a route to one without the other is what this file exists to catch.
 const DOCUMENT_ROUTES = [
   'app/orders/[id]/document/[type]/page.tsx',
   'app/d/[token]/page.tsx',
   'app/approval/[token]/page.tsx',
+  'app/e/[token]/page.tsx',
+  'app/i/[token]/page.tsx',
+  'app/f/[slug]/page.tsx',
+  'app/q/[token]/page.tsx',
+  'app/p/[token]/page.tsx',
+]
+
+/** One representative path per prefix the predicate must claim. */
+const CUSTOMER_PATHS = [
+  '/orders/abc-123/document/estimate',
+  '/d/tok_123', '/approval/tok_123', '/e/tok_123', '/i/tok_123',
+  '/f/enquire', '/q/tok_123', '/p/tok_123',
+  // Not a customer, but the URL lands in an SMS preview and must name nobody either.
+  '/m/tok_123',
 ]
 
 /** Anything that names us. Case-insensitive, so a lowercase slug is caught too. */
@@ -69,10 +93,18 @@ describe('the root layout refuses to brand a customer document', () => {
 })
 
 describe('isCustomerDocumentPath', () => {
-  it('matches the three document surfaces', () => {
-    expect(isCustomerDocumentPath('/orders/abc-123/document/estimate')).toBe(true)
-    expect(isCustomerDocumentPath('/d/tok_123')).toBe(true)
-    expect(isCustomerDocumentPath('/approval/tok_123')).toBe(true)
+  it.each(CUSTOMER_PATHS)('claims %s', (path) => {
+    expect(isCustomerDocumentPath(path)).toBe(true)
+  })
+
+  it('does not match a longer segment that merely starts with a claimed letter', () => {
+    // The predicate tests a whole path SEGMENT. `includes`, or a prefix without the slash, would
+    // neutralise the brand on every one of these — all of them owner-facing app screens.
+    expect(isCustomerDocumentPath('/partner/commissions')).toBe(false)
+    expect(isCustomerDocumentPath('/inbox')).toBe(false)
+    expect(isCustomerDocumentPath('/marketplace')).toBe(false)
+    expect(isCustomerDocumentPath('/quotes')).toBe(false)
+    expect(isCustomerDocumentPath('/dashboard')).toBe(false)
   })
 
   it('does NOT match the owner’s own order screen', () => {

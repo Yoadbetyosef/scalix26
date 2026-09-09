@@ -14,6 +14,8 @@ export interface OrderEditInitial {
   orderNumber: string
   contactId: string | null
   customerName: string | null; customerEmail: string | null; customerPhone: string | null
+  /** Optional, like every field behind a hand-run migration — see Order.customerCompany. */
+  customerCompany?: string | null
   factoryName: string | null; factoryContactName: string | null; factoryEmail: string | null
   assignedEmployee: string | null; orderDate: string | null; requestedCompletionDate: string | null
   depositCents: number; currency: string
@@ -38,7 +40,8 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
   const [lists, setLists] = useState<OrderOptionList[]>([])
 
   const [customer, setCustomer] = useState<PickedContact>({
-    id: initial.contactId, name: initial.customerName ?? '', email: initial.customerEmail ?? '',
+    id: initial.contactId, name: initial.customerName ?? '', company: initial.customerCompany ?? '',
+    email: initial.customerEmail ?? '',
     phone: initial.customerPhone ?? '', address: '', currency: initial.currency || 'usd',
   })
   const [f, setF] = useState({
@@ -63,7 +66,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
   useEffect(() => { if (open && !lists.length) fetchOptionLists().then(setLists) }, [open, lists.length])
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }))
-  const setLine = (i: number, k: keyof LineDraft, v: string) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
+  const setLine = (i: number, k: keyof LineDraft, v: string | string[]) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
   const sym = SYMBOL[customer.currency] ?? customer.currency.toUpperCase()
   const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0)
 
@@ -75,7 +78,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
     try {
       const body = {
         orderNumber: f.orderNumber.trim() || undefined,
-        contactId: customer.id, customerName: customer.name || null, customerEmail: customer.email || null, customerPhone: customer.phone || null,
+        contactId: customer.id, customerName: customer.name || null, customerCompany: customer.company || null, customerEmail: customer.email || null, customerPhone: customer.phone || null,
         currency: customer.currency,
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,

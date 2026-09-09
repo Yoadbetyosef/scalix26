@@ -126,6 +126,7 @@ describe('the document says the same words as the form', () => {
     quantity: 1, unitPriceCents: 0, measurements: "16''", color: null, material: null,
     customSpec: null, productRef: null, lineTotalCents: 0, displayOrder: 0, internalCostCents: null,
     productType: null, stoneQuality: null, stoneColor: null, stoneOrigin: null, stoneType: null,
+    sideStoneShapes: [], bandWidthMm: null,
     centerStoneShape: 'Round', sideStoneShape: null, centerStoneCarat: 17, sideStoneCaratTotal: null,
     metalKarat: null, certificateLab: null, ringSize: null,
     ...over,

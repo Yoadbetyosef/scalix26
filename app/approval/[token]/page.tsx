@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { getApprovalByToken } from '@/lib/orders/approvals'
+import { getApprovalByToken, deadLinkReason } from '@/lib/orders/approvals'
 import type { PublicOrderView } from '@/lib/orders/types'
 import { PrintButton } from '@/components/studio/print-button'
 import { PublicApprovalForm } from '@/components/orders/public-approval'
@@ -8,13 +8,28 @@ import { FactoryDelivery } from '@/components/orders/factory-delivery'
 export const dynamic = 'force-dynamic'
 
 // PUBLIC approval page — reachable only with a valid token. No tenant data, internal notes, internal IDs, or
-// other orders are ever exposed. Invalid/expired/revoked tokens get a single generic page.
-function Unavailable() {
+// other orders are ever exposed.
+//
+// ── AN UNKNOWN TOKEN AND A WITHDRAWN ONE ARE NOT THE SAME EVENT ─────────────────────────────────
+//
+// Both used to render the sentence below, which named three possible causes and left the reader to
+// guess. The bare version is right for a token that resolves to nothing — the caller has proved
+// nothing and silence is the only safe answer. It is wrong for a token that resolves to a real row:
+// that caller IS the named recipient, they cannot have reached the branch without the link they were
+// sent, and "invalid" tells them the business is broken when the truth is that it withdrew the link.
+//
+// See deadLinkReason() for why this leaks nothing.
+function Unavailable({ reason }: { reason?: 'revoked' | 'expired' }) {
+  const [title, body] = reason === 'revoked'
+    ? ['This link was withdrawn', 'The business that sent you this approval has since withdrawn the link. Please contact them if you still need to review the order.']
+    : reason === 'expired'
+      ? ['This link is no longer active', 'This approval link was closed. Please contact the business that sent it and ask them to send a new one — the order itself is unaffected.']
+      : ['Link unavailable', 'This approval link is not valid. If you believe this is a mistake, please contact the sender.']
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f6f7f9', fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ maxWidth: 440, padding: 28, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, textAlign: 'center' }}>
-        <h1 style={{ fontSize: 18, margin: '0 0 8px', color: '#111827' }}>Link unavailable</h1>
-        <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>This approval link is invalid, has expired, or is no longer available. If you believe this is a mistake, please contact the sender.</p>
+        <h1 style={{ fontSize: 18, margin: '0 0 8px', color: '#111827' }}>{title}</h1>
+        <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>{body}</p>
       </div>
     </div>
   )
@@ -40,7 +55,8 @@ export async function generateMetadata() {
 export default async function ApprovalPage({ params }: { params: Promise<{ token: string }> }) {
   const token = (await params).token
   const view = await getApprovalByToken(token)
-  if (!view) return <Unavailable />
+  // The second lookup happens ONLY on the unhappy path, so the ordinary case still costs one query.
+  if (!view) return <Unavailable reason={(await deadLinkReason(token)) ?? undefined} />
 
   // The factory cannot make the piece from a product name alone — every spec the order carries is listed
   // as its own labelled row. Pricing and internal notes stay out; these are manufacturing instructions.
@@ -51,9 +67,15 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
     ['Colour', l.stoneColor],
     ['Center shape', l.centerStoneShape],
     ['Center weight', l.centerStoneCarat != null ? `${l.centerStoneCarat} ct` : null],
-    ['Side shape', l.sideStoneShape],
+    // Every side shape, not just the first — the workshop is the one that has to cut them. Pluralised
+    // only when there is more than one, so a single-shape piece prints the row it always printed.
+    // `?? []` for the same reason as lib/orders/documents.ts: this is the factory's page and a
+    // thrown error is a workshop with no work order.
+    [(l.sideStoneShapes ?? []).length > 1 ? 'Side shapes' : 'Side shape',
+      (l.sideStoneShapes ?? []).length > 0 ? (l.sideStoneShapes ?? []).join(', ') : l.sideStoneShape],
     ['Side weight (total)', l.sideStoneCaratTotal != null ? `${l.sideStoneCaratTotal} ct` : null],
     ['Metal', l.metalKarat ?? l.material],
+    ['Band width', l.bandWidthMm != null ? `${l.bandWidthMm} mm` : null],
     ['Measurements', l.measurements],
     ['Finish', l.color],
     ['Notes', l.customSpec],

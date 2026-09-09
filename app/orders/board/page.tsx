@@ -2,24 +2,46 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders } from '@/lib/orders/store'
-import { ORDER_STAGES, STAGE_LABELS, isProtectedStage, hasNoBoardColumn, type OrderStage } from '@/lib/orders/stages'
-import { Lock } from 'lucide-react'
-import { stageColor, stageHue, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-colors'
+import { ORDER_STAGES, hasNoBoardColumn, type OrderStage } from '@/lib/orders/stages'
+import { BoardColumns, type BoardCard } from '@/components/orders/board-columns'
 
 export const dynamic = 'force-dynamic'
-const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 
 // Kanban view. Columns are the workflow stages; approval columns are marked (their cards move only via the
 // order's workflow actions, not free drag). Cards link to the order for actions.
 //
 // Each column carries its own hue (lib/orders/stage-colors) — a rule across the top and a tinted header —
-// so thirteen stages are told apart at a glance instead of reading as one wall. The column bodies stay
+// so the stages are told apart at a glance instead of reading as one wall. The column bodies stay
 // neutral so the cards, not the chrome, are what you look at.
+//
+// ── THE COLUMNS MOVED INTO A CLIENT COMPONENT ───────────────────────────────────────────────────
+//
+// Dragging needs event handlers, so the columns are now components/orders/board-columns.tsx. This
+// page keeps what a server component is for: the guard, the read, and deciding WHICH columns exist.
+// It hands down plain data — no functions, no order objects with methods — so the boundary stays a
+// serialisable one.
+//
+// Two columns are new. 'Pending' is a new stage for a job that is parked rather than lost or
+// untouched; 'Lost business' is `closed_no_sale`, which had deliberately been kept OFF the board on
+// the reasoning that thirty lost quotes a day would grow a column nobody could work from. That was
+// true of a column you read and false of one you can drag into — see lib/orders/stages.ts.
 export default async function OrdersBoardPage() {
   const a = await requireOrdersAccess()
   if (!a) notFound()
   const orders = await listOrders()
-  const byStage = (s: OrderStage) => orders.filter((o) => o.stage === s)
+
+  const stages: OrderStage[] = ORDER_STAGES.filter((s) => !hasNoBoardColumn(s))
+  // Exactly the fields a card draws, and nothing else. An order carries internal costs and internal
+  // notes; a client component receives a projection so those never cross the boundary at all.
+  const cards: BoardCard[] = orders.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    customerName: o.customerName,
+    customerCompany: o.customerCompany ?? null,
+    factoryName: o.factoryName,
+    subtotalCents: o.subtotalCents,
+    stage: o.stage,
+  }))
 
   return (
     <div className="v2 v2-embedded p-4 sm:p-6">
@@ -30,52 +52,14 @@ export default async function OrdersBoardPage() {
         <Link href="/orders/new" className="v2-act" data-solid>New order</Link>
       </div>
 
-      {/* THE COLUMN HUES ARE UNCHANGED — that fan is a designed thing, thirteen hues no two of which
-          sit closer than 16°, and the table now reads from the same one via stageHue. What changed
-          is the chrome around them: v1 wrapped each column in a grey card on a grey body, so the
-          board read as a wall of boxes with the hue reduced to a 3px rule. The hue is the column
-          now — a tinted header on paper, one hairline, and the cards inside are the kit's rows. */}
-      <div className="flex gap-3 overflow-x-auto pb-4">
-        {/* The exclusion is a rule now rather than two stage names written here: 'closed_no_sale'
-            is the third place work leaves the board for, and a board that grew a column of thirty
-            lost quotes a day would be a board nobody could work from. See hasNoBoardColumn. */}
-        {ORDER_STAGES.filter((s) => !hasNoBoardColumn(s)).map((s) => {
-          const c = stageColor(s)
-          const rows = byStage(s)
-          return (
-            <div key={s} className={`${STAGE_COLUMN_WIDTH} shrink-0 overflow-hidden`}
-                 style={{ border: '1px solid var(--v2-line)', borderRadius: 'var(--v2-radius-card)', background: 'var(--v2-paper)' }}>
-              <div className="flex items-center justify-between gap-2 px-3 py-2.5"
-                   style={{ background: c.bg, borderBottom: `1px solid ${c.border}` }}>
-                <span className="v2-kick" style={{ color: c.text, whiteSpace: 'nowrap' }}>{STAGE_LABELS[s]}</span>
-                <span className="flex shrink-0 items-center gap-1.5">
-                  <span className="v2-kick" style={{ color: c.text, opacity: 0.8 }}>{rows.length}</span>
-                  {/* An approval stage moves only through the order's own workflow actions. It was a
-                      padlock emoji; a title on an emoji is not a label anyone reads. */}
-                  {isProtectedStage(s) && (
-                    <Lock aria-label="Approval stage — moves via workflow actions only"
-                          style={{ width: 11, height: 11, color: c.text, opacity: 0.7 }} />
-                  )}
-                </span>
-              </div>
-              <div className="v2-list">
-                {rows.map((o) => (
-                  <Link key={o.id} href={`/orders/${o.id}`} className="v2-row" data-click
-                        style={{ ['--chan' as string]: stageHue(s), padding: '11px 13px' }}>
-                    <div className="v2-m">
-                      <p className="truncate">{o.customerName ?? 'No customer'}</p>
-                      <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11 }}>
-                        {o.orderNumber} · {money(o.subtotalCents)}{o.factoryName ? ` · ${o.factoryName}` : ''}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-                {rows.length === 0 && <p className="v2-kick" style={{ padding: '14px 13px' }}>Nothing here</p>}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      {/* Said once, at the top, rather than as a tooltip on every card: dragging is a desktop
+          gesture and the HTML5 API this uses does not fire on touch. On a phone the stage buttons on
+          the order itself are the way, and they are the same transition. */}
+      <p className="v2-kick" style={{ marginBottom: 10 }}>
+        Drag a card to move it. On a phone, open the order and use its stage buttons.
+      </p>
+
+      <BoardColumns stages={stages} cards={cards} />
     </div>
   )
 }

@@ -3,14 +3,14 @@
 // (production → ready → delivered → completed) and cancellation are manual. Pure + tested.
 
 export const ORDER_STAGES = [
-  'new', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved',
+  'new', 'pending', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved',
   'waiting_customer_approval', 'customer_changes_requested', 'customer_approved',
   'production', 'ready', 'delivered', 'completed', 'finished', 'closed_no_sale', 'cancelled',
 ] as const
 export type OrderStage = typeof ORDER_STAGES[number]
 
 export const STAGE_LABELS: Record<OrderStage, string> = {
-  new: 'New Order', waiting_factory_approval: 'Waiting for Factory Approval', factory_changes_requested: 'Factory Changes Requested',
+  new: 'New Order', pending: 'Pending', waiting_factory_approval: 'Waiting for Factory Approval', factory_changes_requested: 'Factory Changes Requested',
   factory_approved: 'Factory Approved', waiting_customer_approval: 'Waiting for Customer Approval', customer_changes_requested: 'Customer Changes Requested',
   customer_approved: 'Customer Approved', production: 'Production', ready: 'Ready', delivered: 'Delivered', completed: 'Completed', finished: 'Finished',
   closed_no_sale: 'Closed – No Sale', cancelled: 'Cancelled',
@@ -52,13 +52,43 @@ export const isTerminalStage = (s: OrderStage): boolean => s === 'completed' || 
 // returns usually returns wanting a change, and an estimate you cannot edit is one you have to retype.
 export const isAtRestStage = (s: OrderStage): boolean => s === 'closed_no_sale'
 
+// ── PENDING: PARKED, AND STILL HERS ─────────────────────────────────────────────────────────────
+//
+// Not terminal, not at rest, and deliberately not either. 'closed_no_sale' says the customer did not
+// buy; 'pending' says nobody has stopped, the job is simply waiting on something — a stone to arrive,
+// a size to be confirmed, a customer on holiday. Before this the only places to put such a job were
+// 'new' (which is a lie about it being untouched) and 'closed_no_sale' (which is a lie about losing
+// it), and both of those are what the board actually contained.
+//
+// It is WORK, so it keeps a column, it keeps its colour on the working side of the fan, and it is
+// reachable from anywhere a live job can be. What it is not is a step: coming back from pending
+// returns the job to 'new', the same one honest move 'closed_no_sale' makes, because a parked job
+// resumes rather than advances.
+export const isPendingStage = (s: OrderStage): boolean => s === 'pending'
+
 /**
  * No column on the board. NOT the same as terminal: 'completed' is terminal and keeps its column,
  * because it is the end of the forward chain and the drag target out of 'delivered'. These three are
  * places work LEAVES the board for, so a column of them would grow forever and never be worked from.
  */
 export const hasNoBoardColumn = (s: OrderStage): boolean =>
-  s === 'cancelled' || s === 'finished' || s === 'closed_no_sale'
+  s === 'cancelled' || s === 'finished'
+
+/**
+ * What a column is CALLED on the board, when that differs from the stage's own label.
+ *
+ * 'closed_no_sale' is "Closed – No Sale" everywhere a stage is named — on the button, in the
+ * timeline, in the table — and that is the right words for an action and for a record. As a standing
+ * column heading it is a negative sentence at the top of the widest column on the board, so the
+ * column says what the pile IS: lost business.
+ *
+ * A separate map rather than a renamed label, because the two are genuinely different jobs and the
+ * label is asserted by name in lib/orders/closed-no-sale.test.ts.
+ */
+export const BOARD_COLUMN_LABELS: Partial<Record<OrderStage, string>> = {
+  closed_no_sale: 'Lost business',
+}
+export const boardColumnLabel = (s: OrderStage): string => BOARD_COLUMN_LABELS[s] ?? STAGE_LABELS[s]
 
 // ── WHAT A TERMINAL ORDER STILL ACCEPTS, AND WHY CANCELLED IS NOT THE SAME THING ────────────────
 //
@@ -126,9 +156,10 @@ export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected'
 // finish are both allowed from any non-terminal stage.
 const MANUAL_FORWARD: Partial<Record<OrderStage, OrderStage[]>> = {
   production: ['ready'], ready: ['delivered'], delivered: ['completed'],
-  // THE ONE MOVE BACK IN THE WHOLE MACHINE. Reopening restores the estimate to where it was and no
-  // further: a customer returning is not the job advancing.
+  // THE MOVES BACK. Reopening restores the estimate to where it was and no further: a customer
+  // returning is not the job advancing, and neither is a parked job resuming.
   closed_no_sale: ['new'],
+  pending: ['new'],
 }
 /** The piece is being made. Walking away from one of these is a cancellation, not a lost quote. */
 const IN_FLIGHT = new Set<OrderStage>(['production', 'ready', 'delivered'])
@@ -149,6 +180,11 @@ export function canManualTransition(from: OrderStage, to: OrderStage): boolean {
   // customer walks away from is a cancellation, with a factory to tell; calling that a no-sale would
   // file real, abandoned work under "they never bought".
   if (to === 'closed_no_sale') return !isTerminalStage(from) && !isAtRestStage(from) && !IN_FLIGHT.has(from)
+  // PARKING IS REACHABLE FROM ANYWHERE A JOB IS STILL LIVE, including production — a piece waiting on
+  // a stone is the commonest reason to park one, so the IN_FLIGHT exclusion that applies to a no-sale
+  // would rule out the main case. Not from a terminal stage (nothing leaves those) and not from a
+  // no-sale (getting out of that is Reopen, then whatever you meant — the same two honest steps).
+  if (to === 'pending') return !isTerminalStage(from) && !isAtRestStage(from) && !isPendingStage(from)
   if (isProtectedStage(to)) return false // entering an approval stage is action-only
   return (MANUAL_FORWARD[from] ?? []).includes(to)
 }

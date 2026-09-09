@@ -103,11 +103,35 @@ export function specRows(l: OrderLineItem): Array<[string, string]> {
     ['Colour', l.stoneColor],
     [label('centerStoneShape'), l.centerStoneShape],
     [label('centerStoneCarat'), l.centerStoneCarat != null ? `${l.centerStoneCarat} ct` : null],
-    [label('sideStoneShape'), l.sideStoneShape],
+    // ── SEVERAL SIDE SHAPES, LISTED ─────────────────────────────────────────────────────────────
+    //
+    // A piece can be round on the shoulders and baguette down the sides. The label is pluralised only
+    // when there is more than one, so a ring with a single side shape prints exactly the row it
+    // always printed and nothing about the existing documents changes.
+    //
+    // Joined with a comma rather than becoming several rows: they are one attribute of the piece with
+    // several values, and a spec table that repeated "Side shape" four times would read as four
+    // different measurements.
+    //
+    // `?? []` is not belt-and-braces. This function renders the CUSTOMER'S document, and it is
+    // reachable with a line item that did not come through lineRow() — a fixture, a caller built
+    // before the field existed, anything constructed by hand. The type says the array is always
+    // there; the type is not what arrives at runtime, and a thrown error here is a blank page where
+    // an estimate should be.
+    (() => {
+      const sides = l.sideStoneShapes ?? []
+      return [
+        sides.length > 1 ? `${label('sideStoneShape')}s` : label('sideStoneShape'),
+        sides.length > 0 ? sides.join(', ') : l.sideStoneShape,
+      ] as [string, string | null]
+    })(),
     [label('sideStoneCaratTotal'), l.sideStoneCaratTotal != null ? `${l.sideStoneCaratTotal} ct` : null],
     ['Certificate', l.certificateLab],
     ['Metal', l.metalKarat ?? l.material],
     [label('ringSize'), l.ringSize],
+    // The unit lives on the VALUE here, as it does for carats — the doc label is "Band width", not
+    // "Band width (mm)", so the table reads as prose rather than as a form.
+    [label('bandWidthMm'), l.bandWidthMm != null ? `${l.bandWidthMm} mm` : null],
     [label('measurements'), l.measurements],
     ['Finish', l.color],
     ['SKU', l.sku],

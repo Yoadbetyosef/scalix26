@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   ORDER_STAGES, STAGE_LABELS, canManualTransition, isTerminalStage, isAtRestStage,
-  hasNoBoardColumn, canEditWorkflow, type OrderStage,
+  hasNoBoardColumn, canEditWorkflow, boardColumnLabel, type OrderStage,
 } from './stages'
 
 // "CLOSED – NO SALE": the estimate the customer didn't take.
@@ -53,13 +53,30 @@ describe('closed_no_sale', () => {
     expect(canEditWorkflow('closed_no_sale')).toBe(true)
   })
 
-  it('leaves the board without taking completed with it', () => {
-    expect(hasNoBoardColumn('closed_no_sale')).toBe(true)
+  it('now KEEPS a board column, as "Lost business"', () => {
+    // ── THIS ASSERTION WAS THE OPPOSITE, AND THE REVERSAL IS DELIBERATE ─────────────────────────
+    //
+    // The original reasoning was that ~30 no-sales a day would grow a column nobody could work from.
+    // True of a column you have to read; false of one you can drag INTO, which is what the board
+    // gained. Closing an estimate as lost is now the commonest thing the board is used for, and it
+    // was the one outcome with nowhere to drop a card.
+    //
+    // Cancelled and finished stay off: those are genuinely one-way, and neither is a drag target.
+    expect(hasNoBoardColumn('closed_no_sale')).toBe(false)
     expect(hasNoBoardColumn('cancelled')).toBe(true)
     expect(hasNoBoardColumn('finished')).toBe(true)
     // 'completed' is terminal AND keeps its column — it is the end of the forward chain and the drag
     // target out of 'delivered'. A predicate built on isTerminalStage would have removed it.
     expect(hasNoBoardColumn('completed')).toBe(false)
+  })
+
+  it('is headed by what the pile IS, not by the action that made it', () => {
+    // "Closed – No Sale" is right on a button and in a timeline. As a standing column heading it is a
+    // negative sentence; the column says what is in it.
+    expect(boardColumnLabel('closed_no_sale')).toBe('Lost business')
+    // Everything without an override still uses its own label, so the map cannot silently rename a
+    // stage nobody meant to rename.
+    expect(boardColumnLabel('production')).toBe(STAGE_LABELS.production)
   })
 
   it('does not resurrect the bare word "closed", which was deliberately retired', () => {

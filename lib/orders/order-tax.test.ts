@@ -155,7 +155,11 @@ describe('a refused stage write is no longer silent', () => {
     // second one arrived. It is a lookup now, and every stage in it names its own file.
     expect(store).toContain('STAGE_MIGRATION[to]')
     expect(store).toContain("finished: 'add_order_finished_stage.sql'")
-    expect(store).toContain("closed_no_sale: 'add_order_closed_no_sale_stage.sql'")
+    // Both new stages now point at add_tg_jewellers_2.sql, which is the ONE file that teaches the
+    // database about them. Naming the superseded add_order_closed_no_sale_stage.sql would send the
+    // owner to a migration that must not be run — it would drop 'pending' back out of the CHECK.
+    expect(store).toContain("closed_no_sale: 'add_tg_jewellers_2.sql'")
+    expect(store).toContain("pending: 'add_tg_jewellers_2.sql'")
   })
 
   it('and the board gives no column to a stage work only accumulates in', () => {
@@ -168,7 +172,10 @@ describe('a refused stage write is no longer silent', () => {
     expect(read('../../app/orders/board/page.tsx')).toContain('hasNoBoardColumn(s)')
     expect(hasNoBoardColumn('cancelled')).toBe(true)
     expect(hasNoBoardColumn('finished')).toBe(true)
-    expect(hasNoBoardColumn('closed_no_sale')).toBe(true)
+    // 'closed_no_sale' moved to the OTHER side of this line when the board became draggable — it is
+    // the "Lost business" column now, and the commonest drop target on the board. See
+    // lib/orders/closed-no-sale.test.ts for why the original reasoning stopped applying.
+    expect(hasNoBoardColumn('closed_no_sale')).toBe(false)
     // 'completed' is terminal and KEEPS its column: it is the end of the forward chain and the drag
     // target out of 'delivered'. A predicate built on isTerminalStage would have taken it away.
     expect(hasNoBoardColumn('completed')).toBe(false)

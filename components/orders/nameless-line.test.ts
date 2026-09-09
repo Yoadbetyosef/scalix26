@@ -87,11 +87,30 @@ describe('and the write itself cannot lose the old items', () => {
 
   it('leaves no unchecked insert on either path', () => {
     // The whole fault was one line: `await sb.from('order_line_items').insert(...)` with no error
-    // read, on create AND on update. Both now destructure it; the only bare insert left is the
-    // restore, whose own failure is already inside the throw that follows it.
-    const inserts = (store.match(/from\('order_line_items'\)[\s\S]{0,40}?\.insert\(/g) ?? []).length
-    const checked = (store.match(/const \{ error: lineErr \} = await sb\.from\('order_line_items'\)/g) ?? []).length
-    expect(inserts).toBe(3)
-    expect(checked).toBe(2)
+    // read, on create AND on update.
+    //
+    // ── COUNTED BY WHAT IS CHECKED, NOT BY HOW MANY LINES THERE ARE ──────────────────────────────
+    //
+    // This used to assert two literal counts (3 inserts, 2 destructured). Both writes now go through
+    // insertLines(), which added a retry insert for the case where the new columns are missing — so
+    // the counts moved and the assertion failed while the property it protects was MORE true than
+    // before. A count is a proxy; the property is that no insert's error goes unread.
+    const inserts = store.match(/from\('order_line_items'\)[\s\S]{0,80}?\.insert\(/g) ?? []
+    expect(inserts.length).toBeGreaterThan(0)
+
+    // Every insert inside insertLines destructures its error...
+    const helper = store.slice(store.indexOf('async function insertLines'), store.indexOf('export const LINE_EXTRAS_MIGRATION'))
+    expect(helper).toMatch(/const \{ error \} = await sb\.from\('order_line_items'\)\.insert\(rows\)/)
+    expect(helper).toMatch(/const retry = await sb\.from\('order_line_items'\)\.insert\(legacy\)/)
+    expect(helper).toMatch(/return \{ error: retry\.error, degraded: true \}/)
+
+    // ...and BOTH call sites read what it returns.
+    const reads = (store.match(/const \{ error: lineErr, degraded \} = await insertLines\(/g) ?? []).length
+    expect(reads).toBe(2)
+    expect(store).toMatch(/if \(lineErr\) throw new Error\(`The order was created but its items could not be saved/)
+    expect(store).toMatch(/if \(lineErr\) \{/)
+
+    // The one bare insert left is the restore, whose failure is already inside the throw after it.
+    expect(store).toMatch(/if \(back\.length\) await sb\.from\('order_line_items'\)\.insert\(back\)/)
   })
 })

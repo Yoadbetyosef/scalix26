@@ -83,7 +83,7 @@ export const effectiveProductType = (line: { productType?: string | null; produc
 /** The jewellery fields whose presence and wording depend on what the piece is. */
 export type VariableField =
   | 'centerStoneShape' | 'centerStoneCarat' | 'sideStoneShape' | 'sideStoneCaratTotal'
-  | 'ringSize' | 'measurements'
+  | 'ringSize' | 'measurements' | 'bandWidthMm'
 
 export interface FieldSpec {
   /** On the form, with its unit. */
@@ -104,6 +104,18 @@ const SIDE_CT: FieldSpec = { label: 'Side total weight (ct)', docLabel: 'Side we
 const RING_SIZE: FieldSpec = { label: 'Ring size', docLabel: 'Ring size' }
 const MEASUREMENTS: FieldSpec = { label: 'Measurements / size', docLabel: 'Measurements' }
 const LENGTH: FieldSpec = { label: 'Length', docLabel: 'Length', list: LENGTH_LIST_KEY }
+
+// ── BAND WIDTH, AND WHY IT IS NOT `measurements` ────────────────────────────────────────────────
+//
+// The 'band' type already re-labels `measurements` as "Width (mm)", and her data shows widths going
+// in there as free text ("2.00mm") alongside stone dimensions and necklace lengths. That worked for
+// a band, where width is THE measurement, and it has never worked for a ring — which has a band
+// width AND stone dimensions, and only one box to put both in.
+//
+// So this is its own field with its own unit, offered on everything worn on a finger. `measurements`
+// keeps its per-type meaning untouched; nothing is migrated out of it (see types.ts for why parsing
+// it would be a guess).
+const BAND_WIDTH: FieldSpec = { label: 'Band width (mm)', docLabel: 'Band width' }
 
 // ── CENTRE WEIGHT, WHICH IS THE ONE THAT HAD TO BE RIGHT ────────────────────────────────────────────
 //
@@ -134,7 +146,7 @@ const STONE_SHAPE: FieldSpec = { label: 'Stone shape', docLabel: 'Stone shape' }
 const RING: FieldSet = {
   centerStoneShape: CENTRE, centerStoneCarat: CENTRE_CT,
   sideStoneShape: SIDE, sideStoneCaratTotal: SIDE_CT,
-  ringSize: RING_SIZE, measurements: MEASUREMENTS,
+  ringSize: RING_SIZE, measurements: MEASUREMENTS, bandWidthMm: BAND_WIDTH,
 }
 // No centre and no sides, one run of stones and one total: tennis, and a stone-set band.
 const RUN_OF_STONES: FieldSet = { centerStoneShape: STONE_SHAPE, centerStoneCarat: TOTAL_CT }
@@ -176,10 +188,15 @@ const FIELD_SETS: Record<ProductTypeKey, FieldSet> = {
 
   // Worn on a finger, so it keeps its size; set all the way round, so it has no centre; and the
   // measurement that matters is how wide it is.
+  // Worn on a finger, so it keeps its size and its band width. `measurements` KEEPS its "Width (mm)"
+  // wording rather than being re-pointed at the new field: the rows she has already typed a width
+  // into read from that column, and moving the label would leave those values under a name that no
+  // longer describes them. New widths go in the numeric field; old ones stay legible where they are.
   band: {
     ...RUN_OF_STONES,
     ringSize: RING_SIZE,
     measurements: { label: 'Width (mm)', docLabel: 'Width' },
+    bandWidthMm: BAND_WIDTH,
   },
 }
 

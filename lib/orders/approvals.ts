@@ -8,12 +8,39 @@ import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResp
 import { approvalEmailHtml, deliveryRequestEmailHtml } from './approval-email'
 import { getSupplier, type Supplier } from './suppliers'
 import type { PublicOrderView } from './types'
+import { endOfDayUtc } from './approval-deadline'
+import { getBusinessTimezone } from '@/lib/timezone'
+import { isMissingColumn } from '@/lib/db/missing-column'
 
 // External approval primitive. Tatiana-side ops go through the RLS client; the PUBLIC token route uses the
 // service role + token-hash validation (no session). Raw tokens are never stored or logged. Sending advances
 // the order stage ONLY after the email succeeds. Resending revokes the prior actionable token (versioning).
 
-const DEFAULT_EXPIRY_DAYS = 14
+// ── AN APPROVAL LINK DOES NOT EXPIRE. REVOKING IT IS THE ONLY THING THAT ENDS IT. ────────────────
+//
+// There was a `DEFAULT_EXPIRY_DAYS = 14`, and a deadline she picked overrode it with something
+// usually shorter. Both wrote `expires_at`, and the public reader turned a past `expires_at` into
+// null, which the page renders as "Link unavailable". Three separate faults came out of that one
+// idea:
+//
+//   1. The DEADLINE WAS ALSO A LOCK. "Please respond by Friday" is a request a recipient can miss
+//      and still act on. Making it end the link meant the customer who opened the estimate on
+//      Saturday was told it was invalid — by us, on the jeweller's behalf, with no way back.
+//
+//   2. IT WAS COMPUTED IN THE WRONG ZONE. `deadline + 'T23:59:59Z'` reads her local calendar date as
+//      a UTC instant. In Vancouver that ends the day at 16:59 local. Two links sent at 18:26 and
+//      18:27 on 8 Sep 2026 carried an expiry of 16:59:59 that same afternoon: dead 87 minutes before
+//      they were sent, `opened_at` null on both. See ./approval-deadline.ts.
+//
+//   3. EXPIRING A ROW DESTROYED ITS ANSWER. The reader wrote `status: 'expired'` over whatever the
+//      row said, including 'approved'. A factory approval from July now reads as an expiry, and the
+//      only surviving record that it was ever approved is the order_events row.
+//
+// So: nothing is written to `expires_at` any more, and nothing reads it. `revoked` is the single
+// kill switch, and it is now reachable from the UI — which it never was. A row still carrying
+// `status = 'expired'` is a legacy marker no new code path can produce; it is honoured (the link
+// stays dead) but it now SAYS so rather than 404ing, and add_tg_jewellers_2.sql clears the ones
+// that were never meant to die.
 
 export interface ApprovalRequestRow {
   id: string; orderId: string; approvalType: ApprovalType; recipientName: string | null; recipientEmail: string
@@ -70,13 +97,33 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   if (actionable.length) await sb.from('order_approval_requests').update({ status: 'revoked', revoked_at: new Date().toISOString() }).in('id', actionable.map((r) => r.id))
 
   const { token, hash } = generateApprovalToken()
-  const expiresAt = input.deadline ? new Date(input.deadline + 'T23:59:59Z').toISOString() : new Date(Date.now() + DEFAULT_EXPIRY_DAYS * 86_400_000).toISOString()
-  const { data: created, error: insErr } = await sb.from('order_approval_requests').insert({
+
+  // The deadline, as a DATE and nothing more. `expires_at` is deliberately absent from this payload:
+  // the column still exists (old rows carry values) but nothing writes it any more.
+  //
+  // Resolved in the tenant's own timezone so the date she picked is the date the recipient reads.
+  // getBusinessTimezone never throws and never returns an invalid zone, and endOfDayUtc returns null
+  // rather than guessing — so a deadline that cannot be resolved is simply not shown, and the
+  // approval still goes out. Under the old code the same uncertainty killed the link.
+  const tz = await getBusinessTimezone(c.tenantId, (await sb.from('tenants').select('timezone').eq('id', c.tenantId).maybeSingle()).data?.timezone as string | null)
+  const deadlineOn = input.deadline && endOfDayUtc(input.deadline, tz) ? input.deadline : null
+
+  const base = {
     tenant_id: c.tenantId, order_id: orderId, approval_type: input.approvalType, recipient_name: input.recipientName ?? null, recipient_email: input.recipientEmail,
     supplier_id: supplier?.id ?? null,
     token_hash: hash, status: 'draft', version, subject: input.subject ?? null, message: input.message ?? null, internal_note: input.internalNote ?? null,
-    expires_at: expiresAt, created_by: c.actorUserId,
-  }).select('*').single()
+    created_by: c.actorUserId,
+  }
+  // `deadline_on` arrives in add_tg_jewellers_2.sql. Until that is run the insert would fail on the
+  // whole row, so a missing column drops the deadline and keeps the approval — the reverse of the
+  // contacts rule (a write that silently loses data is refused there) because here the deadline is
+  // decoration on a send that must not be blocked by it. The date is still in the email either way.
+  let created: Record<string, unknown> | null = null
+  let insErr: { code?: string; message?: string } | null = null
+  ;({ data: created, error: insErr } = await sb.from('order_approval_requests').insert({ ...base, deadline_on: deadlineOn }).select('*').single())
+  if (isMissingColumn(insErr, 'deadline_on')) {
+    ;({ data: created, error: insErr } = await sb.from('order_approval_requests').insert(base).select('*').single())
+  }
   if (insErr || !created) return { ok: false, error: insErr?.message ?? 'Could not create the request.' }
   const requestId = created.id as string
 
@@ -94,7 +141,7 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   const link = `${baseUrl.replace(/\/$/, '')}/approval/${token}` // raw token only in the link, never persisted/logged
 
   // Send FIRST; only advance the stage if the email actually succeeds (sendEmail RETURNS {success}, not throws).
-  const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: input.deadline ?? expiresAt.slice(0, 10), link, supportEmail: (tenant?.email as string) ?? null })
+  const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: deadlineOn, link, supportEmail: (tenant?.email as string) ?? null })
   const sendResult = await sendEmail(input.recipientEmail, input.subject || `Approval requested — order ${order.order_number}`, html, { tenantId: c.tenantId, fromName: businessName, replyTo: (tenant?.email as string) ?? undefined }).catch((e) => ({ success: false as const, error: (e as Error).message }))
   if (!sendResult.success) {
     // Email failed → keep the request as draft, DO NOT advance the order stage.
@@ -141,19 +188,49 @@ async function findByToken(rawToken: string) {
   const { data } = await sb.from('order_approval_requests').select('*').eq('token_hash', hashToken(rawToken)).maybeSingle()
   return data ? (data as Record<string, unknown>) : null
 }
-const isExpired = (r: Record<string, unknown>) => !!r.expires_at && new Date(r.expires_at as string).getTime() < Date.now()
+
+/**
+ * WHY A KNOWN LINK MAY EXPLAIN ITSELF AND AN UNKNOWN ONE MAY NOT.
+ *
+ * Every failure used to answer identically — one "Link unavailable" page — on the reasoning that
+ * telling an anonymous caller which failure it was is free information for somebody guessing tokens.
+ * That reasoning is sound for a token that does not resolve, and it is wrong for one that does.
+ *
+ * A caller holding a token that matches a real row has already proved they were given it. They are
+ * the named recipient on that row. Telling them "the business withdrew this link" costs nothing an
+ * attacker could use — an attacker cannot reach this branch without the token — and it is the
+ * difference between a customer who rings Tatiana and one who assumes her business is broken.
+ *
+ * A token that resolves to nothing still gets a bare 404, because there the caller has proved
+ * nothing and the only honest answer is silence.
+ *
+ * Returns null when the link is fine, or when the token is unknown; the caller has already
+ * distinguished those by asking for the view first.
+ */
+export type DeadLinkReason = 'revoked' | 'expired'
+
+export async function deadLinkReason(rawToken: string): Promise<DeadLinkReason | null> {
+  const r = await findByToken(rawToken)
+  if (!r) return null
+  const status = r.status as string
+  if (status === 'revoked') return 'revoked'
+  // Legacy only. No code path can write this any more; add_tg_jewellers_2.sql clears the rows that
+  // were expired by the deadline bug rather than by anybody's decision.
+  if (status === 'expired') return 'expired'
+  // 'draft' is deliberately absent: it was never sent, so its recipient is not a known recipient and
+  // learning that a draft exists is the one thing this function must not leak.
+  return null
+}
 
 export async function getApprovalByToken(rawToken: string): Promise<PublicApprovalView | null> {
   const r = await findByToken(rawToken)
   if (!r) return null
   const status = r.status as string
-  if (status === 'revoked' || status === 'draft') return null
+  // The three states that are not a readable document, and nothing else. `expires_at` is not
+  // consulted: a link stays live until it is revoked. 'expired' survives only as a legacy marker on
+  // rows written before that rule — deadLinkReason() below turns each of these into a sentence.
+  if (status === 'revoked' || status === 'draft' || status === 'expired') return null
   const sb = createAdminClient()
-  // Expired (either already marked, or past its deadline) → mark + show the generic unavailable page.
-  if (status === 'expired' || isExpired(r)) {
-    if (status !== 'expired') await sb.from('order_approval_requests').update({ status: 'expired' }).eq('id', r.id as string)
-    return null
-  }
 
   // Mark opened on first view.
   if (r.status === 'sent') {
@@ -165,7 +242,22 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes, stage').eq('id', r.order_id as string).maybeSingle()
   // Jewelry specs are part of the safe projection: the factory can't approve a piece it can't see the
   // stone, shape and metal for. Pricing and internal notes remain excluded.
-  const { data: lines } = await sb.from('order_line_items').select('product_name, description, quantity, measurements, color, material, custom_spec, stone_quality, stone_color, stone_origin, stone_type, center_stone_shape, side_stone_shape, center_stone_carat, side_stone_carat_total, metal_karat, certificate_lab, ring_size').eq('order_id', r.order_id as string).order('display_order')
+  //
+  // SELECTED BY NAME, which is what makes this a safe projection — pricing and internal notes cannot
+  // arrive by accident. The cost of that is a query which FAILS rather than degrades when a column is
+  // missing, so the two columns add_tg_jewellers_2.sql introduces are behind one retry. Without it
+  // the factory's page would 500 for the whole window between deploy and the migration being run.
+  const LINE_COLS = 'product_name, description, quantity, measurements, color, material, custom_spec, stone_quality, stone_color, stone_origin, stone_type, center_stone_shape, side_stone_shape, center_stone_carat, side_stone_carat_total, metal_karat, certificate_lab, ring_size, product_type'
+  // The column list is built at runtime, so PostgREST cannot infer a row type from it and hands back
+  // its generic error-shaped type. Narrowed once here rather than cast at the use site.
+  const readLines = async (cols: string) => {
+    const { data, error } = await sb.from('order_line_items').select(cols).eq('order_id', r.order_id as string).order('display_order')
+    return { rows: (data ?? []) as unknown as Array<Record<string, unknown>>, error }
+  }
+  const full = await readLines(`${LINE_COLS}, side_stone_shapes, band_width_mm`)
+  const lines = isMissingColumn(full.error, 'side_stone_shapes', 'band_width_mm')
+    ? (await readLines(LINE_COLS)).rows
+    : full.rows
   const { data: tenant } = await sb.from('tenants').select('business_name').eq('id', r.tenant_id as string).maybeSingle()
   const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
   const attIds = (attRows ?? []).map((a) => a.attachment_id as string)
@@ -181,12 +273,19 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const publicOrder: PublicOrderView = {
     orderNumber: (order?.order_number as string) ?? '', customerName: (order?.customer_name as string) ?? null,
     requestedCompletionDate: (order?.requested_completion_date as string) ?? null, publicNotes: (order?.public_notes as string) ?? null,
-    lineItems: ((lines as Array<Record<string, unknown>>) ?? []).map((l) => ({
+    lineItems: lines.map((l) => ({
       productName: l.product_name as string, description: (l.description as string) ?? null, quantity: Number(l.quantity ?? 1),
       measurements: (l.measurements as string) ?? null, color: (l.color as string) ?? null, material: (l.material as string) ?? null, customSpec: (l.custom_spec as string) ?? null,
       // The factory is told WHAT it is making. Read off the row rather than selected by name, so a
       // database without add_order_product_types renders the approval exactly as it did before.
       productType: (l.product_type as string) ?? null,
+      // EVERY side shape, because the workshop is the one that has to cut them. A piece with round
+      // shoulders and baguette sides used to reach the bench as one shape and a sentence in Notes.
+      // Falls back to the single column, so an unmigrated database shows exactly what it always did.
+      sideStoneShapes: Array.isArray(l.side_stone_shapes)
+        ? (l.side_stone_shapes as string[]).filter((v) => typeof v === 'string' && v.trim() !== '')
+        : ((l.side_stone_shape as string) ? [l.side_stone_shape as string] : []),
+      bandWidthMm: l.band_width_mm == null ? null : Number(l.band_width_mm),
       stoneQuality: (l.stone_quality as string) ?? null, stoneColor: (l.stone_color as string) ?? null, stoneOrigin: (l.stone_origin as string) ?? null, stoneType: (l.stone_type as string) ?? null,
       centerStoneShape: (l.center_stone_shape as string) ?? null, sideStoneShape: (l.side_stone_shape as string) ?? null,
       centerStoneCarat: l.center_stone_carat == null ? null : Number(l.center_stone_carat),
@@ -200,8 +299,15 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const isFactory = (r.approval_type as ApprovalType) === 'factory'
   return {
     businessName: (tenant?.business_name as string) || 'Our team', approvalType: r.approval_type as ApprovalType, status: r.status as string, recipientName: (r.recipient_name as string) ?? null,
-    // Can respond (or change a prior response) while not revoked/expired. Reopening the link is allowed.
-    deadline: (r.expires_at as string) ?? null, canRespond: !isExpired(r) && !['revoked', 'draft', 'expired'].includes(r.status as string),
+    // The deadline is the DATE she asked for, read from its own column. Old rows have no
+    // `deadline_on` and fall back to the instant that used to double as the expiry — which is the
+    // right thing to show for them, since it is the date the recipient was originally given.
+    //
+    // canRespond is now unconditional at this point: every state that refuses a response has already
+    // returned null above. It stays in the shape because the page reads it, and because a future
+    // state that can be READ but not answered is a real possibility.
+    deadline: (r.deadline_on as string) ?? (r.expires_at as string) ?? null,
+    canRespond: true,
     order: publicOrder, attachments,
     existingResponse: responded ? { comment: (r.response_comment as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null } : null,
     // Same factory link becomes a "ready + invoice" hand-off once the order reaches production.
@@ -216,7 +322,7 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
 export async function attachmentForToken(rawToken: string, attachmentId: string): Promise<{ storagePath: string; fileName: string; mimeType: string } | null> {
   const r = await findByToken(rawToken)
   if (!r) return null
-  if (['revoked', 'draft'].includes(r.status as string) || isExpired(r)) return null
+  if (['revoked', 'draft'].includes(r.status as string)) return null
 
   const sb = createAdminClient()
   const { data: link } = await sb.from('order_approval_attachments')
@@ -235,7 +341,6 @@ export async function recordApprovalResponse(rawToken: string, decision: Approva
   if (!r) return { ok: false, error: 'This approval link is invalid or has expired.' }
   const status = r.status as string
   if (['revoked'].includes(status)) return { ok: false, error: 'This approval link has been revoked.' }
-  if (isExpired(r)) return { ok: false, error: 'This approval link has expired.' }
   if ((decision === 'changes_requested' || decision === 'rejected') && !(comment && comment.trim())) return { ok: false, error: 'A comment is required for this response.' }
 
   const type = r.approval_type as ApprovalType
@@ -270,7 +375,7 @@ export async function recordApprovalResponse(rawToken: string, decision: Approva
 export async function submitFactoryDelivery(rawToken: string, file: File): Promise<{ ok: boolean; error?: string }> {
   const r = await findByToken(rawToken)
   if (!r) return { ok: false, error: 'This link is invalid or has expired.' }
-  if (['revoked', 'draft'].includes(r.status as string) || isExpired(r)) return { ok: false, error: 'This link is no longer available.' }
+  if (['revoked', 'draft'].includes(r.status as string)) return { ok: false, error: 'This link is no longer available.' }
   if ((r.approval_type as ApprovalType) !== 'factory') return { ok: false, error: 'This action is not available.' }
   // Extension-based, and narrower than the tenant-side allowlist — this endpoint is reachable with only
   // a token, so it accepts invoice documents and photos and nothing else.
@@ -375,9 +480,9 @@ export async function sendToProduction(orderId: string, baseUrl?: string, suppli
         tenant_id: c.tenantId, order_id: orderId, approval_type: 'factory', supplier_id: supplier!.id,
         recipient_name: supplier!.contactName || supplier!.name, recipient_email: recipient,
         token_hash: hash, status: 'sent', version: 1, sent_at: now, created_by: c.actorUserId,
-        // No deadline. The factory needs this page for as long as the piece takes to make, and a link that
-        // expires mid-job fails the person holding the work, not the person who sent it.
-        expires_at: null,
+        // No deadline, and no expires_at key at all — this row used to set it to null explicitly to
+        // say "the factory keeps this for as long as the piece takes". That sentence is now true of
+        // every link in the system, so the column no longer needs naming here to be sure of it.
       })
       if (insErr) throw new Error(insErr.message)
     }

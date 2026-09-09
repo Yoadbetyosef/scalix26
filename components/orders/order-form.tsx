@@ -10,7 +10,7 @@ const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '
 
 export function OrderForm() {
   const router = useRouter()
-  const [customer, setCustomer] = useState<PickedContact>({ id: null, name: '', email: '', phone: '', address: '', currency: 'usd' })
+  const [customer, setCustomer] = useState<PickedContact>({ id: null, name: '', company: '', email: '', phone: '', address: '', currency: 'usd' })
   const [f, setF] = useState({
     orderNumber: '', factoryName: '', factoryContactName: '', factoryEmail: '', assignedEmployee: '',
     orderDate: '', requestedCompletionDate: '', depositAmount: '', clientRequirements: '', internalNotes: '', publicNotes: '',
@@ -23,7 +23,7 @@ export function OrderForm() {
   useEffect(() => { fetchOptionLists().then(setLists) }, [])
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }))
-  const setLine = (i: number, k: keyof LineDraft, v: string) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
+  const setLine = (i: number, k: keyof LineDraft, v: string | string[]) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
   const sym = SYMBOL[customer.currency] ?? customer.currency.toUpperCase()
   const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0)
 
@@ -35,7 +35,7 @@ export function OrderForm() {
     try {
       const body = {
         orderNumber: f.orderNumber.trim() || undefined,
-        contactId: customer.id, customerName: customer.name || null, customerEmail: customer.email || null, customerPhone: customer.phone || null,
+        contactId: customer.id, customerName: customer.name || null, customerCompany: customer.company || null, customerEmail: customer.email || null, customerPhone: customer.phone || null,
         currency: customer.currency,
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,

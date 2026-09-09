@@ -1,4 +1,15 @@
 -- ============================================================================
+-- ⚠  SUPERSEDED — DO NOT RUN. Run PART 1 of add_tg_jewellers_2.sql instead.
+--
+-- This file was never run. add_tg_jewellers_2.sql PART 1 replaces it with a
+-- superset that also teaches the database 'pending'. Running this one after
+-- that one would DROP 'pending' back out of the CHECK constraint and break the
+-- board's new column — the constraint is rewritten wholesale, not added to.
+--
+-- Kept rather than deleted because it is the written record of why
+-- 'closed_no_sale' exists, and that reasoning is still the reasoning.
+-- ============================================================================
+--
 -- A FOURTEENTH STAGE: closed_no_sale — the estimate the customer didn't take.
 -- Run in the Supabase SQL editor. Idempotent; safe to re-run.
 --

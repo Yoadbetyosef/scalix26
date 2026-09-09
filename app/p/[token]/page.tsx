@@ -26,6 +26,28 @@ async function resolve(token: string): Promise<{ product: StudioProduct; variant
   return { product, variants: variants || [], activeVariantId }
 }
 
+// THE PAGE TITLE IS THE TENANT'S, AND ONLY THE TENANT'S — see app/q/[token] for the same fix and the
+// same reason. This page is what a QR code on a piece opens; it had no title of its own, so it took
+// the host's, and the host is us.
+//
+// It reuses resolve() rather than querying again: Next runs generateMetadata and the page in the same
+// request, and the two must never be able to disagree about which product this token names.
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const bare = { title: '', robots: { index: false, follow: false } }
+  try {
+    const data = await resolve((await params).token)
+    if (!data) return bare
+    const { data: tenant } = await createAdminClient().from('tenants')
+      .select('business_name').eq('id', data.product.tenant_id).maybeSingle()
+    return {
+      ...bare,
+      title: [tenant?.business_name, data.product.name].filter(Boolean).join(' · ') || '',
+    }
+  } catch {
+    return bare
+  }
+}
+
 const money = (n: number | null) => (n != null ? `$${Number(n).toLocaleString()}` : null)
 
 export default async function PublicProductPage({ params }: { params: Promise<{ token: string }> }) {

@@ -97,6 +97,86 @@ export async function shareDocument(
 
 export interface SharedDocument { orderId: string; tenantId: string; docType: OrderDocType }
 
+/** One live or withdrawn link, for the owner's own list. The raw token is NOT here — it cannot be. */
+export interface ShareRow {
+  id: string; docType: OrderDocType; recipientName: string | null; recipientEmail: string
+  sentAt: string | null; revokedAt: string | null; createdAt: string
+}
+
+const shareRow = (r: Record<string, unknown>): ShareRow => ({
+  id: r.id as string, docType: r.doc_type as OrderDocType,
+  recipientName: (r.recipient_name as string) ?? null, recipientEmail: r.recipient_email as string,
+  sentAt: (r.sent_at as string) ?? null, revokedAt: (r.revoked_at as string) ?? null,
+  createdAt: r.created_at as string,
+})
+
+/**
+ * Every link ever minted for this order, newest first.
+ *
+ * ── THE OWNER COULD NOT SEE THESE, WHICH IS WHY SHE COULD NOT KILL THEM ─────────────────────────
+ *
+ * `revoked_at` has been on this table since it was created and no code in the repository ever wrote
+ * it: no route, no action, no button. So a link, once emailed, was permanent and invisible — the one
+ * thing a shared document must never be. Meanwhile the APPROVAL link, which should have been
+ * permanent, was expiring on its own. The two were exactly the wrong way round.
+ */
+export async function listShares(orderId: string): Promise<ShareRow[]> {
+  const c = await requireActiveBusinessContext()
+  if (!c) return []
+  const { data } = await createAdminClient()
+    .from('order_document_shares')
+    .select('id, doc_type, recipient_name, recipient_email, sent_at, revoked_at, created_at')
+    .eq('tenant_id', c.tenantId).eq('order_id', orderId)
+    .order('created_at', { ascending: false })
+  return ((data as Array<Record<string, unknown>> | null) ?? []).map(shareRow)
+}
+
+/**
+ * Withdraw a link. The ONLY thing that ends one.
+ *
+ * Scoped by tenant on the write itself rather than by a read-then-write, so a share id belonging to
+ * another tenant updates nothing instead of being checked and then trusted. `revoked_at` is set once
+ * and never cleared: un-revoking would mean a link the owner believed she had killed coming back,
+ * and re-sending mints a fresh token, which is the honest way to change her mind.
+ */
+export async function revokeShare(shareId: string): Promise<{ ok: boolean; error?: string }> {
+  const c = await requireActiveBusinessContext()
+  if (!c) return { ok: false, error: 'Not signed in' }
+  const db = createAdminClient()
+  const { data, error } = await db.from('order_document_shares')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('tenant_id', c.tenantId).eq('id', shareId).is('revoked_at', null)
+    .select('id, order_id')
+  if (error) return { ok: false, error: error.message }
+  if (!data || data.length === 0) return { ok: false, error: 'That link no longer exists, or was already withdrawn.' }
+  await db.from('order_events').insert({
+    tenant_id: c.tenantId, order_id: data[0].order_id as string,
+    type: 'share_revoked', actor: c.actorUserId, payload: { shareId },
+  })
+  return { ok: true }
+}
+
+/**
+ * Why a share token that RESOLVES is nonetheless not readable — see approvals.deadLinkReason for the
+ * full reasoning. In one line: a caller holding a token that matches a row has proved they were
+ * given it, so naming the cause leaks nothing an attacker could not already have; a token that
+ * matches nothing gets silence.
+ *
+ * 'revoked' is the only value this can return. There is no expiry to report because a shared
+ * document has never had one, and now neither does an approval.
+ */
+export async function shareLinkRevoked(rawToken: string): Promise<boolean> {
+  if (!looksLikeToken(rawToken)) return false
+  try {
+    const { data } = await createAdminClient()
+      .from('order_document_shares').select('revoked_at')
+      .eq('token_hash', hashToken(rawToken)).maybeSingle()
+    return !!data?.revoked_at
+  } catch {
+    return false
+  }
+}
+
 /**
  * Resolve a raw token to the document it opens, or null.
  *
@@ -108,12 +188,19 @@ export async function resolveShare(rawToken: string): Promise<SharedDocument | n
   try {
     const { data, error } = await createAdminClient()
       .from('order_document_shares')
-      .select('order_id, tenant_id, doc_type, revoked_at, expires_at')
+      .select('order_id, tenant_id, doc_type, revoked_at')
       .eq('token_hash', hashToken(rawToken))
       .maybeSingle()
     if (error || !data) return null
+    // REVOCATION IS THE ONLY THING THAT ENDS A LINK.
+    //
+    // `expires_at` is no longer consulted. It has never been written — every row in production holds
+    // null — so this changes nothing today; it is removed because reading it left a column sitting
+    // there that a future migration could give a default to, and a default on that column would kill
+    // every shared document silently and at once. The same idea, on the approval side, is what put
+    // two already-dead links in a customer's inbox. There is no expiry here and there is not going
+    // to be one.
     if (data.revoked_at) return null
-    if (data.expires_at && new Date(data.expires_at as string) < new Date()) return null
     return {
       orderId: data.order_id as string,
       tenantId: data.tenant_id as string,

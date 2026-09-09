@@ -21,6 +21,15 @@ export interface LineDraft {
   centerStoneShape: string; sideStoneShape: string; metalKarat: string
   centerStoneCarat: string; sideStoneCaratTotal: string
   certificateLab: string; ringSize: string
+  /**
+   * EVERY side shape on the piece. The only non-string field on this draft, which is why
+   * `lineHasContent` had to learn about arrays — see the note there.
+   *
+   * `sideStoneShape` above stays as the legacy single value and is derived from this on the way out.
+   */
+  sideStoneShapes: string[]
+  /** Millimetres, as typed. A string here like every other numeric field; parsed on the way out. */
+  bandWidthMm: string
 }
 
 export const emptyLine = (): LineDraft => ({
@@ -30,6 +39,7 @@ export const emptyLine = (): LineDraft => ({
   centerStoneShape: '', sideStoneShape: '', metalKarat: '',
   centerStoneCarat: '', sideStoneCaratTotal: '',
   certificateLab: '', ringSize: '',
+  sideStoneShapes: [], bandWidthMm: '',
 })
 
 // Turn the on-screen strings into the API payload. Blank means "not specified", never 0 or "".
@@ -43,10 +53,19 @@ export const lineToPayload = (l: LineDraft) => ({
   internalCostCents: l.internalCost.trim() === '' ? null : Math.round((parseFloat(l.internalCost) || 0) * 100),
   measurements: l.measurements || null, color: l.color || null, material: l.material || null, customSpec: l.customSpec || null,
   stoneType: l.stoneType || null, stoneOrigin: l.stoneOrigin || null, stoneQuality: l.stoneQuality || null, stoneColor: l.stoneColor || null,
-  centerStoneShape: l.centerStoneShape || null, sideStoneShape: l.sideStoneShape || null, metalKarat: l.metalKarat || null,
+  centerStoneShape: l.centerStoneShape || null,
+  // The array is the truth and the single field is derived from it, so the two can never disagree.
+  // Sending both keeps a database that has not had the migration run recording one side shape as it
+  // always did, rather than silently recording none.
+  sideStoneShapes: l.sideStoneShapes,
+  sideStoneShape: l.sideStoneShapes[0] ?? l.sideStoneShape ?? null,
+  metalKarat: l.metalKarat || null,
   certificateLab: l.certificateLab || null, ringSize: l.ringSize || null,
   centerStoneCarat: l.centerStoneCarat.trim() === '' ? null : parseFloat(l.centerStoneCarat),
   sideStoneCaratTotal: l.sideStoneCaratTotal.trim() === '' ? null : parseFloat(l.sideStoneCaratTotal),
+  // Blank stays NULL — "not recorded" — rather than becoming 0, which on a manufacturing document
+  // would read as a band with no width.
+  bandWidthMm: l.bandWidthMm.trim() === '' ? null : parseFloat(l.bandWidthMm),
 })
 
 // Rehydrate a saved line item back into the form.
@@ -58,6 +77,7 @@ export const lineFromSaved = (l: {
   centerStoneShape?: string | null; sideStoneShape?: string | null; metalKarat?: string | null
   centerStoneCarat?: number | null; sideStoneCaratTotal?: number | null
   certificateLab?: string | null; ringSize?: string | null
+  sideStoneShapes?: string[] | null; bandWidthMm?: number | null
 }): LineDraft => ({
   productType: l.productType ?? '', productName: l.productName, description: l.description ?? '', sku: l.sku ?? '',
   quantity: String(l.quantity), unitPrice: l.unitPriceCents ? (l.unitPriceCents / 100).toString() : '',
@@ -68,6 +88,10 @@ export const lineFromSaved = (l: {
   centerStoneCarat: l.centerStoneCarat == null ? '' : String(l.centerStoneCarat),
   sideStoneCaratTotal: l.sideStoneCaratTotal == null ? '' : String(l.sideStoneCaratTotal),
   certificateLab: l.certificateLab ?? '', ringSize: l.ringSize ?? '',
+  // A line saved before the array existed rehydrates from its single value, so opening an old order
+  // shows the shape it has rather than an empty control.
+  sideStoneShapes: l.sideStoneShapes?.length ? l.sideStoneShapes : (l.sideStoneShape ? [l.sideStoneShape] : []),
+  bandWidthMm: l.bandWidthMm == null ? '' : String(l.bandWidthMm),
 })
 
 
@@ -87,11 +111,21 @@ export const lineFromSaved = (l: {
 //
 // So the filter stays (a genuinely blank row is not an item) and the SILENCE goes.
 
-/** True when somebody has put anything into this row other than its name. */
+/**
+ * True when somebody has put anything into this row other than its name.
+ *
+ * ARRAYS ARE HANDLED EXPLICITLY. This used to call `.trim()` on every value, which was safe only
+ * while every field was a string. `sideStoneShapes` is an array, and the unguarded version would
+ * throw on it — inside the guard that exists to stop a filled-in line being silently discarded,
+ * which is the last place that can afford to break.
+ */
 export const lineHasContent = (l: LineDraft): boolean => {
   const blank = emptyLine()
-  return (Object.keys(blank) as (keyof LineDraft)[])
-    .some((k) => k !== 'productName' && l[k].trim() !== blank[k])
+  return (Object.keys(blank) as (keyof LineDraft)[]).some((k) => {
+    if (k === 'productName') return false
+    const v = l[k]
+    return Array.isArray(v) ? v.length > 0 : v.trim() !== (blank[k] as string)
+  })
 }
 
 /** 1-based positions of rows that would be dropped: filled in, but unnamed. */
@@ -125,11 +159,64 @@ function OptionSelect({ label, value, options, onChange }: { label: string; valu
   )
 }
 
+/**
+ * SEVERAL SHAPES ON ONE PIECE.
+ *
+ * A ring can be round-cut on the shoulders and baguette down the sides, and the single dropdown could
+ * say one of those. What she did instead was write the second one into Notes, where the factory reads
+ * it as prose and the document does not print it as a spec at all.
+ *
+ * ── CHECKBOXES, NOT A <select multiple> ─────────────────────────────────────────────────────────
+ *
+ * A native multi-select requires ctrl/cmd-click to add a second value and silently replaces the
+ * selection on a plain click. On a touch screen it is worse. This is a small list she picks one or
+ * two from, so every option is visible and each is one tap.
+ *
+ * A value retired from her list but still on this line is shown at the front, checked, exactly as
+ * OptionSelect does — an old order being edited must not quietly lose a shape.
+ */
+function MultiOptionSelect({ label, values, options, onChange }: {
+  label: string; values: string[]; options: string[]; onChange: (v: string[]) => void
+}) {
+  const all = [...values.filter((v) => !options.includes(v)), ...options]
+  const toggle = (o: string) =>
+    onChange(values.includes(o) ? values.filter((v) => v !== o) : [...values, o])
+
+  return (
+    <div className="v2-fld" style={{ gridColumn: '1 / -1' }}>
+      <label>{label}</label>
+      {all.length === 0
+        ? <p className="v2-hint">No shapes in your list yet — add them in Settings.</p>
+        : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+            {all.map((o) => {
+              const on = values.includes(o)
+              return (
+                <button
+                  key={o} type="button" onClick={() => toggle(o)}
+                  aria-pressed={on}
+                  className="v2-act"
+                  data-solid={on || undefined}
+                  style={{ fontSize: 12 }}
+                >
+                  {o}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      {/* The order is the order she tapped them in, and it is the order they print. Said once, here,
+          because nothing else on the form has an order that matters. */}
+      {values.length > 1 && <p className="v2-hint" style={{ marginTop: 6 }}>Printed in the order you picked them.</p>}
+    </div>
+  )
+}
+
 export function LineItemFields({ line, lists, currencySymbol, onChange }: {
   line: LineDraft
   lists: OrderOptionList[]
   currencySymbol: string
-  onChange: (k: keyof LineDraft, v: string) => void
+  onChange: (k: keyof LineDraft, v: string | string[]) => void
 }) {
   // Empty array when a list hasn't loaded yet — the field still renders, just with no choices.
   const opts = (key: string) => lists.find((l) => l.key === key)?.options.map((o) => o.label) ?? []
@@ -206,8 +293,11 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
           {(() => { const f = spec('centerStoneCarat', line.centerStoneCarat); return f && (
             <div className="v2-fld"><label htmlFor="li-centerStoneCarat">{f.label}</label><input id="li-centerStoneCarat" value={line.centerStoneCarat} onChange={(e) => onChange('centerStoneCarat', e.target.value)} inputMode="decimal" placeholder="e.g. 1.25" /></div>
           ) })()}
-          {(() => { const f = spec('sideStoneShape', line.sideStoneShape); return f && (
-            <OptionSelect label={f.label} value={line.sideStoneShape} options={opts('side_stone_shape')} onChange={(v) => onChange('sideStoneShape', v)} />
+          {/* Plural now. `spec` is still asked about the singular field because that is what the
+              per-piece field set is keyed on — what changed is how many of them a line may hold, not
+              which pieces have side stones at all. */}
+          {(() => { const f = spec('sideStoneShape', line.sideStoneShapes[0] ?? ''); return f && (
+            <MultiOptionSelect label={`${f.label}s`} values={line.sideStoneShapes} options={opts('side_stone_shape')} onChange={(v) => onChange('sideStoneShapes', v)} />
           ) })()}
           {(() => { const f = spec('sideStoneCaratTotal', line.sideStoneCaratTotal); return f && (
             <div className="v2-fld"><label htmlFor="li-sideStoneCaratTotal">{f.label}</label><input id="li-sideStoneCaratTotal" value={line.sideStoneCaratTotal} onChange={(e) => onChange('sideStoneCaratTotal', e.target.value)} inputMode="decimal" placeholder="e.g. 0.50" /></div>
@@ -235,6 +325,12 @@ export function LineItemFields({ line, lists, currencySymbol, onChange }: {
             ? <OptionSelect label={f.label} value={line.measurements} options={lengthOpts} onChange={(v) => onChange('measurements', v)} />
             : <div className="v2-fld"><label htmlFor="li-measurements">{f.label}</label><input id="li-measurements" value={line.measurements} onChange={(e) => onChange('measurements', e.target.value)} /></div>
         })()}
+        {/* Its own numeric field with a fixed unit, rather than another thing crammed into
+            Measurements — see lib/orders/product-types.ts. Offered on the pieces worn on a finger,
+            and anywhere else only when a value is already sitting in it. */}
+        {(() => { const f = spec('bandWidthMm', line.bandWidthMm); return f && (
+          <div className="v2-fld"><label htmlFor="li-bandWidthMm">{f.label}</label><input id="li-bandWidthMm" value={line.bandWidthMm} onChange={(e) => onChange('bandWidthMm', e.target.value)} inputMode="decimal" placeholder="e.g. 2.00" /></div>
+        ) })()}
         <div className="v2-fld"><label htmlFor="li-color">Finish / colour note</label><input id="li-color" value={line.color} onChange={(e) => onChange('color', e.target.value)} /></div>
         <div className="v2-fld"><label htmlFor="li-customSpec">Custom spec</label><input id="li-customSpec" value={line.customSpec} onChange={(e) => onChange('customSpec', e.target.value)} /></div>
       </div>

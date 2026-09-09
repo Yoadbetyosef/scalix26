@@ -12,6 +12,7 @@ import { DeleteOrderButton } from '@/components/orders/delete-order'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
 import { FinishActions } from '@/components/orders/finish-actions'
+import { SharedLinks } from '@/components/orders/shared-links'
 import { listTemplates } from '@/lib/orders/templates'
 import { getSupplier } from '@/lib/orders/suppliers'
 
@@ -76,7 +77,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         {canEditWorkflow(o.stage) ? (
           <OrderEdit orderId={o.id} initial={{
             orderNumber: o.orderNumber, contactId: o.contactId,
-            customerName: o.customerName, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
+            customerName: o.customerName, customerCompany: o.customerCompany, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
             factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
             assignedEmployee: o.assignedEmployee, orderDate: o.orderDate, requestedCompletionDate: o.requestedCompletionDate,
             depositCents: o.depositCents, currency: o.currency, internalNotes: o.internalNotes, publicNotes: o.publicNotes,
@@ -200,6 +201,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       <section style={{ marginTop: 24 }}>
         <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Attachments</p><s /></div>
         <AttachmentsPanel orderId={o.id} invoiceImageId={o.invoiceImageId} canSetInvoiceImage={canEditDocumentFacts(o.stage)} />
+      </section>
+
+      {/* Sits directly after Attachments and before Activity: what has LEFT the building, between
+          the material she attached and the log of what happened to it. Renders nothing at all until
+          a link has actually been sent. */}
+      <section style={{ marginTop: 24 }}>
+        <SharedLinks orderId={o.id} />
       </section>
 
       <section style={{ marginTop: 24 }}>

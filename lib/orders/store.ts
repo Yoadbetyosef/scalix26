@@ -4,6 +4,7 @@ import { ORDER_BUCKET } from './attachments'
 import { generateOrderNumber } from './order-number'
 import { canManualTransition, type OrderStage } from './stages'
 import { taxChoiceById } from '@/lib/tax/canada'
+import { isMissingColumn } from '@/lib/db/missing-column'
 import type { Order, OrderLineItem, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
 
 // Server-only Orders data access. Every call resolves the validated active tenant (requireActiveBusinessContext)
@@ -20,6 +21,9 @@ async function ctx(): Promise<OrderCtx | null> {
 const orderRow = (r: Record<string, unknown>): Order => ({
   id: r.id as string, tenantId: r.tenant_id as string, orderNumber: r.order_number as string, contactId: (r.contact_id as string) ?? null,
   customerName: (r.customer_name as string) ?? null, customerEmail: (r.customer_email as string) ?? null, customerPhone: (r.customer_phone as string) ?? null,
+  // Read off the row rather than selected by name, so a database without add_tg_jewellers_2 yields
+  // undefined here instead of failing the whole query.
+  customerCompany: (r.customer_company as string) ?? null,
   stage: r.stage as OrderStage, supplierId: (r.supplier_id as string) ?? null, factoryName: (r.factory_name as string) ?? null, factoryContactName: (r.factory_contact_name as string) ?? null, factoryEmail: (r.factory_email as string) ?? null,
   assignedEmployee: (r.assigned_employee as string) ?? null, orderDate: (r.order_date as string) ?? null, requestedCompletionDate: (r.requested_completion_date as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null,
   subtotalCents: Number(r.subtotal_cents ?? 0), depositCents: Number(r.deposit_cents ?? 0), balanceCents: Number(r.balance_cents ?? 0), currency: (r.currency as string) ?? 'usd',
@@ -49,6 +53,14 @@ const lineRow = (r: Record<string, unknown>): OrderLineItem => ({
   productType: (r.product_type as string) ?? null,
   stoneQuality: (r.stone_quality as string) ?? null, stoneColor: (r.stone_color as string) ?? null, stoneOrigin: (r.stone_origin as string) ?? null, stoneType: (r.stone_type as string) ?? null,
   centerStoneShape: (r.center_stone_shape as string) ?? null, sideStoneShape: (r.side_stone_shape as string) ?? null,
+  // Read OFF THE ROW rather than selected by name, so a database without add_tg_jewellers_2 renders
+  // the line exactly as it did before instead of erroring. The legacy single value is the fallback
+  // for every row written before the array existed — a piece with one side shape reads identically
+  // through either field, which is what lets the two coexist.
+  sideStoneShapes: Array.isArray(r.side_stone_shapes)
+    ? (r.side_stone_shapes as string[]).filter((v) => typeof v === 'string' && v.trim() !== '')
+    : ((r.side_stone_shape as string) ? [r.side_stone_shape as string] : []),
+  bandWidthMm: num(r.band_width_mm),
   centerStoneCarat: num(r.center_stone_carat), sideStoneCaratTotal: num(r.side_stone_carat_total), metalKarat: (r.metal_karat as string) ?? null,
   certificateLab: (r.certificate_lab as string) ?? null, ringSize: (r.ring_size as string) ?? null,
   // num() rather than Number(): it preserves NULL, which here means "not recorded" and must not
@@ -58,16 +70,71 @@ const lineRow = (r: Record<string, unknown>): OrderLineItem => ({
 
 // One place that turns a LineItemInput into its DB row — used by both create and update so the jewelry
 // columns can never drift between the two paths.
+/**
+ * The columns add_tg_jewellers_2.sql introduces, kept apart from the rest of the row.
+ *
+ * Separating them is what makes the retry in `insertLines` able to drop EXACTLY the new fields and
+ * keep everything else — a blanket try/catch would have to guess which key offended.
+ *
+ * `side_stone_shape` (singular) is written from the FIRST entry of the array and is not in here: the
+ * column already exists, and keeping it populated means the approval page, the AI's lookups and any
+ * report still reading it keep working unchanged rather than silently going blank.
+ */
+const lineExtras = (i: LineItemInput) => ({
+  side_stone_shapes: i.sideStoneShapes ?? [],
+  band_width_mm: i.bandWidthMm ?? null,
+})
+
 const lineInsert = (tenantId: string, orderId: string, i: LineItemInput, total: number, idx: number) => ({
   tenant_id: tenantId, order_id: orderId, product_name: i.productName, description: i.description ?? null, sku: i.sku ?? null,
   quantity: i.quantity ?? 1, unit_price_cents: i.unitPriceCents ?? 0, measurements: i.measurements ?? null, color: i.color ?? null, material: i.material ?? null,
   custom_spec: i.customSpec ?? null, product_ref: i.productRef ?? null, line_total_cents: total, display_order: idx,
   product_type: i.productType ?? null, stone_quality: i.stoneQuality ?? null, stone_color: i.stoneColor ?? null, stone_origin: i.stoneOrigin ?? null, stone_type: i.stoneType ?? null,
-  center_stone_shape: i.centerStoneShape ?? null, side_stone_shape: i.sideStoneShape ?? null,
+  center_stone_shape: i.centerStoneShape ?? null,
+  // The multi-select's first entry wins over the legacy single field when both arrive, because the
+  // form now sends the array and the single value is derived from it. Falling back the other way
+  // keeps an older client (or a direct API caller) working.
+  side_stone_shape: i.sideStoneShapes?.[0] ?? i.sideStoneShape ?? null,
   center_stone_carat: i.centerStoneCarat ?? null, side_stone_carat_total: i.sideStoneCaratTotal ?? null, metal_karat: i.metalKarat ?? null,
   certificate_lab: i.certificateLab ?? null, ring_size: i.ringSize ?? null,
   internal_cost_cents: i.internalCostCents ?? null,
 })
+/**
+ * Write a whole order's line items, dropping the new columns if the database has not been told about
+ * them yet.
+ *
+ * ── WHY THIS DROPS RATHER THAN REFUSES ──────────────────────────────────────────────────────────
+ *
+ * lib/contacts/company-column.ts refuses the equivalent write, and is right to: a company name typed
+ * into a form and silently discarded is data the owner believes is saved. The judgement is different
+ * here and the reason is what the two fields are worth against what they are attached to.
+ *
+ * A line item carries the piece — its name, its price, its stones, its metal. Refusing the whole save
+ * because a band width could not be stored would lose ALL of that to protect one number, on a form
+ * where the order is the thing being written. So the extras are dropped and everything else lands.
+ *
+ * It is not silent: `degraded` comes back to the caller, which turns it into a sentence naming the
+ * migration. The owner is told the width did not save, on the same screen, immediately — which is the
+ * property that actually matters, and it is one a refusal is not required to deliver.
+ */
+async function insertLines(
+  sb: Awaited<ReturnType<typeof createClient>>,
+  tenantId: string, orderId: string, items: LineItemInput[], totals: number[],
+): Promise<{ error: { message: string } | null; degraded: boolean }> {
+  const rows = items.map((i, idx) => ({ ...lineInsert(tenantId, orderId, i, totals[idx], idx), ...lineExtras(i) }))
+  const { error } = await sb.from('order_line_items').insert(rows)
+  if (!isMissingColumn(error, 'side_stone_shapes', 'band_width_mm')) return { error, degraded: false }
+
+  // The one retry, without the new columns. `side_stone_shape` (singular) is still populated from the
+  // array's first entry inside lineInsert, so an unmigrated database keeps recording ONE side shape
+  // exactly as it always has rather than none.
+  const legacy = items.map((i, idx) => lineInsert(tenantId, orderId, i, totals[idx], idx))
+  const retry = await sb.from('order_line_items').insert(legacy)
+  return { error: retry.error, degraded: true }
+}
+
+export const LINE_EXTRAS_MIGRATION = 'add_tg_jewellers_2.sql'
+
 const eventRow = (r: Record<string, unknown>): OrderEvent => ({ id: r.id as string, orderId: r.order_id as string, type: r.type as string, actor: (r.actor as string) ?? null, payload: (r.payload as Record<string, unknown>) ?? null, createdAt: r.created_at as string })
 
 export async function listOrders(): Promise<Order[]> {
@@ -127,7 +194,7 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   const subtotal = totals.reduce((s, n) => s + n, 0)
   const deposit = input.depositCents ?? 0
   const orderNumber = (input.orderNumber && input.orderNumber.trim()) || generateOrderNumber()
-  const { data, error } = await sb.from('orders').insert({
+  const base = {
     tenant_id: c.tenantId, order_number: orderNumber, contact_id: input.contactId ?? null,
     customer_name: input.customerName ?? null, customer_email: input.customerEmail ?? null, customer_phone: input.customerPhone ?? null,
     stage: 'new', factory_name: input.factoryName ?? null, factory_contact_name: input.factoryContactName ?? null, factory_email: input.factoryEmail ?? null,
@@ -135,16 +202,25 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
     subtotal_cents: subtotal, deposit_cents: deposit, balance_cents: subtotal - deposit, currency: input.currency ?? 'usd',
     client_requirements: input.clientRequirements ?? null, is_custom_design: input.isCustomDesign ?? false,
     internal_notes: input.internalNotes ?? null, public_notes: input.publicNotes ?? null, created_by: c.actor,
-  }).select('*').single()
+  }
+  // Same rule as the line items below: the ORDER is the thing being written and must land. A business
+  // name that could not be stored is reported afterwards, by name, rather than taking the order with it.
+  let { data, error } = await sb.from('orders').insert({ ...base, customer_company: input.customerCompany ?? null }).select('*').single()
+  let companyDropped = false
+  if (isMissingColumn(error, 'customer_company')) {
+    companyDropped = !!input.customerCompany
+    ;({ data, error } = await sb.from('orders').insert(base).select('*').single())
+  }
   if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
   const order = orderRow(data as Record<string, unknown>)
   if (items.length) {
-    const { error: lineErr } = await sb.from('order_line_items')
-      .insert(items.map((i, idx) => lineInsert(c.tenantId, order.id, i, totals[idx], idx)))
+    const { error: lineErr, degraded } = await insertLines(sb, c.tenantId, order.id, items, totals)
     // An order that saved and lost its items is worse than one that did not save: the person is told
     // it worked and finds out later. Said out loud, on the same call.
     if (lineErr) throw new Error(`The order was created but its items could not be saved: ${lineErr.message}`)
+    if (degraded) throw new Error(`The order was created, but side shapes and band width were not saved — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   }
+  if (companyDropped) throw new Error(`The order was created, but the business name was not saved — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   await addEvent(order.id, 'created', { orderNumber })
   return order
 }
@@ -175,7 +251,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   const c = await ctx(); if (!c) return null
   const sb = await createClient()
   const m: Record<string, unknown> = { updated_at: new Date().toISOString() }
-  const map: Record<string, string> = { orderNumber: 'order_number', contactId: 'contact_id', customerName: 'customer_name', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', clientRequirements: 'client_requirements', isCustomDesign: 'is_custom_design', internalNotes: 'internal_notes', publicNotes: 'public_notes', deliveryProvince: 'delivery_province', documentTemplateId: 'document_template_id', invoiceImageId: 'invoice_image_id', letterheadStyle: 'letterhead_style' }
+  const map: Record<string, string> = { orderNumber: 'order_number', contactId: 'contact_id', customerName: 'customer_name', customerCompany: 'customer_company', customerEmail: 'customer_email', customerPhone: 'customer_phone', factoryName: 'factory_name', factoryContactName: 'factory_contact_name', factoryEmail: 'factory_email', assignedEmployee: 'assigned_employee', orderDate: 'order_date', requestedCompletionDate: 'requested_completion_date', estimatedCompletionDate: 'estimated_completion_date', depositCents: 'deposit_cents', currency: 'currency', clientRequirements: 'client_requirements', isCustomDesign: 'is_custom_design', internalNotes: 'internal_notes', publicNotes: 'public_notes', deliveryProvince: 'delivery_province', documentTemplateId: 'document_template_id', invoiceImageId: 'invoice_image_id', letterheadStyle: 'letterhead_style' }
   // Only keys actually PRESENT in the patch are written. That is what lets add_orders_6's columns be
   // optional: a form that does not send delivery_province never names it, so a database without the
   // column is never asked about it.
@@ -206,8 +282,8 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
     const { data: previous } = await sb.from('order_line_items').select('*').eq('order_id', id)
     await sb.from('order_line_items').delete().eq('order_id', id)
     if (patch.lineItems.length) {
-      const { error: lineErr } = await sb.from('order_line_items')
-        .insert(patch.lineItems.map((i, idx) => lineInsert(c.tenantId, id, i, totals[idx], idx)))
+      const { error: lineErr, degraded } = await insertLines(sb, c.tenantId, id, patch.lineItems, totals)
+      if (!lineErr && degraded) throw new Error(`The items saved, but side shapes and band width were not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
       if (lineErr) {
         const back = (previous as Array<Record<string, unknown>> | null) ?? []
         if (back.length) await sb.from('order_line_items').insert(back)
@@ -215,8 +291,19 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
       }
     }
   }
-  const { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
+  let { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
+  let companyDropped = false
+  if (isMissingColumn(error, 'customer_company')) {
+    // Only the ONE key is dropped; every other edit in the patch still applies. The field map above
+    // writes a key only when the patch carries it, so this branch is reachable only when she actually
+    // typed a business name.
+    companyDropped = true
+    const rest = { ...m }
+    delete rest.customer_company
+    ;({ data, error } = await sb.from('orders').update(rest).eq('tenant_id', c.tenantId).eq('id', id).select('*').single())
+  }
   if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
+  if (companyDropped) throw new Error(`The order was saved, but the business name was not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   await addEvent(id, 'updated', null)
   return orderRow(data as Record<string, unknown>)
 }
@@ -225,7 +312,15 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
 /** Which file teaches the database a stage. Only the ones added after the original CHECK are here. */
 const STAGE_MIGRATION: Partial<Record<OrderStage, string>> = {
   finished: 'add_order_finished_stage.sql',
-  closed_no_sale: 'add_order_closed_no_sale_stage.sql',
+  // BOTH NOW POINT AT THE SAME FILE, and that is the fix for "Close and No sale do not work".
+  //
+  // Nothing was wrong with the code: `closed_no_sale` shipped complete in db120a6 and its migration
+  // was never run, so every attempt hit the CHECK constraint with 23514 and the owner got an error
+  // naming a file. add_order_closed_no_sale_stage.sql is folded into add_tg_jewellers_2.sql — which
+  // also teaches the database 'pending' — so there is ONE file to run rather than a queue of them,
+  // and naming the superseded file would send her to a migration that is not the one to run.
+  closed_no_sale: 'add_tg_jewellers_2.sql',
+  pending: 'add_tg_jewellers_2.sql',
 }
 
 export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: boolean; error?: string }> {

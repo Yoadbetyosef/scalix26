@@ -22,6 +22,13 @@ export const lineItemSchema = z.object({
   productType: optionLabel,
   stoneQuality: optionLabel, stoneColor: optionLabel, stoneOrigin: optionLabel, stoneType: optionLabel,
   centerStoneShape: optionLabel, sideStoneShape: optionLabel, metalKarat: optionLabel,
+  // EVERY side shape on the piece, not just one. Same rule as the single field it supersedes: these
+  // are her own option labels, so length-capped and never validated against an enum. 20 is a ceiling
+  // against a malformed client, not a design limit — no piece has twenty distinct side shapes.
+  sideStoneShapes: z.array(z.string().max(200)).max(20).optional(),
+  // Millimetres, as a number. Capped at 100mm: a band wider than a hand is a typo, and letting one
+  // through puts it on a manufacturing document a workshop reads literally.
+  bandWidthMm: z.number().min(0).max(100).nullable().optional(),
   certificateLab: optionLabel, ringSize: optionLabel,
   centerStoneCarat: carat, sideStoneCaratTotal: carat,
 })
@@ -30,6 +37,11 @@ export const lineItemSchema = z.object({
 const orderFields = {
   contactId: z.string().uuid().nullable().optional(),
   customerName: z.string().max(300).nullable().optional(), customerEmail: z.string().email().max(320).nullable().optional(), customerPhone: z.string().max(50).nullable().optional(),
+  // THE B2B HALF OF THE CUSTOMER. On the TG Designs side the customer IS the firm — a yacht centre,
+  // a dealer — and `customerName` is the person at it to ring. Kept as two fields rather than one
+  // composed string for the same reason contacts split them: a machine that appends to a composed
+  // name corrupts it, and every surface that only knows `customerName` still shows a true thing.
+  customerCompany: z.string().max(300).nullable().optional(),
   factoryName: z.string().max(300).nullable().optional(), factoryContactName: z.string().max(300).nullable().optional(), factoryEmail: z.string().email().max(320).nullable().optional(),
   assignedEmployee: z.string().max(300).nullable().optional(), orderDate: date.nullable().optional(), requestedCompletionDate: date.nullable().optional(), estimatedCompletionDate: date.nullable().optional(),
   depositCents: z.number().int().min(0).optional(), currency: z.string().max(8).optional(),

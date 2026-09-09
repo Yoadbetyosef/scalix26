@@ -20,6 +20,28 @@ export function isCustomerDocumentPath(pathname: string): boolean {
   // enquiry form saw our name in the browser tab.
   if (pathname.startsWith('/d/') || pathname.startsWith('/approval/') || pathname.startsWith('/f/')) return true
   if (pathname.startsWith('/e/')) return true
+
+  // ── THE FOUR THAT WERE MISSING, AND WHY THE LIST KEEPS GROWING ────────────────────────────────
+  //
+  // This predicate was written against the three routes that existed when the leak was found, and
+  // four more customer-reachable pages have been added since without anybody coming back here. The
+  // omission is invisible by construction: a route that forgets to neutralise itself does not break,
+  // it silently inherits the HOST brand — which on app.scalix26.com is us — and the only symptom is
+  // our name in somebody else's customer's browser tab.
+  //
+  //   /q/  the QR page on a catalogue part. Scanned by a customer standing in the shop, and it had
+  //        no generateMetadata at all, so the tab read "Scalix26 — AI Employee Platform".
+  //   /p/  the QR page on a studio product. The same, and the same fix.
+  //   /i/  the customer's copy of a core invoice. It names itself correctly, so the TITLE was never
+  //        wrong — but it still took the platform brand object into its tree, which is the same
+  //        missing entry waiting for the first component that reads one.
+  //   /m/  the owner's own decide-from-SMS link. Not a customer, but the URL lands in a message
+  //        preview, and a preview is exactly where a platform name is least wanted.
+  //
+  // The membership test is a PREFIX on a single path segment, not `includes`: '/points-of-sale'
+  // must not match '/p/'.
+  if (/^\/(q|p|i|m)\//.test(pathname)) return true
+
   return /^\/orders\/[^/]+\/document(\/|$)/.test(pathname)
 }
 

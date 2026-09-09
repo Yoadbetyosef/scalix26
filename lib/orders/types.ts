@@ -14,9 +14,41 @@ export interface JewelrySpec {
    */
   productType: string | null
   stoneQuality: string | null; stoneColor: string | null; stoneOrigin: string | null; stoneType: string | null
-  centerStoneShape: string | null; sideStoneShape: string | null
+  centerStoneShape: string | null
+  /**
+   * THE ONE SIDE SHAPE THAT WAS EVER ALLOWED. Kept, and kept in sync with the first entry of
+   * `sideStoneShapes` below, because it is what the approval page, the AI's order lookups and every
+   * row written before this change all read. See sideStoneShapes.
+   */
+  sideStoneShape: string | null
+  /**
+   * EVERY SIDE SHAPE ON THE PIECE.
+   *
+   * A ring can have round sides and baguette shoulders on the same setting, which the single field
+   * could not say — so it was said in Notes, or not at all. This is the real answer and the single
+   * column is now its first element.
+   *
+   * Empty array, never null: "no side stones" and "side stones nobody recorded" are the same fact
+   * here, unlike the carat fields where null genuinely means unrecorded. A caller reading `[0]` for
+   * the old behaviour gets undefined rather than a crash.
+   */
+  sideStoneShapes: string[]
   centerStoneCarat: number | null; sideStoneCaratTotal: number | null; metalKarat: string | null
   certificateLab: string | null; ringSize: string | null
+  /**
+   * HOW WIDE THE BAND IS, in millimetres.
+   *
+   * It has always been recorded — as free text in `measurements`, alongside stone dimensions
+   * ("10X7.5X4") and necklace lengths ("16''"), because that column is three different quantities
+   * wearing one name. A ring's band width is a NUMBER with a fixed unit, and giving it a column of
+   * its own is what lets the document print it in the spec table beside the other measurements
+   * rather than buried in a string.
+   *
+   * Null means not recorded. Nothing is backfilled out of `measurements`: parsing "2.00mm" out of a
+   * field that also holds "10X7.5X4" would guess, and a guessed measurement on a manufacturing
+   * document is worse than an absent one.
+   */
+  bandWidthMm: number | null
 }
 
 export interface OrderLineItem extends JewelrySpec {
@@ -35,6 +67,18 @@ export interface OrderLineItem extends JewelrySpec {
 export interface OrderEvent { id: string; orderId: string; type: string; actor: string | null; payload: Record<string, unknown> | null; createdAt: string }
 
 export interface Order {
+  /**
+   * The BUSINESS this order is for, when it is for a business.
+   *
+   * Optional on the type, like every other column that arrives in a hand-run migration: the app must
+   * render before add_tg_jewellers_2.sql is run, and optional forces every consumer to handle its
+   * absence rather than reading undefined as a value.
+   *
+   * Null on a retail order, which is most of them. `customerName` keeps meaning the PERSON in both
+   * cases — a retail buyer, or the contact at the firm — so nothing that already reads it changes
+   * meaning.
+   */
+  customerCompany?: string | null
   // ── Added by add_orders_6, and OPTIONAL on the type on purpose ──────────────────────────────────
   // The application must render before the migration is run. Optional here means every consumer is
   // forced by the compiler to handle their absence, rather than reading undefined as a value.
@@ -107,6 +151,8 @@ export interface OrderInput {
   documentTemplateId?: string | null
   orderNumber?: string | null
   contactId?: string | null; customerName?: string | null; customerEmail?: string | null; customerPhone?: string | null
+  /** The firm, when the customer is one. See Order.customerCompany. */
+  customerCompany?: string | null
   factoryName?: string | null; factoryContactName?: string | null; factoryEmail?: string | null; assignedEmployee?: string | null
   orderDate?: string | null; requestedCompletionDate?: string | null; estimatedCompletionDate?: string | null
   depositCents?: number; currency?: string; internalNotes?: string | null; publicNotes?: string | null
