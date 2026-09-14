@@ -81,6 +81,52 @@ one genuinely separate thing, because they are stock in someone else's hands, no
 | 32 | Mobile | **WORKING** | Responsive web (v2 kit rows on phones). No PWA, no native app. Board drag does not fire on touch (HTML5 API) → the ⋯ menu is the phone path. |
 | 33 | Website import | **BLOCKED** | `catalog_sources` row for tgjewellers.com is paused with `no_products_found` (URL was the Acuity appointment page; the site is a custom Next.js build with no product feed). Needs an export from her site vendor / Odoo. Importer architecture (`lib/ingestion`) is ready for a feed. |
 
+
+## Status per request (2026-09-14, after the pre-migration completion pass)
+
+Statuses: **COMPLETE** (working in production now) · **COMPLETE IN CODE** (deployed; waits only on the named migration part) · **EXTERNAL SETUP REQUIRED** · **INTENTIONALLY DEFERRED** · **TECHNICAL DEBT** (non-blocking).
+
+| # | Request | Status | Unlocked by |
+|---|---|---|---|
+| 1 | Closed – No Sale keeps everything | **COMPLETE** | — |
+| 2 | Closed Order consistent everywhere | **COMPLETE** | — |
+| 3 | Estimate → Order → Invoice, invoice before completion | **COMPLETE** | — |
+| 4 | Product info saving | **COMPLETE** (four causes; twelve-type three-save tests; smoke stress) | — |
+| 5 | Public customer document: no login, branding, video, certificate | **COMPLETE** (plus frozen copies as sent, View as sent, customer-safe error pages) | — |
+| 6 | Board: any stage, backwards, mobile | **COMPLETE** | In Process column: part 1 |
+| 7 | Status model with In Process + history with reason/user | **COMPLETE IN CODE** for In Process; history **COMPLETE** | part 1 |
+| 8 | Customer + company, no duplicates, staff link/unlink | **COMPLETE** | — |
+| 9 | Jewellery types incl. chain/watch/loose stone/other | **COMPLETE** in code (field sets, inference); her list gains the four | part 8b (data) |
+| 10 | Type-specific specs propagate to documents | **COMPLETE** | — |
+| 11 | B2B / TG Designs branding on documents, emails, sender, reply-to, approval pages | **COMPLETE** | — |
+| 12 | Vendor quotation, distinct from customer approval | **COMPLETE IN CODE** (controls hidden until then) | part 7 |
+| 13 | Payments: deposit/partial/final/refund, methods, ledger, totals | **COMPLETE**; wire/e-transfer stored under their own words | part 2 |
+| 14 | Canadian taxes | **COMPLETE** (unchanged; create now honours the choice) | — |
+| 15 | Purchases | **COMPLETE IN CODE** (panel shows "not enabled yet") | part 5 |
+| 16 | Memo | **COMPLETE IN CODE** (pages show "not enabled yet") | part 4 |
+| 17 | Consignment | **COMPLETE IN CODE** | part 4 |
+| 18 | Repair | **COMPLETE IN CODE** (kind section hidden until then) | part 6 |
+| 19 | Appraisal | **COMPLETE IN CODE** | part 6 |
+| 20 | Inventory / archive, nothing disappears | **COMPLETE**; memo ledger movements | part 4 |
+| 21 | Customer history | **COMPLETE** (grouped, documents sent, payments, appointments; memos when enabled) | memos: part 4 |
+| 22 | Acuity | **EXTERNAL SETUP REQUIRED** — Acuity API user + key; nothing exists in code | — |
+| 23 | QuickBooks | **EXTERNAL SETUP REQUIRED** — platform `QUICKBOOKS_CLIENT_ID/SECRET` are not set in production env, then TG connects; connect-only by decision | — |
+| 24 | Three mailboxes | **EXTERNAL SETUP REQUIRED** — Tatiana connects the third mailbox to a third AI employee (Google OAuth exists) | — |
+| 25 | Separate assistants / isolation | **COMPLETE** (agent-scoped knowledge, scan safety, isolation gates) | — |
+| 26 | Email quality | **COMPLETE** (identity, style, escalation rules, thread; fixtures) | — |
+| 27 | Appraisal Q&A | **COMPLETE** (seeded on Avi, editable, idempotent seed) | — |
+| 28 | Phone AI / Canadian number | **EXTERNAL SETUP REQUIRED** — Twilio CA regulatory bundle + number purchase (not done; incurs charges); routing works | — |
+| 29 | WhatsApp | **EXTERNAL SETUP REQUIRED** — Meta channel connection | — |
+| 30 | Visual board | **COMPLETE** | — |
+| 31 | Status history | **COMPLETE** | — |
+| 32 | Mobile | **COMPLETE** (responsive web; no native app by design) | — |
+| 33 | Website product import | **EXTERNAL SETUP REQUIRED** — a product feed/export from her site vendor or Odoo | — |
+| — | Line-item ids change on save | **TECHNICAL DEBT** — invariant guarded by test | — |
+| — | No transactions across PostgREST | **TECHNICAL DEBT** — compensated (see partial-failure table) | — |
+| — | Alex's website knowledge (erased by the old scan bug) | **EXTERNAL SETUP REQUIRED** — Tatiana re-runs Scan website on Alex | — |
+
+**After the migration parts are applied, no further development is required**: the smoke scripts report each part as applied and the seven PENDING business-path checks turn into passes.
+
 ## Hardening pass (2026-09-14, later the same day)
 
 ### Migration state, verified part by part against production
@@ -115,6 +161,8 @@ Dependencies: none between parts. Idempotent: every statement is `IF NOT EXISTS`
 | tenant + 2 agents timezone → `America/Vancouver` | REST | data, not schema; asserted by the smoke script (5d) |
 
 Order of a rebuilt environment: run every migration → run `seed-appraisal-knowledge.mjs` for the appraisal agent → set the timezone in Settings. IDs are stable throughout (nothing is deleted and recreated).
+
+**Capability detection**: each migration part inserts its key into `schema_flags`; `lib/db/capabilities.ts` reads it (server, cached) and the UI/API gate on it. Sent documents are frozen as JSON in the private order bucket (`<tenant>/<order>/snapshots/<shareId>.json`) — the owner's document pages are live, the customer's links are records.
 
 ### Historical orders → contacts (item 5)
 
