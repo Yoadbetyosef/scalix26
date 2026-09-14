@@ -5,6 +5,7 @@ import { requireOrdersAccess } from '@/lib/orders/guard'
 import { OrderForm } from '@/components/orders/order-form'
 import { createAdminClient } from '@/lib/supabase/server'
 import type { PickedContact } from '@/components/orders/contact-picker'
+import { getSchemaCapabilities } from '@/lib/db/capabilities'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,7 +37,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
         <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />New order</p>
         <s />
       </div>
-      <OrderForm initialCustomer={prefill} />
+      <OrderForm initialCustomer={prefill} supportsKinds={(await getSchemaCapabilities()).orderKinds} />
     </div>
   )
 }

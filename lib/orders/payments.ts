@@ -44,7 +44,13 @@ const row = (r: Record<string, unknown>): OrderPayment => {
   // 'transfer' is what the ledger stored before it learned the two Canadian words for it. Read back
   // as 'wire' — the older of the two meanings — and the note, which carries the exact wording when
   // the fallback wrote one, says which it was.
-  const m: OrderPaymentMethod | null = method === 'transfer' ? 'wire' : isOrderPaymentMethod(method) ? method : method ? 'other' : null
+  // 'transfer' is the ledger's older word. The fallback write put the exact method at the front of
+  // the note ("E-transfer — …" / "Wire transfer — …"), so it is read back from there rather than
+  // guessed: an e-transfer never comes back labelled as a wire.
+  const note = (r.note as string) ?? ''
+  const m: OrderPaymentMethod | null = method === 'transfer'
+    ? (note.startsWith(PAYMENT_METHOD_LABELS.etransfer) ? 'etransfer' : 'wire')
+    : isOrderPaymentMethod(method) ? method : method ? 'other' : null
   return {
     id: r.id as string,
     kind: kind === 'deposit' ? 'deposit' : kind === 'refund' ? 'refund' : 'payment',
@@ -160,7 +166,7 @@ export async function recordOrderPayment(orderId: string, input: RecordPaymentIn
       : note
     ;({ data, error } = await db.from('payment_allocations')
       .insert({ ...base, method: legacyMethod, note: legacyNote }).select('*').single())
-    if (!error) degraded = `Recorded. To store "${input.method ? PAYMENT_METHOD_LABELS[input.method] : 'the method'}" and the payment date exactly, run ${PAYMENTS_MIGRATION} in the Supabase SQL editor.`
+    if (!error) { console.warn(`[payments] method/date stored in fallback form — ${PAYMENTS_MIGRATION} part 2 not applied`); degraded = `Recorded as a transfer dated today — "${input.method ? PAYMENT_METHOD_LABELS[input.method] : 'the method'}" and the exact date will be kept once extended payment methods are enabled on this account.` }
   }
   if (error || !data) return { ok: false, error: error?.message ?? 'Could not record the payment.' }
 

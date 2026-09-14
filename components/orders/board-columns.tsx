@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -54,7 +54,19 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
   const router = useRouter()
   // Free-text filter over what a card shows: customer, company, number, factory. Typed here rather
   // than a server round trip because the whole board is already on the page.
-  const [filter, setFilter] = useState('')
+  // Remembered per tab, so a refresh after a move does not clear what she was looking at.
+  const [filter, setFilterState] = useState('')
+  // Read after mount, never during render: the server has no sessionStorage and a differing initial
+  // value would be a hydration mismatch on the input. Deferred a tick so it is not a synchronous
+  // setState inside the effect.
+  useEffect(() => {
+    let saved = ''
+    try { saved = sessionStorage.getItem('orders-board-filter') ?? '' } catch { /* private mode */ }
+    if (!saved) return
+    const t = setTimeout(() => setFilterState(saved), 0)
+    return () => clearTimeout(t)
+  }, [])
+  const setFilter = (v: string) => { setFilterState(v); try { sessionStorage.setItem('orders-board-filter', v) } catch { /* private mode */ } }
   const q = filter.trim().toLowerCase()
   const shown = q
     ? cards.filter((c) => [c.customerName, c.customerCompany, c.orderNumber, c.factoryName].some((v) => (v ?? '').toLowerCase().includes(q)))
@@ -183,7 +195,7 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
                       opacity: dragging?.id === o.id ? 0.4 : 1,
                     }}
                   >
-                    <div className="v2-m" style={{ paddingRight: 28 }}>
+                    <div className="v2-m" style={{ paddingRight: 40 }}>
                       {/* The firm when there is one — a B2B card that says "Irina" and not which
                           yacht centre is a card she has to open to identify. */}
                       <p className="truncate">{o.customerCompany || o.customerName || 'No customer'}</p>
@@ -196,21 +208,22 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
                       chevron in the card's corner; choosing a stage posts the same route the drop
                       posts. Listed in board order with the current column disabled, so it reads as
                       "where can this go" rather than as a form. */}
+                  {/* 36px, not 22: a thumb target. The board is used at the bench and on a phone. */}
                   {isLiveStage(stageOf(o)) && (
-                    <label style={{ position: 'absolute', top: 8, right: 8 }} title="Move to another stage">
+                    <label style={{ position: 'absolute', top: 4, right: 4 }} title="Move to another stage">
                       <span className="sr-only">Move {o.orderNumber} to</span>
                       <select
                         value=""
                         disabled={busy}
                         onChange={(e) => { const to = e.target.value as OrderStage; if (to) void moveCard(o, to) }}
-                        style={{ width: 22, height: 22, opacity: 0, position: 'absolute', inset: 0, cursor: 'pointer' }}
+                        style={{ width: 36, height: 36, opacity: 0, position: 'absolute', inset: 0, cursor: 'pointer' }}
                       >
                         <option value="">Move to…</option>
                         {stages.filter((t) => canManualTransition(stageOf(o), t)).map((t) => (
                           <option key={t} value={t}>{STAGE_LABELS[t]}</option>
                         ))}
                       </select>
-                      <span aria-hidden className="v2-ico" style={{ width: 22, height: 22, fontSize: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>⋯</span>
+                      <span aria-hidden className="v2-ico" style={{ width: 36, height: 36, fontSize: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>⋯</span>
                     </label>
                   )}
                   </div>

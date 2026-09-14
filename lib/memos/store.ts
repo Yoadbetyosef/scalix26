@@ -10,6 +10,9 @@ import { canMemoTransition, type Memo, type MemoEvent, type MemoInput, type Memo
 // catalog tables are RLS-locked with no user policy, so the cookie client cannot reach them.
 
 export const MEMOS_MIGRATION = 'add_tg_production_1.sql'
+/** What a person sees when the memo tables are not there. The migration is named in the server log only. */
+export const MEMOS_UNAVAILABLE = 'The memo workflow is not enabled on this account yet.'
+const unavailable = (why: string) => { console.warn(`[memos] unavailable: ${why} — ${MEMOS_MIGRATION} part 4 not applied`); return MEMOS_UNAVAILABLE }
 
 interface Ctx { tenantId: string; actor: string }
 async function ctx(): Promise<Ctx | null> {
@@ -96,7 +99,7 @@ async function moveStockForMemo(tenantId: string, productId: string, qty: number
     on_memo_quantity: nextOnMemo, availability_status: availabilityOf(p as Record<string, unknown>, q), updated_at: new Date().toISOString(),
   }).eq('tenant_id', tenantId).eq('id', productId)
   if (error) {
-    if (error.code === '42703' || error.code === 'PGRST204') return { ok: false, error: `Run ${MEMOS_MIGRATION} (part 4) in the Supabase SQL editor first — the catalog does not know about stock on memo yet.` }
+    if (error.code === '42703' || error.code === 'PGRST204') return { ok: false, error: unavailable('on_memo_quantity column') }
     return { ok: false, error: error.message }
   }
   const { error: mvErr } = await db.from('catalog_movements').insert({
@@ -110,7 +113,7 @@ async function moveStockForMemo(tenantId: string, productId: string, qty: number
       [COL.showroom]: Number(p.showroom_quantity ?? 0), [COL.warehouse]: Number(p.warehouse_quantity ?? 0), [COL.storage]: Number(p.storage_quantity ?? 0),
       on_memo_quantity: onMemo, availability_status: p.availability_status, updated_at: new Date().toISOString(),
     }).eq('tenant_id', tenantId).eq('id', productId)
-    return { ok: false, error: mvErr.code === '23514' ? `Run ${MEMOS_MIGRATION} (part 4) in the Supabase SQL editor first — the stock ledger does not know the memo movement types yet.` : mvErr.message }
+    return { ok: false, error: mvErr.code === '23514' ? unavailable('movement types') : mvErr.message }
   }
   return { ok: true }
 }
@@ -148,7 +151,7 @@ export async function createMemo(input: MemoInput): Promise<{ ok: boolean; error
         internal_notes: `${kind === 'consignment' ? 'On consignment' : 'On memo'} from ${(input.counterpartyName ?? '').trim() || 'supplier'} — not company stock`,
       }).select('id').single()
       if (error) {
-        if (error.code === '42703' || error.code === 'PGRST204') return { ok: false, error: `Run ${MEMOS_MIGRATION} in the Supabase SQL editor first — the catalog does not know about ownership yet.` }
+        if (error.code === '42703' || error.code === 'PGRST204') return { ok: false, error: unavailable('catalog ownership column') }
         return { ok: false, error: error.message }
       }
       productId = created.id as string
@@ -173,7 +176,7 @@ export async function createMemo(input: MemoInput): Promise<{ ok: boolean; error
       await db.from('catalog_movements').delete().eq('tenant_id', c.tenantId).eq('product_id', productId)
       await db.from('catalog_products').delete().eq('tenant_id', c.tenantId).eq('id', productId)
     }
-    if (error.code === '42P01' || error.code === 'PGRST205') return { ok: false, error: `Run ${MEMOS_MIGRATION} in the Supabase SQL editor first — the memos table does not exist yet.` }
+    if (error.code === '42P01' || error.code === 'PGRST205') return { ok: false, error: unavailable('memos table') }
     return { ok: false, error: error.message }
   }
   const memo = row(data as Record<string, unknown>)

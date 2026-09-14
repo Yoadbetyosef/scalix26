@@ -9,6 +9,13 @@ describe('knowledge stays with the business that owns it', () => {
   it('a website scan replaces only its own agent\'s rows and writes them scoped to that agent', () => {
     const s = src('app/api/agents/[id]/scan-website/route.ts')
     expect(s).toMatch(/\.eq\('source', WEBSITE_SOURCE\)\.eq\('origin_ai_employee_id', agentId\)/)
+    // Insert first; retire the earlier rows only after the new ones landed; an empty crawl returns
+    // before any write; the delete is scoped to THIS agent and excludes the rows just written.
+    const write = s.indexOf(".insert(\n    items.map("), retire = s.indexOf(".delete()\n    .eq('tenant_id', agent.tenant_id).eq('source', WEBSITE_SOURCE).eq('origin_ai_employee_id', agentId)")
+    expect(write).toBeGreaterThan(-1); expect(retire).toBeGreaterThan(write)
+    expect(s).toMatch(/\.not\('id', 'in', `\(\$\{keep\.join\(','\)\}\)`\)/)
+    expect(s.indexOf('if (items.length === 0) {')).toBeLessThan(write)
+    expect(s).toMatch(/previous website knowledge left untouched/)
     expect(s).toMatch(/ai_employee_id: agentId, origin_ai_employee_id: agentId/)
     // The old shape — every website row in the tenant, written shared — must not come back.
     expect(s).not.toMatch(/delete\(\)\.eq\('tenant_id', agent\.tenant_id\)\.eq\('source', WEBSITE_SOURCE\)\n/)

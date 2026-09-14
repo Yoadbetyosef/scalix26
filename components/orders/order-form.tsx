@@ -9,7 +9,7 @@ import { KindFields, emptyKind, type KindDraft } from './kind-fields'
 
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
 
-export function OrderForm({ initialCustomer }: { initialCustomer?: PickedContact | null } = {}) {
+export function OrderForm({ initialCustomer, supportsKinds = false }: { initialCustomer?: PickedContact | null; supportsKinds?: boolean } = {}) {
   const router = useRouter()
   const [customer, setCustomer] = useState<PickedContact>(initialCustomer ?? { id: null, name: '', company: '', email: '', phone: '', address: '', currency: 'usd' })
   const [f, setF] = useState({
@@ -42,7 +42,7 @@ export function OrderForm({ initialCustomer }: { initialCustomer?: PickedContact
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
         clientRequirements: f.clientRequirements || null, isCustomDesign,
-        orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details,
+        ...(supportsKinds ? { orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details } : {}),
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
       }
@@ -66,7 +66,7 @@ export function OrderForm({ initialCustomer }: { initialCustomer?: PickedContact
         <ContactPicker value={customer} onChange={setCustomer} />
       </section>
 
-      <KindFields value={kind} onChange={setKind} idPrefix="of-kind" />
+      {supportsKinds && <KindFields value={kind} onChange={setKind} idPrefix="of-kind" />}
 
       <section>
         <div className="v2-head" style={{ marginBottom: 14 }}><p className="v2-kick"><i />Order</p><s /></div>

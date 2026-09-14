@@ -58,7 +58,9 @@ const upload = async (orderId, name, type, bytes) => {
   const r = await fetch(`${APP}/api/orders/${orderId}/attachments`, { method: 'POST', headers: { cookie }, body: fd })
   return { status: r.status, body: await r.json().catch(() => null) }
 }
-const isPending = (res, part) => res.status === 400 && /add_tg_production_1|not set up|does not know the stage|does not exist yet/.test(res.body?.error ?? '') ? part : null
+// A capability-gated refusal: 409 (checked up front) or 400 (found at write time), with the user-safe
+// wording and never a database detail.
+const isPending = (res, part) => (res.status === 409 || res.status === 400) && /not enabled on this account yet|not available on this account yet/.test(res.body?.error ?? '') && !/add_tg_production|migration|column|constraint/i.test(res.body?.error ?? '') ? part : null
 
 const TAG = `SMOKE-${Date.now().toString(36).toUpperCase()}`
 const made = { contacts: [], orders: [], products: [], memos: [], suppliers: [] }
@@ -109,6 +111,56 @@ try {
   ok(`edit again → reload: quality VVS1, price 4990, other fields intact (${e1.status})`, e1.status === 200 && br2?.stoneQuality === 'VVS1' && br2?.unitPriceCents === 499000 && br2?.centerStoneCarat === 5.25 && br2?.metalKarat === '14K White Gold' && g2.body?.order?.lineItems?.length === 4)
   ok('subtotal re-priced after the edit', g2.body?.order?.subtotalCents === 499000 + 1200000 + 89000 + 640000)
 
+  // Save stress: every piece type, several saves, unrelated edits, add/remove/reorder — nothing typed
+  // on one line may vanish because another line or another field was touched.
+  const strip = (l) => { const c = { ...l }; delete c.id; delete c.orderId; delete c.lineTotalCents; delete c.displayOrder; return c }
+  const moreLines = [
+    { productType: 'Earrings', productName: `${TAG} diamond studs`, quantity: 1, unitPriceCents: 199000, stoneType: 'Diamond', stoneQuality: 'VS1', centerStoneShape: 'Round', centerStoneCarat: 1.0, metalKarat: '14K White Gold', measurements: '6mm' },
+    { productType: 'Necklace', productName: `${TAG} pendant necklace`, quantity: 1, unitPriceCents: 150000, stoneType: 'Sapphire', centerStoneShape: 'Oval', centerStoneCarat: 0.8, metalKarat: '18K Yellow Gold', measurements: "18''" },
+    { productType: 'Watch', productName: `${TAG} Datejust`, quantity: 1, unitPriceCents: 800000, metalKarat: 'Stainless steel', measurements: 'Ref 126234 · 36mm', customSpec: 'Box and papers' },
+    { productType: 'Other', productName: `${TAG} brooch`, quantity: 2, unitPriceCents: 40000, metalKarat: 'Sterling Silver', description: 'Vintage, marcasite' },
+  ]
+  const cur = () => api(`/api/orders/${orderId}`).then((r) => r.body?.order)
+  let o = await cur()
+  const save = async (lineItems, extra = {}) => api(`/api/orders/${orderId}`, { method: 'PATCH', body: JSON.stringify({ lineItems, ...extra }) })
+  // add four more (eight in all)
+  await save([...o.lineItems.map(strip), ...moreLines]); o = await cur()
+  ok('eight piece types saved on one order', o?.lineItems?.length === 8 && ['Bracelet', 'Ring', 'Chain', 'Loose stone', 'Earrings', 'Necklace', 'Watch', 'Other'].every((t) => o.lineItems.some((l) => l.productType === t)))
+  // edit the SECOND line while the first exists; the first must be untouched
+  await save(o.lineItems.map((l) => strip(l.productType === 'Ring' ? { ...l, ringSize: '7', unitPriceCents: 1250000 } : l))); o = await cur()
+  const b3 = o.lineItems.find((l) => l.productType === 'Bracelet'), r3 = o.lineItems.find((l) => l.productType === 'Ring')
+  ok('editing the ring changes only the ring; the bracelet keeps every field', r3?.ringSize === '7' && r3?.unitPriceCents === 1250000 && b3?.stoneQuality === 'VVS1' && b3?.internalCostCents === 210000 && JSON.stringify(b3?.sideStoneShapes) === '["Round","Baguette"]' && b3?.measurements === "7''")
+  // unrelated field on the order, lines re-sent unchanged
+  await save(o.lineItems.map(strip), { assignedEmployee: 'Bench 2', internalNotes: 'rush' }); o = await cur()
+  const w3 = o.lineItems.find((l) => l.productType === 'Watch'), e3 = o.lineItems.find((l) => l.productType === 'Earrings')
+  ok('changing an unrelated field keeps all eight lines and their specs', o.assignedEmployee === 'Bench 2' && o.lineItems.length === 8 && w3?.customSpec === 'Box and papers' && e3?.centerStoneCarat === 1.0 && o.lineItems.find((l) => l.productType === 'Loose stone')?.stoneOrigin === 'Lab Grown')
+  // tax change alone (no lines in the patch) must not touch lines or deposit
+  await api(`/api/orders/${orderId}`, { method: 'PATCH', body: JSON.stringify({ taxChoiceId: 'ON' }) }); o = await cur()
+  ok('a tax-only save leaves the eight lines alone and switches the snapshot to ON 13%', o.lineItems.length === 8 && o.taxRatePercent === 13 && o.deliveryProvince === 'ON')
+  await api(`/api/orders/${orderId}`, { method: 'PATCH', body: JSON.stringify({ taxChoiceId: 'BC:combined' }) })
+  // remove one, reorder the rest
+  const without = o.lineItems.filter((l) => l.productType !== 'Other').map(strip).reverse()
+  await save(without); o = await cur()
+  ok('removing one and reversing the order keeps the seven others with their values, in the new order', o.lineItems.length === 7 && o.lineItems[0].productType === 'Watch' && o.lineItems[6].productType === 'Bracelet' && o.lineItems.find((l) => l.productType === 'Necklace')?.measurements === "18''")
+  ok('subtotal follows the lines exactly', o.subtotalCents === o.lineItems.reduce((t, l) => t + l.lineTotalCents, 0))
+
+  // ── Nobody without a session can change anything ────────────────────────────────────────────
+  console.log('\nPermissions (logged out)')
+  const anon = async (path, init = {}) => (await fetch(`${APP}${path}`, { ...init, headers: { 'content-type': 'application/json' }, redirect: 'manual' })).status
+  const refused = (st) => st === 401 || st === 404 || st === 307
+  ok('stage move refused', refused(await anon(`/api/orders/${orderId}/stage`, { method: 'POST', body: JSON.stringify({ toStage: 'production' }) })))
+  ok('payment refused', refused(await anon(`/api/orders/${orderId}/payments`, { method: 'POST', body: JSON.stringify({ kind: 'deposit', amountCents: 100, method: 'cash' }) })))
+  ok('share link refused', refused(await anon(`/api/orders/${orderId}/shares`, { method: 'POST', body: JSON.stringify({ docType: 'estimate' }) })))
+  ok('order edit refused', refused(await anon(`/api/orders/${orderId}`, { method: 'PATCH', body: JSON.stringify({ customerName: 'x' }) })))
+  ok('order delete refused', refused(await anon(`/api/orders/${orderId}`, { method: 'DELETE' })))
+  ok('memo refused', refused(await anon('/api/memos', { method: 'POST', body: JSON.stringify({ direction: 'out' }) })))
+  ok('purchase refused', refused(await anon(`/api/orders/${orderId}/purchases`, { method: 'POST', body: JSON.stringify({ description: 'x' }) })))
+  ok('approval send refused', refused(await anon(`/api/orders/${orderId}/approvals`, { method: 'POST', body: JSON.stringify({ approvalType: 'customer', recipientEmail: 'a@b.co' }) })))
+  ok('order read refused', refused(await anon(`/api/orders/${orderId}`)))
+  ok('a negative payment is refused even when signed in', (await api(`/api/orders/${orderId}/payments`, { method: 'POST', body: JSON.stringify({ kind: 'deposit', amountCents: -500, method: 'cash' }) })).status === 400)
+  ok('a zero payment is refused', (await api(`/api/orders/${orderId}/payments`, { method: 'POST', body: JSON.stringify({ kind: 'deposit', amountCents: 0, method: 'cash' }) })).status === 400)
+  ok('an unknown stage is refused', (await api(`/api/orders/${orderId}/stage`, { method: 'POST', body: JSON.stringify({ toStage: 'shipped' }) })).status === 400)
+
   // ── Estimate + public link ───────────────────────────────────────────────────────────────────
   console.log('\nEstimate and the customer link')
   const est = await page(`/orders/${orderId}/document/estimate`)
@@ -138,7 +190,7 @@ try {
   console.log('\nClosed – No Sale')
   const cns = await api(`/api/orders/${orderId}/stage`, { method: 'POST', body: JSON.stringify({ toStage: 'closed_no_sale', note: 'went with another jeweller' }) })
   const g3 = await api(`/api/orders/${orderId}`)
-  ok(`close as no sale (${cns.status}); order, four lines, two files still there`, cns.status === 200 && g3.body?.order?.stage === 'closed_no_sale' && g3.body?.order?.lineItems?.length === 4)
+  ok(`close as no sale (${cns.status}); order, seven lines, two files still there`, cns.status === 200 && g3.body?.order?.stage === 'closed_no_sale' && g3.body?.order?.lineItems?.length === 7)
   const openList = await page('/orders')
   const noSaleList = await page('/orders?view=no_sale')
   ok('gone from Open, listed under Closed – No Sale', !openList.html.includes(o1.body.order.orderNumber) && noSaleList.html.includes(o1.body.order.orderNumber))
@@ -165,14 +217,14 @@ try {
 
   // ── Payments ─────────────────────────────────────────────────────────────────────────────────
   console.log('\nPayments')
-  const subtotal = g2.body.order.subtotalCents, total = Math.round(subtotal * 1.12)
+  const subtotal = (await cur()).subtotalCents, total = Math.round(subtotal * 1.12)
   const p1 = await api(`/api/orders/${orderId}/payments`, { method: 'POST', body: JSON.stringify({ kind: 'deposit', amountCents: 100000, method: 'card', reference: 'TERM-1', paidOn: '2026-09-14', idempotencyKey: `${TAG}-dep` }) })
   ok(`deposit 1,000 by card (${p1.status})`, p1.status === 200 && p1.body?.totals?.paidCents === 100000)
   const p1again = await api(`/api/orders/${orderId}/payments`, { method: 'POST', body: JSON.stringify({ kind: 'deposit', amountCents: 100000, method: 'card', reference: 'TERM-1', paidOn: '2026-09-14', idempotencyKey: `${TAG}-dep` }) })
   ok('the same deposit sent twice (same key) is recorded once', p1again.status === 200 && p1again.body?.totals?.paidCents === 100000)
   const p2 = await api(`/api/orders/${orderId}/payments`, { method: 'POST', body: JSON.stringify({ kind: 'payment', amountCents: 500000, method: 'etransfer', reference: 'ET-99', paidOn: '2026-09-15' }) })
   ok(`partial payment 5,000 by e-transfer (${p2.status})`, p2.status === 200 && p2.body?.totals?.paidCents === 600000)
-  if (p2.body?.degraded) pend(`e-transfer stored as 'transfer' until the ledger learns the word`, 2)
+  if (p2.body?.degraded) { pend(`e-transfer stored as 'transfer' until the ledger learns the word`, 2); ok('the fallback note names no database detail', !/migration|column|SQL/i.test(p2.body.degraded)) }
   const g5 = await api(`/api/orders/${orderId}`)
   const detail = await page(`/orders/${orderId}`)
   ok('after re-read: deposit_cents = 6,000 and the page shows Balance due', g5.body?.order?.depositCents === 600000 && /Balance due/.test(detail.html) && /Partly paid/.test(detail.html))

@@ -44,29 +44,7 @@ export async function generateEmailReply(opts: {
   const { data: kbRows } = await kbQuery
   const kb = (kbRows || []).map((r) => `## ${r.title}\n${r.content}`).join('\n\n')
 
-  const name = opts.agent.name || 'the team'
-  const business = opts.agent.business_name || opts.tenantBusinessName || 'our company'
-  const industry = (opts.agent.industry ?? '').trim()
-  const personality = (opts.agent.personality ?? '').trim()
-
-  let system = `${opts.agent.system_prompt || ''}
-
-WHO YOU ARE
-You are ${name}, writing from ${business}${industry ? ` (${industry})` : ''}. You are replying to a customer's email on behalf of the business — as a knowledgeable, ${personality || 'warm and direct'} member of staff would, not as a call centre.
-
-HOW A GOOD REPLY FROM THIS BUSINESS READS
-- Answer the actual question in the first sentence or two. No "Thank you for reaching out", no "I hope this email finds you well", no restating their question back to them.
-- Short. Two to five sentences for most emails; a short paragraph or two at most. Only as long as the answer needs.
-- Specific to this business: use the facts in the knowledge base (prices, services, hours, location, policies) in your own words. If the knowledge base does not cover something, say you will check and come back, or invite them in — never invent a price, a date or a policy.
-- Plain, natural English. Contractions are fine. No corporate filler ("please do not hesitate", "at your earliest convenience", "we value your business"). No exclamation marks in every sentence.
-- One clear next step when there is one (book a time, bring the piece in, reply with a photo).
-- If they are continuing a thread, continue it — do not re-introduce yourself or repeat what was already said.
-
-FORMAT (strict)
-- Start DIRECTLY with the greeting (e.g. "Hi Yoad,"). Do NOT add any label, heading, subject line, or prefix such as "Email Reply" or "Subject:".
-- No markdown, no bullet points unless listing three or more distinct items.
-- Sign off with your first name and the business name on the last line.
-- Never reveal you are an AI unless directly asked.${kb ? `\n\nKNOWLEDGE BASE (the only source of facts about the business):\n${kb}` : ''}`
+  let system = buildEmailSystemPrompt({ agent: opts.agent, tenantBusinessName: opts.tenantBusinessName, kb })
 
   // Unified Business Context: inject live module data relevant to the email (catalog, orders, hours…),
   // with the same no-hallucination contract. Best-effort. No contact identity resolved here → customer-scoped
@@ -77,19 +55,7 @@ FORMAT (strict)
   } catch { /* best-effort */ }
 
   console.log('[email-reply] calling Claude', MODEL, 'kb-entries', kbRows?.length || 0)
-  // The thread so far, as alternating turns, then the email being answered. Anthropic requires the
-  // turns to alternate and start with the user, so the history is normalised: consecutive same-role
-  // turns are merged and a leading assistant turn is dropped.
-  const turns: Array<{ role: 'user' | 'assistant'; content: string }> = []
-  for (const h of (opts.history ?? []).slice(-12)) {
-    const content = (h.content || '').trim()
-    if (!content) continue
-    const last = turns[turns.length - 1]
-    if (last && last.role === h.role) last.content += `\n\n${content}`
-    else turns.push({ role: h.role, content })
-  }
-  while (turns.length && turns[0].role === 'assistant') turns.shift()
-  if (turns.length && turns[turns.length - 1].role === 'user') turns.pop()
+  const turns = normalizeHistory(opts.history ?? [])
 
   const res = await anthropic.messages.create({
     model: MODEL,
@@ -99,6 +65,61 @@ FORMAT (strict)
   })
   const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join(' ').trim()
   return stripMarkdown(stripLeadingLabel(text))
+}
+
+/**
+ * The system prompt, as a pure function of the agent row and the knowledge it may see — so the
+ * voice each business speaks with can be TESTED with realistic emails (lib/email/reply.test.ts)
+ * without calling the model.
+ */
+export function buildEmailSystemPrompt(p: { agent: Agent; tenantBusinessName: string | null; kb: string }): string {
+  const name = p.agent.name || 'the team'
+  const business = p.agent.business_name || p.tenantBusinessName || 'our company'
+  const industry = (p.agent.industry ?? '').trim()
+  const personality = (p.agent.personality ?? '').trim()
+  return `${p.agent.system_prompt || ''}
+
+WHO YOU ARE
+You are ${name}, writing from ${business}${industry ? ` (${industry})` : ''}. You are replying to a customer's email on behalf of the business — as a knowledgeable, ${personality || 'warm and direct'} member of staff would, not as a call centre. You only ever speak for ${business}; you do not answer for any other business, and you do not use another business's prices, services or hours.
+
+HOW A GOOD REPLY FROM THIS BUSINESS READS
+- Answer the actual question in the first sentence or two. No "Thank you for reaching out", no "I hope this email finds you well", no restating their question back to them.
+- Short. Two to five sentences for most emails; a short paragraph or two at most. Only as long as the answer needs.
+- Specific to this business: use the facts in the knowledge base (prices, services, hours, location, policies) in your own words. If the knowledge base does not cover something, say you will check and come back, or invite them in — never invent a price, a date or a policy.
+- Plain, natural English. Contractions are fine. No corporate filler ("please do not hesitate", "at your earliest convenience", "we value your business"). No exclamation marks in every sentence.
+- One clear next step when there is one (book a time, bring the piece in, reply with a photo).
+- If they are continuing a thread, continue it — do not re-introduce yourself or repeat what was already said.
+
+WHAT YOU DO NOT KNOW, AND HOW TO SAY SO
+- The status of a specific order, estimate, CAD, deposit or delivery is not in your knowledge base. Do not guess a status, a date or an amount. Say that you will check it with the team and reply, or that ${name} will call — and ask for the order number or the name it was placed under if they have not given one.
+- Whether a piece can be valued from a description or a photo: it cannot; say so kindly and invite them to bring it in.
+- Bookings: if the knowledge base gives hours or a booking link, offer them; otherwise ask for two or three times that suit and say you will confirm. Never confirm a specific slot yourself.
+- Anything a person must decide (a discount, a rush, a repair on a fragile antique): say a colleague will confirm, rather than promising.
+
+FORMAT (strict)
+- Start DIRECTLY with the greeting (e.g. "Hi Yoad,"). Do NOT add any label, heading, subject line, or prefix such as "Email Reply" or "Subject:".
+- No markdown, no bullet points unless listing three or more distinct items.
+- Sign off with your first name and the business name on the last line.
+- Never reveal you are an AI unless directly asked.${p.kb ? `\n\nKNOWLEDGE BASE (the only source of facts about the business):\n${p.kb}` : ''}`
+}
+
+/**
+ * The thread so far as alternating turns. Anthropic requires the turns to alternate and start
+ * with the user, so consecutive same-role turns are merged, a leading assistant turn is dropped,
+ * and a trailing user turn is dropped (the email being answered is appended by the caller).
+ */
+export function normalizeHistory(history: Array<{ role: 'user' | 'assistant'; content: string }>): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const turns: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  for (const h of history.slice(-12)) {
+    const content = (h.content || '').trim()
+    if (!content) continue
+    const last = turns[turns.length - 1]
+    if (last && last.role === h.role) last.content += `\n\n${content}`
+    else turns.push({ role: h.role, content })
+  }
+  while (turns.length && turns[0].role === 'assistant') turns.shift()
+  if (turns.length && turns[turns.length - 1].role === 'user') turns.pop()
+  return turns
 }
 
 // Strip any leaked channel/label prefix the model sometimes puts at the very top

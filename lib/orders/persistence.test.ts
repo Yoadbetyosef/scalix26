@@ -134,7 +134,7 @@ describe('the four layers that made a save silently lose data', () => {
   it('2 — re-saving line items keeps the deposit already on the order', () => {
     const s = src('lib/orders/store.ts')
     expect(s).not.toMatch(/balance_cents = subtotal - \(patch\.depositCents \?\? 0\)/)
-    expect(s).toMatch(/'depositCents' in patch && patch\.depositCents !== undefined \? patch\.depositCents : Number\(cur\?\.deposit_cents \?\? 0\)/)
+    expect(s).toMatch(/'depositCents' in patch && patch\.depositCents !== undefined \? patch\.depositCents : Number\(before\?\.deposit_cents \?\? 0\)/)
   })
 
   it('3 — two items on one order never share a control id', () => {
@@ -155,5 +155,49 @@ describe('the four layers that made a save silently lose data', () => {
   it('and the deposit is no longer typed into either form — money goes through the ledger', () => {
     expect(src('components/orders/order-edit.tsx')).not.toMatch(/depositAmount/)
     expect(src('components/orders/order-form.tsx')).not.toMatch(/depositAmount/)
+  })
+})
+
+// ── EVERY PIECE TYPE, THREE SAVES DEEP ──────────────────────────────────────────────────────────
+//
+// create → save → reload → edit → save → reload → change an unrelated field → save → reload, for all
+// twelve types, through the same pure pipeline the API uses. A field that survives the first save
+// and dies on the third is the shape of the bug that was reported.
+import { PRODUCT_TYPE_OPTIONS } from './product-types'
+
+describe('every piece type survives three saves', () => {
+  const full = (type: string, i: number): LineDraft => ({
+    ...emptyLine(),
+    productType: type, productName: `${type} ${i}`, description: `desc ${i}`, sku: `SKU-${i}`, quantity: String(1 + i), unitPrice: `${1000 + i}.50`, internalCost: `${500 + i}`,
+    measurements: `m${i}`, color: `c${i}`, material: `mat${i}`, customSpec: `spec ${i}`,
+    stoneType: 'Diamond', stoneOrigin: 'Natural', stoneQuality: 'VS1', stoneColor: 'G',
+    centerStoneShape: 'Oval', sideStoneShape: 'Round', metalKarat: '14K White Gold',
+    centerStoneCarat: `${i}.25`, sideStoneCaratTotal: `0.${i}5`, certificateLab: 'GIA', ringSize: `${5 + i}`,
+    sideStoneShapes: ['Round', 'Baguette'], bandWidthMm: `${2 + i}.1`,
+  })
+  const roundTrip = (draft: LineDraft) => {
+    const payload = lineItemSchema.parse(lineToPayload(draft)) as LineItemInput
+    const row = { ...lineInsert('t', 'o', payload, 0, 0), ...lineExtras(payload), id: 'x', created_at: 'now' }
+    return lineFromSaved(lineRow(row as unknown as Record<string, unknown>))
+  }
+  const norm = (d: LineDraft) => JSON.stringify({ ...d, unitPrice: Number(d.unitPrice), internalCost: Number(d.internalCost), centerStoneCarat: Number(d.centerStoneCarat), sideStoneCaratTotal: Number(d.sideStoneCaratTotal), bandWidthMm: Number(d.bandWidthMm), quantity: Number(d.quantity) })
+  const same = (a: LineDraft, b: LineDraft) => norm(a) === norm(b)
+
+  it.each(PRODUCT_TYPE_OPTIONS.map((t, i) => [t, i] as const))('%s: create, edit, unrelated edit — nothing lost', (type, i) => {
+    const created = full(type, i)
+    const afterSave1 = roundTrip(created)
+    expect(same(afterSave1, created)).toBe(true)
+    const afterSave2 = roundTrip({ ...afterSave1, stoneQuality: 'VVS2' })
+    expect(afterSave2.stoneQuality).toBe('VVS2')
+    expect(same({ ...afterSave2, stoneQuality: 'VS1' }, created)).toBe(true)
+    const afterSave3 = roundTrip({ ...afterSave2, customSpec: 'changed later' })
+    expect(afterSave3.customSpec).toBe('changed later')
+    expect(same({ ...afterSave3, stoneQuality: 'VS1', customSpec: created.customSpec }, created)).toBe(true)
+  })
+
+  it('two lines on one order stay independent through the same pipeline', () => {
+    const a = roundTrip(full('Ring', 1)), b = roundTrip(full('Bracelet', 2))
+    expect(roundTrip({ ...a, unitPrice: '9999' }).unitPrice).toBe('9999')
+    expect(same(roundTrip(b), b)).toBe(true)
   })
 })

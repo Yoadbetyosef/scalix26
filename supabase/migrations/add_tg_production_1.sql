@@ -9,6 +9,15 @@
 -- rolled the WHOLE thing back silently. Nine separate runs cannot do that:
 -- each part stands alone and nothing below depends on anything above.
 --
+-- ── HOW THE APP KNOWS WHICH PARTS ARE APPLIED ──────────────────────────────
+--
+-- Every part creates (IF NOT EXISTS) a tiny `schema_flags` table and, as its
+-- LAST statement, inserts its own key. The editor runs a pasted part as one
+-- transaction, so the flag lands only when the whole part did. The application
+-- reads that table once (lib/db/capabilities.ts) and hides or disables exactly
+-- the actions a missing part would break — it never probes missing tables and
+-- never shows a database error to a person.
+--
 -- ── WHAT THE APP DOES BEFORE THIS IS RUN ───────────────────────────────────
 --
 -- Everything is additive. Every new column is read off the row with a
@@ -37,6 +46,9 @@
 -- CONSTRAINT ONLY. No existing row changes stage.
 -- ════════════════════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_stage_check;
 ALTER TABLE orders ADD CONSTRAINT orders_stage_check
   CHECK (stage IN (
@@ -51,6 +63,9 @@ ALTER TABLE orders ADD CONSTRAINT orders_stage_check
     'closed_no_sale',
     'cancelled'
   ));
+
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part1') ON CONFLICT DO NOTHING;
 
 -- verify: the constraint lists sixteen stages and no row is outside it
 SELECT pg_get_constraintdef(oid) AS orders_stage_check FROM pg_constraint WHERE conname = 'orders_stage_check';
@@ -70,6 +85,9 @@ SELECT count(*) AS rows_outside_constraint FROM orders WHERE stage NOT IN (
 -- The RPC is recreated with the wider method list so core's own path accepts
 -- the same words. Everything else in it is byte-identical to add_payment_method.
 -- ════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE payment_allocations ADD COLUMN IF NOT EXISTS paid_on date;
 COMMENT ON COLUMN payment_allocations.paid_on IS
@@ -117,6 +135,9 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'total_cents', v_total, 'paid_cents', v_paid, 'balance_cents', v_balance, 'status', v_status);
 END $$;
 
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part2') ON CONFLICT DO NOTHING;
+
 -- verify: paid_on exists; the method constraint names eight words
 SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'payment_allocations' AND column_name IN ('paid_on', 'method');
 SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'payment_allocations_method_check';
@@ -134,6 +155,9 @@ SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'payment_all
 -- came from. Nothing is changed on the orders table.
 -- ════════════════════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
+
 INSERT INTO payment_allocations (tenant_id, document_type, document_id, kind, amount_cents, currency, note, idempotency_key, paid_on)
 SELECT o.tenant_id, 'order', o.id, 'deposit', o.deposit_cents, COALESCE(o.currency, 'usd'),
        'Deposit recorded before payment history existed',
@@ -146,6 +170,9 @@ WHERE o.deposit_cents > 0
     WHERE p.tenant_id = o.tenant_id AND p.document_type = 'order' AND p.document_id = o.id
   )
 ON CONFLICT DO NOTHING;
+
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part3') ON CONFLICT DO NOTHING;
 
 -- verify: every order with a typed deposit now has ledger rows summing to it
 SELECT count(*) AS orders_with_deposit,
@@ -165,6 +192,9 @@ FROM orders o WHERE o.deposit_cents > 0;
 -- product received on memo carries ownership 'memo_in' or 'consignment' so it
 -- is never counted as company-owned stock.
 -- ════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE catalog_products ADD COLUMN IF NOT EXISTS ownership text NOT NULL DEFAULT 'owned';
 ALTER TABLE catalog_products DROP CONSTRAINT IF EXISTS catalog_products_ownership_check;
@@ -234,6 +264,9 @@ CREATE POLICY "Tenant memos access" ON memos FOR ALL USING (tenant_id = get_tena
 DROP POLICY IF EXISTS "Tenant memo_events access" ON memo_events;
 CREATE POLICY "Tenant memo_events access" ON memo_events FOR ALL USING (tenant_id = get_tenant_id()) WITH CHECK (tenant_id = get_tenant_id());
 
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part4') ON CONFLICT DO NOTHING;
+
 -- verify
 SELECT column_name FROM information_schema.columns WHERE table_name = 'catalog_products' AND column_name IN ('ownership', 'on_memo_quantity');
 SELECT count(*) AS memos FROM memos;
@@ -246,6 +279,9 @@ SELECT count(*) AS memos FROM memos;
 -- the order they are for (nullable: stock purchases exist), to the supplier,
 -- and optionally to the supplier's invoice as an order attachment.
 -- ════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS order_purchases (
   id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -276,6 +312,9 @@ ALTER TABLE order_purchases ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Tenant order_purchases access" ON order_purchases;
 CREATE POLICY "Tenant order_purchases access" ON order_purchases FOR ALL USING (tenant_id = get_tenant_id()) WITH CHECK (tenant_id = get_tenant_id());
 
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part5') ON CONFLICT DO NOTHING;
+
 -- verify
 SELECT count(*) AS purchases FROM order_purchases;
 
@@ -289,6 +328,9 @@ SELECT count(*) AS purchases FROM order_purchases;
 -- pocket, no second table. Every existing order is 'custom'.
 -- ════════════════════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_kind text NOT NULL DEFAULT 'custom';
 ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_order_kind_check;
 ALTER TABLE orders ADD CONSTRAINT orders_order_kind_check
@@ -296,6 +338,9 @@ ALTER TABLE orders ADD CONSTRAINT orders_order_kind_check
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS kind_details jsonb NOT NULL DEFAULT '{}'::jsonb;
 COMMENT ON COLUMN orders.order_kind IS 'custom (bespoke/made) | repair | appraisal | stock (a piece sold from inventory). Labels on the form and the document follow it.';
 COMMENT ON COLUMN orders.kind_details IS 'Kind-specific fields: repair {itemDescription, repairRequested}; appraisal {purpose, appraiser, itemDescription}.';
+
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part6') ON CONFLICT DO NOTHING;
 
 -- verify
 SELECT order_kind, count(*) FROM orders GROUP BY 1;
@@ -309,6 +354,9 @@ SELECT order_kind, count(*) FROM orders GROUP BY 1;
 -- and the answer is a number. Two columns on the existing request row.
 -- ════════════════════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE order_approval_requests ADD COLUMN IF NOT EXISTS request_kind text NOT NULL DEFAULT 'approval';
 ALTER TABLE order_approval_requests DROP CONSTRAINT IF EXISTS order_approval_requests_request_kind_check;
 ALTER TABLE order_approval_requests ADD CONSTRAINT order_approval_requests_request_kind_check
@@ -316,6 +364,9 @@ ALTER TABLE order_approval_requests ADD CONSTRAINT order_approval_requests_reque
 ALTER TABLE order_approval_requests ADD COLUMN IF NOT EXISTS quoted_cost_cents bigint;
 COMMENT ON COLUMN order_approval_requests.request_kind IS 'approval: please approve this piece. quote: please tell us what it would cost.';
 COMMENT ON COLUMN order_approval_requests.quoted_cost_cents IS 'What the factory said it would cost, in the order''s currency. Internal — never on a customer document.';
+
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part7') ON CONFLICT DO NOTHING;
 
 -- verify
 SELECT request_kind, count(*) FROM order_approval_requests GROUP BY 1;
@@ -346,6 +397,9 @@ SELECT request_kind, count(*) FROM order_approval_requests GROUP BY 1;
 --     is pinned to her tenant regardless.
 -- ════════════════════════════════════════════════════════════════════════════
 
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
+
 UPDATE knowledge_base k
 SET ai_employee_id = k.origin_ai_employee_id
 WHERE k.tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e837f'
@@ -363,6 +417,9 @@ CROSS JOIN (VALUES ('Chain', 1), ('Watch', 2), ('Loose stone', 3), ('Other', 4))
 WHERE l.key = 'product_type'
   AND l.tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e837f'
   AND NOT EXISTS (SELECT 1 FROM order_options o WHERE o.list_id = l.id AND lower(o.label) = lower(v.label));
+
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part8') ON CONFLICT DO NOTHING;
 
 -- verify
 SELECT title, ai_employee_id, origin_ai_employee_id FROM knowledge_base WHERE source = 'website' AND tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e837f';
@@ -388,6 +445,9 @@ WHERE l.key = 'product_type' AND l.tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e
 -- production (2026-09-14); this statement is the same rule for a rebuilt
 -- environment and updates 0 rows where the script already ran.
 -- ════════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS schema_flags (key text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now());
+ALTER TABLE schema_flags ENABLE ROW LEVEL SECURITY;
 
 -- The business's OWN addresses are placeholders, not customers: the tenant email, its agents'
 -- and letterheads' emails, and everything on their domains (gmail-style domains excluded). A match
@@ -442,6 +502,9 @@ WHERE o.contact_id IS NULL AND o.customer_phone IS NOT NULL
        WHERE c.tenant_id = o.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
          AND NOT tg_is_business_address(o.tenant_id, c.email)
          AND right(regexp_replace(c.phone, '\D', '', 'g'), 10) = right(regexp_replace(o.customer_phone, '\D', '', 'g'), 10)) = 1;
+
+-- the flag the application reads to know this part is applied (lib/db/capabilities.ts)
+INSERT INTO schema_flags (key) VALUES ('tg_production_1.part9') ON CONFLICT DO NOTHING;
 
 -- verify: how many orders now have a contact, per tenant
 SELECT tenant_id, count(*) FILTER (WHERE contact_id IS NOT NULL) AS linked, count(*) AS total FROM orders GROUP BY 1;

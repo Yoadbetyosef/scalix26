@@ -5,6 +5,7 @@ import { generateApprovalToken, hashToken, looksLikeToken } from './approval-tok
 import { loadDocContext, orderDocNumber, type OrderDocType } from './documents'
 import { getOrder, addEvent } from './store'
 import { letterheadStyleFor, resolveLetterhead } from '@/lib/documents/letterhead-resolve'
+import { writeDocumentSnapshot } from './document-snapshot'
 import type { Order } from './types'
 
 // Sharing a document with the customer.
@@ -59,17 +60,19 @@ export async function createShareLink(orderId: string, docType: OrderDocType, ba
   if (!order || order.tenantId !== c.tenantId) return { ok: false, error: 'Order not found' }
 
   const { token, hash } = generateApprovalToken()
-  const { error } = await createAdminClient().from('order_document_shares').insert({
+  const { data: created, error } = await createAdminClient().from('order_document_shares').insert({
     tenant_id: c.tenantId, order_id: orderId, doc_type: docType, token_hash: hash,
     recipient_name: (label ?? '').trim() || null,
     // The column is NOT NULL and means "who this was emailed to"; a copied link was emailed to nobody.
     // The sentinel is a plain word, never an address, so nothing downstream can try to send to it.
     recipient_email: COPIED_LINK,
     sent_at: new Date().toISOString(), created_by: c.actorUserId ?? null,
-  })
-  if (error) return { ok: false, error: `Could not create the link. (${error.message})` }
+  }).select('id').single()
+  if (error || !created) return { ok: false, error: `Could not create the link. (${error?.message ?? 'no row'})` }
+  // The document as it is NOW, frozen under this link — see document-snapshot.ts.
+  await writeDocumentSnapshot(c.tenantId, orderId, created.id as string, docType)
   const url = shareUrl(baseUrl, token)
-  await addEvent(orderId, 'document_shared', { docType, via: 'link' })
+  await addEvent(orderId, 'document_shared', { docType, via: 'link', shareId: created.id })
   return { ok: true, url }
 }
 /** The recipient_email of a link that was copied rather than emailed. */
@@ -102,7 +105,7 @@ export async function shareDocument(
   const { token, hash } = generateApprovalToken()
   const db = createAdminClient()
 
-  const { error: insErr } = await db.from('order_document_shares').insert({
+  const { data: created, error: insErr } = await db.from('order_document_shares').insert({
     tenant_id: c.tenantId,
     order_id: orderId,
     doc_type: docType,
@@ -110,12 +113,13 @@ export async function shareDocument(
     recipient_name: input.recipientName ?? null,
     recipient_email: input.recipientEmail,
     created_by: c.actorUserId ?? null,
-  })
-  if (insErr) {
-    // The most likely cause by far is the migration not having been run. Say so, rather than
-    // surfacing a PostgREST code the person reading it cannot act on.
-    return { ok: false, error: `Could not create the link. If this is a new install, run add_orders_6_estimates_tax_templates.sql. (${insErr.message})` }
+  }).select('id').single()
+  if (insErr || !created) {
+    console.error('[orders] share insert failed', insErr?.message)
+    return { ok: false, error: 'The link could not be created. Please try again; if it keeps failing, contact support.' }
   }
+  // Frozen at the moment it is sent — see document-snapshot.ts.
+  await writeDocumentSnapshot(c.tenantId, orderId, created.id as string, docType)
 
   const url = shareUrl(baseUrl, token)
   const label = docType.charAt(0).toUpperCase() + docType.slice(1)
@@ -144,12 +148,12 @@ export async function shareDocument(
     .eq('token_hash', hash).eq('tenant_id', c.tenantId)
   // On the timeline, so "was the estimate ever sent?" is answered from the order rather than from
   // the inbox. The recipient is on the Shared links panel, not here.
-  await addEvent(orderId, 'document_shared', { docType, via: 'email' })
+  await addEvent(orderId, 'document_shared', { docType, via: 'email', shareId: created.id })
 
   return { ok: true, url }
 }
 
-export interface SharedDocument { orderId: string; tenantId: string; docType: OrderDocType }
+export interface SharedDocument { orderId: string; tenantId: string; docType: OrderDocType; shareId: string }
 
 /** One live or withdrawn link, for the owner's own list. The raw token is NOT here — it cannot be. */
 export interface ShareRow {
@@ -242,7 +246,7 @@ export async function resolveShare(rawToken: string): Promise<SharedDocument | n
   try {
     const { data, error } = await createAdminClient()
       .from('order_document_shares')
-      .select('order_id, tenant_id, doc_type, revoked_at')
+      .select('id, order_id, tenant_id, doc_type, revoked_at')
       .eq('token_hash', hashToken(rawToken))
       .maybeSingle()
     if (error || !data) return null
@@ -259,6 +263,7 @@ export async function resolveShare(rawToken: string): Promise<SharedDocument | n
       orderId: data.order_id as string,
       tenantId: data.tenant_id as string,
       docType: data.doc_type as OrderDocType,
+      shareId: data.id as string,
     }
   } catch {
     return null

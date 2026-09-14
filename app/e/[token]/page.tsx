@@ -4,6 +4,7 @@ import { OrderDocumentBody } from '@/components/orders/document-body'
 import { loadOrderDocument } from '@/lib/orders/document-data'
 import { resolveShare, shareLinkRevoked, documentSender } from '@/lib/orders/shares'
 import { ORDER_DOC_META } from '@/lib/orders/documents'
+import { readDocumentSnapshot, documentDataFromSnapshot } from '@/lib/orders/document-snapshot'
 
 // The customer's copy of a document, at a token URL.
 //
@@ -70,7 +71,14 @@ export default async function SharedDocumentPage({ params }: { params: Promise<{
   // Every photo, video and certificate on the customer's copy is reached through the token route
   // rather than a storage URL minted now, so a link still opens after the page has sat open for an
   // hour — see app/e/[token]/file/[attachmentId]/route.ts.
-  const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType, (a) => `/e/${token}/file/${a.id}`)
+  // THE COPY AS SENT. A link minted since snapshots existed renders the document exactly as it was
+  // the moment the link was made; the order may have been edited since and this page will not
+  // move. Older links (no snapshot on file) render the live order, as they always did.
+  const urlFor = (a: { id: string }) => `/e/${token}/file/${a.id}`
+  const snap = await readDocumentSnapshot(share.tenantId, share.orderId, share.shareId)
+  const data = snap
+    ? await documentDataFromSnapshot(snap, urlFor, share.tenantId, share.orderId)
+    : await loadOrderDocument(share.tenantId, share.orderId, share.docType, urlFor)
   if (!data) notFound()
 
   return (

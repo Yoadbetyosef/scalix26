@@ -7,6 +7,7 @@ import { taxChoiceById } from '@/lib/tax/canada'
 import { isMissingColumn } from '@/lib/db/missing-column'
 import { resolveContactForOrder } from './link-contact'
 import { orderRow, lineRow, lineExtras, lineInsert } from './rows'
+import { getSchemaCapabilities, stageSupported } from '@/lib/db/capabilities'
 import type { Order, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
 
 // Server-only Orders data access. Every call resolves the validated active tenant (requireActiveBusinessContext)
@@ -63,6 +64,22 @@ export async function listOrders(): Promise<Order[]> {
   const sb = await createClient()
   const { data } = await sb.from('orders').select('*').eq('tenant_id', c.tenantId).order('created_at', { ascending: false })
   return ((data as Array<Record<string, unknown>> | null) ?? []).map(orderRow)
+}
+
+/**
+ * Orders whose LINES match a search term — product name, description, custom spec, SKU, stone type
+ * or metal — for the list's search box. Tenant-scoped through the cookie client.
+ */
+export async function orderIdsMatchingLines(term: string): Promise<Set<string>> {
+  const c = await ctx(); if (!c) return new Set()
+  const safe = term.replace(/[%,()\\]/g, ' ').trim()
+  if (!safe) return new Set()
+  const sb = await createClient()
+  const like = `%${safe}%`
+  const { data } = await sb.from('order_line_items').select('order_id').eq('tenant_id', c.tenantId)
+    .or(`product_name.ilike.${like},description.ilike.${like},custom_spec.ilike.${like},sku.ilike.${like},stone_type.ilike.${like},metal_karat.ilike.${like}`)
+    .limit(500)
+  return new Set(((data as Array<{ order_id: string }> | null) ?? []).map((r) => r.order_id))
 }
 
 /**
@@ -200,10 +217,21 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   // edit drawer sends contactId: null for a typed-in walk-in, and that null used to unlink an order
   // that had been recognised. Only when the patch carries customer fields; a tax-only patch leaves
   // the link alone.
-  let linkedNow: { contactId: string; created: boolean } | null = null
+  let linkedNow: { contactId: string; created: boolean; manual?: boolean } | null = null
+  let unlinkedNow: string | null = null
+  const { data: before } = await sb.from('orders').select('contact_id, deposit_cents').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+  const priorContact = (before?.contact_id as string) ?? null
   if ('contactId' in patch && !patch.contactId && ('customerEmail' in patch || 'customerPhone' in patch || 'customerName' in patch)) {
     const linked = await resolveContactForOrder(sb, c.tenantId, patch).catch(() => null)
-    if (linked?.contactId) { m.contact_id = linked.contactId; linkedNow = { contactId: linked.contactId, created: linked.created } }
+    if (linked?.contactId) { m.contact_id = linked.contactId; if (linked.contactId !== priorContact) linkedNow = { contactId: linked.contactId, created: linked.created } }
+  } else if ('contactId' in patch && patch.contactId && patch.contactId !== priorContact) {
+    // A person chose the customer (the order page's Link customer, or the picker on the form): on the
+    // timeline as a manual link, distinct from the automatic one above.
+    linkedNow = { contactId: patch.contactId, created: false, manual: true }
+  } else if ('contactId' in patch && !patch.contactId && priorContact) {
+    // An explicit unlink: contactId null with NO customer fields in the patch. (A patch that carries
+    // customer fields with a null id is the form saying "typed, not picked", handled above.)
+    unlinkedNow = priorContact
   }
   // The snapshot, resolved from the picked id rather than from anything the client sent. Written after
   // the field map so it wins over a delivery_province the same patch might also carry.
@@ -228,8 +256,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
     // the order's balance recomputed as if nothing had been paid. The deposit column itself was
     // untouched, so the page showed a deposit AND a balance that ignored it. The current figure is
     // read and kept unless the patch actually names a new one.
-    const { data: cur } = await sb.from('orders').select('deposit_cents').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
-    const deposit = 'depositCents' in patch && patch.depositCents !== undefined ? patch.depositCents : Number(cur?.deposit_cents ?? 0)
+    const deposit = 'depositCents' in patch && patch.depositCents !== undefined ? patch.depositCents : Number(before?.deposit_cents ?? 0)
     m.subtotal_cents = subtotal; m.balance_cents = subtotal - deposit
     // ── DELETE THEN INSERT, WITH A WAY BACK ───────────────────────────────────────────────────────
     //
@@ -295,6 +322,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   if (degradedNote) throw new Error(degradedNote)
   await addEvent(id, 'updated', null)
   if (linkedNow) await addEvent(id, 'contact_linked', linkedNow)
+  if (unlinkedNow) await addEvent(id, 'contact_unlinked', { contactId: unlinkedNow })
   return orderRow(data as Record<string, unknown>)
 }
 
@@ -328,6 +356,12 @@ export async function setStageManual(id: string, to: OrderStage, note?: string |
   if (!data) return { ok: false, error: 'not found' }
   const from = data.stage as OrderStage
   if (!canManualTransition(from, to)) return { ok: false, error: `This order cannot move from ${STAGE_LABELS[from]} to ${STAGE_LABELS[to]}.` }
+  // A stage the database has not been taught yet is refused HERE, in words a person can act on,
+  // rather than by the CHECK constraint with a code. The migration is named in the server log only.
+  if (!stageSupported(await getSchemaCapabilities(), to)) {
+    console.warn(`[orders] stage ${to} not available: ${STAGE_MIGRATION[to] ?? 'migration'} not applied`)
+    return { ok: false, error: `"${STAGE_LABELS[to]}" is not available on this account yet.` }
+  }
   // THE WRITE'S ERROR WAS BEING DISCARDED. It returned ok on a refused update, the screen refreshed,
   // and the stage was simply unchanged — a silent failure with nothing to read. It matters now because
   // 'finished' is a stage the DATABASE has to be told about: against an unmigrated constraint the write
@@ -341,7 +375,7 @@ export async function setStageManual(id: string, to: OrderStage, note?: string |
       // true when 'finished' was the only one the database had to be told about and became wrong the
       // moment a second one arrived — sending the owner to a migration that is already run.
       error: error.code === '23514'
-        ? `The database does not know the stage "${to}" yet — run ${STAGE_MIGRATION[to] ?? 'the latest orders migration'} in the Supabase SQL editor.`
+        ? (console.warn(`[orders] stage ${to} refused by CHECK: ${STAGE_MIGRATION[to] ?? 'migration'} not applied`), `"${STAGE_LABELS[to]}" is not available on this account yet.`)
         : error.message,
     }
   }

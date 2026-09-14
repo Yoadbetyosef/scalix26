@@ -17,6 +17,7 @@ import { PaymentsPanel } from '@/components/orders/payments-panel'
 import { PurchasesPanel } from '@/components/orders/purchases-panel'
 import { listPurchases } from '@/lib/orders/purchases'
 import { SharedLinks } from '@/components/orders/shared-links'
+import { LinkCustomer } from '@/components/orders/link-customer'
 import { listTemplates } from '@/lib/orders/templates'
 import { getSupplier } from '@/lib/orders/suppliers'
 import { deletable } from '@/lib/orders/store'
@@ -25,6 +26,8 @@ import { resolveOrderTax } from '@/lib/orders/document-data'
 import { actorLabels, actorLabel } from '@/lib/orders/actors'
 import { ORDER_KIND_LABELS, APPRAISAL_PURPOSE_LABELS, kindWords } from '@/lib/orders/kinds'
 import { PAYMENT_METHOD_LABELS, isOrderPaymentMethod } from '@/lib/orders/payments'
+import { getSchemaCapabilities, stageSupported } from '@/lib/db/capabilities'
+import { ORDER_STAGES } from '@/lib/orders/stages'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -41,7 +44,7 @@ const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated:
 sent_to_production: 'Moved to production', moved_to_production: 'Moved to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note',
   invoice_raised: 'Invoice raised', archived_to_inventory: 'Added to catalog', share_revoked: 'Document link withdrawn',
   document_shared: 'Document sent', payment_recorded: 'Payment recorded', payment_removed: 'Payment removed', contact_linked: 'Linked to customer',
-  purchase_added: 'Purchase added', purchase_status: 'Purchase updated', purchase_removed: 'Purchase removed' }
+  purchase_added: 'Purchase added', purchase_status: 'Purchase updated', purchase_removed: 'Purchase removed', contact_unlinked: 'Unlinked from customer' }
 
 // The sentence the timeline prints for one event. Stage changes say from → to and the reason; money
 // says how much and how; a sent document says which. The raw uuid that used to follow every line is
@@ -62,6 +65,7 @@ function eventLine(e: import('@/lib/orders/types').OrderEvent): string {
     case 'purchase_added': return [p.description, p.supplier ? `from ${p.supplier}` : null].filter(Boolean).join(' ')
     case 'purchase_status': return `${p.description ?? ''}: ${String(p.from ?? '').replace('_', ' ')} → ${String(p.to ?? '').replace('_', ' ')}`
     case 'purchase_removed': return String(p.description ?? '')
+    case 'contact_linked': return p.manual ? 'chosen by staff' : p.created ? 'new customer record created from the order' : 'matched by email or phone'
     case 'approval_responded': return `${String(p.approvalType ?? '')}: ${String(p.decision ?? '').replace('_', ' ')}`
     default: return p.to ? `→ ${stage(p.to)}` : ''
   }
@@ -75,9 +79,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   // so the picker simply does not appear rather than the page failing.
   const templates = o ? await listTemplates(o.tenantId) : []
   if (!o) notFound()
-  const [payments, tax, canDelete, labels, purchases] = await Promise.all([
-    listOrderPayments(o.id), resolveOrderTax(o), deletable(o.id), actorLabels(o.events.map((e) => e.actor)), listPurchases(o.id),
+  const [payments, tax, canDelete, labels, purchases, caps] = await Promise.all([
+    listOrderPayments(o.id), resolveOrderTax(o), deletable(o.id), actorLabels(o.events.map((e) => e.actor)), listPurchases(o.id), getSchemaCapabilities(),
   ])
+  const unavailableStages = ORDER_STAGES.filter((st) => !stageSupported(caps, st))
   // An order from before the ledger shows its typed deposit as one line, until add_tg_production_1.sql
   // (or the first recorded payment) carries it into the ledger.
   const shownPayments = payments.length === 0 && o.depositCents > 0
@@ -122,6 +127,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         )}
       </div>
 
+      {/* Who this order belongs to. A linked order offers the customer's page and an undo; an
+          unlinked one says so and offers the address book. */}
+      <div style={{ marginBottom: 16 }}>
+        <LinkCustomer orderId={o.id} contactId={o.contactId} customerName={o.customerName} customerCompany={o.customerCompany ?? null} />
+      </div>
+
       {/* THE ACTION BAR, with the separator that is its whole point: everything after the hairline
           changes something that cannot be put back. v1 put six equally-weighted boxes in a row and
           made two of them red, so Delete order was exactly as easy to hit as Estimate. */}
@@ -142,7 +153,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             documentTemplateId: o.documentTemplateId,
             templates: templates.map((t) => ({ id: t.id, name: t.name })),
             clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
-            orderKind: o.orderKind, kindDetails: o.kindDetails,
+            orderKind: o.orderKind, kindDetails: o.kindDetails, supportsKinds: caps.orderKinds,
             lineItems: o.lineItems,
           }} />
         ) : canEditDocumentFacts(o.stage) ? (
@@ -161,7 +172,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         {/* The invoice at ANY stage but cancelled — see raiseInvoice. A deposit is invoiced the day it
             is taken; the balance is collected months later against the same document. */}
         {canEditDocumentFacts(o.stage) && <InvoiceButton orderId={o.id} invoicedAt={o.invoicedAt} />}
-        <StageControl orderId={o.id} stage={o.stage} />
+        <StageControl orderId={o.id} stage={o.stage} unavailable={unavailableStages} />
         {/* Delete only while the order is an untouched draft — see `deletable`. Once a link has gone
             out or money has come in, the endings are Close / Cancel, which keep everything. */}
         {canDelete.ok && (
@@ -182,7 +193,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             <FinishActions orderId={o.id} invoicedAt={o.invoicedAt} archivedAt={o.archivedAt} />
           </div>
         )}
-        <ApprovalActions orderId={o.id} stage={o.stage} orderSupplier={o.supplierId ? await getSupplier(o.supplierId) : null} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} />
+        <ApprovalActions orderId={o.id} stage={o.stage} orderSupplier={o.supplierId ? await getSupplier(o.supplierId) : null} prefill={{ factoryName: o.factoryContactName, factoryEmail: o.factoryEmail, customerName: o.customerName, customerEmail: o.customerEmail }} supportsQuotation={caps.vendorQuotation} />
       </section>
 
       <div className="grid gap-6 md:grid-cols-3">

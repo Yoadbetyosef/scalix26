@@ -95,3 +95,16 @@ describe('wired into the store, and the customer history reads both ways', () =>
     for (const label of ['Orders &amp; estimates', 'Payments ·', 'Memos ·', 'Appointments ·']) expect(p).toContain(label)
   })
 })
+
+describe('normalisation the matching relies on', () => {
+  it('email: case and whitespace do not matter; a placeholder is not an email', async () => {
+    const { normalizeEmail } = await import('@/lib/contacts/store')
+    expect(normalizeEmail('  Anna.Morozova@MPYachtCentre.com ')).toBe('anna.morozova@mpyachtcentre.com')
+    expect(normalizeEmail('none')).toBeNull(); expect(normalizeEmail('')).toBeNull(); expect(normalizeEmail(null)).toBeNull()
+  })
+  it('phone: punctuation, +1 and Canadian formatting collapse to the last ten digits; too short is nothing', async () => {
+    const { normalizePhone } = await import('@/lib/contacts/store')
+    for (const v of ['+1 (604) 446-8438', '604.446.8438', '1 604 446 8438', '6044468438', '+1-604-446-8438']) expect(normalizePhone(v)).toBe('6044468438')
+    expect(normalizePhone('12345')).toBeNull(); expect(normalizePhone('')).toBeNull()
+  })
+})

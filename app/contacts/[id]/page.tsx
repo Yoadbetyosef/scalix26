@@ -176,33 +176,46 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
                   <span>Every estimate, quote, order and invoice for this person will be listed here — including the ones that did not go ahead.</span>
                 </div>
               ) : (
-                <>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {history.totals.active > 0 && <span className="v2-chip" data-on>{history.totals.active} open</span>}
-                    {history.totals.closed > 0 && <span className="v2-chip">{history.totals.closed} closed</span>}
-                    {history.totals.noSale > 0 && <span className="v2-chip">{history.totals.noSale} no sale</span>}
-                  </div>
-                  <div className="v2-list">
-                    {history.orders.map((o) => (
-                      <Link key={o.id} href={`/orders/${o.id}`} className="v2-row tap-target" data-click style={{ ['--chan' as string]: stageHue(o.stage) }}>
-                        <div className="v2-m">
-                          <p className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="truncate">{o.summary ?? 'Order'}</span>
-                            <span className="v2-stat">{o.group === 'active' ? o.stageLabel : STATUS_GROUP_LABELS[o.group]}</span>
-                            {o.invoicedAt && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>Invoiced</span>}
-                          </p>
-                          <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11.5 }}>
-                            {o.orderNumber}{o.group === 'active' ? '' : ` · ${o.stageLabel}`}{o.via !== 'contact' ? ` · matched by ${o.via}` : ''}
-                          </span>
-                        </div>
-                        <div className="v2-meta">
-                          <em style={{ fontVariantNumeric: 'tabular-nums' }}>{money(o.subtotalCents, o.currency)}</em>
-                          <em>{formatDate(o.createdAt)}</em>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </>
+                // ── FOUR PILES, IN THE ORDER A JEWELLER ASKS ABOUT THEM ─────────────────────────
+                // What is live now; what was done; what was quoted and not taken (kept on purpose —
+                // "we quoted you a 1.2ct oval in March" is the sentence a returning customer needs);
+                // and what was cancelled. Each row says what the piece was, where it stands, which
+                // documents were actually sent, and opens the order.
+                (['active', 'closed', 'no_sale', 'cancelled'] as const).map((g) => {
+                  const rows = history.orders.filter((o) => o.group === g)
+                  if (rows.length === 0) return null
+                  const heading = g === 'active' ? 'Active orders & estimates' : g === 'closed' ? 'Closed orders' : g === 'no_sale' ? 'Estimates not taken (Closed – No Sale)' : 'Cancelled'
+                  const docName = (t: string) => t === 'estimate' ? 'Estimate' : t === 'quote' ? 'Quote' : t === 'invoice' ? 'Invoice' : t
+                  return (
+                    <div key={g} style={{ marginBottom: 18 }}>
+                      <p className="v2-kick" style={{ marginBottom: 8 }}>{heading} · {rows.length}</p>
+                      <div className="v2-list">
+                        {rows.map((o) => (
+                          <Link key={o.id} href={`/orders/${o.id}`} className="v2-row tap-target" data-click style={{ ['--chan' as string]: stageHue(o.stage) }}>
+                            <div className="v2-m">
+                              <p className="flex items-center gap-2 flex-wrap min-w-0">
+                                <span className="truncate">{o.summary ?? 'Order'}</span>
+                                {o.kindLabel && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t1)' }}>{o.kindLabel}</span>}
+                                <span className="v2-stat">{o.group === 'active' ? o.stageLabel : STATUS_GROUP_LABELS[o.group]}</span>
+                                {o.invoicedAt && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>Invoiced</span>}
+                              </p>
+                              <span style={{ fontSize: 12 }}>
+                                <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11.5 }}>{o.orderNumber}</span>
+                                {o.group !== 'active' ? ` · ${o.stageLabel}` : ''}
+                                {o.sent.length > 0 ? ` · ${o.sent.map((d) => `${docName(d.docType)} sent ${formatDate(d.at)}`).join(', ')}` : ''}
+                                {o.via !== 'contact' ? ` · found by the ${o.via} on the order` : ''}
+                              </span>
+                            </div>
+                            <div className="v2-meta">
+                              <em style={{ fontVariantNumeric: 'tabular-nums' }}>{money(o.subtotalCents, o.currency)}</em>
+                              <em>{formatDate(o.createdAt)}</em>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })
               )}
             </div>
           )}
@@ -214,7 +227,7 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
                 {history.payments.map((p) => (
                   <Link key={p.id} href={`/orders/${p.orderId}`} className="v2-row tap-target" data-click>
                     <div className="v2-m">
-                      <p>{p.kind === 'deposit' ? 'Deposit' : p.kind === 'refund' ? 'Refund' : 'Payment'}{p.method ? ` · ${p.method}` : ''}</p>
+                      <p>{p.kind === 'deposit' ? 'Deposit' : p.kind === 'refund' ? 'Refund' : 'Payment'}{p.method ? ` · ${({ card: 'credit card', cheque: 'cheque', cash: 'cash', wire: 'wire transfer', etransfer: 'e-transfer', transfer: 'transfer', zelle: 'Zelle', other: 'other' } as Record<string, string>)[p.method] ?? p.method}` : ''}</p>
                       <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11.5 }}>{p.orderNumber}</span>
                     </div>
                     <div className="v2-meta">

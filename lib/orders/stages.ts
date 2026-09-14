@@ -170,7 +170,15 @@ export const canEditDocumentFacts = (s: OrderStage): boolean => s !== 'cancelled
  * `taxChoiceId` carries the destination province with it: the server resolves province, kind, label
  * and rate from the one id, so there is no separate delivery-province field to keep open.
  */
-export const DOCUMENT_FACT_FIELDS = ['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId', 'letterheadStyle'] as const
+export const DOCUMENT_FACT_FIELDS = ['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId', 'letterheadStyle', 'contactId'] as const
+
+/**
+ * WHO THE ORDER BELONGS TO is a fact about the record, not about the work or the money: a closed
+ * order from March that was typed as a walk-in can be linked to the customer today, and a wrong
+ * link can be undone, without reopening anything. So `contactId` is accepted on every stage —
+ * cancelled included, where it is the ONLY key accepted.
+ */
+export const RECORD_FIELDS = ['contactId'] as const
 
 /**
  * Which of the offered keys this stage refuses. Pure, so the decision is testable rather than
@@ -182,7 +190,10 @@ export const DOCUMENT_FACT_FIELDS = ['taxChoiceId', 'pstExempt', 'pstExemptionNo
  */
 export function refusedFields(stage: OrderStage, offered: string[]): string[] | null {
   if (canEditWorkflow(stage)) return []
-  if (!canEditDocumentFacts(stage)) return null
+  if (!canEditDocumentFacts(stage)) {
+    // Cancelled: nothing about the work or the document, but the customer link may still be fixed.
+    return offered.length > 0 && offered.every((k) => (RECORD_FIELDS as readonly string[]).includes(k)) ? [] : null
+  }
   return offered.filter((k) => !(DOCUMENT_FACT_FIELDS as readonly string[]).includes(k))
 }
 

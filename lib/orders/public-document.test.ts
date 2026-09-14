@@ -45,10 +45,37 @@ describe('the token is the credential for the files too', () => {
     expect(route).toMatch(/'Cache-Control': 'no-store'/)
   })
   it('the customer page routes every attachment through it', () => {
-    expect(src('app/e/[token]/page.tsx')).toMatch(/\(a\) => `\/e\/\$\{token\}\/file\/\$\{a\.id\}`/)
+    expect(src('app/e/[token]/page.tsx')).toMatch(/const urlFor = \(a: \{ id: string \}\) => `\/e\/\$\{token\}\/file\/\$\{a\.id\}`/)
   })
   it('is reachable without a session — /e/ is a public prefix', () => {
     expect(src('lib/supabase/middleware.ts')).toMatch(/'\/e\/'/)
+  })
+})
+
+describe('a sent document is a record, not a view', () => {
+  it('every share — emailed or copied — freezes the document under its id', () => {
+    const s = src('lib/orders/shares.ts')
+    expect((s.match(/await writeDocumentSnapshot\(c\.tenantId, orderId, created\.id as string, docType\)/g) ?? []).length).toBe(2)
+  })
+  it('the customer page renders the frozen copy first and the live order only for older links', () => {
+    const p = src('app/e/[token]/page.tsx')
+    expect(p).toMatch(/const snap = await readDocumentSnapshot\(share\.tenantId, share\.orderId, share\.shareId\)/)
+    expect(p).toMatch(/snap\s*\? await documentDataFromSnapshot\(snap, urlFor, share\.tenantId, share\.orderId\)\s*: await loadOrderDocument/)
+  })
+  it('the snapshot stores ids, never signed URLs, and lives in the private bucket', () => {
+    const s = src('lib/orders/document-snapshot.ts')
+    expect(s).toMatch(/\(a\) => `id:\$\{a\.id\}`/)
+    expect(s).toMatch(/storage\.from\(ORDER_BUCKET\)/)
+    expect(s).toMatch(/snapshots\/\$\{shareId\}\.json/)
+  })
+  it('the owner can open any sent copy', () => {
+    expect(src('components/orders/shared-links.tsx')).toMatch(/View as sent/)
+    expect(src('app/orders/[id]/shares/[shareId]/page.tsx')).toMatch(/requireOrdersAccess/)
+  })
+  it('an unknown link and a missing file explain themselves without a brand, a login or a code', () => {
+    const nf = src('app/e/not-found.tsx'); const file = src('app/e/[token]/file/[attachmentId]/route.ts')
+    for (const s of [nf, file]) { expect(s).not.toMatch(/Scalix|\/auth\/login|migration|database/i); expect(s).toMatch(/ask the business/) }
+    expect(src('components/orders/document-media.tsx')).toMatch(/onError=\{\(\) => setFailed\(true\)\}/)
   })
 })
 

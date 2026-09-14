@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { PURCHASE_KINDS, PURCHASE_STATUSES, createPurchase, listPurchases } from '@/lib/orders/purchases'
+import { getSchemaCapabilities } from '@/lib/db/capabilities'
 
 // GET/POST /api/orders/[id]/purchases — what was bought from suppliers to make this piece.
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
@@ -23,6 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const a = await requireOrdersAccess()
   if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!(await getSchemaCapabilities()).purchases) return NextResponse.json({ error: 'Purchases are not enabled on this account yet.' }, { status: 409 })
   const parsed = purchaseSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })
   const r = await createPurchase((await params).id, parsed.data)

@@ -7,6 +7,7 @@ import { ORDER_BUCKET } from './attachments'
 import { canSendForApproval, canSendToProduction, stageAfterSend, stageAfterResponse, respondableStage, type ApprovalType, type ApprovalDecision, type OrderStage } from './stages'
 import { approvalEmailHtml, deliveryRequestEmailHtml } from './approval-email'
 import { getSupplier, type Supplier } from './suppliers'
+import { documentSender } from './shares'
 import type { PublicOrderView } from './types'
 import { endOfDayUtc } from './approval-deadline'
 import { getBusinessTimezone } from '@/lib/timezone'
@@ -154,12 +155,16 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
 
   // Business branding for the email.
   const { data: tenant } = await createAdminClient().from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
-  const businessName = (tenant?.business_name as string) || 'Our team'
+  // The BUSINESS this order belongs to — the letterhead's name and reply-to, not the tenant's. A
+  // T.G. Designs factory request must not arrive "from TG jewellers". Same resolver as the documents.
+  const sender = await documentSender(c.tenantId, { letterheadStyle: (order.letterhead_style as string) ?? null })
+  const businessName = sender.businessName || (tenant?.business_name as string) || 'Our team'
+  const replyTo = sender.replyTo ?? (tenant?.email as string) ?? undefined
   const link = `${baseUrl.replace(/\/$/, '')}/approval/${token}` // raw token only in the link, never persisted/logged
 
   // Send FIRST; only advance the stage if the email actually succeeds (sendEmail RETURNS {success}, not throws).
-  const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: deadlineOn, link, supportEmail: (tenant?.email as string) ?? null, requestKind })
-  const sendResult = await sendEmail(input.recipientEmail, input.subject || (requestKind === 'quote' ? `Quotation requested — order ${order.order_number}` : `Approval requested — order ${order.order_number}`), html, { tenantId: c.tenantId, fromName: businessName, replyTo: (tenant?.email as string) ?? undefined }).catch((e) => ({ success: false as const, error: (e as Error).message }))
+  const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: deadlineOn, link, supportEmail: replyTo ?? null, requestKind })
+  const sendResult = await sendEmail(input.recipientEmail, input.subject || (requestKind === 'quote' ? `Quotation requested — order ${order.order_number}` : `Approval requested — order ${order.order_number}`), html, { tenantId: c.tenantId, fromName: businessName, replyTo }).catch((e) => ({ success: false as const, error: (e as Error).message }))
   if (!sendResult.success) {
     // Email failed → keep the request as draft, DO NOT advance the order stage.
     return { ok: false, error: `Email failed to send${'error' in sendResult && sendResult.error ? ` (${sendResult.error})` : ''}; the order stage was not changed.`, requestId }
@@ -258,7 +263,7 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     r.status = 'opened'
   }
 
-  const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes, stage').eq('id', r.order_id as string).maybeSingle()
+  const { data: order } = await sb.from('orders').select('order_number, customer_name, requested_completion_date, public_notes, stage, letterhead_style').eq('id', r.order_id as string).maybeSingle()
   // Jewelry specs are part of the safe projection: the factory can't approve a piece it can't see the
   // stone, shape and metal for. Pricing and internal notes remain excluded.
   //
@@ -278,6 +283,9 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     ? (await readLines(LINE_COLS)).rows
     : full.rows
   const { data: tenant } = await sb.from('tenants').select('business_name').eq('id', r.tenant_id as string).maybeSingle()
+  // The letterhead's business, so the page a factory or customer opens is headed by the company that
+  // sent it — T.G. Designs on a Designs order, TG jewellers on a retail one.
+  const sender = await documentSender(r.tenant_id as string, { letterheadStyle: (order?.letterhead_style as string) ?? null }).catch(() => null)
   const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
   const attIds = (attRows ?? []).map((a) => a.attachment_id as string)
   let attachments: PublicApprovalView['attachments'] = []
@@ -317,7 +325,7 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   const orderStage = (order?.stage as OrderStage) ?? 'new'
   const isFactory = (r.approval_type as ApprovalType) === 'factory'
   return {
-    businessName: (tenant?.business_name as string) || 'Our team', approvalType: r.approval_type as ApprovalType, status: r.status as string, recipientName: (r.recipient_name as string) ?? null,
+    businessName: sender?.businessName || (tenant?.business_name as string) || 'Our team', approvalType: r.approval_type as ApprovalType, status: r.status as string, recipientName: (r.recipient_name as string) ?? null,
     // The deadline is the DATE she asked for, read from its own column. Old rows have no
     // `deadline_on` and fall back to the instant that used to double as the expiry — which is the
     // right thing to show for them, since it is the date the recipient was originally given.
@@ -472,7 +480,7 @@ export interface ProductionResult {
 export async function sendToProduction(orderId: string, baseUrl?: string, supplierId?: string | null): Promise<ProductionResult> {
   const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized', notified: null, reason: null }
   const sb = await createClient()
-  const { data } = await sb.from('orders').select('stage, order_number, supplier_id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
+  const { data } = await sb.from('orders').select('stage, order_number, supplier_id, letterhead_style').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
   if (!data) return { ok: false, error: 'not found', notified: null, reason: null }
   if (!canSendToProduction(data.stage as OrderStage)) return { ok: false, error: 'Order must be Factory Approved or Customer Approved before production.', notified: null, reason: null }
 
@@ -524,10 +532,12 @@ export async function sendToProduction(orderId: string, baseUrl?: string, suppli
       if (insErr) throw new Error(insErr.message)
     }
     const { data: tenant } = await sb.from('tenants').select('business_name, email').eq('id', c.tenantId).maybeSingle()
-    const bizName = (tenant?.business_name as string) || 'Our team'
-    const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: (tenant?.email as string) ?? null, firstContact })
+    const sender = await documentSender(c.tenantId, { letterheadStyle: (data.letterhead_style as string) ?? null }).catch(() => null)
+    const bizName = sender?.businessName || (tenant?.business_name as string) || 'Our team'
+    const replyTo = sender?.replyTo ?? (tenant?.email as string) ?? undefined
+    const html = deliveryRequestEmailHtml({ businessName: bizName, orderNumber: (data.order_number as string) ?? '', message: null, link: `${baseUrl}/approval/${token}`, supportEmail: replyTo ?? null, firstContact })
     const subject = firstContact ? `Work order ${data.order_number} from ${bizName}` : `Order ${data.order_number} confirmed — upload invoice when ready`
-    sent = await sendEmail(recipient, subject, html, { tenantId: c.tenantId, fromName: bizName, replyTo: (tenant?.email as string) ?? undefined })
+    sent = await sendEmail(recipient, subject, html, { tenantId: c.tenantId, fromName: bizName, replyTo })
   } catch (e) {
     sent = { success: false, error: (e as Error).message }
   }

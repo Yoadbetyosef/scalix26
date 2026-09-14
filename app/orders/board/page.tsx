@@ -4,6 +4,7 @@ import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders } from '@/lib/orders/store'
 import { ORDER_STAGES, hasNoBoardColumn, type OrderStage } from '@/lib/orders/stages'
 import { BoardColumns, type BoardCard } from '@/components/orders/board-columns'
+import { getSchemaCapabilities, stageSupported } from '@/lib/db/capabilities'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +31,10 @@ export default async function OrdersBoardPage() {
   if (!a) notFound()
   const orders = await listOrders()
 
-  const stages: OrderStage[] = ORDER_STAGES.filter((s) => !hasNoBoardColumn(s))
+  // A column for every stage the DATABASE accepts today. A stage a pending migration part adds is
+  // left off rather than shown as a column a drop would be refused into.
+  const caps = await getSchemaCapabilities()
+  const stages: OrderStage[] = ORDER_STAGES.filter((s) => !hasNoBoardColumn(s) && stageSupported(caps, s))
   // Exactly the fields a card draws, and nothing else. An order carries internal costs and internal
   // notes; a client component receives a projection so those never cross the boundary at all.
   const cards: BoardCard[] = orders.map((o) => ({

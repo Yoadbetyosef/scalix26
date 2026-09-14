@@ -189,8 +189,10 @@ describe('what a terminal order still accepts', () => {
     // letterheadStyle joined them because it is the same kind of fact: which paper a document that
     // already exists is printed on. Re-issuing a finished invoice on the right company's letterhead
     // changes nothing anybody agreed to; re-pricing it does.
-    expect([...DOCUMENT_FACT_FIELDS]).toEqual(['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId', 'letterheadStyle'])
-    for (const priced of ['lineItems', 'depositCents', 'currency', 'orderNumber', 'contactId', 'customerName']) {
+    // contactId joined them: who the order belongs to is a fact about the record, fixable on a
+    // closed order without reopening it.
+    expect([...DOCUMENT_FACT_FIELDS]).toEqual(['taxChoiceId', 'pstExempt', 'pstExemptionNote', 'invoiceImageId', 'letterheadStyle', 'contactId'])
+    for (const priced of ['lineItems', 'depositCents', 'currency', 'orderNumber', 'customerName']) {
       expect(DOCUMENT_FACT_FIELDS as readonly string[], priced).not.toContain(priced)
     }
   })
@@ -212,9 +214,11 @@ describe('refusedFields — the decision itself, not its wording', () => {
     }
   })
 
-  it('a cancelled order refuses the whole edit', () => {
+  it('a cancelled order refuses the whole edit — except fixing who it belongs to', () => {
     expect(refusedFields('cancelled', TAX_ONLY)).toBeNull()
     expect(refusedFields('cancelled', [])).toBeNull()
+    expect(refusedFields('cancelled', ['contactId'])).toEqual([])
+    expect(refusedFields('cancelled', ['contactId', 'customerName'])).toBeNull()
   })
 
   it('finished and completed take tax and the photo, and nothing else', () => {

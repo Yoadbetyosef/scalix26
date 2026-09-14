@@ -25,7 +25,11 @@ const NEXT: Partial<Record<OrderStage, OrderStage>> = {
   production: 'ready', ready: 'delivered', delivered: 'completed',
 }
 
-export function StageControl({ orderId, stage }: { orderId: string; stage: OrderStage }) {
+export function StageControl({ orderId, stage, unavailable = [] }: {
+  orderId: string; stage: OrderStage
+  /** Stages the database does not accept yet (a pending migration part). Hidden, not faked. */
+  unavailable?: OrderStage[]
+}) {
   const router = useRouter()
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -33,8 +37,8 @@ export function StageControl({ orderId, stage }: { orderId: string; stage: Order
   const [note, setNote] = useState('')
   const { ask, dialog } = useConfirm()
 
-  const targets = ORDER_STAGES.filter((s) => canManualTransition(stage, s))
-  const next = NEXT[stage] && canManualTransition(stage, NEXT[stage]!) ? NEXT[stage]! : null
+  const targets = ORDER_STAGES.filter((s) => canManualTransition(stage, s) && !unavailable.includes(s))
+  const next = NEXT[stage] && canManualTransition(stage, NEXT[stage]!) && !unavailable.includes(NEXT[stage]!) ? NEXT[stage]! : null
   const reopenTo = canReopen(stage) ? REOPEN_TARGET[stage]! : null
 
   const move = async (to: OrderStage, why?: string) => {

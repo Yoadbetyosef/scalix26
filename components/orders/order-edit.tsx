@@ -29,6 +29,8 @@ export interface OrderEditInitial {
   templates?: Array<{ id: string; name: string }>
   clientRequirements: string | null; isCustomDesign: boolean
   orderKind?: OrderKind; kindDetails?: KindDetails
+  /** False until the database has order_kind: the kind section is left off rather than saved into nothing. */
+  supportsKinds?: boolean
   internalNotes: string | null; publicNotes: string | null
   lineItems: Array<Parameters<typeof lineFromSaved>[0]>
 }
@@ -114,7 +116,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         pstExemptionNote: f.pstExemptionNote.trim() || null,
         documentTemplateId: f.documentTemplateId || null,
         clientRequirements: f.clientRequirements || null, isCustomDesign,
-        orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details,
+        ...(initial.supportsKinds ? { orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details } : {}),
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
       }
@@ -154,7 +156,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                 <ContactPicker value={customer} onChange={setCustomer} />
               </section>
 
-              <KindFields value={kind} onChange={setKind} idPrefix="oe-kind" />
+              {initial.supportsKinds && <KindFields value={kind} onChange={setKind} idPrefix="oe-kind" />}
 
               <section>
                 <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Order</p><s /></div>

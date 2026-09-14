@@ -7,6 +7,7 @@ import type { OrderWithDetails } from '@/lib/orders/types'
 import { Letterhead } from '@/components/documents/letterhead'
 import { letterheadStyleFor, resolveLetterhead } from '@/lib/documents/letterhead-resolve'
 import { kindWords } from '@/lib/orders/kinds'
+import { DocumentVideo } from './document-media'
 
 // ONE document body, two entry points.
 //
@@ -73,7 +74,9 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
   return (
     <>
       {/* Above the paper, not on it. The toolbar is the app's, not the document's. */}
-      {toolbar && <div className="mx-auto mb-6 flex max-w-3xl items-center justify-end gap-2 px-6 pt-10 print:hidden">{toolbar}</div>}
+      {/* flex-wrap: on a phone the toolbar is six controls, and a row that does not wrap puts the
+          primary one off the right edge of the screen. */}
+      {toolbar && <div className="mx-auto mb-6 flex max-w-3xl flex-wrap items-center justify-end gap-2 px-4 pt-6 sm:px-6 sm:pt-10 print:hidden">{toolbar}</div>}
       <Letterhead data={letterhead}>
         {/* min-h-screen fills the window on an unbranded document. Under a letterhead it would push the
             footer band a whole viewport below a short quote, so the paper ends where the document does. */}
@@ -165,17 +168,7 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
                 {images.map((img) => (
                   img.kind === 'video' ? (
                     <div key={img.id}>
-                      <video
-                        src={img.url}
-                        controls
-                        playsInline
-                        // No autoplay and no loop: this is a document, and a document that starts
-                        // moving on open is an advertisement.
-                        preload="metadata"
-                        className={images.length === 1
-                          ? 'max-h-80 w-full rounded-lg border border-neutral-200 bg-black object-contain print:hidden'
-                          : 'h-40 w-full rounded-lg border border-neutral-200 bg-black object-cover print:hidden'}
-                      />
+                      <DocumentVideo src={img.url} fileName={img.fileName} single={images.length === 1} />
                       <p className="hidden text-xs text-neutral-500 print:block">
                         A video of this piece ({img.fileName}) is included with the online copy of this document.
                       </p>

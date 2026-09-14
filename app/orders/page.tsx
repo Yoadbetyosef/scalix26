@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
-import { listOrders } from '@/lib/orders/store'
+import { listOrders, orderIdsMatchingLines } from '@/lib/orders/store'
 import { STAGE_LABELS, orderStatusGroup, type OrderStage } from '@/lib/orders/stages'
 import { stageHue } from '@/lib/orders/stage-colors'
 
@@ -35,7 +35,10 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   // A search runs across EVERY order regardless of view: "find Irina's bracelet" must find the one
   // that closed as a no-sale eight months ago, which is the whole point of keeping it.
   const q = (sp.q ?? '').trim().toLowerCase()
-  const matches = (o: typeof all[number]) => !q || [o.orderNumber, o.customerName, o.customerCompany, o.customerEmail, o.customerPhone, o.factoryName]
+  // The pieces too: "oval sapphire", a SKU, the note on a line. What was quoted is how a jeweller
+  // remembers an order as often as by whom.
+  const byLine = q ? await orderIdsMatchingLines(q) : new Set<string>()
+  const matches = (o: typeof all[number]) => !q || byLine.has(o.id) || [o.orderNumber, o.customerName, o.customerCompany, o.customerEmail, o.customerPhone, o.factoryName]
     .some((v) => (v ?? '').toLowerCase().includes(q))
   const orders = all.filter((o) => (q ? true : view.test(o.stage as OrderStage)) && matches(o))
   const countOf = (v: typeof VIEWS[number]) => all.filter((o) => v.test(o.stage as OrderStage)).length
@@ -66,7 +69,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         ))}
         <form method="get" action="/orders" className="v2-fld" style={{ marginLeft: 'auto', minWidth: 200 }}>
           <label htmlFor="orders-q" className="sr-only">Search orders</label>
-          <input id="orders-q" name="q" defaultValue={sp.q ?? ''} placeholder="Search customer, company, order №…" />
+          <input id="orders-q" name="q" defaultValue={sp.q ?? ''} placeholder="Search customer, company, order №, piece, SKU…" />
         </form>
       </div>
       {q && <p className="v2-kick" style={{ marginBottom: 10 }}>Matching “{sp.q}” across every order, open or closed · {orders.length}</p>}

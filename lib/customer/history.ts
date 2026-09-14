@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { normalizeEmail, normalizePhone } from '@/lib/contacts/store'
 import { orderStatusGroup, STAGE_LABELS, type OrderStage, type OrderStatusGroup } from '@/lib/orders/stages'
 import { memoStatusLabel, type Memo } from '@/lib/memos/types'
+import { ORDER_KIND_LABELS, isOrderKind, type OrderKind } from '@/lib/orders/kinds'
 
 // ── ONE CUSTOMER, THE WHOLE STORY ───────────────────────────────────────────────────────────────
 //
@@ -28,6 +29,11 @@ export interface HistoryOrder {
   summary: string | null
   /** Linked by id, or found by the email/phone typed on the order. */
   via: 'contact' | 'email' | 'phone'
+  /** custom / repair / appraisal / stock — 'custom' on a database without the column. */
+  kind: OrderKind
+  kindLabel: string | null
+  /** Documents the customer was actually sent, oldest first: "Estimate · 12 Sep". */
+  sent: Array<{ docType: string; at: string }>
 }
 export interface HistoryAppointment {
   id: string; slotDate: string; slotTime: string | null; serviceType: string | null; status: string | null; meetingKind: string | null
@@ -52,7 +58,8 @@ export async function readCustomerHistory(
   const email = normalizeEmail(contact.email)
   const phone = normalizePhone(contact.phone)
 
-  const cols = 'id, order_number, stage, created_at, updated_at, subtotal_cents, deposit_cents, currency, invoiced_at, contact_id, customer_email, customer_phone'
+  // '*' so a database without order_kind still answers; the kind is read off the row with a fallback.
+  const cols = '*'
   const filters = [`contact_id.eq.${contact.id}`]
   if (email) filters.push(`customer_email.ilike.${email.replace(/[%,()]/g, '')}`)
   if (phone) filters.push(`customer_phone.ilike.%${phone}`)
@@ -66,13 +73,19 @@ export async function readCustomerHistory(
   const rows = (orderRows as Array<Record<string, unknown>> | null) ?? []
   const ids = rows.map((r) => r.id as string)
 
-  const [{ data: lineRows }, { data: payRows }] = ids.length
+  const [{ data: lineRows }, { data: payRows }, { data: shareRows }] = ids.length
     ? await Promise.all([
         db.from('order_line_items').select('order_id, product_name, display_order').in('order_id', ids).order('display_order'),
         // '*' so a ledger without paid_on (migration pending) still answers.
         db.from('payment_allocations').select('*').eq('tenant_id', tenantId).eq('document_type', 'order').in('document_id', ids).order('created_at', { ascending: false }),
+        db.from('order_document_shares').select('order_id, doc_type, sent_at, created_at').eq('tenant_id', tenantId).in('order_id', ids).order('created_at', { ascending: true }),
       ])
-    : [{ data: [] }, { data: [] }]
+    : [{ data: [] }, { data: [] }, { data: [] }]
+  const sentByOrder = new Map<string, Array<{ docType: string; at: string }>>()
+  for (const r of (shareRows as Array<Record<string, unknown>> | null) ?? []) {
+    const oid = r.order_id as string
+    sentByOrder.set(oid, [...(sentByOrder.get(oid) ?? []), { docType: r.doc_type as string, at: ((r.sent_at ?? r.created_at) as string) }])
+  }
 
   const firstLine = new Map<string, string>()
   for (const l of (lineRows as Array<Record<string, unknown>> | null) ?? []) {
@@ -93,6 +106,9 @@ export async function readCustomerHistory(
       invoicedAt: (r.invoiced_at as string) ?? null,
       summary: firstLine.get(r.id as string) ?? null,
       via,
+      kind: isOrderKind(r.order_kind) ? r.order_kind : 'custom',
+      kindLabel: isOrderKind(r.order_kind) && r.order_kind !== 'custom' ? ORDER_KIND_LABELS[r.order_kind] : null,
+      sent: sentByOrder.get(r.id as string) ?? [],
     }
   })
   const payments: HistoryPayment[] = ((payRows as Array<Record<string, unknown>> | null) ?? []).map((p) => ({

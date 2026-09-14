@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { createMemo, listMemos } from '@/lib/memos/store'
 import { MEMO_DIRECTIONS, MEMO_KINDS } from '@/lib/memos/types'
+import { MEMOS_UNAVAILABLE } from '@/lib/memos/store'
+import { getSchemaCapabilities } from '@/lib/db/capabilities'
 
 // GET  /api/memos — every memo for the tenant.
 // POST /api/memos — send a piece out on memo, or record one received from a supplier.
@@ -38,6 +40,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const a = await requireOrdersAccess()
   if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!(await getSchemaCapabilities()).memos) return NextResponse.json({ error: MEMOS_UNAVAILABLE }, { status: 409 })
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid payload', detail: parsed.error.issues[0]?.message }, { status: 400 })
   const r = await createMemo(parsed.data)

@@ -20,11 +20,13 @@ const STATUS_HUE: Record<string, string> = {
   revoked: 'var(--v2-mute)', expired: 'var(--v2-mute)',
 }
 
-export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
+export function ApprovalActions({ orderId, stage, prefill, orderSupplier, supportsQuotation = false }: {
   orderId: string; stage: OrderStage
   prefill: { factoryName: string | null; factoryEmail: string | null; customerName: string | null; customerEmail: string | null }
   /** The factory already recorded on this order, if any. Both dialogs open on it. */
   orderSupplier: Supplier | null
+  /** False until the database can record a quotation request as one; the option is left off, not faked. */
+  supportsQuotation?: boolean
 }) {
   const router = useRouter()
   const [approvals, setApprovals] = useState<Approval[]>([])
@@ -48,13 +50,13 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
   }, [orderId])
   useEffect(() => { let active = true; (async () => { const [ar, at] = await Promise.all([fetch(`/api/orders/${orderId}/approvals`), fetch(`/api/orders/${orderId}/attachments`)]); if (!active) return; if (ar.ok) setApprovals((await ar.json()).approvals); if (at.ok) setAtts(((await at.json()).attachments as Att[]).filter((a) => a.visibility === 'public')) })(); return () => { active = false } }, [orderId])
 
-  const openModal = (type: ApprovalType) => {
+  const openModal = (type: ApprovalType, kind: 'approval' | 'quote' = 'approval') => {
     setErr(null)
     // Every shared file starts ticked. Sending the piece's reference photos is the normal case; leaving
     // one out should be the deliberate act, not remembering to include it.
     const shared = atts.filter((a) => a.visibility === 'public').map((a) => a.id)
     setSupplier(orderSupplier ?? null)
-    setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: shared, requestKind: 'approval' })
+    setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: shared, requestKind: kind })
     setOpen(type)
   }
   const send = async () => {
@@ -101,8 +103,13 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
     <div>
       {err && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginBottom: 12 }}><p>{err}</p></div>}
       <div className="v2-bar">
+        {/* THREE DIFFERENT ASKS, THREE DIFFERENT WORDS. A vendor quote request asks a workshop what it
+            would cost; customer approval asks the customer to say yes to the piece; the customer's
+            estimate and quote are documents (the links above). Naming them alike is how "send the
+            customer a quote" and "ask the factory for a quote" get confused at a busy counter. */}
         {canFactory && <button onClick={() => openModal('factory')} className="v2-act" data-solid>Send to factory for approval</button>}
-        {canCustomer && <button onClick={() => openModal('customer')} className="v2-act" data-solid>Send to customer for approval</button>}
+        {canFactory && supportsQuotation && <button onClick={() => openModal('factory', 'quote')} className="v2-act">Request vendor quote</button>}
+        {canCustomer && <button onClick={() => openModal('customer')} className="v2-act" data-solid>Request customer approval</button>}
         {/* Was the only emerald button in the app. Moving to production is a forward step, not a
             success message — the filled pill already says it is the primary act here. */}
         {canProd && <button onClick={() => { setSupplier(orderSupplier ?? null); setErr(null); setProdOpen(true) }} disabled={busy} className="v2-act" data-solid>Move to production</button>}
@@ -174,7 +181,7 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
 
       {open && (
         <Modal open onClose={() => setOpen(null)} dismissable={!busy}
-          title={`Send to ${open === 'factory' ? 'factory' : 'customer'} for approval`}
+          title={open === 'factory' ? (f.requestKind === 'quote' ? 'Vendor quote request' : 'Factory approval request') : 'Customer approval request'}
           actions={
             <>
               <button onClick={send} disabled={busy || (open === 'factory' ? !supplier?.email : !f.recipientEmail)} className="v2-act" data-solid>{busy ? 'Sending…' : 'Send approval request'}</button>
@@ -243,7 +250,7 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
               </div>
             )}
 
-            {open === 'factory' && (
+            {open === 'factory' && supportsQuotation && (
               <label className="v2-check" style={{ marginTop: 14 }}>
                 <input type="checkbox" checked={f.requestKind === 'quote'} onChange={(e) => setF((p) => ({ ...p, requestKind: e.target.checked ? 'quote' : 'approval' }))} />
                 <span>Ask for a quotation<em>the factory sees the same specification and files and answers with a cost, not an approval</em></span>

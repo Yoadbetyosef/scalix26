@@ -79,7 +79,7 @@ export function PurchasesPanel({ orderId, currency, purchases, missing, canEdit 
         {totalCost > 0 && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>Cost {money(totalCost, currency)} · internal</span>}
         {canEdit && !missing && <button type="button" onClick={() => { setErr(null); setOpen(true) }} className="v2-act">Add purchase</button>}
       </div>
-      {missing && <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)' }}><p>Purchases are not set up on this database yet — run add_tg_production_1.sql (part 5) in the Supabase SQL editor.</p></div>}
+      {missing && <div className="v2-card" data-empty><b>Purchases are not enabled on this account yet</b><span>Stones, mountings and castings bought for a piece will be tracked here once the workflow is switched on.</span></div>}
       {!missing && purchases.length === 0 && (
         <div className="v2-card" data-empty><b>Nothing ordered from a supplier yet</b><span>Add the stone, the mounting or the casting as it is ordered, and track it here until it passes QC.</span></div>
       )}

@@ -353,14 +353,29 @@ ${corpus}`,
   //
   // Older rows written shared (origin = this agent, ai_employee_id NULL) are replaced too, so a
   // re-scan never leaves a stale shared copy beside the new scoped one.
-  await admin.from('knowledge_base').delete().eq('tenant_id', agent.tenant_id).eq('source', WEBSITE_SOURCE).eq('origin_ai_employee_id', agentId)
-  const { error } = await admin.from('knowledge_base').insert(
+  //
+  // ── INSERT FIRST, THEN RETIRE THE OLD ROWS ──────────────────────────────────────────────────────
+  //
+  // Delete-then-insert has a hole: a refused insert leaves the agent with NOTHING, and a working
+  // knowledge base has been wiped by a scan that failed. So the new rows land first; only when they
+  // have, the agent's earlier website rows — every one NOT in the set just written — are removed.
+  // A failure at any point leaves the previous rows in place. Two scans racing each other each
+  // keep their own rows until the other's delete runs; the later one wins whole, and neither can
+  // leave the agent empty. The empty-crawl case above never reaches this point at all.
+  const { data: inserted, error } = await admin.from('knowledge_base').insert(
     items.map((it) => ({ tenant_id: agent.tenant_id, ai_employee_id: agentId, origin_ai_employee_id: agentId, title: it.title, content: it.content, source: WEBSITE_SOURCE })),
-  )
-  if (error) {
-    console.error('[scan] KB insert failed:', error.message)
-    return NextResponse.json({ added: 0, error: 'Could not save the website content. Please try again.' })
+  ).select('id')
+  if (error || !inserted?.length) {
+    console.error('[scan] KB insert failed — previous website knowledge left untouched:', error?.message)
+    return NextResponse.json({ added: 0, error: 'Could not save the website content. Your existing knowledge was not changed. Please try again.' })
   }
+  const keep = inserted.map((r) => r.id as string)
+  const { data: retired, error: delErr } = await admin.from('knowledge_base').delete()
+    .eq('tenant_id', agent.tenant_id).eq('source', WEBSITE_SOURCE).eq('origin_ai_employee_id', agentId)
+    .not('id', 'in', `(${keep.join(',')})`)
+    .select('id')
+  if (delErr) console.error('[scan] could not retire the previous scan rows (the new ones are in place):', delErr.message)
+  console.log(`[scan] agent ${agentId}: wrote ${keep.length} website rows, retired ${retired?.length ?? 0} earlier rows`)
 
   // Persist scan state on the agent (drives the "Connected" badge). Store the exact
   // URL the owner entered so the UI can match/stale against the field value. Resilient:

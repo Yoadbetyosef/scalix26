@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Link2, Check } from 'lucide-react'
@@ -140,6 +142,9 @@ export function SharedLinks({ orderId }: { orderId: string }) {
                     {r.note ? ` · ${r.note}` : ''}
                   </span>
                 </div>
+                {r.kind === 'share' && (
+                  <Link href={`/orders/${orderId}/shares/${r.id}`} className="v2-act" target="_blank">View as sent ↗</Link>
+                )}
                 {r.live
                   ? (
                     <button onClick={() => revoke(r.kind, r.id, r.who)} disabled={busy !== null} className="v2-act" data-danger>

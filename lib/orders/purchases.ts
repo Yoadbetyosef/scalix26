@@ -50,7 +50,7 @@ export async function createPurchase(orderId: string, input: PurchaseInput): Pro
     ...toRow({ kind: 'other', quantity: 1, status: 'draft', currency: (order.currency as string) ?? 'usd', ...input }),
   }).select('*').single()
   if (error) {
-    if (error.code === '42P01' || error.code === 'PGRST205') return { ok: false, error: `Run ${PURCHASES_MIGRATION} (part 5) in the Supabase SQL editor first — purchases are not set up yet.` }
+    if (error.code === '42P01' || error.code === 'PGRST205') { console.warn(`[purchases] unavailable — ${PURCHASES_MIGRATION} part 5 not applied`); return { ok: false, error: 'Purchases are not enabled on this account yet.' } }
     return { ok: false, error: error.message }
   }
   const p = row(data as Record<string, unknown>)

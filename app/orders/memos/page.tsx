@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listMemos } from '@/lib/memos/store'
 import { MEMO_KIND_LABELS, isMemoSettled, memoOverdue, memoStatusLabel, MEMOS_MIGRATION_HINT } from '@/lib/memos/labels'
+import { getSchemaCapabilities } from '@/lib/db/capabilities'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number | null, cur: string) => c == null ? '—' : new Intl.NumberFormat(undefined, { style: 'currency', currency: cur.toUpperCase(), maximumFractionDigits: 0 }).format(c / 100)
@@ -13,7 +14,9 @@ const money = (c: number | null, cur: string) => c == null ? '—' : new Intl.Nu
 export default async function MemosPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const a = await requireOrdersAccess()
   if (!a) notFound()
-  const { memos, missing } = await listMemos()
+  const caps = await getSchemaCapabilities()
+  const { memos, missing: tableMissing } = caps.memos ? await listMemos() : { memos: [], missing: true }
+  const missing = tableMissing || !caps.memos
   const view = (await searchParams).view === 'all' ? 'all' : 'open'
   const shown = view === 'open' ? memos.filter((m) => !isMemoSettled(m.status)) : memos
   const open = memos.filter((m) => !isMemoSettled(m.status)).length
@@ -24,18 +27,19 @@ export default async function MemosPage({ searchParams }: { searchParams: Promis
         <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />Memos &amp; consignment · {shown.length}</p>
         <s />
         <Link href="/orders" className="v2-act">Orders</Link>
-        <Link href="/orders/memos/new" className="v2-act" data-solid>New memo</Link>
+        {!missing && <Link href="/orders/memos/new" className="v2-act" data-solid>New memo</Link>}
       </div>
       <div className="flex flex-wrap gap-2 mb-5">
         <Link href="/orders/memos" className="v2-chip" data-on={view === 'open' || undefined}>Open <span style={{ opacity: 0.6 }}>{open}</span></Link>
         <Link href="/orders/memos?view=all" className="v2-chip" data-on={view === 'all' || undefined}>All <span style={{ opacity: 0.6 }}>{memos.length}</span></Link>
       </div>
 
-      {missing && (
-        <div className="v2-notice" style={{ ['--ghue' as string]: 'var(--v2-t4)', marginBottom: 16 }}><p>{MEMOS_MIGRATION_HINT}</p></div>
-      )}
-
-      {shown.length === 0 ? (
+      {missing ? (
+        <div className="v2-card" data-empty>
+          <b>{MEMOS_MIGRATION_HINT}</b>
+          <span>Sending stock out on memo, and taking a supplier&apos;s pieces on memo or consignment, will be tracked here once the workflow is switched on.</span>
+        </div>
+      ) : shown.length === 0 ? (
         <div className="v2-card" data-empty>
           <b>{view === 'open' ? 'Nothing out on memo' : 'No memos yet'}</b>
           <span>Send a stock piece out to a customer or dealer, or record a supplier&apos;s piece received on memo or consignment. Stock follows automatically.</span>
