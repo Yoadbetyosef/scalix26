@@ -145,6 +145,7 @@ describe('every function the loader calls resolves tenancy explicitly', () => {
   const CHAIN: Array<[string, string]> = [
     ['lib/orders/store.ts', 'getOrderForTenant'],
     ['lib/orders/attachments.ts', 'publicDocumentMediaForTenant'],
+    ['lib/orders/payments.ts', 'listOrderPaymentsForTenant'],
     ['lib/orders/attachments.ts', 'publicDocumentImagesForTenant'],
     ['lib/orders/documents.ts', 'loadDocContext'],
     ['lib/orders/templates.ts', 'listTemplates'],

@@ -63,11 +63,35 @@ export function SendDocument({ orderId, docType, defaultEmail, defaultName }: {
     } finally { setBusy(false) }
   }
 
+  // Mint (or reuse this session's) customer link and open it in a new tab — what the customer will
+  // see, exactly, and the tab's address bar then shows the RIGHT link to copy.
+  const preview = async () => {
+    let url = link
+    if (!url) {
+      setBusy(true); setErr(null)
+      try {
+        const r = await fetch(`/api/orders/${orderId}/shares`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docType, label: 'preview' }) })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok || !j.url) throw new Error(j.error || 'Could not create the link.')
+        url = j.url as string; setLink(url)
+      } catch (e) { setErr((e as Error).message); return } finally { setBusy(false) }
+    }
+    window.open(url!, '_blank', 'noopener')
+  }
+
   if (!open) {
     return (
       <span className="inline-flex flex-wrap items-center gap-2 print:hidden">
-        <button onClick={copyLink} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50" title="A link the customer can open without an account">
-          <Link2 className="h-4 w-4" /> {busy ? 'Creating link…' : copied === 'done' ? 'Link copied' : 'Copy customer link'}
+        {/* ── THE ADDRESS BAR IS NOT THE LINK ─────────────────────────────────────────────────
+            This page is the owner's view, behind login. The link the customer can open is the one
+            these buttons make, and the primary button is the one that copies it — so the natural
+            thing to reach for is the right thing. Said in words too, because the mistake was made. */}
+        <span className="text-xs text-neutral-500">Internal view — customers use the link below, not this page&apos;s address.</span>
+        <button onClick={copyLink} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50" title="A link the customer can open without an account">
+          <Link2 className="h-4 w-4" /> {busy ? 'Working…' : copied === 'done' ? 'Customer link copied' : 'Copy customer link'}
+        </button>
+        <button onClick={preview} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50" title="Open the customer's copy in a new tab">
+          Preview as customer ↗
         </button>
         {link && copied === 'shown' && (
           <span className="max-w-xs break-all rounded bg-neutral-50 p-1.5 font-mono text-[11px] text-neutral-600">{link}</span>

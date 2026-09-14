@@ -329,21 +329,30 @@ SELECT request_kind, count(*) FROM order_approval_requests GROUP BY 1;
 --     Website-scanned knowledge was written tenant-wide, so Vancouver Gem Lab's
 --     appraisal pages were being read by the TG Jewellers agent — and each
 --     agent's scan DELETED the other's. Rows whose origin agent is known are
---     scoped to that agent, for any tenant that has more than one agent. A
---     single-agent tenant is untouched (scoping would change nothing there
---     and tenant-wide is what its next agent expects to inherit).
+--     scoped to that agent.
+--
+--     TG's TENANT ONLY. The first draft applied this to every tenant with more
+--     than one agent, and that is wrong for the demo tenant (fea1d3c6), whose
+--     two agents are one business sharing one website — their scan must stay
+--     shared. Verified 2026-09-14: TG is the only multi-business tenant.
+--
+--     These three rows were already re-scoped by hand on 2026-09-14 (the leak
+--     was live). This statement is what makes that reproducible: on production
+--     it updates 0 rows; on a rebuilt environment it does the same fix.
 --
 -- 8b. TG's own piece-type list gains Chain, Watch, Loose stone and Other —
---     appended, active, after whatever she already has. Nothing renamed.
+--     appended, active, after whatever she already has. Nothing renamed. TG is
+--     the only tenant with a product_type list (verified), and the statement
+--     is pinned to her tenant regardless.
 -- ════════════════════════════════════════════════════════════════════════════
 
 UPDATE knowledge_base k
 SET ai_employee_id = k.origin_ai_employee_id
-WHERE k.ai_employee_id IS NULL
+WHERE k.tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e837f'
+  AND k.ai_employee_id IS NULL
   AND k.origin_ai_employee_id IS NOT NULL
   AND k.source = 'website'
-  AND EXISTS (SELECT 1 FROM ai_employees a WHERE a.id = k.origin_ai_employee_id AND a.tenant_id = k.tenant_id)
-  AND (SELECT count(*) FROM ai_employees a WHERE a.tenant_id = k.tenant_id) > 1;
+  AND EXISTS (SELECT 1 FROM ai_employees a WHERE a.id = k.origin_ai_employee_id AND a.tenant_id = k.tenant_id);
 
 INSERT INTO order_options (tenant_id, list_id, label, display_order, active)
 SELECT l.tenant_id, l.id, v.label,
@@ -352,6 +361,7 @@ SELECT l.tenant_id, l.id, v.label,
 FROM order_option_lists l
 CROSS JOIN (VALUES ('Chain', 1), ('Watch', 2), ('Loose stone', 3), ('Other', 4)) AS v(label, ord)
 WHERE l.key = 'product_type'
+  AND l.tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e837f'
   AND NOT EXISTS (SELECT 1 FROM order_options o WHERE o.list_id = l.id AND lower(o.label) = lower(v.label));
 
 -- verify
@@ -363,28 +373,75 @@ WHERE l.key = 'product_type' AND l.tenant_id = 'e6f07ad7-c5a2-4997-b798-cca7e09e
 -- ════════════════════════════════════════════════════════════════════════════
 -- PART 9 — DATA: WALK-IN ORDERS LINKED TO THE CONTACT THEY BELONG TO
 --
--- 21 of TG's 36 orders carry a typed email and no contact_id. Where that email
--- matches EXACTLY ONE live contact in the same tenant, link it. Nothing on the
--- order changes but contact_id; no contact is created here (the app does that
--- for new orders — creating 21 contacts from old free text would guess at
--- "STOCK" and "None"). Ambiguous emails are left for the person.
+-- 21 of TG's 36 orders carried typed customer details and no contact_id. The
+-- rule, the same one scripts/audit-order-contacts.mjs applies and reports on:
+--
+--   SAFE AUTO-LINK  the order's email matches EXACTLY ONE live contact in the
+--                   tenant (case-insensitive), or — with no email match — its
+--                   phone matches exactly one contact on the last ten digits.
+--   AMBIGUOUS       more than one contact matches: left alone, listed.
+--   NO MATCH        nothing matches: left alone (no contact is invented from
+--                   free text — "STOCK" and "None" are not people).
+--
+-- Never by name. Nothing on the order changes but contact_id. Idempotent: an
+-- order that already has a contact is skipped. The script was run first on
+-- production (2026-09-14); this statement is the same rule for a rebuilt
+-- environment and updates 0 rows where the script already ran.
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- The business's OWN addresses are placeholders, not customers: the tenant email, its agents'
+-- and letterheads' emails, and everything on their domains (gmail-style domains excluded). A match
+-- on one of these is refused — seven of TG's orders carry tatiana@tg-designs.com typed in for
+-- other people's pieces, and linking "Andrea's ring" to Tatiana's own record would be wrong.
+CREATE OR REPLACE FUNCTION tg_is_business_address(p_tenant uuid, p_email text) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+  WITH own AS (
+    SELECT lower(trim(e)) AS email FROM (
+      SELECT t.email AS e FROM tenants t WHERE t.id = p_tenant
+      UNION ALL SELECT a.email FROM ai_employees a WHERE a.tenant_id = p_tenant
+      UNION ALL SELECT a.reply_from_email FROM ai_employees a WHERE a.tenant_id = p_tenant
+      UNION ALL SELECT l.email FROM letterhead_profiles l WHERE l.tenant_id = p_tenant
+    ) x WHERE e IS NOT NULL AND e LIKE '%@%'
+  )
+  SELECT p_email IS NOT NULL AND (
+    lower(trim(p_email)) IN (SELECT email FROM own)
+    OR split_part(lower(trim(p_email)), '@', 2) IN (
+      SELECT split_part(email, '@', 2) FROM own
+      WHERE split_part(email, '@', 2) NOT IN ('gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com')
+    )
+  )
+$$;
+
+-- 9a. By email, exactly one live contact, not a business address.
 UPDATE orders o
-SET contact_id = m.id
-FROM (
-  SELECT o2.id AS order_id, (
-    SELECT c.id FROM contacts c
-    WHERE c.tenant_id = o2.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
-      AND lower(c.email) = lower(o2.customer_email)
-  ) AS id
-  FROM orders o2
-  WHERE o2.contact_id IS NULL AND o2.customer_email IS NOT NULL AND o2.customer_email <> ''
-    AND (SELECT count(*) FROM contacts c
-         WHERE c.tenant_id = o2.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
-           AND lower(c.email) = lower(o2.customer_email)) = 1
-) m
-WHERE o.id = m.order_id AND m.id IS NOT NULL;
+SET contact_id = (
+  SELECT c.id FROM contacts c
+  WHERE c.tenant_id = o.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
+    AND lower(trim(c.email)) = lower(trim(o.customer_email))
+)
+WHERE o.contact_id IS NULL AND o.customer_email IS NOT NULL AND trim(o.customer_email) <> ''
+  AND NOT tg_is_business_address(o.tenant_id, o.customer_email)
+  AND (SELECT count(*) FROM contacts c
+       WHERE c.tenant_id = o.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
+         AND lower(trim(c.email)) = lower(trim(o.customer_email))) = 1;
+
+-- 9b. By phone (last ten digits), exactly one live contact, for orders 9a did not link and that
+--     have NO email match at all (an email that matched a business address is not retried by phone).
+UPDATE orders o
+SET contact_id = (
+  SELECT c.id FROM contacts c
+  WHERE c.tenant_id = o.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
+    AND NOT tg_is_business_address(o.tenant_id, c.email)
+    AND right(regexp_replace(c.phone, '\D', '', 'g'), 10) = right(regexp_replace(o.customer_phone, '\D', '', 'g'), 10)
+)
+WHERE o.contact_id IS NULL AND o.customer_phone IS NOT NULL
+  AND length(regexp_replace(o.customer_phone, '\D', '', 'g')) >= 7
+  AND NOT EXISTS (SELECT 1 FROM contacts c WHERE c.tenant_id = o.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
+                    AND o.customer_email IS NOT NULL AND lower(trim(c.email)) = lower(trim(o.customer_email)))
+  AND (SELECT count(*) FROM contacts c
+       WHERE c.tenant_id = o.tenant_id AND c.merged_into_id IS NULL AND c.archived_at IS NULL
+         AND NOT tg_is_business_address(o.tenant_id, c.email)
+         AND right(regexp_replace(c.phone, '\D', '', 'g'), 10) = right(regexp_replace(o.customer_phone, '\D', '', 'g'), 10)) = 1;
 
 -- verify: how many orders now have a contact, per tenant
 SELECT tenant_id, count(*) FILTER (WHERE contact_id IS NOT NULL) AS linked, count(*) AS total FROM orders GROUP BY 1;

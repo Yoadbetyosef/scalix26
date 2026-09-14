@@ -104,7 +104,10 @@ const lineTotals = (items: LineItemInput[]) => items.map((i) => Math.round((i.qu
 export async function addEvent(orderId: string, type: string, payload: Record<string, unknown> | null, actor?: string): Promise<void> {
   const c = await ctx(); if (!c) return
   const sb = await createClient()
-  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type, actor: actor ?? c.actor, payload })
+  // The timeline is the audit trail. A refused insert must not vanish: it is logged with the event
+  // it failed to record, so a gap in a history can be traced rather than wondered about.
+  const { error } = await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type, actor: actor ?? c.actor, payload })
+  if (error) console.error('[orders] timeline row not written', { orderId, type, error: error.message })
 }
 
 export async function createOrder(input: OrderInput): Promise<Order | null> {
@@ -207,6 +210,9 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   // Never blank out the (NOT NULL, unique) order number — ignore an empty edit.
   if (typeof m.order_number === 'string') { const t = m.order_number.trim(); if (t) m.order_number = t; else delete m.order_number }
   // Re-price if line items are replaced.
+  let previousLines: Array<Record<string, unknown>> = []
+  let linesReplaced = false
+  let degradedNote: string | null = null
   if (patch.lineItems) {
     const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0)
     // ── THE DEPOSIT IS NOT IN THIS PATCH, AND IT USED TO BE TREATED AS ZERO ───────────────────────
@@ -231,16 +237,31 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
     // No transaction is available through PostgREST, so the snapshot IS the transaction: if the
     // insert is refused the old rows go back, ids and all, and the caller is told.
     const { data: previous } = await sb.from('order_line_items').select('*').eq('order_id', id)
+    previousLines = (previous as Array<Record<string, unknown>> | null) ?? []
     await sb.from('order_line_items').delete().eq('order_id', id)
     if (patch.lineItems.length) {
       const { error: lineErr, degraded } = await insertLines(sb, c.tenantId, id, patch.lineItems, totals)
-      if (!lineErr && degraded) throw new Error(`The items saved, but side shapes and band width were not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
       if (lineErr) {
-        const back = (previous as Array<Record<string, unknown>> | null) ?? []
-        if (back.length) await sb.from('order_line_items').insert(back)
+        if (previousLines.length) await sb.from('order_line_items').insert(previousLines)
         throw new Error(`The items could not be saved: ${lineErr.message}. The order is unchanged.`)
       }
+      linesReplaced = true
+      if (degraded) degradedNote = `The items saved, but side shapes and band width were not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`
+    } else {
+      linesReplaced = true
     }
+  }
+  // ── THE ORDER ROW, AND THE WAY BACK IF IT REFUSES ──────────────────────────────────────────────
+  //
+  // The lines are already replaced when this runs (they had to be, to know the subtotal). If THIS
+  // write is refused — a duplicate order number, a column the database has not been told about
+  // that the retries below do not recognise — the order would keep its old subtotal above a new
+  // set of lines. So a refused order write puts the previous lines back, ids and all, exactly as a
+  // refused line insert does: the caller is told, and the order is as it was.
+  const restoreLines = async () => {
+    if (!linesReplaced) return
+    await sb.from('order_line_items').delete().eq('order_id', id)
+    if (previousLines.length) await sb.from('order_line_items').insert(previousLines)
   }
   let { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
   if (isMissingColumn(error, 'order_kind', 'kind_details')) {
@@ -257,8 +278,15 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
     delete rest.customer_company
     ;({ data, error } = await sb.from('orders').update(rest).eq('tenant_id', c.tenantId).eq('id', id).select('*').single())
   }
-  if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
+  if (error) {
+    await restoreLines()
+    throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
+  }
   if (companyDropped) throw new Error(`The order was saved, but the business name was not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
+  // Said AFTER the order row is written: the items and the order both saved, and only the two new
+  // columns were dropped. Before, this threw before the order row was touched — so the lines were
+  // replaced and the subtotal never followed.
+  if (degradedNote) throw new Error(degradedNote)
   await addEvent(id, 'updated', null)
   if (linkedNow) await addEvent(id, 'contact_linked', linkedNow)
   return orderRow(data as Record<string, unknown>)

@@ -79,7 +79,11 @@ describe('and the write itself cannot lose the old items', () => {
     const del = upd.indexOf(".delete().eq('order_id', id)")
     expect(snap).toBeGreaterThan(-1)
     expect(snap).toBeLessThan(del)
-    expect(upd).toMatch(/if \(back\.length\) await sb\.from\('order_line_items'\)\.insert\(back\)/)
+    expect(upd).toMatch(/if \(previousLines\.length\) await sb\.from\('order_line_items'\)\.insert\(previousLines\)/)
+    // And a refused ORDER write (after the lines were replaced) restores them too, so the subtotal
+    // and the lines can never describe two different orders.
+    expect(upd).toMatch(/const restoreLines = async \(\) => \{[\s\S]*?\.delete\(\)\.eq\('order_id', id\)[\s\S]*?insert\(previousLines\)/)
+    expect(upd).toMatch(/if \(error\) \{\s*await restoreLines\(\)/)
   })
 
   it('throws instead of returning 200 with the items gone', () => {
@@ -112,7 +116,7 @@ describe('and the write itself cannot lose the old items', () => {
     expect(store).toMatch(/if \(lineErr\) throw new Error\(`The order was created but its items could not be saved/)
     expect(store).toMatch(/if \(lineErr\) \{/)
 
-    // The one bare insert left is the restore, whose failure is already inside the throw after it.
-    expect(store).toMatch(/if \(back\.length\) await sb\.from\('order_line_items'\)\.insert\(back\)/)
+    // The bare inserts left are the restores, whose failure is already inside the throw after them.
+    expect((store.match(/await sb\.from\('order_line_items'\)\.insert\(previousLines\)/g) ?? []).length).toBe(2)
   })
 })

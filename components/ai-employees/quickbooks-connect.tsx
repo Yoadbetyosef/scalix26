@@ -63,8 +63,8 @@ export function QuickbooksConnect({ agentId }: { agentId: string }) {
             {status === null
               ? 'Checking…'
               : !status.connected
-                ? 'Connect your QuickBooks Online account to link your accounting. Optional.'
-                : <>QuickBooks Online is connected{status.companyName ? ` · ${status.companyName}` : ''}{status.environment ? ` · ${status.environment}` : ''}.</>}
+                ? 'Not connected. Connect your QuickBooks Online account to link your accounting. Optional — and connect-only for now: invoices and payments are not synced to QuickBooks yet.'
+                : <>QuickBooks Online is connected{status.companyName ? ` · ${status.companyName}` : ''}{status.environment ? ` · ${status.environment}` : ''}. Connect-only: nothing is synced to QuickBooks yet.</>}
           </span>
           {/* Which company you are about to link to, BEFORE you link it. A sandbox connection
               succeeds, reports "Connected", and syncs happily into a test company that no accountant
@@ -100,7 +100,7 @@ function SandboxWarning({ connected }: { connected?: boolean }) {
       <b style={{ fontWeight: 600 }}>Test mode.</b>{' '}
       {connected
         ? 'This is linked to an Intuit sandbox company, not your real books — nothing here reaches your accountant.'
-        : 'This will link to an Intuit sandbox company, not your real books. Use it to try the sync; switch the server to production before relying on it.'}
+        : 'This will link to an Intuit sandbox company, not your real books. Switch the server to production before relying on it.'}
     </span>
   )
 }

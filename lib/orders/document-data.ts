@@ -1,5 +1,7 @@
 import { loadDocContext } from './documents'
 import { publicDocumentMediaForTenant, type AttachmentUrlFor } from './attachments'
+import { listOrderPaymentsForTenant } from './payments'
+import { sumPayments } from './payment-types'
 import { templateForOrder, applyTemplate } from './templates'
 import { getOrderForTenant } from './store'
 import { loadTaxRates } from '@/lib/tax/rates-store'
@@ -71,14 +73,26 @@ export async function loadOrderDocument(
     invoiceImageId?: string | null
   }
 
-  const [ctx, media, template, rates] = await Promise.all([
+  const [ctx, media, template, rates, payments] = await Promise.all([
     loadDocContext(tenantId),
     // ForTenant, NOT the session-scoped variant: on /e/[token] that returned an empty array and the
     // customer's copy silently rendered with no photograph of the piece.
     publicDocumentMediaForTenant(tenantId, orderId, urlFor),
     templateForOrder(tenantId, extra.documentTemplateId ?? null),
     loadTaxRates('CA'),
+    listOrderPaymentsForTenant(tenantId, orderId),
   ])
+
+  // ── PAID COMES FROM THE LEDGER, NOT THE CACHED COLUMN ──────────────────────────────────────────
+  // orders.deposit_cents is a cache of the ledger sum, rewritten after every payment. If that
+  // rewrite ever failed (no transaction spans the two writes), the cache is stale and the ledger is
+  // right — and a customer's invoice must print the right figure. An order with no ledger rows
+  // (before add_tg_production_1 part 3) keeps its typed deposit.
+  if (payments.length) {
+    const paid = sumPayments(payments)
+    order.depositCents = paid
+    order.balanceCents = order.subtotalCents - paid
+  }
 
   const applied = applyTemplate(template, ctx.branding, ctx.business)
 

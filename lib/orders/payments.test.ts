@@ -64,7 +64,12 @@ describe('the ledger, not a new table', () => {
     expect(s).not.toMatch(/from\('order_payments'\)/)
   })
   it('writes the running total back to deposit_cents so every older reader sees it', () => {
-    expect(src('lib/orders/payments.ts')).toMatch(/update\(\{ deposit_cents: paid, balance_cents: Number\(o\.subtotal_cents \?\? 0\) - paid/)
+    const s = src('lib/orders/payments.ts')
+    expect(s).toMatch(/update\(\{ deposit_cents: paidCents, balance_cents: subtotalCents - paidCents/)
+    // A retry with the same idempotency key rewrites the cache, so a half-done write heals itself…
+    expect(s).toMatch(/if \(dupe\) \{[\s\S]*?await writeRunningTotal\(/)
+    // …and the document never trusts the cache anyway.
+    expect(src('lib/orders/document-data.ts')).toMatch(/order\.depositCents = paid/)
   })
   it('carries a pre-ledger deposit into the ledger before the first recorded payment', () => {
     const s = src('lib/orders/payments.ts')

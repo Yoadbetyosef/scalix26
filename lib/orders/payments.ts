@@ -118,8 +118,12 @@ export async function recordOrderPayment(orderId: string, input: RecordPaymentIn
     const { data: dupe } = await db.from('payment_allocations').select('*')
       .eq('tenant_id', c.tenantId).eq('idempotency_key', input.idempotencyKey).maybeSingle()
     if (dupe) {
+      // A retry after the ledger row landed but the order's running total did not: recompute and
+      // write it again, so the retry HEALS the half-done write rather than reporting it as done.
       const payments = await listOrderPaymentsForTenant(c.tenantId, orderId)
-      return { ok: true, payment: row(dupe as Record<string, unknown>), totals: orderTotals(orderShape(o), { paidCents: sumPayments(payments) }) }
+      const paid = sumPayments(payments)
+      await writeRunningTotal(db, c.tenantId, orderId, Number(o.subtotal_cents ?? 0), paid)
+      return { ok: true, payment: row(dupe as Record<string, unknown>), totals: orderTotals(orderShape(o), { paidCents: paid }) }
     }
   }
 
@@ -165,13 +169,26 @@ export async function recordOrderPayment(orderId: string, input: RecordPaymentIn
   const totals = orderTotals(orderShape(o), { paidCents: paid })
   // deposit_cents = everything received; balance_cents keeps its historical meaning (subtotal minus
   // deposit) because readers that predate the tax snapshot still compare it to the subtotal.
-  await db.from('orders').update({ deposit_cents: paid, balance_cents: Number(o.subtotal_cents ?? 0) - paid, updated_at: new Date().toISOString() })
-    .eq('tenant_id', c.tenantId).eq('id', orderId)
+  //
+  // ── IF THIS WRITE FAILS ──────────────────────────────────────────────────────────────────────
+  // The ledger row exists (the money is recorded) and the order's cached total is stale. Every
+  // surface that prints money reads the LEDGER — the order page, the customer history, and the
+  // document loader (loadOrderDocument re-derives deposit from the ledger) — so nothing misprints;
+  // and the next payment, or a retry with the same idempotency key, rewrites the cache.
+  const cached = await writeRunningTotal(db, c.tenantId, orderId, Number(o.subtotal_cents ?? 0), paid)
+  if (!cached.ok) console.error('[orders/payments] ledger row written but running total not cached', orderId, cached.error)
   await addEvent(orderId, 'payment_recorded', {
     kind: input.kind, amountCents: input.kind === 'refund' ? -amount : amount, method: input.method, reference, paidOn,
     paidCents: paid, dueCents: totals.dueCents,
   })
   return { ok: true, payment: row(data as Record<string, unknown>), totals, degraded }
+}
+
+/** The cached running total on the order row: deposit_cents = ledger sum, balance_cents = subtotal − it. */
+async function writeRunningTotal(db: ReturnType<typeof createAdminClient>, tenantId: string, orderId: string, subtotalCents: number, paidCents: number): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await db.from('orders').update({ deposit_cents: paidCents, balance_cents: subtotalCents - paidCents, updated_at: new Date().toISOString() })
+    .eq('tenant_id', tenantId).eq('id', orderId)
+  return error ? { ok: false, error: error.message } : { ok: true }
 }
 
 /** The typed deposit on an order that predates the ledger becomes a ledger row, once. */
@@ -218,8 +235,7 @@ export async function deleteOrderPayment(orderId: string, paymentId: string): Pr
   if (!o) return { ok: false, error: 'Order not found' }
   const payments = await listOrderPaymentsForTenant(c.tenantId, orderId)
   const paid = sumPayments(payments)
-  await db.from('orders').update({ deposit_cents: paid, balance_cents: Number(o.subtotal_cents ?? 0) - paid, updated_at: new Date().toISOString() })
-    .eq('tenant_id', c.tenantId).eq('id', orderId)
+  await writeRunningTotal(db, c.tenantId, orderId, Number(o.subtotal_cents ?? 0), paid)
   const removed = row(gone[0] as Record<string, unknown>)
   await addEvent(orderId, 'payment_removed', { amountCents: removed.amountCents, method: removed.method, reference: removed.reference, paidCents: paid })
   return { ok: true, totals: orderTotals(orderShape(o), { paidCents: paid }) }

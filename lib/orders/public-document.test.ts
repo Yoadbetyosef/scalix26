@@ -58,6 +58,17 @@ describe('the link she can copy is the customer link, not her own tab', () => {
     expect(s).toMatch(/fetch\(`\/api\/orders\/\$\{orderId\}\/shares`, \{\s*method: 'POST'/)
     expect(s).toMatch(/navigator\.clipboard\.writeText\(j\.url\)/)
     expect(s).toMatch(/Copy customer link/)
+    // It is the PRIMARY control (the filled one), the page says the address bar is not the link,
+    // and there is a way to see what the customer sees.
+    expect(s).toMatch(/bg-neutral-900 px-4 py-2 text-sm font-semibold text-white[^>]*>\s*<Link2/)
+    expect(s).toMatch(/Internal view — customers use the link below/)
+    expect(s).toMatch(/Preview as customer/)
+  })
+  it('no outbound customer email carries the internal /orders/ URL', () => {
+    for (const f of ['lib/orders/shares.ts', 'lib/orders/approvals.ts', 'lib/orders/approval-email.ts']) {
+      expect(src(f), f).not.toMatch(/\/orders\/\$\{/)
+    }
+    expect(src('lib/orders/shares.ts')).toMatch(/\/e\/\$\{token\}/)
   })
   it('a copied link is recorded in the same table and can be withdrawn like an emailed one', () => {
     const s = src('lib/orders/shares.ts')

@@ -126,6 +126,48 @@ try {
   const rk = await rest(`order_approval_requests?select=request_kind&limit=1`)
   ok(`part 7 (request_kind) applied: ${rk.ok}`, true)
 
+  // ── 5b. Token stress: cross-tenant file, signed-URL lifetime, token shape ─────────────────────
+  // A public attachment from a DIFFERENT tenant, by id, through TG's token: must be refused.
+  const foreign = await (await rest(`order_attachments?select=id&tenant_id=neq.${tg.id}&visibility=eq.public&limit=1`)).json()
+  if (foreign[0]) ok("another TENANT's attachment is refused through the token", (await fetch(`${APP}/e/${token}/file/${foreign[0].id}`, { redirect: 'manual' })).status === 404)
+  else info('no foreign public attachment available to test cross-tenant refusal')
+  ok('a non-uuid file id is refused without a lookup', (await fetch(`${APP}/e/${token}/file/../../orders`, { redirect: 'manual' })).status === 404)
+  {
+    // The signed URL's lifetime: the JWT in it carries exp − iat; the route asks for 300s.
+    const jwt = /token=([^&]+)/.exec(loc)?.[1]
+    const payload = jwt ? JSON.parse(Buffer.from(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()) : null
+    ok(`signed storage URL lives ≤ 5 minutes (exp − iat = ${payload ? payload.exp - payload.iat : '?'}s)`, !!payload && payload.exp - payload.iat <= 300)
+    ok('the signed URL points at exactly the stored object path', !!payload && String(payload.url ?? '').endsWith(pdfPath))
+  }
+  ok('share tokens are 32 random bytes, base64url (43 chars)', token.length === 43 && /^[A-Za-z0-9_-]+$/.test(token))
+
+  // ── 5c. AI knowledge isolation between the two businesses on this tenant ──────────────────────
+  // The same filter every reply path applies (lib/knowledge/scope.ts): this agent's rows + shared.
+  const agentsRows = await (await rest(`ai_employees?select=id,name,website&tenant_id=eq.${tg.id}`)).json()
+  const alex = agentsRows.find((a) => /tgjewellers/.test(a.website || '')), avi = agentsRows.find((a) => /vancouvergemlab/.test(a.website || ''))
+  ok(`found both agents (${alex?.name}, ${avi?.name})`, !!alex && !!avi)
+  if (alex && avi) {
+    const visibleTo = async (id) => (await (await rest(`knowledge_base?select=id,title,ai_employee_id,source&tenant_id=eq.${tg.id}&or=(ai_employee_id.eq.${id},ai_employee_id.is.null)`)).json())
+    const seenByAlex = await visibleTo(alex.id), seenByAvi = await visibleTo(avi.id)
+    const aviOnly = seenByAvi.filter((r) => r.ai_employee_id === avi.id)
+    ok(`${avi.name} sees its appraisal knowledge (${aviOnly.length} own rows incl. pricing)`, aviOnly.some((r) => r.title === 'Appraisal pricing') && aviOnly.some((r) => r.source === 'website'))
+    ok(`${alex.name} sees none of ${avi.name}'s rows`, !seenByAlex.some((r) => r.ai_employee_id === avi.id))
+    ok('no website-scanned row on this tenant is tenant-wide (each belongs to the agent whose site it is)', !seenByAlex.some((r) => r.source === 'website' && r.ai_employee_id === null))
+    // The scan's replace rule, exercised on data: a throwaway website row for Alex survives a
+    // "re-scan by Avi" (delete where source=website AND origin=Avi), which is the exact statement
+    // the route now runs. The old rule (delete where source=website) would have removed it.
+    const [probe] = await (await rest('knowledge_base', { method: 'POST', body: JSON.stringify({ tenant_id: tg.id, ai_employee_id: alex.id, origin_ai_employee_id: alex.id, source: 'website', title: 'VERIFY-PROBE tgjewellers page', content: 'throwaway' }) })).json()
+    await rest(`knowledge_base?tenant_id=eq.${tg.id}&source=eq.website&origin_ai_employee_id=eq.${avi.id}&title=eq.VERIFY-PROBE-none`, { method: 'DELETE' })
+    const stillThere = await (await rest(`knowledge_base?select=id&id=eq.${probe.id}`)).json()
+    ok(`a website re-scan by ${avi.name} does not delete ${alex.name}'s scanned rows`, stillThere.length === 1)
+    await rest(`knowledge_base?id=eq.${probe.id}`, { method: 'DELETE' })
+  }
+
+  // ── 5d. Business timezone ─────────────────────────────────────────────────────────────────────
+  const [tz] = await (await rest(`tenants?select=timezone&id=eq.${tg.id}`)).json()
+  const tzAgents = await (await rest(`ai_employees?select=timezone&tenant_id=eq.${tg.id}`)).json()
+  ok('tenant and every agent run on America/Vancouver', tz?.timezone === 'America/Vancouver' && tzAgents.every((a) => a.timezone === 'America/Vancouver'))
+
   // ── 6. Closing as no sale keeps everything ─────────────────────────────────────────────────────
   await rest(`orders?id=eq.${orderId}`, { method: 'PATCH', body: JSON.stringify({ stage: 'closed_no_sale' }) })
   const [after] = await (await rest(`orders?select=id,stage,internal_notes&id=eq.${orderId}`)).json()

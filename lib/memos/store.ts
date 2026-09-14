@@ -152,6 +152,13 @@ export async function createMemo(input: MemoInput): Promise<{ ok: boolean; error
     created_by: c.actor,
   }).select('*').single()
   if (error) {
+    // The supplier's piece was entered as a product a moment ago and the memo that explains it did
+    // not land: remove the product again, so nothing ownership-'memo_in' sits in the catalog with
+    // no memo behind it.
+    if (input.direction === 'in' && productId && !input.catalogProductId) {
+      await db.from('catalog_movements').delete().eq('tenant_id', c.tenantId).eq('product_id', productId)
+      await db.from('catalog_products').delete().eq('tenant_id', c.tenantId).eq('id', productId)
+    }
     if (error.code === '42P01' || error.code === 'PGRST205') return { ok: false, error: `Run ${MEMOS_MIGRATION} in the Supabase SQL editor first — the memos table does not exist yet.` }
     return { ok: false, error: error.message }
   }
@@ -205,22 +212,42 @@ export async function transitionMemo(id: string, input: MemoTransitionInput): Pr
   if (input.to === 'sold') { patch.sold_on = today; patch.sold_price_cents = input.soldPriceCents ?? m.agreedPriceCents; if (input.orderId) patch.order_id = input.orderId }
   if (input.to === 'returned') patch.returned_on = today
 
-  // Stock first, then the status: if the stock cannot move the status must not claim it did.
+  // ── THE STATUS IS THE LOCK ─────────────────────────────────────────────────────────────────────
+  //
+  // No transaction spans the memo row and the catalog, so the order of the two writes decides what
+  // a failure or a double-tap leaves behind. The status is written FIRST, conditionally on the
+  // status this call read (`.eq('status', m.status)`): a second tap, a retried request or a
+  // colleague's move finds the row already changed, updates nothing, and moves NO stock — so a
+  // memo can never move the same piece twice. Then the stock moves; if that fails the status is
+  // put back, and the caller sees the error with the memo exactly as it was.
+  const { data: locked, error: lockErr } = await db.from('memos').update(patch)
+    .eq('tenant_id', c.tenantId).eq('id', id).eq('status', m.status).select('id')
+  if (lockErr) return { ok: false, error: lockErr.message }
+  if (!locked?.length) return { ok: false, error: 'This memo was just changed by somebody else — reload to see its current state.' }
+  const revert = async (why: string) => {
+    await db.from('memos').update({ status: m.status, sold_on: m.soldOn, returned_on: m.returnedOn, sold_price_cents: m.soldPriceCents, order_id: m.orderId, due_on: m.dueOn, updated_at: new Date().toISOString() })
+      .eq('tenant_id', c.tenantId).eq('id', id)
+    return { ok: false as const, error: why }
+  }
+
+  // Then the stock. Any failure here reverts the status above, so the two never disagree.
   if (m.catalogProductId) {
     const loc = asLoc(input.toLocation) ?? asLoc(m.fromLocation) ?? 'showroom'
     if (m.direction === 'out' && input.to === 'returned') {
       const r = await moveStockForMemo(c.tenantId, m.catalogProductId, m.quantity, loc, -1, 'memo_return', `Returned from ${m.kind} by ${m.counterpartyName ?? 'customer'}`, c.actor)
-      if (!r.ok) return r
+      if (!r.ok) return revert(r.error ?? 'The stock could not be moved.')
     }
     if (m.direction === 'out' && input.to === 'sold') {
       // Off on-memo, and not back into any location: it is sold.
       const { data: p } = await db.from('catalog_products').select('on_memo_quantity').eq('tenant_id', c.tenantId).eq('id', m.catalogProductId).maybeSingle()
-      await db.from('catalog_products').update({ on_memo_quantity: clamp(Number(p?.on_memo_quantity ?? 0) - m.quantity), updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', m.catalogProductId)
+      const { error: soldErr } = await db.from('catalog_products').update({ on_memo_quantity: clamp(Number(p?.on_memo_quantity ?? 0) - m.quantity), updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', m.catalogProductId)
+      if (soldErr) return revert(soldErr.message)
       await db.from('catalog_movements').insert({ tenant_id: c.tenantId, product_id: m.catalogProductId, movement_type: 'sell', quantity: m.quantity, from_location: null, note: `Sold from ${m.kind} to ${m.counterpartyName ?? 'customer'}`, created_by: c.actor })
     }
     if (m.direction === 'in' && input.to === 'returned') {
       // It was never ours. Quantity to zero and the row archived, so it stops appearing available.
-      await db.from('catalog_products').update({ showroom_quantity: 0, warehouse_quantity: 0, storage_quantity: 0, availability_status: 'out_of_stock', archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', m.catalogProductId)
+      const { error: retErr } = await db.from('catalog_products').update({ showroom_quantity: 0, warehouse_quantity: 0, storage_quantity: 0, availability_status: 'out_of_stock', archived_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', m.catalogProductId)
+      if (retErr) return revert(retErr.message)
       await db.from('catalog_movements').insert({ tenant_id: c.tenantId, product_id: m.catalogProductId, movement_type: 'memo_return_supplier', quantity: m.quantity, from_location: loc, note: `Returned to ${m.counterpartyName ?? 'supplier'}`, created_by: c.actor })
     }
     if (m.direction === 'in' && input.to === 'sold') {
@@ -228,13 +255,14 @@ export async function transitionMemo(id: string, input: MemoTransitionInput): Pr
       if (p) {
         const q: Record<Loc, number> = { showroom: Number(p.showroom_quantity ?? 0), warehouse: Number(p.warehouse_quantity ?? 0), storage: Number(p.storage_quantity ?? 0) }
         q[loc] = clamp(q[loc] - m.quantity)
-        await db.from('catalog_products').update({ [COL.showroom]: q.showroom, [COL.warehouse]: q.warehouse, [COL.storage]: q.storage, availability_status: availabilityOf(p as Record<string, unknown>, q), updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', m.catalogProductId)
+        const { error: sellErr } = await db.from('catalog_products').update({ [COL.showroom]: q.showroom, [COL.warehouse]: q.warehouse, [COL.storage]: q.storage, availability_status: availabilityOf(p as Record<string, unknown>, q), updated_at: new Date().toISOString() }).eq('tenant_id', c.tenantId).eq('id', m.catalogProductId)
+        if (sellErr) return revert(sellErr.message)
         await db.from('catalog_movements').insert({ tenant_id: c.tenantId, product_id: m.catalogProductId, movement_type: 'sell', quantity: m.quantity, from_location: loc, note: `Sold — ${m.kind} piece from ${m.counterpartyName ?? 'supplier'}`, created_by: c.actor })
       }
     }
   }
 
-  const { data: updated, error } = await db.from('memos').update(patch).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
+  const { data: updated, error } = await db.from('memos').select('*').eq('tenant_id', c.tenantId).eq('id', id).single()
   if (error) return { ok: false, error: error.message }
   await addMemoEvent(c.tenantId, id, 'status_changed', { from: m.status, to: input.to, note: (input.note ?? '').trim() || null, soldPriceCents: patch.sold_price_cents ?? null, orderId: input.orderId ?? null }, c.actor)
   return { ok: true, memo: row(updated as Record<string, unknown>) }

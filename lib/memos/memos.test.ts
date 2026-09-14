@@ -54,8 +54,15 @@ describe('the stock follows the memo — asserted against the store', () => {
   it('a sale writes a sell movement in either direction and never touches a status without stock', () => {
     expect(s).toMatch(/m\.direction === 'out' && input\.to === 'sold'[\s\S]*?movement_type: 'sell'/)
     expect(s).toMatch(/m\.direction === 'in' && input\.to === 'sold'[\s\S]*?movement_type: 'sell'/)
-    // Stock first, then status.
-    expect(s.indexOf('// Stock first, then the status')).toBeLessThan(s.indexOf("await db.from('memos').update(patch)"))
+  })
+  it('the status is an optimistic lock, and a failed stock move puts it back', () => {
+    // No transaction spans memo + catalog. The status write is conditional on the status this call
+    // read, so a double-tap or a retry moves no stock twice; every stock failure reverts it.
+    expect(s).toMatch(/\.update\(patch\)\s*\n\s*\.eq\('tenant_id', c\.tenantId\)\.eq\('id', id\)\.eq\('status', m\.status\)/)
+    expect(s).toMatch(/if \(!locked\?\.length\) return \{ ok: false/)
+    expect((s.match(/return revert\(/g) ?? []).length).toBeGreaterThanOrEqual(4)
+    // A supplier piece entered a moment ago is removed again if the memo itself does not land.
+    expect(s).toMatch(/if \(input\.direction === 'in' && productId && !input\.catalogProductId\) \{[\s\S]*?from\('catalog_products'\)\.delete\(\)/)
   })
   it('every transition is on the memo history', () => {
     expect(s).toMatch(/addMemoEvent\(c\.tenantId, id, 'status_changed'/)
