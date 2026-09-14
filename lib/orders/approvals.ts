@@ -47,8 +47,12 @@ export interface ApprovalRequestRow {
   status: string; version: number; subject: string | null; message: string | null; expiresAt: string | null
   sentAt: string | null; openedAt: string | null; respondedAt: string | null; responseComment: string | null
   estimatedCompletionDate: string | null; createdAt: string
+  /** 'quote' when the factory was asked for a cost. Read as 'approval' on a row without the column. */
+  requestKind: 'approval' | 'quote'
+  /** What the factory quoted, in cents. Internal. */
+  quotedCostCents: number | null
 }
-const reqRow = (r: Record<string, unknown>): ApprovalRequestRow => ({ id: r.id as string, orderId: r.order_id as string, approvalType: r.approval_type as ApprovalType, recipientName: (r.recipient_name as string) ?? null, recipientEmail: r.recipient_email as string, status: r.status as string, version: Number(r.version ?? 1), subject: (r.subject as string) ?? null, message: (r.message as string) ?? null, expiresAt: (r.expires_at as string) ?? null, sentAt: (r.sent_at as string) ?? null, openedAt: (r.opened_at as string) ?? null, respondedAt: (r.responded_at as string) ?? null, responseComment: (r.response_comment as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null, createdAt: r.created_at as string })
+const reqRow = (r: Record<string, unknown>): ApprovalRequestRow => ({ requestKind: r.request_kind === 'quote' ? 'quote' : 'approval', quotedCostCents: r.quoted_cost_cents == null ? null : Number(r.quoted_cost_cents), id: r.id as string, orderId: r.order_id as string, approvalType: r.approval_type as ApprovalType, recipientName: (r.recipient_name as string) ?? null, recipientEmail: r.recipient_email as string, status: r.status as string, version: Number(r.version ?? 1), subject: (r.subject as string) ?? null, message: (r.message as string) ?? null, expiresAt: (r.expires_at as string) ?? null, sentAt: (r.sent_at as string) ?? null, openedAt: (r.opened_at as string) ?? null, respondedAt: (r.responded_at as string) ?? null, responseComment: (r.response_comment as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null, createdAt: r.created_at as string })
 
 export async function listApprovalsForOrder(orderId: string): Promise<ApprovalRequestRow[]> {
   const c = await requireActiveBusinessContext(); if (!c) return []
@@ -63,6 +67,13 @@ export interface SendApprovalInput {
   attachmentIds?: string[]; sendCopyToSelf?: boolean; internalNote?: string | null
   /** Factory sends only: the supplier record this goes to. Also becomes the order's supplier. */
   supplierId?: string | null
+  /**
+   * WHAT IS BEING ASKED. 'approval' (the default) asks the recipient to approve the piece; 'quote'
+   * asks a factory what it would COST — the same link, the same specification and attachments, a
+   * different question, and the answer is a number that lands in quoted_cost_cents. Internal to the
+   * job; never on a customer document.
+   */
+  requestKind?: 'approval' | 'quote'
 }
 
 export async function createAndSendApproval(orderId: string, input: SendApprovalInput, baseUrl: string): Promise<{ ok: boolean; error?: string; requestId?: string }> {
@@ -108,6 +119,7 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   const tz = await getBusinessTimezone(c.tenantId, (await sb.from('tenants').select('timezone').eq('id', c.tenantId).maybeSingle()).data?.timezone as string | null)
   const deadlineOn = input.deadline && endOfDayUtc(input.deadline, tz) ? input.deadline : null
 
+  const requestKind = input.approvalType === 'factory' && input.requestKind === 'quote' ? 'quote' : 'approval'
   const base = {
     tenant_id: c.tenantId, order_id: orderId, approval_type: input.approvalType, recipient_name: input.recipientName ?? null, recipient_email: input.recipientEmail,
     supplier_id: supplier?.id ?? null,
@@ -120,7 +132,12 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   // decoration on a send that must not be blocked by it. The date is still in the email either way.
   let created: Record<string, unknown> | null = null
   let insErr: { code?: string; message?: string } | null = null
-  ;({ data: created, error: insErr } = await sb.from('order_approval_requests').insert({ ...base, deadline_on: deadlineOn }).select('*').single())
+  ;({ data: created, error: insErr } = await sb.from('order_approval_requests').insert({ ...base, deadline_on: deadlineOn, request_kind: requestKind }).select('*').single())
+  if (isMissingColumn(insErr, 'request_kind')) {
+    // add_tg_production_1 part 7 not run: the request goes out as a plain approval, which is what
+    // the row can say. The email below still asks for the cost in words.
+    ;({ data: created, error: insErr } = await sb.from('order_approval_requests').insert({ ...base, deadline_on: deadlineOn }).select('*').single())
+  }
   if (isMissingColumn(insErr, 'deadline_on')) {
     ;({ data: created, error: insErr } = await sb.from('order_approval_requests').insert(base).select('*').single())
   }
@@ -141,8 +158,8 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   const link = `${baseUrl.replace(/\/$/, '')}/approval/${token}` // raw token only in the link, never persisted/logged
 
   // Send FIRST; only advance the stage if the email actually succeeds (sendEmail RETURNS {success}, not throws).
-  const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: deadlineOn, link, supportEmail: (tenant?.email as string) ?? null })
-  const sendResult = await sendEmail(input.recipientEmail, input.subject || `Approval requested — order ${order.order_number}`, html, { tenantId: c.tenantId, fromName: businessName, replyTo: (tenant?.email as string) ?? undefined }).catch((e) => ({ success: false as const, error: (e as Error).message }))
+  const html = approvalEmailHtml({ businessName, orderNumber: order.order_number as string, approvalType: input.approvalType, message: input.message ?? null, deadline: deadlineOn, link, supportEmail: (tenant?.email as string) ?? null, requestKind })
+  const sendResult = await sendEmail(input.recipientEmail, input.subject || (requestKind === 'quote' ? `Quotation requested — order ${order.order_number}` : `Approval requested — order ${order.order_number}`), html, { tenantId: c.tenantId, fromName: businessName, replyTo: (tenant?.email as string) ?? undefined }).catch((e) => ({ success: false as const, error: (e as Error).message }))
   if (!sendResult.success) {
     // Email failed → keep the request as draft, DO NOT advance the order stage.
     return { ok: false, error: `Email failed to send${'error' in sendResult && sendResult.error ? ` (${sendResult.error})` : ''}; the order stage was not changed.`, requestId }
@@ -154,7 +171,7 @@ export async function createAndSendApproval(orderId: string, input: SendApproval
   // The supplier is recorded on the order only after the send worked, so an order never claims a factory
   // that was never contacted.
   await sb.from('orders').update({ stage: stageAfterSend(input.approvalType), ...(supplier ? { supplier_id: supplier.id } : {}), updated_at: now }).eq('tenant_id', c.tenantId).eq('id', orderId)
-  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'approval_sent', actor: c.actorUserId, payload: { approvalType: input.approvalType, version, recipientEmail: input.recipientEmail } })
+  await sb.from('order_events').insert({ tenant_id: c.tenantId, order_id: orderId, type: 'approval_sent', actor: c.actorUserId, payload: { approvalType: input.approvalType, version, recipientEmail: input.recipientEmail, requestKind } })
   return { ok: true, requestId }
 }
 
@@ -176,7 +193,9 @@ export interface PublicApprovalView {
   // the object path, which is `<tenant_id>/<order_id>/<uuid>`, and would hand both internal ids to an
   // external factory on every image it renders.
   attachments: Array<{ id: string; fileName: string; mimeType: string; url: string }>
-  existingResponse: { comment: string | null; estimatedCompletionDate: string | null } | null
+  existingResponse: { comment: string | null; estimatedCompletionDate: string | null; quotedCostCents: number | null } | null
+  /** 'quote' when the factory is being asked what it would cost rather than to approve. */
+  requestKind: 'approval' | 'quote'
   // Factory-only production hand-off: once the order is in production, the same link lets the factory
   // upload an invoice and mark the item ready. Set only for factory tokens.
   canSubmitDelivery: boolean; deliverySubmitted: boolean
@@ -309,7 +328,8 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
     deadline: (r.deadline_on as string) ?? (r.expires_at as string) ?? null,
     canRespond: true,
     order: publicOrder, attachments,
-    existingResponse: responded ? { comment: (r.response_comment as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null } : null,
+    existingResponse: responded ? { comment: (r.response_comment as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null, quotedCostCents: r.quoted_cost_cents == null ? null : Number(r.quoted_cost_cents) } : null,
+    requestKind: r.request_kind === 'quote' ? 'quote' : 'approval',
     // Same factory link becomes a "ready + invoice" hand-off once the order reaches production.
     canSubmitDelivery: isFactory && orderStage === 'production',
     deliverySubmitted: isFactory && ['ready', 'delivered', 'completed'].includes(orderStage),
@@ -336,7 +356,7 @@ export async function attachmentForToken(rawToken: string, attachmentId: string)
   return { storagePath: att.storage_path as string, fileName: att.file_name as string, mimeType: att.mime_type as string }
 }
 
-export async function recordApprovalResponse(rawToken: string, decision: ApprovalDecision, comment: string | null, estCompletionDate: string | null): Promise<{ ok: boolean; error?: string }> {
+export async function recordApprovalResponse(rawToken: string, decision: ApprovalDecision, comment: string | null, estCompletionDate: string | null, quotedCostCents: number | null = null): Promise<{ ok: boolean; error?: string }> {
   const r = await findByToken(rawToken)
   if (!r) return { ok: false, error: 'This approval link is invalid or has expired.' }
   const status = r.status as string
@@ -345,26 +365,43 @@ export async function recordApprovalResponse(rawToken: string, decision: Approva
 
   const type = r.approval_type as ApprovalType
   const sb = createAdminClient()
-  // Must be in the respondable stage OR already at a result of this cycle (allows a decision change), and the
-  // request itself must be actionable (sent/opened) or already responded on this cycle.
+  if (!['sent', 'opened', 'approved', 'changes_requested', 'rejected'].includes(status)) return { ok: false, error: 'This order is no longer awaiting your response.' }
+
+  // ── THE ANSWER IS ALWAYS RECORDED. THE STAGE MOVES ONLY WHEN IT STILL DESCRIBES THE ORDER. ──────
+  //
+  // This used to refuse the whole response unless the order was still sitting in the waiting stage.
+  // Now that staff may move a job anywhere by hand — "customer rang, we're proceeding" drags it to
+  // production while the link is still in the customer's inbox — that refusal would throw away the
+  // customer's written approval, on their screen, with an error that blames the software. The
+  // request row is the truth about what was answered and it is always written. The order's stage is
+  // a summary, and it is only rewritten when the order is still at this cycle's waiting stage or
+  // one of its results; otherwise it stays where the jeweller put it and the timeline shows both.
   const { data: order } = await sb.from('orders').select('stage').eq('id', r.order_id as string).maybeSingle()
   const orderStage = order?.stage as OrderStage | undefined
   const resultStages: OrderStage[] = type === 'factory' ? ['factory_approved', 'factory_changes_requested'] : ['customer_approved', 'customer_changes_requested']
   const cycleOk = orderStage === respondableStage(type) || resultStages.includes(orderStage as OrderStage)
-  if (!['sent', 'opened', 'approved', 'changes_requested', 'rejected'].includes(status) || !cycleOk) return { ok: false, error: 'This order is no longer awaiting your response.' }
+  if (orderStage === 'cancelled') return { ok: false, error: 'This order has been cancelled and is no longer awaiting your response.' }
 
   const now = new Date().toISOString()
   const newStatus = decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'changes_requested'
-  await sb.from('order_approval_requests').update({ status: newStatus, responded_at: now, response_comment: comment ?? null, estimated_completion_date: estCompletionDate ?? null, updated_at: now }).eq('id', r.id as string)
+  const responsePatch = { status: newStatus, responded_at: now, response_comment: comment ?? null, estimated_completion_date: estCompletionDate ?? null, updated_at: now }
+  // The quoted cost, when the factory gave one. Dropped with a retry on a database that has not
+  // had part 7 run — the comment still carries the number in words, so nothing is lost.
+  const { error: respErr } = await sb.from('order_approval_requests').update({ ...responsePatch, ...(quotedCostCents != null ? { quoted_cost_cents: quotedCostCents } : {}) }).eq('id', r.id as string)
+  if (respErr && quotedCostCents != null) await sb.from('order_approval_requests').update(responsePatch).eq('id', r.id as string)
   const nextStage = stageAfterResponse(type, decision)
-  await sb.from('orders').update({ stage: nextStage, ...(estCompletionDate ? { estimated_completion_date: estCompletionDate } : {}), updated_at: now }).eq('id', r.order_id as string)
-  await sb.from('order_events').insert({ tenant_id: r.tenant_id, order_id: r.order_id, type: 'approval_responded', actor: type, payload: { approvalType: type, decision, hasComment: !!comment, changed: ['approved', 'changes_requested', 'rejected'].includes(status) } })
+  if (cycleOk) {
+    await sb.from('orders').update({ stage: nextStage, ...(estCompletionDate ? { estimated_completion_date: estCompletionDate } : {}), updated_at: now }).eq('id', r.order_id as string)
+  } else if (estCompletionDate) {
+    await sb.from('orders').update({ estimated_completion_date: estCompletionDate, updated_at: now }).eq('id', r.order_id as string)
+  }
+  await sb.from('order_events').insert({ tenant_id: r.tenant_id, order_id: r.order_id, type: 'approval_responded', actor: type, payload: { approvalType: type, decision, hasComment: !!comment, changed: ['approved', 'changes_requested', 'rejected'].includes(status), stageMoved: cycleOk, ...(cycleOk ? { to: nextStage } : { staysAt: orderStage }), ...(quotedCostCents != null ? { quotedCostCents } : {}) } })
 
   // Notify Tatiana (tenant email). Best-effort — never blocks the recipient's response.
   try {
     const { data: tenant } = await sb.from('tenants').select('email, business_name').eq('id', r.tenant_id as string).maybeSingle()
     const { data: ord } = await sb.from('orders').select('order_number').eq('id', r.order_id as string).maybeSingle()
-    if (tenant?.email) await sendEmail(tenant.email as string, `${type === 'factory' ? 'Factory' : 'Customer'} responded — order ${ord?.order_number}`, `<p>The ${type} responded to order <strong>${ord?.order_number}</strong>: <strong>${decision.replace('_', ' ')}</strong>.</p>${comment ? `<p>Comment: ${comment.replace(/[<>]/g, '')}</p>` : ''}${estCompletionDate ? `<p>Estimated completion: ${estCompletionDate}</p>` : ''}`, { tenantId: r.tenant_id as string, fromName: (tenant?.business_name as string) || undefined })
+    if (tenant?.email) await sendEmail(tenant.email as string, `${type === 'factory' ? 'Factory' : 'Customer'} responded — order ${ord?.order_number}`, `<p>The ${type} responded to order <strong>${ord?.order_number}</strong>: <strong>${decision.replace('_', ' ')}</strong>.</p>${quotedCostCents != null ? `<p>Quoted cost: <strong>${(quotedCostCents / 100).toFixed(2)}</strong></p>` : ''}${comment ? `<p>Comment: ${comment.replace(/[<>]/g, '')}</p>` : ''}${estCompletionDate ? `<p>Estimated completion: ${estCompletionDate}</p>` : ''}`, { tenantId: r.tenant_id as string, fromName: (tenant?.business_name as string) || undefined })
   } catch { /* ignore notification failure */ }
   return { ok: true }
 }

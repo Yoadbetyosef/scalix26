@@ -10,6 +10,7 @@ import { LETTERHEAD_STYLES } from '@/lib/documents/letterhead-styles'
 import { letterheadName } from '@/lib/documents/letterhead-resolve'
 import { OrderDocumentBody } from '@/components/orders/document-body'
 import { loadOrderDocument } from '@/lib/orders/document-data'
+import { documentSender } from '@/lib/orders/shares'
 
 // The owner's copy. The customer's copy is /e/[token], and both render the same body from the same
 // loader — see components/orders/document-body.tsx for why that matters.
@@ -27,7 +28,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     const [order, { business }] = await Promise.all([getOrder(id), loadDocContext(a.tenantId)])
     const label = type.charAt(0).toUpperCase() + type.slice(1)
     const num = order?.orderNumber ? ` ${order.orderNumber}` : ''
-    return { title: [business.businessName, `${label}${num}`].filter(Boolean).join(' · '), robots: { index: false, follow: false } }
+    // The letterhead's name — Chrome prints document.title on every page, so a T.G. Designs
+    // estimate must not be headed "TG jewellers".
+    const sender = order ? await documentSender(a.tenantId, order) : null
+    return { title: [sender?.businessName || business.businessName, `${label}${num}`].filter(Boolean).join(' · '), robots: { index: false, follow: false } }
   } catch {
     // A title is not worth failing a document render over.
     return { title: '' }
@@ -61,6 +65,7 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
       branding={data.branding}
       business={data.business}
       images={data.images}
+      files={data.files}
       tax={data.tax}
       pstExemptionNote={data.pstExemptionNote}
       footerNote={data.footerNote}

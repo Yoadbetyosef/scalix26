@@ -5,17 +5,19 @@ import { useRouter } from 'next/navigation'
 import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
 import { LineItemFields, emptyLine, fetchOptionLists, lineToPayload, namelessError, type LineDraft } from './line-item-fields'
+import { KindFields, emptyKind, type KindDraft } from './kind-fields'
 
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
 
-export function OrderForm() {
+export function OrderForm({ initialCustomer }: { initialCustomer?: PickedContact | null } = {}) {
   const router = useRouter()
-  const [customer, setCustomer] = useState<PickedContact>({ id: null, name: '', company: '', email: '', phone: '', address: '', currency: 'usd' })
+  const [customer, setCustomer] = useState<PickedContact>(initialCustomer ?? { id: null, name: '', company: '', email: '', phone: '', address: '', currency: 'usd' })
   const [f, setF] = useState({
     orderNumber: '', factoryName: '', factoryContactName: '', factoryEmail: '', assignedEmployee: '',
-    orderDate: '', requestedCompletionDate: '', depositAmount: '', clientRequirements: '', internalNotes: '', publicNotes: '',
+    orderDate: '', requestedCompletionDate: '', clientRequirements: '', internalNotes: '', publicNotes: '',
   })
   const [isCustomDesign, setIsCustomDesign] = useState(false)
+  const [kind, setKind] = useState<KindDraft>(emptyKind())
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
   const [lists, setLists] = useState<OrderOptionList[]>([])
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
@@ -39,8 +41,8 @@ export function OrderForm() {
         currency: customer.currency,
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
-        depositCents: Math.round((parseFloat(f.depositAmount) || 0) * 100),
         clientRequirements: f.clientRequirements || null, isCustomDesign,
+        orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details,
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
       }
@@ -63,6 +65,8 @@ export function OrderForm() {
         <div className="v2-head" style={{ marginBottom: 14 }}><p className="v2-kick"><i />Customer</p><s /></div>
         <ContactPicker value={customer} onChange={setCustomer} />
       </section>
+
+      <KindFields value={kind} onChange={setKind} idPrefix="of-kind" />
 
       <section>
         <div className="v2-head" style={{ marginBottom: 14 }}><p className="v2-kick"><i />Order</p><s /></div>
@@ -121,7 +125,7 @@ export function OrderForm() {
         <div className="space-y-3">
           {lines.map((l, i) => (
             <div key={i} className="v2-card" style={{ gap: 0 }}>
-              <LineItemFields line={l} lists={lists} currencySymbol={sym} onChange={(k, v) => setLine(i, k, v)} />
+              <LineItemFields line={l} lists={lists} currencySymbol={sym} onChange={(k, v) => setLine(i, k, v)} index={i} />
               {lines.length > 1 && (
                 <button type="button" onClick={() => setLines((p) => p.filter((_, idx) => idx !== i))}
                         className="v2-act" data-danger style={{ marginTop: 14, alignSelf: 'flex-start' }}>
@@ -136,8 +140,8 @@ export function OrderForm() {
 
       <section>
         <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-          <div className="v2-fld"><label htmlFor="of-dep">Deposit ({sym})</label>
-            <input id="of-dep" value={f.depositAmount} onChange={set('depositAmount')} placeholder="0" /></div>
+          {/* No deposit field here any more: money is recorded on the order page (Record deposit),
+              with how it was paid and a reference, and the balance follows from the ledger. */}
           <div className="v2-fld"><label htmlFor="of-pub">Public notes</label>
             <textarea id="of-pub" value={f.publicNotes} onChange={set('publicNotes')} rows={2} />
             <span className="v2-hint">Visible on the approval page.</span></div>

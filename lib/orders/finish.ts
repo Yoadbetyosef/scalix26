@@ -20,12 +20,25 @@ const MIGRATION_HINT = 'run add_orders_6_estimates_tax_templates.sql'
  * Mark the order invoiced. It creates no new record, because the invoice already exists: the same
  * order, rendered as an invoice document, from the data that was entered when the job was quoted.
  * Nothing is re-keyed — that is the whole point of the feature.
+ *
+ * ── AT ANY STAGE BUT CANCELLED ──────────────────────────────────────────────────────────────────
+ *
+ * This was gated to completed/finished, which made the invoice the LAST thing that could happen to
+ * a job. TG invoices at the deposit: estimate → verbal yes → deposit → invoice → months of
+ * production → balance at pickup. Gating the invoice on production being over meant the deposit
+ * receipt lived in another system. The stage says where the WORK is; the invoice is a document
+ * about the money, and the payments ledger — not the stage — says how much of it has arrived.
+ *
+ * Already invoiced is not an error: the stamp is left as it was, so the date on the order is the
+ * date it was FIRST invoiced.
  */
 export async function raiseInvoice(orderId: string): Promise<FinishResult> {
   const c = await requireActiveBusinessContext()
   if (!c) return { ok: false, error: 'Not signed in' }
   const order = await getOrder(orderId)
   if (!order || order.tenantId !== c.tenantId) return { ok: false, error: 'Order not found' }
+  if (order.stage === 'cancelled') return { ok: false, error: 'This order is cancelled — there is nothing to invoice.' }
+  if (order.invoicedAt) return { ok: true }
 
   const db = createAdminClient()
   const { error } = await db.from('orders')

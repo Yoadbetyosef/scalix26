@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { PrintButton } from '@/components/studio/print-button'
 import { OrderDocumentBody } from '@/components/orders/document-body'
 import { loadOrderDocument } from '@/lib/orders/document-data'
-import { resolveShare, shareLinkRevoked } from '@/lib/orders/shares'
+import { resolveShare, shareLinkRevoked, documentSender } from '@/lib/orders/shares'
 import { ORDER_DOC_META } from '@/lib/orders/documents'
 
 // The customer's copy of a document, at a token URL.
@@ -25,9 +25,12 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
     if (!share) return { title: 'Document', robots: { index: false, follow: false } }
     const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType)
     const label = ORDER_DOC_META[share.docType]?.title ?? 'Document'
-    // The tenant's name, never ours — see lib/documents/routes.ts.
+    // The name the LETTERHEAD carries, never ours and not necessarily the tenant's: a T.G. Designs
+    // estimate must not open in a tab that says TG jewellers. See lib/documents/routes.ts and
+    // documentSender.
+    const sender = data ? await documentSender(share.tenantId, data.order) : null
     return {
-      title: [data?.business.businessName, label].filter(Boolean).join(' · ') || label,
+      title: [sender?.businessName || data?.business.businessName, label].filter(Boolean).join(' · ') || label,
       robots: { index: false, follow: false },
     }
   } catch {
@@ -64,7 +67,10 @@ export default async function SharedDocumentPage({ params }: { params: Promise<{
     notFound()
   }
 
-  const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType)
+  // Every photo, video and certificate on the customer's copy is reached through the token route
+  // rather than a storage URL minted now, so a link still opens after the page has sat open for an
+  // hour — see app/e/[token]/file/[attachmentId]/route.ts.
+  const data = await loadOrderDocument(share.tenantId, share.orderId, share.docType, (a) => `/e/${token}/file/${a.id}`)
   if (!data) notFound()
 
   return (
@@ -74,6 +80,7 @@ export default async function SharedDocumentPage({ params }: { params: Promise<{
       branding={data.branding}
       business={data.business}
       images={data.images}
+      files={data.files}
       tax={data.tax}
       pstExemptionNote={data.pstExemptionNote}
       footerNote={data.footerNote}

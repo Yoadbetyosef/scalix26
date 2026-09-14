@@ -91,8 +91,10 @@ export function SharedLinks({ orderId }: { orderId: string }) {
     ...(shares ?? []).map((s) => ({
       key: `s:${s.id}`, id: s.id, kind: 'share' as const,
       label: `${title(s.docType)} link`,
-      who: s.recipientName || s.recipientEmail,
-      email: s.recipientEmail,
+      // A link minted with "Copy customer link" was emailed to nobody; its recipient_email is the
+      // sentinel 'link' (lib/orders/shares.ts COPIED_LINK), which the panel says in words.
+      who: s.recipientEmail === 'link' ? (s.recipientName ? `Copied link · ${s.recipientName}` : 'Copied link') : (s.recipientName || s.recipientEmail),
+      email: s.recipientEmail === 'link' ? '' : s.recipientEmail,
       sent: s.sentAt ?? s.createdAt,
       live: !s.revokedAt,
       note: s.revokedAt ? `Withdrawn ${when(s.revokedAt)}` : null,
@@ -133,7 +135,7 @@ export function SharedLinks({ orderId }: { orderId: string }) {
                     {r.label} · {r.who}
                   </p>
                   <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11 }}>
-                    {r.who !== r.email ? `${r.email} · ` : ''}
+                    {r.email && r.who !== r.email ? `${r.email} · ` : ''}
                     {when(r.sent) ?? 'not sent'}
                     {r.note ? ` · ${r.note}` : ''}
                   </span>

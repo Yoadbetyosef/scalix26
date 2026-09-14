@@ -8,6 +8,10 @@ import { Chip } from '@/components/inbox/conversation-contact-panel'
 import { channelHue } from '@/app/(v2)/v2/channels'
 import { formatDate, formatDateTime, contactIdentifier } from '@/lib/utils'
 import { contactDisplayOrIdentifier, contactInitial } from '@/lib/contacts/names'
+import { readCustomerHistory } from '@/lib/customer/history'
+import { getTenantEnabledModules } from '@/lib/tenant'
+import { stageHue } from '@/lib/orders/stage-colors'
+import { STATUS_GROUP_LABELS } from '@/lib/orders/stages'
 
 // Status wears the same chip as the channel, in its own hue — identical to /inbox/[id], because a
 // conversation's status means the same thing on whichever screen it is listed.
@@ -59,6 +63,15 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
     .eq('tenant_id', tenantId)
     .order('updated_at', { ascending: false })
     .limit(50)
+
+  // Everything else that is about this person — orders, estimates (taken or not), payments and
+  // appointments. Only when the tenant has Orders at all; a tenant without it sees the page it had.
+  const modules = await getTenantEnabledModules()
+  const history = modules.includes('orders')
+    ? await readCustomerHistory(tenantId, { id: contact.id, email: contact.email, phone: contact.phone })
+    : null
+  const money = (c: number, cur: string) =>
+    new Intl.NumberFormat(undefined, { style: 'currency', currency: (cur || 'usd').toUpperCase(), maximumFractionDigits: 0 }).format(c / 100)
 
   const ident = contactIdentifier(contact.channel, contact.phone)
   const IdentIcon = ident?.isPhone ? Phone : MessageCircle
@@ -141,9 +154,114 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
           </div>
         </div>
 
-        {/* Conversation history — the kit's list row, the same component /inbox uses, because these
-            are the same records seen from the other side. */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-8">
+          {/* ── ORDERS, ESTIMATES AND EVERYTHING BOUGHT OR QUOTED ─────────────────────────────────
+              The permanent record. A closed-no-sale estimate sits here next to the finished ring,
+              because "we quoted you a 1.2ct oval in March" is the sentence a returning customer
+              needs to hear. Matched by the link on the order AND by the email/phone typed on it —
+              see lib/customer/history.ts. */}
+          {history && (
+            <div>
+              <div className="v2-head" style={{ marginBottom: 12 }}>
+                <p className="v2-kick">Orders &amp; estimates · {history.totals.orders}</p>
+                <s />
+                {history.totals.spentCents > 0 && (
+                  <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>Paid {money(history.totals.spentCents, history.orders[0]?.currency ?? 'usd')}</span>
+                )}
+                <Link href={`/orders/new?contact=${contact.id}`} className="v2-act">New order</Link>
+              </div>
+              {history.orders.length === 0 ? (
+                <div className="v2-card" data-empty>
+                  <b>No orders or estimates yet</b>
+                  <span>Every estimate, quote, order and invoice for this person will be listed here — including the ones that did not go ahead.</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {history.totals.active > 0 && <span className="v2-chip" data-on>{history.totals.active} open</span>}
+                    {history.totals.closed > 0 && <span className="v2-chip">{history.totals.closed} closed</span>}
+                    {history.totals.noSale > 0 && <span className="v2-chip">{history.totals.noSale} no sale</span>}
+                  </div>
+                  <div className="v2-list">
+                    {history.orders.map((o) => (
+                      <Link key={o.id} href={`/orders/${o.id}`} className="v2-row tap-target" data-click style={{ ['--chan' as string]: stageHue(o.stage) }}>
+                        <div className="v2-m">
+                          <p className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="truncate">{o.summary ?? 'Order'}</span>
+                            <span className="v2-stat">{o.group === 'active' ? o.stageLabel : STATUS_GROUP_LABELS[o.group]}</span>
+                            {o.invoicedAt && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)' }}>Invoiced</span>}
+                          </p>
+                          <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11.5 }}>
+                            {o.orderNumber}{o.group === 'active' ? '' : ` · ${o.stageLabel}`}{o.via !== 'contact' ? ` · matched by ${o.via}` : ''}
+                          </span>
+                        </div>
+                        <div className="v2-meta">
+                          <em style={{ fontVariantNumeric: 'tabular-nums' }}>{money(o.subtotalCents, o.currency)}</em>
+                          <em>{formatDate(o.createdAt)}</em>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {history && history.payments.length > 0 && (
+            <div>
+              <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick">Payments · {history.payments.length}</p><s /></div>
+              <div className="v2-list">
+                {history.payments.map((p) => (
+                  <Link key={p.id} href={`/orders/${p.orderId}`} className="v2-row tap-target" data-click>
+                    <div className="v2-m">
+                      <p>{p.kind === 'deposit' ? 'Deposit' : p.kind === 'refund' ? 'Refund' : 'Payment'}{p.method ? ` · ${p.method}` : ''}</p>
+                      <span style={{ fontFamily: 'var(--v2-mono)', fontSize: 11.5 }}>{p.orderNumber}</span>
+                    </div>
+                    <div className="v2-meta">
+                      <em style={{ fontVariantNumeric: 'tabular-nums' }}>{p.amountCents < 0 ? '−' : ''}{money(Math.abs(p.amountCents), p.currency)}</em>
+                      <em>{p.paidOn}</em>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {history && history.memos.length > 0 && (
+            <div>
+              <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick">Memos · {history.memos.length}</p><s /></div>
+              <div className="v2-list">
+                {history.memos.map((m) => (
+                  <Link key={m.id} href={`/orders/memos/${m.id}`} className="v2-row tap-target" data-click style={{ ['--chan' as string]: m.settled ? 'var(--v2-mute)' : 'var(--v2-t3)' }}>
+                    <div className="v2-m">
+                      <p className="flex items-center gap-2 flex-wrap min-w-0"><span className="truncate">{m.itemDescription}</span><span className="v2-stat">{m.statusLabel}</span></p>
+                      <span>{m.movedOn}{m.dueOn && !m.settled ? ` · follow up ${m.dueOn}` : ''}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {history && history.appointments.length > 0 && (
+            <div>
+              <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick">Appointments · {history.appointments.length}</p><s /></div>
+              <div className="v2-list">
+                {history.appointments.map((a) => (
+                  <div key={a.id} className="v2-row">
+                    <div className="v2-m">
+                      <p>{a.serviceType ?? 'Appointment'}{a.status ? <span className="v2-stat" style={{ marginLeft: 8 }}>{a.status}</span> : null}</p>
+                      <span>{a.slotDate}{a.slotTime ? ` · ${a.slotTime}` : ''}{a.meetingKind ? ` · ${a.meetingKind.replace('_', ' ')}` : ''}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Conversation history — the kit's list row, the same component /inbox uses, because these
+              are the same records seen from the other side. */}
+          <div>
           <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick">Conversation history</p><s /></div>
           {!conversations?.length ? (
             <div className="v2-card" data-empty>
@@ -172,6 +290,7 @@ export default async function ContactProfilePage({ params }: { params: Promise<{
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

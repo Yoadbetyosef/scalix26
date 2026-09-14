@@ -8,10 +8,28 @@ import { specRows } from './documents'
 import type { OrderLineItem } from './types'
 
 describe('reading her words', () => {
-  it('knows the eight the starter offers', () => {
+  it('knows the twelve the starter offers', () => {
     expect(PRODUCT_TYPE_OPTIONS.map(productTypeKey)).toEqual([
       'ring', 'band', 'earrings', 'pendant', 'necklace', 'tennis_necklace', 'bracelet', 'tennis_bracelet',
+      'chain', 'watch', 'loose_stone', 'other',
     ])
+  })
+
+  it('is not ring-shaped: a chain, a watch and a loose stone each get their own field set', () => {
+    expect(productTypeKey('18" rope chain')).toBe('chain')
+    expect(productTypeKey('Chain necklace')).toBe('necklace')   // a chain that says necklace is one
+    expect(productTypeKey('Rolex Datejust')).toBe('watch')
+    expect(productTypeKey('Loose diamond 1.02ct')).toBe('loose_stone')
+    expect(productTypeKey('Brooch')).toBe('other')
+    // A loose stone has no ring size and no side stones unless a value is already there.
+    expect(fieldFor('loose_stone', 'ringSize', false)).toBeNull()
+    expect(fieldFor('loose_stone', 'sideStoneShape', false)).toBeNull()
+    expect(fieldFor('loose_stone', 'centerStoneCarat', false)?.docLabel).toBe('Weight')
+    // A chain offers no stone fields at all, and a length.
+    expect(fieldFor('chain', 'centerStoneShape', false)).toBeNull()
+    expect(fieldFor('chain', 'measurements', false)?.docLabel).toBe('Length')
+    // Nothing typed ever disappears: a ring size already on a chain comes back under its plain name.
+    expect(fieldFor('chain', 'ringSize', true)?.label).toBe('Ring size')
   })
 
   it('tests earrings BEFORE ring, because "earring" contains "ring"', () => {
@@ -34,7 +52,10 @@ describe('reading her words', () => {
   })
 
   it('says nothing rather than guessing', () => {
-    expect(productTypeKey('Anklet')).toBe('unspecified')
+    // An anklet reads as 'other', which shows the whole form — the same form 'unspecified' shows.
+    expect(productTypeKey('Anklet')).toBe('other')
+    expect(fieldsFor('other')).toEqual(fieldsFor('ring'))
+    expect(productTypeKey('Something new entirely')).toBe('unspecified')
     expect(productTypeKey('')).toBe('unspecified')
     expect(productTypeKey(null)).toBe('unspecified')
     // A type it does not recognise gets the WHOLE form — today's behaviour, never something narrower.

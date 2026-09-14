@@ -2,10 +2,12 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
 import { ORDER_BUCKET } from './attachments'
 import { generateOrderNumber } from './order-number'
-import { canManualTransition, type OrderStage } from './stages'
+import { canManualTransition, STAGE_LABELS, type OrderStage } from './stages'
 import { taxChoiceById } from '@/lib/tax/canada'
 import { isMissingColumn } from '@/lib/db/missing-column'
-import type { Order, OrderLineItem, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
+import { resolveContactForOrder } from './link-contact'
+import { orderRow, lineRow, lineExtras, lineInsert } from './rows'
+import type { Order, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
 
 // Server-only Orders data access. Every call resolves the validated active tenant (requireActiveBusinessContext)
 // and queries through the RLS-scoped authenticated client, so a tenant can only ever touch its own orders.
@@ -18,87 +20,6 @@ async function ctx(): Promise<OrderCtx | null> {
   return { tenantId: c.tenantId, actor: c.actorUserId }
 }
 
-const orderRow = (r: Record<string, unknown>): Order => ({
-  id: r.id as string, tenantId: r.tenant_id as string, orderNumber: r.order_number as string, contactId: (r.contact_id as string) ?? null,
-  customerName: (r.customer_name as string) ?? null, customerEmail: (r.customer_email as string) ?? null, customerPhone: (r.customer_phone as string) ?? null,
-  // Read off the row rather than selected by name, so a database without add_tg_jewellers_2 yields
-  // undefined here instead of failing the whole query.
-  customerCompany: (r.customer_company as string) ?? null,
-  stage: r.stage as OrderStage, supplierId: (r.supplier_id as string) ?? null, factoryName: (r.factory_name as string) ?? null, factoryContactName: (r.factory_contact_name as string) ?? null, factoryEmail: (r.factory_email as string) ?? null,
-  assignedEmployee: (r.assigned_employee as string) ?? null, orderDate: (r.order_date as string) ?? null, requestedCompletionDate: (r.requested_completion_date as string) ?? null, estimatedCompletionDate: (r.estimated_completion_date as string) ?? null,
-  subtotalCents: Number(r.subtotal_cents ?? 0), depositCents: Number(r.deposit_cents ?? 0), balanceCents: Number(r.balance_cents ?? 0), currency: (r.currency as string) ?? 'usd',
-  clientRequirements: (r.client_requirements as string) ?? null, isCustomDesign: r.is_custom_design === true,
-  internalNotes: (r.internal_notes as string) ?? null, publicNotes: (r.public_notes as string) ?? null, createdBy: (r.created_by as string) ?? null, createdAt: r.created_at as string, updatedAt: r.updated_at as string,
-  // Added by add_orders_6. Read off the row rather than selected by name, so a database without the
-  // migration yields undefined here instead of failing the whole query.
-  deliveryProvince: (r.delivery_province as string) ?? null,
-  // Read off the row rather than selected by name, so a database without add_order_tax_choice renders
-  // through the live fallback instead of erroring — the same defence documentTemplateId already uses.
-  taxKind: (r.tax_kind as 'gst_only' | 'combined') ?? null,
-  taxLabel: (r.tax_label as string) ?? null,
-  taxRatePercent: r.tax_rate_percent === null || r.tax_rate_percent === undefined ? null : Number(r.tax_rate_percent),
-  pstExempt: r.pst_exempt === true,
-  pstExemptionNote: (r.pst_exemption_note as string) ?? null,
-  invoiceImageId: (r.invoice_image_id as string) ?? null,
-  documentTemplateId: (r.document_template_id as string) ?? null,
-  letterheadStyle: (r.letterhead_style as string) ?? null,
-  invoicedAt: (r.invoiced_at as string) ?? null,
-  archivedAt: (r.archived_at as string) ?? null,
-})
-const num = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v))
-const lineRow = (r: Record<string, unknown>): OrderLineItem => ({
-  id: r.id as string, orderId: r.order_id as string, productName: r.product_name as string, description: (r.description as string) ?? null, sku: (r.sku as string) ?? null,
-  quantity: Number(r.quantity ?? 1), unitPriceCents: Number(r.unit_price_cents ?? 0), measurements: (r.measurements as string) ?? null, color: (r.color as string) ?? null, material: (r.material as string) ?? null,
-  customSpec: (r.custom_spec as string) ?? null, productRef: (r.product_ref as string) ?? null, lineTotalCents: Number(r.line_total_cents ?? 0), displayOrder: Number(r.display_order ?? 0),
-  productType: (r.product_type as string) ?? null,
-  stoneQuality: (r.stone_quality as string) ?? null, stoneColor: (r.stone_color as string) ?? null, stoneOrigin: (r.stone_origin as string) ?? null, stoneType: (r.stone_type as string) ?? null,
-  centerStoneShape: (r.center_stone_shape as string) ?? null, sideStoneShape: (r.side_stone_shape as string) ?? null,
-  // Read OFF THE ROW rather than selected by name, so a database without add_tg_jewellers_2 renders
-  // the line exactly as it did before instead of erroring. The legacy single value is the fallback
-  // for every row written before the array existed — a piece with one side shape reads identically
-  // through either field, which is what lets the two coexist.
-  sideStoneShapes: Array.isArray(r.side_stone_shapes)
-    ? (r.side_stone_shapes as string[]).filter((v) => typeof v === 'string' && v.trim() !== '')
-    : ((r.side_stone_shape as string) ? [r.side_stone_shape as string] : []),
-  bandWidthMm: num(r.band_width_mm),
-  centerStoneCarat: num(r.center_stone_carat), sideStoneCaratTotal: num(r.side_stone_carat_total), metalKarat: (r.metal_karat as string) ?? null,
-  certificateLab: (r.certificate_lab as string) ?? null, ringSize: (r.ring_size as string) ?? null,
-  // num() rather than Number(): it preserves NULL, which here means "not recorded" and must not
-  // collapse to 0. See lib/orders/types.ts.
-  internalCostCents: num(r.internal_cost_cents),
-})
-
-// One place that turns a LineItemInput into its DB row — used by both create and update so the jewelry
-// columns can never drift between the two paths.
-/**
- * The columns add_tg_jewellers_2.sql introduces, kept apart from the rest of the row.
- *
- * Separating them is what makes the retry in `insertLines` able to drop EXACTLY the new fields and
- * keep everything else — a blanket try/catch would have to guess which key offended.
- *
- * `side_stone_shape` (singular) is written from the FIRST entry of the array and is not in here: the
- * column already exists, and keeping it populated means the approval page, the AI's lookups and any
- * report still reading it keep working unchanged rather than silently going blank.
- */
-const lineExtras = (i: LineItemInput) => ({
-  side_stone_shapes: i.sideStoneShapes ?? [],
-  band_width_mm: i.bandWidthMm ?? null,
-})
-
-const lineInsert = (tenantId: string, orderId: string, i: LineItemInput, total: number, idx: number) => ({
-  tenant_id: tenantId, order_id: orderId, product_name: i.productName, description: i.description ?? null, sku: i.sku ?? null,
-  quantity: i.quantity ?? 1, unit_price_cents: i.unitPriceCents ?? 0, measurements: i.measurements ?? null, color: i.color ?? null, material: i.material ?? null,
-  custom_spec: i.customSpec ?? null, product_ref: i.productRef ?? null, line_total_cents: total, display_order: idx,
-  product_type: i.productType ?? null, stone_quality: i.stoneQuality ?? null, stone_color: i.stoneColor ?? null, stone_origin: i.stoneOrigin ?? null, stone_type: i.stoneType ?? null,
-  center_stone_shape: i.centerStoneShape ?? null,
-  // The multi-select's first entry wins over the legacy single field when both arrive, because the
-  // form now sends the array and the single value is derived from it. Falling back the other way
-  // keeps an older client (or a direct API caller) working.
-  side_stone_shape: i.sideStoneShapes?.[0] ?? i.sideStoneShape ?? null,
-  center_stone_carat: i.centerStoneCarat ?? null, side_stone_carat_total: i.sideStoneCaratTotal ?? null, metal_karat: i.metalKarat ?? null,
-  certificate_lab: i.certificateLab ?? null, ring_size: i.ringSize ?? null,
-  internal_cost_cents: i.internalCostCents ?? null,
-})
 /**
  * Write a whole order's line items, dropping the new columns if the database has not been told about
  * them yet.
@@ -194,8 +115,11 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   const subtotal = totals.reduce((s, n) => s + n, 0)
   const deposit = input.depositCents ?? 0
   const orderNumber = (input.orderNumber && input.orderNumber.trim()) || generateOrderNumber()
+  // The customer record this order belongs to — picked, recognised, or created from what was typed.
+  // See lib/orders/link-contact.ts. Failing to link never fails the order.
+  const linked = await resolveContactForOrder(sb, c.tenantId, input).catch(() => ({ contactId: input.contactId ?? null, created: false, matched: false }))
   const base = {
-    tenant_id: c.tenantId, order_number: orderNumber, contact_id: input.contactId ?? null,
+    tenant_id: c.tenantId, order_number: orderNumber, contact_id: linked.contactId,
     customer_name: input.customerName ?? null, customer_email: input.customerEmail ?? null, customer_phone: input.customerPhone ?? null,
     stage: 'new', factory_name: input.factoryName ?? null, factory_contact_name: input.factoryContactName ?? null, factory_email: input.factoryEmail ?? null,
     assigned_employee: input.assignedEmployee ?? null, order_date: input.orderDate ?? null, requested_completion_date: input.requestedCompletionDate ?? null, estimated_completion_date: input.estimatedCompletionDate ?? null,
@@ -205,7 +129,13 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   }
   // Same rule as the line items below: the ORDER is the thing being written and must land. A business
   // name that could not be stored is reported afterwards, by name, rather than taking the order with it.
-  let { data, error } = await sb.from('orders').insert({ ...base, customer_company: input.customerCompany ?? null }).select('*').single()
+  // The kind, dropped with a retry when the database has not been told about it: an unmigrated
+  // database keeps taking orders (they are all 'custom' there anyway).
+  const kindCols = { order_kind: input.orderKind ?? 'custom', kind_details: input.kindDetails ?? {} }
+  let { data, error } = await sb.from('orders').insert({ ...base, customer_company: input.customerCompany ?? null, ...kindCols }).select('*').single()
+  if (isMissingColumn(error, 'order_kind', 'kind_details')) {
+    ;({ data, error } = await sb.from('orders').insert({ ...base, customer_company: input.customerCompany ?? null }).select('*').single())
+  }
   let companyDropped = false
   if (isMissingColumn(error, 'customer_company')) {
     companyDropped = !!input.customerCompany
@@ -222,6 +152,7 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   }
   if (companyDropped) throw new Error(`The order was created, but the business name was not saved — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   await addEvent(order.id, 'created', { orderNumber })
+  if (linked.contactId && !input.contactId) await addEvent(order.id, 'contact_linked', { contactId: linked.contactId, created: linked.created })
   return order
 }
 
@@ -256,18 +187,38 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   // optional: a form that does not send delivery_province never names it, so a database without the
   // column is never asked about it.
   for (const [k, col] of Object.entries(map)) if (k in patch) m[col] = (patch as Record<string, unknown>)[k]
+  // An edit that names a customer without picking one links it the same way creation does — the
+  // edit drawer sends contactId: null for a typed-in walk-in, and that null used to unlink an order
+  // that had been recognised. Only when the patch carries customer fields; a tax-only patch leaves
+  // the link alone.
+  let linkedNow: { contactId: string; created: boolean } | null = null
+  if ('contactId' in patch && !patch.contactId && ('customerEmail' in patch || 'customerPhone' in patch || 'customerName' in patch)) {
+    const linked = await resolveContactForOrder(sb, c.tenantId, patch).catch(() => null)
+    if (linked?.contactId) { m.contact_id = linked.contactId; linkedNow = { contactId: linked.contactId, created: linked.created } }
+  }
   // The snapshot, resolved from the picked id rather than from anything the client sent. Written after
   // the field map so it wins over a delivery_province the same patch might also carry.
   const snap = taxSnapshotFrom(patch)
   if (snap) Object.assign(m, snap)
   if ('pstExempt' in patch) m.pst_exempt = patch.pstExempt
   if ('pstExemptionNote' in patch) m.pst_exemption_note = patch.pstExemptionNote
+  if ('orderKind' in patch && patch.orderKind) m.order_kind = patch.orderKind
+  if ('kindDetails' in patch) m.kind_details = patch.kindDetails ?? {}
   // Never blank out the (NOT NULL, unique) order number — ignore an empty edit.
   if (typeof m.order_number === 'string') { const t = m.order_number.trim(); if (t) m.order_number = t; else delete m.order_number }
   // Re-price if line items are replaced.
   if (patch.lineItems) {
     const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0)
-    m.subtotal_cents = subtotal; m.balance_cents = subtotal - (patch.depositCents ?? 0)
+    // ── THE DEPOSIT IS NOT IN THIS PATCH, AND IT USED TO BE TREATED AS ZERO ───────────────────────
+    //
+    // `patch.depositCents ?? 0`: a client that re-sent the line items without the deposit — which is
+    // every client now that money is recorded on the payments ledger rather than typed here — had
+    // the order's balance recomputed as if nothing had been paid. The deposit column itself was
+    // untouched, so the page showed a deposit AND a balance that ignored it. The current figure is
+    // read and kept unless the patch actually names a new one.
+    const { data: cur } = await sb.from('orders').select('deposit_cents').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+    const deposit = 'depositCents' in patch && patch.depositCents !== undefined ? patch.depositCents : Number(cur?.deposit_cents ?? 0)
+    m.subtotal_cents = subtotal; m.balance_cents = subtotal - deposit
     // ── DELETE THEN INSERT, WITH A WAY BACK ───────────────────────────────────────────────────────
     //
     // Replacing the set means removing it first, and the insert's error used to be discarded — so a
@@ -292,6 +243,10 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
     }
   }
   let { data, error } = await sb.from('orders').update(m).eq('tenant_id', c.tenantId).eq('id', id).select('*').single()
+  if (isMissingColumn(error, 'order_kind', 'kind_details')) {
+    const rest = { ...m }; delete rest.order_kind; delete rest.kind_details
+    ;({ data, error } = await sb.from('orders').update(rest).eq('tenant_id', c.tenantId).eq('id', id).select('*').single())
+  }
   let companyDropped = false
   if (isMissingColumn(error, 'customer_company')) {
     // Only the ONE key is dropped; every other edit in the patch still applies. The field map above
@@ -305,6 +260,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   if (error) throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
   if (companyDropped) throw new Error(`The order was saved, but the business name was not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   await addEvent(id, 'updated', null)
+  if (linkedNow) await addEvent(id, 'contact_linked', linkedNow)
   return orderRow(data as Record<string, unknown>)
 }
 
@@ -321,15 +277,23 @@ const STAGE_MIGRATION: Partial<Record<OrderStage, string>> = {
   // and naming the superseded file would send her to a migration that is not the one to run.
   closed_no_sale: 'add_tg_jewellers_2.sql',
   pending: 'add_tg_jewellers_2.sql',
+  in_process: 'add_tg_production_1.sql',
 }
 
-export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Move an order between stages by hand — the board drop, the stage buttons, and Reopen all land here.
+ *
+ * `note` is the optional reason ("customer changed the stone", "reopened — wants matching band") and
+ * is written to the timeline row with from, to and who. Every surface that shows history reads that
+ * row, so a move is never a silent change of one column.
+ */
+export async function setStageManual(id: string, to: OrderStage, note?: string | null): Promise<{ ok: boolean; error?: string }> {
   const c = await ctx(); if (!c) return { ok: false, error: 'unauthorized' }
   const sb = await createClient()
   const { data } = await sb.from('orders').select('stage').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
   if (!data) return { ok: false, error: 'not found' }
   const from = data.stage as OrderStage
-  if (!canManualTransition(from, to)) return { ok: false, error: `Transition ${from} → ${to} is not allowed (approval stages change via workflow actions only)` }
+  if (!canManualTransition(from, to)) return { ok: false, error: `This order cannot move from ${STAGE_LABELS[from]} to ${STAGE_LABELS[to]}.` }
   // THE WRITE'S ERROR WAS BEING DISCARDED. It returned ok on a refused update, the screen refreshed,
   // and the stage was simply unchanged — a silent failure with nothing to read. It matters now because
   // 'finished' is a stage the DATABASE has to be told about: against an unmigrated constraint the write
@@ -347,7 +311,37 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
         : error.message,
     }
   }
-  await addEvent(id, 'stage_changed', { from, to, manual: true })
+  const reason = (note ?? '').trim() || null
+  await addEvent(id, 'stage_changed', { from, to, manual: true, ...(reason ? { note: reason } : {}) })
+  return { ok: true }
+}
+
+// ── DELETION IS FOR MISTAKES, NOT FOR ENDINGS ───────────────────────────────────────────────────
+//
+// The product has three ways to END an order (finished, cancelled, no-sale) and all of them keep
+// everything. Delete is for a record that should never have existed — a duplicate created by a
+// double-tap, a test. So it is refused the moment the order has become a fact to somebody else:
+// a document or approval link was sent, a payment was recorded, or the job left 'new'. Those orders
+// are closed, not deleted, because a customer holding an estimate for a record that has vanished
+// is exactly the data loss the no-sale stage exists to prevent.
+//
+// Enforced HERE, on the server, and not only by hiding the button.
+export interface DeletableVerdict { ok: boolean; reason?: string }
+export async function deletable(id: string): Promise<DeletableVerdict> {
+  const c = await ctx(); if (!c) return { ok: false, reason: 'unauthorized' }
+  const sb = await createClient()
+  const { data: order } = await sb.from('orders').select('stage').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
+  if (!order) return { ok: false, reason: 'not found' }
+  if (order.stage !== 'new') return { ok: false, reason: `This order has moved past New — close it instead of deleting it, so its history stays with the customer.` }
+  const admin = createAdminClient()
+  const [shares, approvals, payments] = await Promise.all([
+    admin.from('order_document_shares').select('id', { count: 'exact', head: true }).eq('tenant_id', c.tenantId).eq('order_id', id),
+    admin.from('order_approval_requests').select('id', { count: 'exact', head: true }).eq('tenant_id', c.tenantId).eq('order_id', id),
+    admin.from('payment_allocations').select('id', { count: 'exact', head: true }).eq('tenant_id', c.tenantId).eq('document_type', 'order').eq('document_id', id),
+  ])
+  if (shares.count) return { ok: false, reason: 'A document link for this order has been sent. Close it as no sale instead — the customer may still open what they were sent.' }
+  if (approvals.count) return { ok: false, reason: 'An approval request for this order has been sent. Cancel or close it instead.' }
+  if (payments.count) return { ok: false, reason: 'A payment has been recorded against this order. It cannot be deleted; cancel it and refund instead.' }
   return { ok: true }
 }
 
@@ -355,6 +349,7 @@ export async function setStageManual(id: string, to: OrderStage): Promise<{ ok: 
 // order row — line items, events, attachments rows, and approval requests are removed by ON DELETE CASCADE.
 export async function deleteOrder(id: string): Promise<boolean> {
   const c = await ctx(); if (!c) return false
+  if (!(await deletable(id)).ok) return false
   const sb = await createClient()
   const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
   if (!order) return false

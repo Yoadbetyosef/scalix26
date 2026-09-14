@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Lock } from 'lucide-react'
 import {
-  boardColumnLabel, canManualTransition, isProtectedStage, type OrderStage,
+  boardColumnLabel, canManualTransition, isLiveStage, STAGE_LABELS, type OrderStage,
 } from '@/lib/orders/stages'
 import { stageColor, stageHue, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-colors'
 
@@ -18,16 +17,19 @@ import { stageColor, stageHue, STAGE_COLUMN_WIDTH } from '@/lib/orders/stage-col
 // no sorting within a column, no virtualisation, no nesting. That is what the HTML5 drag-and-drop
 // API is for, and it is already in every browser.
 //
-// ── WHAT THE HTML5 API DOES NOT DO, SAID PLAINLY ────────────────────────────────────────────────
+// ── WHAT THE HTML5 API DOES NOT DO, AND WHAT STANDS IN FOR IT ───────────────────────────────────
 //
 // It does not fire on touch. There is no dragstart from a finger on iOS or Android, and no amount of
-// care here changes that — it is the API, not the implementation. So the board is a desktop tool, and
-// the buttons on the order page remain the way a stage moves on a phone. Those buttons are not a
-// fallback that happens to exist; they are the same transition through the same route, which is why
-// this can ship without them being rebuilt.
+// care here changes that — it is the API, not the implementation. So every card also carries a
+// "Move" control: a plain <select> of the stages it may go to, which works with a thumb, a mouse and
+// a keyboard alike and posts the same route the drop does. On a phone the board is that control.
 //
-// If touch dragging is wanted later it needs a pointer-events implementation or a library, and that
-// is a real decision to make rather than something to slip in here.
+// ── ANY LIVE COLUMN, EITHER DIRECTION ───────────────────────────────────────────────────────────
+//
+// Cards used to move one column forward and nowhere else, and the approval columns were locked.
+// canManualTransition now says a live job may go to any live stage, so the board simply asks it —
+// the same predicate, not a second copy of the rule. Closed columns still refuse a drag out; that
+// is Reopen on the order page, on purpose.
 //
 // ── IT REUSES THE TRANSITION, IT DOES NOT REPEAT IT ─────────────────────────────────────────────
 //
@@ -50,6 +52,13 @@ const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { maximumFr
 
 export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: BoardCard[] }) {
   const router = useRouter()
+  // Free-text filter over what a card shows: customer, company, number, factory. Typed here rather
+  // than a server round trip because the whole board is already on the page.
+  const [filter, setFilter] = useState('')
+  const q = filter.trim().toLowerCase()
+  const shown = q
+    ? cards.filter((c) => [c.customerName, c.customerCompany, c.orderNumber, c.factoryName].some((v) => (v ?? '').toLowerCase().includes(q)))
+    : cards
   // The card being dragged. Held as the whole card, not just an id, because every column needs its
   // ORIGIN stage to decide whether it may accept the drop.
   const [dragging, setDragging] = useState<BoardCard | null>(null)
@@ -67,8 +76,13 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
   const drop = async (to: OrderStage) => {
     const card = dragging
     setDragging(null); setOver(null)
-    if (!card || !canManualTransition(stageOf(card), to)) return
+    if (!card) return
+    await moveCard(card, to)
+  }
 
+  /** One transition for the drop and the select alike. */
+  const moveCard = async (card: BoardCard, to: OrderStage) => {
+    if (!canManualTransition(stageOf(card), to)) return
     const from = stageOf(card)
     setMoved((p) => ({ ...p, [card.id]: to }))
     setBusy(true); setErr(null)
@@ -99,10 +113,15 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
         </div>
       )}
 
+      <div className="v2-fld" style={{ maxWidth: 360, marginBottom: 12 }}>
+        <label htmlFor="board-filter" className="sr-only">Filter cards</label>
+        <input id="board-filter" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter by customer, company, order №, factory…" />
+      </div>
+
       <div className="flex gap-3 overflow-x-auto pb-4">
         {stages.map((s) => {
           const c = stageColor(s)
-          const rows = cards.filter((o) => stageOf(o) === s)
+          const rows = shown.filter((o) => stageOf(o) === s)
           // Three states, and they have to be distinguishable: nothing is being dragged; something is
           // being dragged that this column would take; something is being dragged that it would not.
           const willTake = accepts(s)
@@ -137,20 +156,18 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
                 <span className="v2-kick" style={{ color: c.text, whiteSpace: 'nowrap' }}>{boardColumnLabel(s)}</span>
                 <span className="flex shrink-0 items-center gap-1.5">
                   <span className="v2-kick" style={{ color: c.text, opacity: 0.8 }}>{rows.length}</span>
-                  {isProtectedStage(s) && (
-                    <Lock aria-label="Approval stage — moves via workflow actions only"
-                          style={{ width: 11, height: 11, color: c.text, opacity: 0.7 }} />
-                  )}
                 </span>
               </div>
               <div className="v2-list">
                 {rows.map((o) => (
+                  <div key={o.id} style={{ position: 'relative' }}>
                   <Link
-                    key={o.id} href={`/orders/${o.id}`} className="v2-row" data-click
+                    href={`/orders/${o.id}`} className="v2-row" data-click
                     // draggable on the anchor: a link is already keyboard-reachable and already the
                     // way into the order, so the card keeps both behaviours rather than becoming a
-                    // div that has to re-earn them.
-                    draggable={!busy}
+                    // div that has to re-earn them. Closed cards are not draggable: leaving an
+                    // ending is Reopen on the order page.
+                    draggable={!busy && isLiveStage(stageOf(o))}
                     onDragStart={(e) => {
                       setDragging(o)
                       e.dataTransfer.effectAllowed = 'move'
@@ -166,7 +183,7 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
                       opacity: dragging?.id === o.id ? 0.4 : 1,
                     }}
                   >
-                    <div className="v2-m">
+                    <div className="v2-m" style={{ paddingRight: 28 }}>
                       {/* The firm when there is one — a B2B card that says "Irina" and not which
                           yacht centre is a card she has to open to identify. */}
                       <p className="truncate">{o.customerCompany || o.customerName || 'No customer'}</p>
@@ -175,6 +192,28 @@ export function BoardColumns({ stages, cards }: { stages: OrderStage[]; cards: B
                       </span>
                     </div>
                   </Link>
+                  {/* THE MOVE CONTROL — the drag, for a thumb. A native select styled as a small
+                      chevron in the card's corner; choosing a stage posts the same route the drop
+                      posts. Listed in board order with the current column disabled, so it reads as
+                      "where can this go" rather than as a form. */}
+                  {isLiveStage(stageOf(o)) && (
+                    <label style={{ position: 'absolute', top: 8, right: 8 }} title="Move to another stage">
+                      <span className="sr-only">Move {o.orderNumber} to</span>
+                      <select
+                        value=""
+                        disabled={busy}
+                        onChange={(e) => { const to = e.target.value as OrderStage; if (to) void moveCard(o, to) }}
+                        style={{ width: 22, height: 22, opacity: 0, position: 'absolute', inset: 0, cursor: 'pointer' }}
+                      >
+                        <option value="">Move to…</option>
+                        {stages.filter((t) => canManualTransition(stageOf(o), t)).map((t) => (
+                          <option key={t} value={t}>{STAGE_LABELS[t]}</option>
+                        ))}
+                      </select>
+                      <span aria-hidden className="v2-ico" style={{ width: 22, height: 22, fontSize: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>⋯</span>
+                    </label>
+                  )}
+                  </div>
                 ))}
                 {rows.length === 0 && (
                   <p className="v2-kick" style={{ padding: '14px 13px' }}>

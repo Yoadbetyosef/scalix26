@@ -37,6 +37,10 @@ export const STAGE_COLORS: Record<OrderStage, StageColor> = {
   // this is work, it just is not moving. Sits on the working side of the lightness line the tests
   // draw, so a pending job never reads as quietly as a finished one.
   pending:                    { bar: '#6B7385', bg: '#F2F3F5', text: '#454C5A', border: '#E1E3E8' }, // h218 s11 l47 — slate
+  // VERBALLY AGREED. A steel blue between the parked slate and the indigo of the factory approvals:
+  // more colour than pending (somebody said yes) and not yet the approval hue (nothing is signed).
+  // Sits on the working side of the lightness line, like every live stage.
+  in_process:                 { bar: '#57648E', bg: '#EEF0F6', text: '#3A4468', border: '#D8DCE9' }, // h230 s24 l45 — steel blue
   waiting_factory_approval:   { bar: '#6F69AB', bg: '#EFEFF6', text: '#3B3762', border: '#D6D5E7' }, // h246 s28 l54 — indigo
   factory_changes_requested:  { bar: '#364891', bg: '#EDEFF7', text: '#2C396D', border: '#D2D7EA' }, // h228 s46 l39 — deep indigo, the loudest of the factory trio
   factory_approved:           { bar: '#A27AAE', bg: '#F4EFF5', text: '#563A5F', border: '#E2D6E6' }, // h286 s24 l58 — violet, lifted

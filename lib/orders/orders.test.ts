@@ -1,27 +1,72 @@
 import { describe, it, expect } from 'vitest'
-import { canManualTransition, canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, canSendToProduction, isProtectedStage, isTerminalStage, isAtRestStage, canEditWorkflow, canEditDocumentFacts,
-  DOCUMENT_FACT_FIELDS, refusedFields, ORDER_STAGES, STAGE_LABELS } from './stages'
+import { canManualTransition, canSendForApproval, stageAfterSend, stageAfterResponse, respondableStage, canSendToProduction, isTerminalStage, isAtRestStage, canEditWorkflow, canEditDocumentFacts,
+  DOCUMENT_FACT_FIELDS, refusedFields, ORDER_STAGES, STAGE_LABELS, isLiveStage, canReopen, REOPEN_TARGET, orderStatusGroup, STATUS_GROUP_LABELS, isOpenOrder } from './stages'
 import { orderNumberFromBytes, generateOrderNumber } from './order-number'
 
 describe('Order stage state machine', () => {
-  it('never allows manual drag into or between protected approval stages', () => {
-    const protectedStages = ORDER_STAGES.filter(isProtectedStage)
-    for (const to of protectedStages) for (const from of ORDER_STAGES) expect(canManualTransition(from, to)).toBe(false)
-    expect(canManualTransition('new', 'waiting_factory_approval')).toBe(false) // must use Send action
-    expect(canManualTransition('factory_approved', 'waiting_customer_approval')).toBe(false)
-  })
-  it('allows manual forward moves only along production → ready → delivered → completed', () => {
+  // ── THE RULE CHANGED, AND THE TESTS SAY WHAT IT IS NOW ─────────────────────────────────────────
+  //
+  // This block used to assert a forward chain (production → ready → delivered → completed) with the
+  // approval stages sealed off from any manual move. That rule described what the software allowed,
+  // not what happens in a workshop — a piece in production comes back to revisions, a trade order
+  // skips approval entirely — and it is what "cards can only move to the next column" was. The rule
+  // is now about what a stage MEANS: live stages are freely reachable from each other, the endings
+  // are reachable from live stages only, and leaving an ending is a confirmed Reopen.
+  it('moves freely between live stages, forwards and backwards, approval stages included', () => {
     expect(canManualTransition('production', 'ready')).toBe(true)
     expect(canManualTransition('ready', 'delivered')).toBe(true)
     expect(canManualTransition('delivered', 'completed')).toBe(true)
-    expect(canManualTransition('production', 'completed')).toBe(false) // no skipping
-    expect(canManualTransition('completed', 'production')).toBe(false) // terminal
+    // The two examples from the workshop.
+    expect(canManualTransition('production', 'customer_changes_requested')).toBe(true) // back to revisions
+    expect(canManualTransition('waiting_factory_approval', 'production')).toBe(true)   // CAD review → production
+    expect(canManualTransition('new', 'waiting_customer_approval')).toBe(true)          // asked offline
+    expect(canManualTransition('customer_approved', 'production')).toBe(true)
+    expect(canManualTransition('production', 'completed')).toBe(true) // skipping is a decision, not an error
+    for (const from of ORDER_STAGES.filter(isLiveStage)) for (const to of ORDER_STAGES.filter(isLiveStage)) {
+      if (from !== to) expect(canManualTransition(from, to), `${from} → ${to}`).toBe(true)
+    }
   })
-  it('allows cancel from any non-terminal stage', () => {
+  it('in_process is a live stage between the estimate and the paperwork', () => {
+    expect(ORDER_STAGES).toContain('in_process')
+    expect(STAGE_LABELS.in_process).toBe('In Process')
+    expect(isLiveStage('in_process')).toBe(true)
+    expect(orderStatusGroup('in_process')).toBe('active')
+    expect(canManualTransition('new', 'in_process')).toBe(true)
+    expect(canManualTransition('in_process', 'production')).toBe(true)
+    expect(canSendForApproval('in_process', 'customer')).toBe(true)
+    expect(canSendToProduction('in_process')).toBe(true)
+  })
+  it('allows cancel from any live stage, and nothing leaves cancelled', () => {
     expect(canManualTransition('new', 'cancelled')).toBe(true)
     expect(canManualTransition('production', 'cancelled')).toBe(true)
     expect(canManualTransition('completed', 'cancelled')).toBe(false)
     expect(canManualTransition('cancelled', 'cancelled')).toBe(false)
+    for (const s of ORDER_STAGES) expect(canManualTransition('cancelled', s), s).toBe(false)
+  })
+  it('leaving completed or finished is a Reopen to one target, never a free drag', () => {
+    expect(canReopen('completed')).toBe(true)
+    expect(canReopen('finished')).toBe(true)
+    expect(canReopen('closed_no_sale')).toBe(true)
+    expect(canReopen('cancelled')).toBe(false)
+    expect(canReopen('production')).toBe(false)
+    expect(canManualTransition('completed', REOPEN_TARGET.completed!)).toBe(true)
+    expect(canManualTransition('finished', REOPEN_TARGET.finished!)).toBe(true)
+    for (const s of ORDER_STAGES) {
+      if (s !== REOPEN_TARGET.completed) expect(canManualTransition('completed', s), s).toBe(false)
+      if (s !== REOPEN_TARGET.finished) expect(canManualTransition('finished', s), s).toBe(false)
+    }
+  })
+  it('groups the sixteen stages into four answers to "is it open?"', () => {
+    for (const s of ORDER_STAGES.filter(isLiveStage)) expect(orderStatusGroup(s), s).toBe('active')
+    expect(orderStatusGroup('completed')).toBe('closed')
+    expect(orderStatusGroup('finished')).toBe('closed')
+    expect(orderStatusGroup('closed_no_sale')).toBe('no_sale')
+    expect(orderStatusGroup('cancelled')).toBe('cancelled')
+    expect(STATUS_GROUP_LABELS.closed).toBe('Closed Order')
+    // A closed order is never open, on any surface that uses the predicate.
+    expect(isOpenOrder('completed')).toBe(false)
+    expect(isOpenOrder('finished')).toBe(false)
+    expect(isOpenOrder('in_process')).toBe(true)
   })
 
   it('send-for-approval works in EITHER order — neither approval is a prerequisite', () => {
@@ -68,7 +113,6 @@ describe('Order stage state machine', () => {
     expect(canSendToProduction('customer_changes_requested')).toBe(false)
     expect(canSendToProduction('new')).toBe(false)
     expect(canSendToProduction('waiting_factory_approval')).toBe(false)
-    expect(canManualTransition('customer_approved', 'production')).toBe(false) // not via drag
   })
 })
 
@@ -101,24 +145,23 @@ describe('finishing a job, without claiming it was produced', () => {
     expect(canManualTransition('closed_no_sale', 'finished')).toBe(false)
   })
 
-  it('and nothing moves out of it', () => {
-    // A finished job that can be dragged back into production is not finished.
+  it('and nothing drags out of it — the only way back is the confirmed Reopen', () => {
     expect(isTerminalStage('finished')).toBe(true)
-    for (const s of ORDER_STAGES) expect(canManualTransition('finished', s), s).toBe(false)
+    for (const s of ORDER_STAGES) {
+      if (s === REOPEN_TARGET.finished) continue
+      expect(canManualTransition('finished', s), s).toBe(false)
+    }
   })
 
   it('is NOT completed — the board must not claim production that did not happen', () => {
     expect(STAGE_LABELS.finished).toBe('Finished')
     expect(STAGE_LABELS.completed).toBe('Completed')
-    // The forward chain still ends at completed; closed is not on it.
-    expect(canManualTransition('delivered', 'completed')).toBe(true)
-    expect(canManualTransition('new', 'completed')).toBe(false)
+    // Both read as a closed order on every summary surface.
+    expect(orderStatusGroup('finished')).toBe('closed')
+    expect(orderStatusGroup('completed')).toBe('closed')
   })
 
-  it('does not open an approval stage as a side effect', () => {
-    for (const s of ORDER_STAGES) {
-      if (isProtectedStage(s)) expect(canManualTransition('new', s), s).toBe(false)
-    }
+  it('a finished order takes no approval', () => {
     expect(canSendForApproval('finished', 'factory')).toBe(false)
     expect(canSendForApproval('finished', 'customer')).toBe(false)
   })

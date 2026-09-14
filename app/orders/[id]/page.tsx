@@ -4,7 +4,7 @@ import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
 import { ArrowLeft, Lock } from 'lucide-react'
 import { stageHue } from '@/lib/orders/stage-colors'
-import { STAGE_LABELS, isProtectedStage, canEditWorkflow, canEditDocumentFacts } from '@/lib/orders/stages'
+import { STAGE_LABELS, STATUS_GROUP_LABELS, isProtectedStage, canEditWorkflow, canEditDocumentFacts, orderStatusGroup } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
 import { OrderEdit } from '@/components/orders/order-edit'
 import { OrderDocumentEdit } from '@/components/orders/order-document-edit'
@@ -12,9 +12,19 @@ import { DeleteOrderButton } from '@/components/orders/delete-order'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
 import { FinishActions } from '@/components/orders/finish-actions'
+import { InvoiceButton } from '@/components/orders/invoice-button'
+import { PaymentsPanel } from '@/components/orders/payments-panel'
+import { PurchasesPanel } from '@/components/orders/purchases-panel'
+import { listPurchases } from '@/lib/orders/purchases'
 import { SharedLinks } from '@/components/orders/shared-links'
 import { listTemplates } from '@/lib/orders/templates'
 import { getSupplier } from '@/lib/orders/suppliers'
+import { deletable } from '@/lib/orders/store'
+import { listOrderPayments, orderTotals, sumPayments, LEGACY_DEPOSIT_NOTE } from '@/lib/orders/payments'
+import { resolveOrderTax } from '@/lib/orders/document-data'
+import { actorLabels, actorLabel } from '@/lib/orders/actors'
+import { ORDER_KIND_LABELS, APPRAISAL_PURPOSE_LABELS, kindWords } from '@/lib/orders/kinds'
+import { PAYMENT_METHOD_LABELS, isOrderPaymentMethod } from '@/lib/orders/payments'
 
 export const dynamic = 'force-dynamic'
 const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
@@ -28,7 +38,34 @@ const specLine = (l: import('@/lib/orders/types').OrderLineItem): string => {
 const EVENT_LABEL: Record<string, string> = { created: 'Order created', updated: 'Order updated', stage_changed: 'Stage changed', approval_sent: 'Approval request sent', approval_opened: 'Approval link opened', approval_responded: 'Approval response received', approval_revoked: 'Approval revoked', // 'sent_to_production' is the historic name and stays mapped for rows already written. It claimed a send
 // that only sometimes happened, so new rows are 'moved_to_production' — which is what the action does.
 // A real send is recorded separately as 'delivery_requested'.
-sent_to_production: 'Moved to production', moved_to_production: 'Moved to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note' }
+sent_to_production: 'Moved to production', moved_to_production: 'Moved to production', delivery_requested: 'Factory notified — invoice requested', factory_ready: 'Factory marked ready + invoice', attachment_added: 'Attachment added', note: 'Note',
+  invoice_raised: 'Invoice raised', archived_to_inventory: 'Added to catalog', share_revoked: 'Document link withdrawn',
+  document_shared: 'Document sent', payment_recorded: 'Payment recorded', payment_removed: 'Payment removed', contact_linked: 'Linked to customer',
+  purchase_added: 'Purchase added', purchase_status: 'Purchase updated', purchase_removed: 'Purchase removed' }
+
+// The sentence the timeline prints for one event. Stage changes say from → to and the reason; money
+// says how much and how; a sent document says which. The raw uuid that used to follow every line is
+// resolved to a name by actorLabels.
+function eventLine(e: import('@/lib/orders/types').OrderEvent): string {
+  const p = e.payload ?? {}
+  const stage = (v: unknown) => STAGE_LABELS[v as keyof typeof STAGE_LABELS] ?? String(v ?? '')
+  switch (e.type) {
+    case 'stage_changed': return `${p.from ? `${stage(p.from)} → ` : ''}${stage(p.to)}${p.note ? ` — ${p.note}` : ''}`
+    case 'payment_recorded': {
+      const cents = Number(p.amountCents ?? 0)
+      const method = isOrderPaymentMethod(p.method) ? ` by ${PAYMENT_METHOD_LABELS[p.method].toLowerCase()}` : ''
+      return `${p.kind === 'refund' ? 'Refund' : p.kind === 'deposit' ? 'Deposit' : 'Payment'} ${(Math.abs(cents) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}${method}${p.reference ? ` (${p.reference})` : ''}`
+    }
+    case 'payment_removed': return `${(Math.abs(Number(p.amountCents ?? 0)) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })} taken off the order`
+    case 'document_shared': return `${String(p.docType ?? 'document').replace(/^./, (c) => c.toUpperCase())}${p.via === 'link' ? ' — link copied' : ' — emailed'}`
+    case 'attachment_added': return String(p.fileName ?? '')
+    case 'purchase_added': return [p.description, p.supplier ? `from ${p.supplier}` : null].filter(Boolean).join(' ')
+    case 'purchase_status': return `${p.description ?? ''}: ${String(p.from ?? '').replace('_', ' ')} → ${String(p.to ?? '').replace('_', ' ')}`
+    case 'purchase_removed': return String(p.description ?? '')
+    case 'approval_responded': return `${String(p.approvalType ?? '')}: ${String(p.decision ?? '').replace('_', ' ')}`
+    default: return p.to ? `→ ${stage(p.to)}` : ''
+  }
+}
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const a = await requireOrdersAccess()
@@ -38,6 +75,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   // so the picker simply does not appear rather than the page failing.
   const templates = o ? await listTemplates(o.tenantId) : []
   if (!o) notFound()
+  const [payments, tax, canDelete, labels, purchases] = await Promise.all([
+    listOrderPayments(o.id), resolveOrderTax(o), deletable(o.id), actorLabels(o.events.map((e) => e.actor)), listPurchases(o.id),
+  ])
+  // An order from before the ledger shows its typed deposit as one line, until add_tg_production_1.sql
+  // (or the first recorded payment) carries it into the ledger.
+  const shownPayments = payments.length === 0 && o.depositCents > 0
+    ? [{ id: 'legacy', kind: 'deposit' as const, amountCents: o.depositCents, currency: o.currency, method: null, reference: null, note: LEGACY_DEPOSIT_NOTE, paidOn: o.orderDate ?? o.createdAt.slice(0, 10), createdAt: o.createdAt, createdBy: null }]
+    : payments
+  const totals = orderTotals(o, { taxCents: tax?.amountCents ?? 0, paidCents: payments.length ? sumPayments(payments) : o.depositCents })
+  const group = orderStatusGroup(o.stage)
 
   return (
     <div className="v2 v2-embedded mx-auto max-w-4xl p-4 sm:p-6">
@@ -56,6 +103,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         <span className="v2-stat" style={{ ['--chan' as string]: stageHue(o.stage) }}>
           {STAGE_LABELS[o.stage]}
         </span>
+        {/* The summary the stage rolls up to — "Closed Order" on a completed or finished job, so a
+            closed order never reads as open on the one page that describes it. Only shown when it
+            says something the stage chip does not. */}
+        {group !== 'active' && (
+          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>{STATUS_GROUP_LABELS[group]}</span>
+        )}
         {isProtectedStage(o.stage) && (
           <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-mute)' }}>
             <Lock style={{ width: 10, height: 10 }} /> Approval stage
@@ -63,6 +116,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         )}
         {o.isCustomDesign && (
           <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t3)' }}>Custom design</span>
+        )}
+        {o.orderKind && o.orderKind !== 'custom' && (
+          <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t1)' }}>{ORDER_KIND_LABELS[o.orderKind]}{o.orderKind === 'appraisal' && o.kindDetails?.purpose ? ` · ${APPRAISAL_PURPOSE_LABELS[o.kindDetails.purpose]}` : ''}</span>
         )}
       </div>
 
@@ -86,6 +142,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             documentTemplateId: o.documentTemplateId,
             templates: templates.map((t) => ({ id: t.id, name: t.name })),
             clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
+            orderKind: o.orderKind, kindDetails: o.kindDetails,
             lineItems: o.lineItems,
           }} />
         ) : canEditDocumentFacts(o.stage) ? (
@@ -101,9 +158,18 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         {/* Open in a new tab: the document is a print-to-PDF page, not a place to navigate away to. */}
         <Link href={`/orders/${o.id}/document/estimate`} target="_blank" className="v2-act">Estimate ↗</Link>
         <Link href={`/orders/${o.id}/document/quote`} target="_blank" className="v2-act">Quote ↗</Link>
+        {/* The invoice at ANY stage but cancelled — see raiseInvoice. A deposit is invoiced the day it
+            is taken; the balance is collected months later against the same document. */}
+        {canEditDocumentFacts(o.stage) && <InvoiceButton orderId={o.id} invoicedAt={o.invoicedAt} />}
         <StageControl orderId={o.id} stage={o.stage} />
-        <hr />
-        <DeleteOrderButton orderId={o.id} orderNumber={o.orderNumber} />
+        {/* Delete only while the order is an untouched draft — see `deletable`. Once a link has gone
+            out or money has come in, the endings are Close / Cancel, which keep everything. */}
+        {canDelete.ok && (
+          <>
+            <hr />
+            <DeleteOrderButton orderId={o.id} orderNumber={o.orderNumber} />
+          </>
+        )}
       </div>
 
       <section style={{ marginBottom: 24 }}>
@@ -146,13 +212,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
           </div>
-          {/* The kit's totals row: pairs right-aligned, tabular figures, the balance emphasised
-              because it is the number anybody actually came to read. */}
-          <dl className="v2-tot">
-            <div><dt>Subtotal</dt><dd>{money(o.subtotalCents, o.currency)}</dd></div>
-            <div><dt>Deposit</dt><dd>{money(o.depositCents, o.currency)}</dd></div>
-            <div><dt>Balance</dt><dd>{money(o.balanceCents, o.currency)}</dd></div>
-          </dl>
+          {/* Subtotal, tax, total, paid and balance due — the same five figures the invoice prints,
+              from the same arithmetic (orderTotals), with every payment underneath. */}
+          <div style={{ marginTop: 20 }}>
+            <PaymentsPanel orderId={o.id} currency={o.currency} totals={totals} payments={shownPayments} canRecord={o.stage !== 'cancelled'} />
+          </div>
         </section>
 
         <div className="space-y-6">
@@ -170,6 +234,16 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {/* Three notes, three tinted blocks in v1 — violet, white, amber. They are the kit's card
               with a hued micro-label instead: the label says whose words these are and whether they
               leave the building, which is the only thing the tint was ever encoding. */}
+          {(o.orderKind === 'repair' || o.orderKind === 'appraisal') && (o.kindDetails?.itemDescription || o.kindDetails?.repairRequested || o.kindDetails?.appraiser) && (
+            <section>
+              <div className="v2-head" style={{ marginBottom: 10 }}><p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><i />{ORDER_KIND_LABELS[o.orderKind]}</p><s /></div>
+              <dl className="v2-facts" data-narrow>
+                {o.kindDetails?.itemDescription && <div><dt>{kindWords(o.orderKind).piece}</dt><dd>{o.kindDetails.itemDescription}</dd></div>}
+                {o.kindDetails?.repairRequested && <div><dt>{kindWords(o.orderKind).brief}</dt><dd className="whitespace-pre-wrap">{o.kindDetails.repairRequested}</dd></div>}
+                {o.kindDetails?.appraiser && <div><dt>Appraiser</dt><dd>{o.kindDetails.appraiser}</dd></div>}
+              </dl>
+            </section>
+          )}
           {o.clientRequirements && (
             <section>
               <div className="v2-head" style={{ marginBottom: 10 }}>
@@ -198,6 +272,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
       </div>
 
+      {/* What was bought from suppliers to make the piece — the stone, the mounting — each with its
+          own status, so "waiting for the stone" is recorded on the stone rather than guessed from
+          the order's stage. Internal: costs never reach a customer document. */}
+      <section style={{ marginTop: 24 }}>
+        <PurchasesPanel orderId={o.id} currency={o.currency} purchases={purchases.purchases} missing={purchases.missing} canEdit={canEditWorkflow(o.stage)} />
+      </section>
+
       <section style={{ marginTop: 24 }}>
         <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Attachments</p><s /></div>
         <AttachmentsPanel orderId={o.id} invoiceImageId={o.invoiceImageId} canSetInvoiceImage={canEditDocumentFacts(o.stage)} />
@@ -221,8 +302,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                 <span style={{ marginTop: 7, width: 5, height: 5, flex: 'none', borderRadius: '50%', background: 'var(--v2-line-strong)' }} />
                 <div>
                   <span style={{ color: 'var(--v2-ink)' }}>{EVENT_LABEL[e.type] ?? e.type}</span>
-                  {e.payload?.to ? <span style={{ color: 'var(--v2-mute)' }}> → {STAGE_LABELS[e.payload.to as keyof typeof STAGE_LABELS] ?? String(e.payload.to)}</span> : null}
-                  <p className="v2-kick" style={{ marginTop: 2 }}>{new Date(e.createdAt).toLocaleString()}{e.actor ? ` · ${e.actor}` : ''}</p>
+                  {eventLine(e) ? <span style={{ color: 'var(--v2-mute)' }}> · {eventLine(e)}</span> : null}
+                  <p className="v2-kick" style={{ marginTop: 2 }}>{new Date(e.createdAt).toLocaleString()} · {actorLabel(labels, e.actor)}</p>
                 </div>
               </li>
             ))}

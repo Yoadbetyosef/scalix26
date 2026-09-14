@@ -34,11 +34,21 @@ export const LENGTH_LIST_KEY = 'length'
 
 export type ProductTypeKey =
   | 'ring' | 'earrings' | 'necklace' | 'tennis_necklace' | 'bracelet' | 'tennis_bracelet'
-  | 'pendant' | 'band' | 'unspecified'
+  | 'pendant' | 'band' | 'chain' | 'watch' | 'loose_stone' | 'other' | 'unspecified'
 
-/** What a tenant taking the jewellery starter gets. Ordered as a jeweller would say them. */
+/**
+ * What a tenant taking the jewellery starter gets. Ordered as a jeweller would say them.
+ *
+ * The last four arrived when the form was audited for being ring-shaped: a chain has a length and
+ * a metal and no stone at all; a watch has a reference and a case size; a loose stone is ALL stone
+ * and has no metal, no size, no setting; and "Other" is the honest name for the anklet, the cufflink
+ * and the brooch until somebody describes what each needs. A tenant who already has her own list
+ * is not touched — these are what a NEW list starts with, and add_tg_production_1.sql adds the four
+ * to TG's list without renaming anything she typed.
+ */
 export const PRODUCT_TYPE_OPTIONS = [
   'Ring', 'Band', 'Earrings', 'Pendant', 'Necklace', 'Tennis necklace', 'Bracelet', 'Tennis bracelet',
+  'Chain', 'Watch', 'Loose stone', 'Other',
 ] as const
 
 /**
@@ -57,12 +67,18 @@ export function productTypeKey(label: string | null | undefined): ProductTypeKey
   const has = (re: RegExp) => re.test(t)
 
   if (has(/earring|ear ring|stud|hoop/)) return 'earrings'
+  // Before the ring test for the same reason as earrings: a "wedding band" is a band, and a chain
+  // that says "chain" is a chain before "neck" gets a look at it.
+  if (has(/loose stone|loose diamond|loose gem|melee|parcel|^stone$|^diamond$/)) return 'loose_stone'
+  if (has(/watch|timepiece|rolex|omega|cartier tank/)) return 'watch'
   if (has(/tennis/)) return has(/brace|bangle|cuff/) ? 'tennis_bracelet' : 'tennis_necklace'
   if (has(/pendant|charm/)) return 'pendant'
   if (has(/band/)) return 'band'
   if (has(/brace|bangle|cuff/)) return 'bracelet'
+  if (has(/\bchain\b|rope chain|curb|figaro|cable chain|box chain/) && !has(/neck|necklace|pendant/)) return 'chain'
   if (has(/neck|chain|lariat|choker|collar|riviera/)) return 'necklace'
   if (has(/ring|solitaire|engagement|eternity/)) return 'ring'
+  if (has(/^other|anklet|brooch|cufflink|cuff link|tie pin|tiara|body/)) return 'other'
   return 'unspecified'
 }
 
@@ -198,6 +214,32 @@ const FIELD_SETS: Record<ProductTypeKey, FieldSet> = {
     measurements: { label: 'Width (mm)', docLabel: 'Width' },
     bandWidthMm: BAND_WIDTH,
   },
+
+  // A chain is metal and a length. No stone fields at all — they come back only if a value is
+  // already sitting in one, under its plain name, like every other type.
+  chain: {
+    measurements: LENGTH,
+  },
+
+  // A watch is a reference number and a case size, and the stone fields (a diamond bezel does
+  // exist) read as "on the piece" rather than "centre". The reference goes in Measurements — the
+  // free-text column that already holds whatever a piece's one identifying dimension is.
+  watch: {
+    centerStoneShape: STONE_SHAPE, centerStoneCarat: TOTAL_CT,
+    measurements: { label: 'Reference / case size', docLabel: 'Reference' },
+  },
+
+  // A loose stone is ALL stone: shape, weight, dimensions, certificate — and nothing worn. No ring
+  // size, no side stones, no band. Metal stays offered on the shared row below the stone group and
+  // simply reads empty.
+  loose_stone: {
+    centerStoneShape: STONE_SHAPE,
+    centerStoneCarat: { label: 'Weight (ct)', docLabel: 'Weight' },
+    measurements: { label: 'Dimensions (mm)', docLabel: 'Dimensions' },
+  },
+
+  // Everything, under the plain names, until somebody says what an anklet needs.
+  other: RING,
 }
 
 export const fieldsFor = (key: ProductTypeKey): FieldSet => FIELD_SETS[key] ?? RING
@@ -206,6 +248,7 @@ export const fieldsFor = (key: ProductTypeKey): FieldSet => FIELD_SETS[key] ?? R
 export const PRODUCT_TYPE_LABEL: Record<ProductTypeKey, string> = {
   ring: 'Ring', band: 'Band', earrings: 'Earrings', pendant: 'Pendant', necklace: 'Necklace',
   tennis_necklace: 'Tennis necklace', bracelet: 'Bracelet', tennis_bracelet: 'Tennis bracelet',
+  chain: 'Chain', watch: 'Watch', loose_stone: 'Loose stone', other: 'Other',
   unspecified: '',
 }
 

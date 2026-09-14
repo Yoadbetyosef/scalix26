@@ -9,6 +9,8 @@ const schema = z.object({
   decision: z.enum(['approved', 'changes_requested', 'rejected']),
   comment: z.string().max(3000).nullable().optional(),
   estimatedCompletionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  // The factory's quoted cost, on a quotation request. Cents, whole, capped against a fat finger.
+  quotedCostCents: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
 })
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const token = (await params).token
   const parsed = schema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Invalid response.' }, { status: 400 })
-  const r = await recordApprovalResponse(token, parsed.data.decision, parsed.data.comment ?? null, parsed.data.estimatedCompletionDate ?? null)
+  const r = await recordApprovalResponse(token, parsed.data.decision, parsed.data.comment ?? null, parsed.data.estimatedCompletionDate ?? null, parsed.data.quotedCostCents ?? null)
   // Generic error surface (no token/tenant details).
   if (!r.ok) return NextResponse.json({ error: r.error ?? 'This approval link is no longer available.' }, { status: 400 })
   return NextResponse.json({ ok: true })

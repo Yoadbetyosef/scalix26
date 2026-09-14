@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 import { ORDER_DOC_META, orderDocNumber, specRows, totalCarats, validUntil, type DocBranding, type DocBusiness, type OrderDocType } from '@/lib/orders/documents'
 import { taxLabel, type TaxLine } from '@/lib/tax/canada'
-import type { DocumentImage } from '@/lib/orders/attachments'
+import type { DocumentImage, DocumentFile } from '@/lib/orders/attachments'
+import { orderTotals } from '@/lib/orders/payment-types'
 import type { OrderWithDetails } from '@/lib/orders/types'
 import { Letterhead } from '@/components/documents/letterhead'
 import { letterheadStyleFor, resolveLetterhead } from '@/lib/documents/letterhead-resolve'
+import { kindWords } from '@/lib/orders/kinds'
 
 // ONE document body, two entry points.
 //
@@ -27,6 +29,11 @@ export interface OrderDocumentProps {
   branding: DocBranding
   business: DocBusiness
   images: DocumentImage[]
+  /**
+   * Certificates and other documents the customer may open — a GIA report, an appraisal, a
+   * warranty. Absent on a caller that has not been updated; nothing prints.
+   */
+  files?: DocumentFile[]
   /** Null when no delivery province is set, or the rate is unknown. Null renders NO tax line. */
   tax: TaxLine | null
   /** The seller's exemption sentence, printed BENEATH the tax line. Null unless it was asserted. */
@@ -37,19 +44,20 @@ export interface OrderDocumentProps {
   toolbar?: ReactNode
 }
 
-export function OrderDocumentBody({ order: o, type, branding, business, images, tax, pstExemptionNote, footerNote, toolbar }: OrderDocumentProps) {
+export function OrderDocumentBody({ order: o, type, branding, business, images, files = [], tax, pstExemptionNote, footerNote, toolbar }: OrderDocumentProps) {
   const meta = ORDER_DOC_META[type]
   const accent = branding.accent
   const issued = new Date().toISOString().slice(0, 10)
   const carats = totalCarats(o.lineItems)
   const addr = [business.address, [business.city, business.state, business.zip].filter(Boolean).join(', ')].filter(Boolean)
 
-  // Totals are computed HERE rather than read from orders.balance_cents, because that column is
-  // subtotal minus deposit and knows nothing about tax. Reading it would print a balance that does not
-  // equal the numbers printed directly above it — the one arithmetic error a customer always catches.
-  const taxCents = tax?.amountCents ?? 0
-  const totalCents = o.subtotalCents + taxCents
-  const dueCents = totalCents - o.depositCents
+  // Totals come from orderTotals — the SAME arithmetic the order page and the payments panel use —
+  // rather than from orders.balance_cents, which is subtotal minus deposit and knows nothing about
+  // tax. A balance printed here that did not equal the numbers directly above it is the one
+  // arithmetic error a customer always catches; three surfaces computing it three ways is how that
+  // happens.
+  const totals = orderTotals(o, { taxCents: tax?.amountCents ?? 0 })
+  const { totalCents, dueCents } = totals
 
   // The letterhead is a FRAME. Nothing below this line knows it is there: the body renders exactly the
   // layout it rendered before, and Letterhead puts the bands around it (and returns the body untouched
@@ -124,7 +132,15 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
             </div>
             <div className="rounded-lg border border-neutral-200 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Summary</p>
-              <p className="text-sm text-neutral-700">{meta.blurb}</p>
+              <p className="text-sm text-neutral-700">{o.orderKind && o.orderKind !== 'custom' ? (kindWords(o.orderKind).blurb || meta.blurb) : meta.blurb}</p>
+              {/* A repair or appraisal names the piece the customer brought in — the thing the
+                  document is about — above the priced lines. */}
+              {(o.orderKind === 'repair' || o.orderKind === 'appraisal') && o.kindDetails?.itemDescription && (
+                <p className="mt-1 text-sm text-neutral-700"><span className="text-neutral-400">{kindWords(o.orderKind).piece}: </span>{o.kindDetails.itemDescription}</p>
+              )}
+              {o.orderKind === 'repair' && o.kindDetails?.repairRequested && (
+                <p className="mt-1 text-sm text-neutral-700"><span className="text-neutral-400">Requested: </span>{o.kindDetails.repairRequested}</p>
+              )}
               {carats > 0 && <p className="mt-1 text-sm text-neutral-700">Total stone weight <span className="font-medium">{carats.toFixed(2)} ct</span></p>}
               {o.isCustomDesign && <p className="mt-1 text-sm font-medium" style={accent ? { color: accent } : undefined}>Custom design</p>}
             </div>
@@ -177,6 +193,36 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
                   )
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* ── CERTIFICATES AND DOCUMENTS ─────────────────────────────────────────────────────────
+              A GIA report, an appraisal, a warranty card. These were uploaded to the order, marked
+              public, and then silently kept off the customer's copy because a PDF has no thumbnail
+              and the gallery above only knew how to show pictures. The customer was told the stone
+              is certified and given no way to see the certificate.
+
+              Rendered as a list of links rather than embedded: a PDF viewer inside a printable page
+              is a blank box on paper, and a link the customer can open in its own tab is the honest
+              shape. On the customer's copy each link goes through /e/[token]/file/[id], which
+              re-signs the storage URL at click time — so a page left open for an hour still opens
+              the certificate. On paper the list prints as the file names, which tells the reader
+              what accompanies the online copy. */}
+          {files.length > 0 && (
+            <section className="mb-6 break-inside-avoid">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Certificates &amp; documents</p>
+              <ul className="mt-1 space-y-1 text-sm">
+                {files.map((f) => (
+                  <li key={f.id} className="flex items-center gap-2">
+                    <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-neutral-300" />
+                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="font-medium text-neutral-800 underline decoration-neutral-300 underline-offset-2 print:no-underline">
+                      {f.fileName}
+                    </a>
+                    <span className="text-xs text-neutral-400">PDF</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="hidden text-xs text-neutral-500 print:block">Included with the online copy of this document.</p>
             </section>
           )}
 

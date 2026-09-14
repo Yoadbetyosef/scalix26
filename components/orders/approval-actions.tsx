@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { canSendForApproval, canSendToProduction, type OrderStage, type ApprovalType } from '@/lib/orders/stages'
 import { SupplierPicker, type Supplier } from './supplier-picker'
 
-interface Approval { id: string; approvalType: ApprovalType; recipientEmail: string; status: string; version: number; respondedAt: string | null; responseComment: string | null; estimatedCompletionDate: string | null; createdAt: string }
+interface Approval { id: string; approvalType: ApprovalType; recipientEmail: string; status: string; version: number; respondedAt: string | null; responseComment: string | null; estimatedCompletionDate: string | null; createdAt: string; requestKind?: 'approval' | 'quote'; quotedCostCents?: number | null }
 interface Att { id: string; fileName: string; visibility: 'internal' | 'public' }
 // A response should read at a glance: approved is settled, anything else needs her.
 // One hue per state, and the chip derives its own tint and ink from it — v1 hand-picked seven
@@ -33,7 +33,7 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
   // Persistent, not a toast: "nobody was notified" is a fact she may need to act on minutes later.
   const [outcome, setOutcome] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null)
-  const [f, setF] = useState({ recipientName: '', recipientEmail: '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: [] as string[] })
+  const [f, setF] = useState({ recipientName: '', recipientEmail: '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: [] as string[], requestKind: 'approval' as 'approval' | 'quote' })
   // The factory a send is addressed to. A record, not a typed address — see supplier-picker.tsx.
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [prodOpen, setProdOpen] = useState(false)
@@ -54,14 +54,14 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
     // one out should be the deliberate act, not remembering to include it.
     const shared = atts.filter((a) => a.visibility === 'public').map((a) => a.id)
     setSupplier(orderSupplier ?? null)
-    setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: shared })
+    setF({ recipientName: type === 'factory' ? prefill.factoryName ?? '' : prefill.customerName ?? '', recipientEmail: type === 'factory' ? prefill.factoryEmail ?? '' : prefill.customerEmail ?? '', subject: '', message: '', deadline: '', sendCopyToSelf: true, internalNote: '', include: shared, requestKind: 'approval' })
     setOpen(type)
   }
   const send = async () => {
     if (!open) return
     setBusy(true); setErr(null)
     try {
-      const body = { approvalType: open, supplierId: open === 'factory' ? supplier?.id ?? null : null, recipientName: f.recipientName || null, recipientEmail: open === 'factory' ? supplier?.email ?? '' : f.recipientEmail, subject: f.subject || null, message: f.message || null, deadline: f.deadline || null, attachmentIds: f.include, sendCopyToSelf: f.sendCopyToSelf, internalNote: f.internalNote || null }
+      const body = { approvalType: open, supplierId: open === 'factory' ? supplier?.id ?? null : null, recipientName: f.recipientName || null, recipientEmail: open === 'factory' ? supplier?.email ?? '' : f.recipientEmail, subject: f.subject || null, message: f.message || null, deadline: f.deadline || null, attachmentIds: f.include, sendCopyToSelf: f.sendCopyToSelf, internalNote: f.internalNote || null, requestKind: open === 'factory' ? f.requestKind : 'approval' }
       const r = await fetch(`/api/orders/${orderId}/approvals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!r.ok) throw new Error((await r.json()).error || 'Failed to send')
       setOpen(null); router.refresh(); void load()
@@ -122,8 +122,9 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
                 {/* Once the piece is being made, a factory request is the work order — the factory is not
                     being asked to approve anything, they are holding the job. Calling it "factory" there
                     reads as an approval still outstanding. */}
-                <span className="capitalize" style={{ color: 'var(--v2-ink)' }}>{ap.approvalType === 'factory' && ['production', 'ready', 'delivered', 'completed'].includes(stage) ? 'work order' : ap.approvalType}</span>
+                <span className="capitalize" style={{ color: 'var(--v2-ink)' }}>{ap.requestKind === 'quote' ? 'factory quotation' : ap.approvalType === 'factory' && ['production', 'ready', 'delivered', 'completed'].includes(stage) ? 'work order' : ap.approvalType}</span>
                 <span className="v2-stat" style={{ ['--chan' as string]: STATUS_HUE[ap.status] ?? 'var(--v2-mute)' }}>{ap.status.replace('_', ' ')} · v{ap.version}</span>
+                {ap.quotedCostCents != null && <span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)' }}>quoted {(ap.quotedCostCents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })} · internal</span>}
                 <span className="v2-kick">{ap.recipientEmail}</span>
                 {ap.estimatedCompletionDate && <span className="v2-kick">· est {ap.estimatedCompletionDate}</span>}
                 {ap.respondedAt && <span className="v2-kick">· {new Date(ap.respondedAt).toLocaleString()}</span>}
@@ -242,6 +243,12 @@ export function ApprovalActions({ orderId, stage, prefill, orderSupplier }: {
               </div>
             )}
 
+            {open === 'factory' && (
+              <label className="v2-check" style={{ marginTop: 14 }}>
+                <input type="checkbox" checked={f.requestKind === 'quote'} onChange={(e) => setF((p) => ({ ...p, requestKind: e.target.checked ? 'quote' : 'approval' }))} />
+                <span>Ask for a quotation<em>the factory sees the same specification and files and answers with a cost, not an approval</em></span>
+              </label>
+            )}
             <div className="v2-fld" style={{ marginTop: 18 }}>
               <label htmlFor="aa-note">Internal note<span className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t4)', marginLeft: 8 }}>never shared</span></label>
               <input id="aa-note" value={f.internalNote} onChange={(e) => setF((p) => ({ ...p, internalNote: e.target.value }))} />

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Send } from 'lucide-react'
+import { Send, Link2 } from 'lucide-react'
 
 // Email this document to the customer.
 //
@@ -17,6 +17,30 @@ export function SendDocument({ orderId, docType, defaultEmail, defaultName }: {
   const [done, setDone] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [f, setF] = useState({ email: defaultEmail ?? '', name: defaultName ?? '', message: '' })
+  const [copied, setCopied] = useState<'idle' | 'done' | 'shown'>('idle')
+  const [link, setLink] = useState<string | null>(null)
+
+  // ── THE LINK SHE CAN SEND HERSELF ─────────────────────────────────────────────────────────────
+  //
+  // The address bar on this page is the OWNER's route, behind auth. It was the only link on screen,
+  // so it is the one that got pasted into a text message — and the customer landed on a login page.
+  // This mints the customer-facing link (same table, same revocation as an emailed one) and puts it
+  // on the clipboard, for the times she wants to send it through her own channel.
+  const copyLink = async () => {
+    setBusy(true); setErr(null)
+    try {
+      const r = await fetch(`/api/orders/${orderId}/shares`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docType, label: f.name || defaultName || null }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || !j.url) throw new Error(j.error || 'Could not create the link.')
+      setLink(j.url)
+      try { await navigator.clipboard.writeText(j.url); setCopied('done') } catch { setCopied('shown') }
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally { setBusy(false) }
+  }
 
   const send = async () => {
     setBusy(true); setErr(null)
@@ -41,9 +65,18 @@ export function SendDocument({ orderId, docType, defaultEmail, defaultName }: {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 print:hidden">
-        <Send className="h-4 w-4" /> Send to customer
-      </button>
+      <span className="inline-flex flex-wrap items-center gap-2 print:hidden">
+        <button onClick={copyLink} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50" title="A link the customer can open without an account">
+          <Link2 className="h-4 w-4" /> {busy ? 'Creating link…' : copied === 'done' ? 'Link copied' : 'Copy customer link'}
+        </button>
+        {link && copied === 'shown' && (
+          <span className="max-w-xs break-all rounded bg-neutral-50 p-1.5 font-mono text-[11px] text-neutral-600">{link}</span>
+        )}
+        {err && <span className="text-xs text-red-600">{err}</span>}
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50">
+          <Send className="h-4 w-4" /> Email to customer
+        </button>
+      </span>
     )
   }
 

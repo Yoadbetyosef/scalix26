@@ -16,6 +16,8 @@ const schema = z.object({
   attachmentIds: z.array(z.string().uuid()).max(50).optional(),
   sendCopyToSelf: z.boolean().optional(),
   internalNote: z.string().max(3000).nullable().optional(),
+  // Factory only: ask what it would cost rather than for approval.
+  requestKind: z.enum(['approval', 'quote']).optional(),
 })
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

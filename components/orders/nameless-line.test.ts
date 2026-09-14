@@ -60,9 +60,11 @@ describe('both forms refuse rather than drop, and say so where she is', () => {
     // the mark is there, that it is hidden from assistive tech (the input carries aria-required),
     // and that it is on the Product label rather than somewhere kinder to find.
     const s = src('components/orders/line-item-fields.tsx')
-    expect(s).toMatch(/<label htmlFor="li-product">Product <span[^>]*aria-hidden>\*<\/span><\/label>/)
+    // The id is per line now (`li0-product`, `li1-product`…) so two items on one order do not
+    // share it — see the `index` prop. The mark and the aria-required are what this guards.
+    expect(s).toMatch(/<label htmlFor=\{`\$\{p\}-product`\}>Product <span[^>]*aria-hidden>\*<\/span><\/label>/)
     // Not [^>]* — an onChange handler contains "=>" and the character class stops at the arrow.
-    expect(s).toMatch(/id="li-product"[\s\S]{0,200}?required aria-required/)
+    expect(s).toMatch(/id=\{`\$\{p\}-product`\}[\s\S]{0,200}?required aria-required/)
   })
 })
 

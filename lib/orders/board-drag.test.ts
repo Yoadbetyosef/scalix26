@@ -35,7 +35,7 @@ describe('the drag reuses the existing transition', () => {
   it('refuses the drop client-side AND lets the server refuse it too', () => {
     const c = code(BOARD)
     // Checked before the fetch, so an illegal column never lights up...
-    expect(c).toMatch(/if \(!card \|\| !canManualTransition/)
+    expect(c).toMatch(/if \(!canManualTransition\(stageOf\(card\), to\)\) return/)
     // ...and the response is still checked, because the client's copy of the rules is a convenience
     // and the server's is the authority. setStageManual re-asks the same predicate.
     expect(c).toMatch(/if \(!r\.ok\)/)
@@ -82,14 +82,12 @@ describe('the two new columns', () => {
     }
   })
 
-  it('coming back from pending resumes rather than advances', () => {
-    // Back to 'new', the same single honest move out of a no-sale. Anything else would be the board
-    // guessing where a parked job had got to.
+  it('coming back from pending resumes wherever the job actually is', () => {
+    // It used to be 'new' only — the board refusing to guess where a parked job had got to. Now the
+    // person dragging it says where, which is the same freedom every other live stage has.
     expect(canManualTransition('pending', 'new')).toBe(true)
-    for (const s of ORDER_STAGES) {
-      if (['new', 'pending', 'cancelled', 'finished', 'closed_no_sale'].includes(s)) continue
-      expect(canManualTransition('pending', s), s).toBe(false)
-    }
+    expect(canManualTransition('pending', 'production')).toBe(true)
+    expect(canManualTransition('pending', 'waiting_customer_approval')).toBe(true)
   })
 
   it('a parked job can still be lost, cancelled or finished', () => {
@@ -111,5 +109,33 @@ describe('the board hands the client a projection, not an order', () => {
 
   it('still decides its columns from the shared predicate', () => {
     expect(code(PAGE)).toMatch(/hasNoBoardColumn\(s\)/)
+  })
+})
+
+// ── ANY COLUMN, EITHER WAY, ON THE RECORD ───────────────────────────────────────────────────────
+describe('the board moves a job anywhere it may honestly go, and every move is on the timeline', () => {
+  it('a drop between any two live columns is accepted client-side by the same predicate the server uses', () => {
+    expect(canManualTransition('production', 'customer_changes_requested')).toBe(true) // back to revisions
+    expect(canManualTransition('waiting_factory_approval', 'production')).toBe(true)   // straight to production
+    expect(canManualTransition('customer_changes_requested', 'production')).toBe(true) // and forward again
+  })
+  it('closed columns take a drop but do not give one up — Reopen is on the order page', () => {
+    expect(canManualTransition('delivered', 'completed')).toBe(true)
+    expect(canManualTransition('completed', 'production')).toBe(false)
+    expect(code(BOARD)).toMatch(/draggable=\{!busy && isLiveStage\(stageOf\(o\)\)\}/)
+  })
+  it('a phone gets a move menu on every live card, posting the same route', () => {
+    const c = code(BOARD)
+    expect(c).toMatch(/<select[\s\S]*?onChange=\{\(e\) => \{ const to = e\.target\.value as OrderStage; if \(to\) void moveCard\(o, to\) \}\}/)
+    expect(c).toMatch(/const moveCard = async \(card: BoardCard, to: OrderStage\)/)
+    expect(c).not.toMatch(/<Lock/)
+  })
+  it('the stage route takes a reason and the store writes it beside from, to and who', () => {
+    expect(code('app/api/orders/[id]/stage/route.ts')).toMatch(/note: z\.string\(\)\.max\(500\)\.nullable\(\)\.optional\(\)/)
+    expect(code('lib/orders/store.ts')).toMatch(/\.\.\.\(reason \? \{ note: reason \} : \{\}\)/)
+    // And the page prints from → to — reason, with a name rather than a uuid.
+    const page = code('app/orders/[id]/page.tsx')
+    expect(page).toMatch(/case 'stage_changed': return `\$\{p\.from \? `\$\{stage\(p\.from\)\} → ` : ''\}\$\{stage\(p\.to\)\}\$\{p\.note \? ` — \$\{p\.note\}` : ''\}`/)
+    expect(page).toMatch(/actorLabel\(labels, e\.actor\)/)
   })
 })

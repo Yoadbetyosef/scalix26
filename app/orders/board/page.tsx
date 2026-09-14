@@ -53,10 +53,10 @@ export default async function OrdersBoardPage() {
       </div>
 
       {/* Said once, at the top, rather than as a tooltip on every card: dragging is a desktop
-          gesture and the HTML5 API this uses does not fire on touch. On a phone the stage buttons on
-          the order itself are the way, and they are the same transition. */}
+          gesture and the HTML5 API this uses does not fire on touch, so every card also has a ⋯
+          menu that moves it — the same transition, through the same route. */}
       <p className="v2-kick" style={{ marginBottom: 10 }}>
-        Drag a card to move it. On a phone, open the order and use its stage buttons.
+        Drag a card to any stage, forwards or back — or use the ⋯ on a card. Every move is on the order&apos;s timeline.
       </p>
 
       <BoardColumns stages={stages} cards={cards} />

@@ -3,7 +3,9 @@ import { requireActiveBusinessContext } from '@/lib/workspace'
 import { customerFacing, sendEmail } from '@/lib/email/send'
 import { generateApprovalToken, hashToken, looksLikeToken } from './approval-token'
 import { loadDocContext, orderDocNumber, type OrderDocType } from './documents'
-import { getOrder } from './store'
+import { getOrder, addEvent } from './store'
+import { letterheadStyleFor, resolveLetterhead } from '@/lib/documents/letterhead-resolve'
+import type { Order } from './types'
 
 // Sharing a document with the customer.
 //
@@ -24,6 +26,56 @@ export interface ShareResult { ok: boolean; error?: string; url?: string }
 const shareUrl = (baseUrl: string, token: string) => `${baseUrl.replace(/\/$/, '')}/e/${token}`
 
 /**
+ * WHO THIS DOCUMENT IS FROM — the business the letterhead names, not necessarily the tenant.
+ *
+ * TG is one tenant and two companies. An order printed on the T.G. Designs letterhead must be
+ * emailed as T.G. Designs, with replies going to that side's address: the email that said "your
+ * estimate from TG jewellers" above a document headed T.G. DESIGNS was the two businesses on one
+ * page again, in the inbox this time. Resolved through the same function the document itself uses,
+ * so the sender in the email and the sender on the paper cannot disagree.
+ */
+export async function documentSender(tenantId: string, order: Pick<Order, 'letterheadStyle'>): Promise<{ businessName: string; replyTo: string | null }> {
+  const { branding, business } = await loadDocContext(tenantId)
+  const lh = branding.letterhead
+  const resolved = resolveLetterhead(lh, letterheadStyleFor(order.letterheadStyle, lh), business, branding.accent)
+  const name = (resolved.enabled && resolved.businessName) || business.businessName || ''
+  const replyTo = (resolved.enabled && resolved.email) || business.email || null
+  return { businessName: name, replyTo }
+}
+
+/**
+ * Mint a link for a document WITHOUT emailing it — for the owner to paste into her own message, a
+ * text, a WhatsApp. This is the fix for the customer who was "asked to log in": the address bar on
+ * her own document tab is /orders/[id]/document/…, which is the owner's page behind auth, and it
+ * was the only link on screen to copy. The link a customer can open is this one.
+ *
+ * Recorded like every other link — same table, same revocation — so it appears in Shared links and
+ * can be withdrawn.
+ */
+export async function createShareLink(orderId: string, docType: OrderDocType, baseUrl: string, label?: string | null): Promise<ShareResult> {
+  const c = await requireActiveBusinessContext()
+  if (!c) return { ok: false, error: 'Not signed in' }
+  const order = await getOrder(orderId)
+  if (!order || order.tenantId !== c.tenantId) return { ok: false, error: 'Order not found' }
+
+  const { token, hash } = generateApprovalToken()
+  const { error } = await createAdminClient().from('order_document_shares').insert({
+    tenant_id: c.tenantId, order_id: orderId, doc_type: docType, token_hash: hash,
+    recipient_name: (label ?? '').trim() || null,
+    // The column is NOT NULL and means "who this was emailed to"; a copied link was emailed to nobody.
+    // The sentinel is a plain word, never an address, so nothing downstream can try to send to it.
+    recipient_email: COPIED_LINK,
+    sent_at: new Date().toISOString(), created_by: c.actorUserId ?? null,
+  })
+  if (error) return { ok: false, error: `Could not create the link. (${error.message})` }
+  const url = shareUrl(baseUrl, token)
+  await addEvent(orderId, 'document_shared', { docType, via: 'link' })
+  return { ok: true, url }
+}
+/** The recipient_email of a link that was copied rather than emailed. */
+export const COPIED_LINK = 'link'
+
+/**
  * Create a share link for a document and email it to the customer.
  *
  * Branded as the tenant with replies routed to them — the same shape createAndSendApproval uses, and
@@ -41,8 +93,7 @@ export async function shareDocument(
   const order = await getOrder(orderId)
   if (!order || order.tenantId !== c.tenantId) return { ok: false, error: 'Order not found' }
 
-  const { business } = await loadDocContext(c.tenantId)
-  const businessName = business.businessName || ''
+  const { businessName, replyTo } = await documentSender(c.tenantId, order)
   if (!businessName) {
     // customerFacing() would throw on this anyway; failing here says WHY, which is fixable.
     return { ok: false, error: 'Add your business name in settings before sending — it is the sender the customer sees.' }
@@ -80,7 +131,7 @@ export async function shareDocument(
     input.recipientEmail,
     `${label} ${orderDocNumber(docType, order.orderNumber)} from ${businessName}`,
     html,
-    customerFacing(businessName, { tenantId: c.tenantId, replyTo: business.email ?? undefined }),
+    customerFacing(businessName, { tenantId: c.tenantId, replyTo: replyTo ?? undefined }),
   ).catch((e) => ({ success: false as const, error: (e as Error).message }))
 
   if (!sent.success) {
@@ -91,6 +142,9 @@ export async function shareDocument(
 
   await db.from('order_document_shares').update({ sent_at: new Date().toISOString() })
     .eq('token_hash', hash).eq('tenant_id', c.tenantId)
+  // On the timeline, so "was the estimate ever sent?" is answered from the order rather than from
+  // the inbox. The recipient is on the Shared links panel, not here.
+  await addEvent(orderId, 'document_shared', { docType, via: 'email' })
 
   return { ok: true, url }
 }

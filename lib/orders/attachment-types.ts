@@ -118,3 +118,15 @@ export const extensionOf = (fileName: string): string => {
   const i = fileName.lastIndexOf('.')
   return i > 0 ? fileName.slice(i + 1).toLowerCase() : ''
 }
+
+/**
+ * What a public attachment IS to the customer's document — or null when it is neither shown nor
+ * linked. Isomorphic, so the attachments panel can say "this will appear on the customer's copy"
+ * with the same rule the document uses.
+ */
+export function publicAttachmentKind(mime: string): 'image' | 'video' | 'pdf' | null {
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('image/') && mime !== 'image/heic' && mime !== 'image/heif') return 'image'
+  if (mime === 'application/pdf') return 'pdf'
+  return null
+}

@@ -3,14 +3,14 @@
 // (production → ready → delivered → completed) and cancellation are manual. Pure + tested.
 
 export const ORDER_STAGES = [
-  'new', 'pending', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved',
+  'new', 'pending', 'in_process', 'waiting_factory_approval', 'factory_changes_requested', 'factory_approved',
   'waiting_customer_approval', 'customer_changes_requested', 'customer_approved',
   'production', 'ready', 'delivered', 'completed', 'finished', 'closed_no_sale', 'cancelled',
 ] as const
 export type OrderStage = typeof ORDER_STAGES[number]
 
 export const STAGE_LABELS: Record<OrderStage, string> = {
-  new: 'New Order', pending: 'Pending', waiting_factory_approval: 'Waiting for Factory Approval', factory_changes_requested: 'Factory Changes Requested',
+  new: 'New Order', pending: 'Pending', in_process: 'In Process', waiting_factory_approval: 'Waiting for Factory Approval', factory_changes_requested: 'Factory Changes Requested',
   factory_approved: 'Factory Approved', waiting_customer_approval: 'Waiting for Customer Approval', customer_changes_requested: 'Customer Changes Requested',
   customer_approved: 'Customer Approved', production: 'Production', ready: 'Ready', delivered: 'Delivered', completed: 'Completed', finished: 'Finished',
   closed_no_sale: 'Closed – No Sale', cancelled: 'Cancelled',
@@ -65,6 +65,43 @@ export const isAtRestStage = (s: OrderStage): boolean => s === 'closed_no_sale'
 // returns the job to 'new', the same one honest move 'closed_no_sale' makes, because a parked job
 // resumes rather than advances.
 export const isPendingStage = (s: OrderStage): boolean => s === 'pending'
+
+// ── IN PROCESS: THE CUSTOMER SAID YES, AND THE PAPERWORK HAS NOT CAUGHT UP ──────────────────────
+//
+// A verbal go-ahead — on the phone, across the counter — before the deposit is taken and before any
+// formal approval link has been answered. TG works this way for most retail pieces: the customer
+// agrees, the jeweller starts sourcing the stone, and the signed approval and the deposit follow
+// over the next days. Until now that job had to sit in 'new' (a lie about being untouched) or be
+// pushed into an approval stage nobody had actually sent.
+//
+// It is a live, working stage: it keeps a column, it can be sent for approval, it can be invoiced,
+// a deposit can be recorded against it, and it can go straight to production.
+export const isInProcessStage = (s: OrderStage): boolean => s === 'in_process'
+
+// ── STATUS GROUPS: WHAT A LIST, A FILTER AND A CUSTOMER'S HISTORY CALL AN ORDER ─────────────────
+//
+// Sixteen stages are right for a board and wrong for a summary. Every surface that answers "is this
+// still open?" reads THIS, never a hand-written list of stages — the list view, the customer's
+// history, the search results and the reports all agree by construction.
+//
+//   active         being worked, in any of the live stages
+//   closed         over, and the work happened — 'completed' and 'finished' both. A closed order is
+//                  never shown as open anywhere, which was the fault: a finished job kept reading as
+//                  live in places that listed stages by hand.
+//   no_sale        quoted and not taken — at rest, reopenable
+//   cancelled      it is not happening
+export type OrderStatusGroup = 'active' | 'closed' | 'no_sale' | 'cancelled'
+export const STATUS_GROUP_LABELS: Record<OrderStatusGroup, string> = {
+  active: 'Active', closed: 'Closed Order', no_sale: 'Closed – No Sale', cancelled: 'Cancelled',
+}
+export function orderStatusGroup(s: OrderStage): OrderStatusGroup {
+  if (s === 'cancelled') return 'cancelled'
+  if (s === 'closed_no_sale') return 'no_sale'
+  if (s === 'completed' || s === 'finished') return 'closed'
+  return 'active'
+}
+/** True when the order should appear in "open" lists. One predicate, used everywhere. */
+export const isOpenOrder = (s: OrderStage): boolean => orderStatusGroup(s) === 'active'
 
 /**
  * No column on the board. NOT the same as terminal: 'completed' is terminal and keeps its column,
@@ -152,41 +189,59 @@ export function refusedFields(stage: OrderStage, offered: string[]): string[] | 
 export type ApprovalType = 'factory' | 'customer'
 export type ApprovalDecision = 'approved' | 'changes_requested' | 'rejected'
 
-// Manual (drag / explicit set-stage) transitions allowed. Excludes ALL approval transitions. Cancel and
-// finish are both allowed from any non-terminal stage.
-const MANUAL_FORWARD: Partial<Record<OrderStage, OrderStage[]>> = {
-  production: ['ready'], ready: ['delivered'], delivered: ['completed'],
-  // THE MOVES BACK. Reopening restores the estimate to where it was and no further: a customer
-  // returning is not the job advancing, and neither is a parked job resuming.
-  closed_no_sale: ['new'],
-  pending: ['new'],
-}
+// ── MANUAL MOVES: ANYWHERE A LIVE JOB CAN HONESTLY GO ───────────────────────────────────────────
+//
+// This used to be a forward chain — production → ready → delivered → completed — with every other
+// move refused, and the approval stages sealed off entirely because "entering one is action-only".
+// In the workshop that rule was wrong in both directions. A piece in production comes BACK to
+// revisions when the customer changes the stone; a repeat trade order goes from the estimate
+// straight to production with nothing to approve; a job parked as pending resumes wherever it was.
+// The board could do none of that, so the stage stopped describing the job and started describing
+// what the software allowed.
+//
+// So the rule is now about what a stage MEANS, not about adjacency:
+//
+//   · between any two LIVE stages, in either direction: allowed. Approval stages included — moving
+//     a job into "Waiting for customer approval" by hand says the customer is being asked offline,
+//     and the approval request table still records what was actually sent.
+//   · into the three ways a job ENDS (finished, cancelled, no sale): from a live stage only, and
+//     no-sale not from a piece already being made — abandoning real work is a cancellation.
+//   · OUT of an ending: closed_no_sale reopens to 'new'; completed and finished reopen through
+//     REOPEN_TARGET (an explicit, confirmed action on the order page, never a stray drag);
+//     cancelled is final.
+//
+// Every move, from every surface, still goes through setStageManual, which writes the timeline row
+// carrying from, to, who and why. The freedom is in WHERE a job may go, not in whether it is recorded.
 /** The piece is being made. Walking away from one of these is a cancellation, not a lost quote. */
 const IN_FLIGHT = new Set<OrderStage>(['production', 'ready', 'delivered'])
+/** Live: neither ended nor at rest. Where the ordinary work of the board happens. */
+export const isLiveStage = (s: OrderStage): boolean => !isTerminalStage(s) && !isAtRestStage(s)
+
+/**
+ * Where a closed order goes when it is reopened. Completed work reopens at 'delivered' — the piece
+ * exists and was handed over, so the honest live stage is the last one it passed through. A
+ * 'finished' job said nothing about production and reopens at 'new'.
+ */
+export const REOPEN_TARGET: Partial<Record<OrderStage, OrderStage>> = {
+  completed: 'delivered', finished: 'new', closed_no_sale: 'new',
+}
+export const canReopen = (s: OrderStage): boolean => REOPEN_TARGET[s] !== undefined
 
 export function canManualTransition(from: OrderStage, to: OrderStage): boolean {
   if (from === to) return false
-  // FINISH AND CANCEL ARE REACHABLE FROM ANYWHERE, and that is what the forward chain above cannot do.
-  // A job at 'new' had exactly one move available — Cancel — so the only way to record a finished
-  // repair was to cancel it or to march it through factory approval into production first. Both of
-  // those put something false on the board.
-  // AT REST IS EXCLUDED HERE TOO, and the first version of this forgot it. 'closed_no_sale' is not
-  // terminal, so cancel and finish were both offered out of it — which meant one stray tap turned a
-  // reversible close into a permanent one, on the stage whose whole promise is that it comes back.
-  // Getting out of a no-sale is Reopen, and then whatever you meant. Two honest steps.
-  if (to === 'cancelled' || to === 'finished') return !isTerminalStage(from) && !isAtRestStage(from)
-  // Closing as no-sale is a thing you do to a LIVE estimate, so it is offered wherever cancel is —
-  // except out of a stage where the piece is already being made. An order in production that the
-  // customer walks away from is a cancellation, with a factory to tell; calling that a no-sale would
-  // file real, abandoned work under "they never bought".
-  if (to === 'closed_no_sale') return !isTerminalStage(from) && !isAtRestStage(from) && !IN_FLIGHT.has(from)
-  // PARKING IS REACHABLE FROM ANYWHERE A JOB IS STILL LIVE, including production — a piece waiting on
-  // a stone is the commonest reason to park one, so the IN_FLIGHT exclusion that applies to a no-sale
-  // would rule out the main case. Not from a terminal stage (nothing leaves those) and not from a
-  // no-sale (getting out of that is Reopen, then whatever you meant — the same two honest steps).
-  if (to === 'pending') return !isTerminalStage(from) && !isAtRestStage(from) && !isPendingStage(from)
-  if (isProtectedStage(to)) return false // entering an approval stage is action-only
-  return (MANUAL_FORWARD[from] ?? []).includes(to)
+  // NOTHING LEAVES CANCELLED. It is the one stage that is final on purpose, and the page says so
+  // before it is chosen.
+  if (from === 'cancelled') return false
+  // THE ENDINGS. Reachable from any live stage. Not from an ending or from a no-sale: getting out of
+  // those is Reopen, then whatever you meant — two honest steps, so one stray tap cannot turn a
+  // reversible close into a permanent one.
+  if (to === 'cancelled' || to === 'finished' || to === 'completed') return isLiveStage(from)
+  // Closing as no-sale is a thing you do to a LIVE estimate — not to a piece already being made.
+  if (to === 'closed_no_sale') return isLiveStage(from) && !IN_FLIGHT.has(from)
+  // Out of an ending or a no-sale: only the reopen target, and only through this one door.
+  if (isTerminalStage(from) || isAtRestStage(from)) return REOPEN_TARGET[from] === to
+  // Between live stages: free, both directions.
+  return isLiveStage(to)
 }
 
 // Which stages permit sending a given approval type (a "Send to Factory/Customer" action).
@@ -228,5 +283,8 @@ export function stageAfterResponse(type: ApprovalType, decision: ApprovalDecisio
 export const respondableStage = (type: ApprovalType): OrderStage => (type === 'factory' ? 'waiting_factory_approval' : 'waiting_customer_approval')
 
 // Production can start once the CUSTOMER has approved, OR straight after the FACTORY approves when the
-// order skips customer approval entirely (repeat/trade orders, or the customer already agreed offline).
-export const canSendToProduction = (stage: OrderStage): boolean => stage === 'customer_approved' || stage === 'factory_approved'
+// order skips customer approval entirely (repeat/trade orders, or the customer already agreed offline),
+// OR from 'in_process' — the verbal yes IS the customer's approval for most retail work, and the
+// signed paperwork follows the deposit rather than preceding it.
+export const canSendToProduction = (stage: OrderStage): boolean =>
+  stage === 'customer_approved' || stage === 'factory_approved' || stage === 'in_process'

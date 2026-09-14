@@ -340,11 +340,22 @@ ${corpus}`,
     return NextResponse.json({ added: 0, pages: pages.length, shopify, products: products.length, message: 'We crawled your site but found no usable details to add. You can fill them in manually below.' })
   }
 
-  // Idempotent re-scan: replace website-sourced rows only; manual/template KB untouched.
-  // Website content is business-wide → SHARED tenant knowledge (ai_employee_id NULL), scoped by tenant.
-  await admin.from('knowledge_base').delete().eq('tenant_id', agent.tenant_id).eq('source', WEBSITE_SOURCE)
+  // ── IDEMPOTENT RE-SCAN, FOR THIS AGENT ONLY ─────────────────────────────────────────────────────
+  //
+  // This used to delete EVERY website-sourced row the tenant had and write the new scan as shared
+  // (ai_employee_id NULL) knowledge. Right for a tenant that is one business; on TG's tenant — a
+  // jeweller and a gem lab, an agent each with its own website — scanning the gem lab's site
+  // deleted the jeweller's scanned knowledge and then handed the jeweller's agent the appraisal
+  // pages. Both halves are fixed by the same rule: the scan belongs to the agent whose website it
+  // is. Rows are replaced by origin agent, and written scoped to that agent. A tenant with one agent
+  // sees no difference (the agent reads its own rows plus shared ones), and if that agent is ever
+  // deleted the rows become shared again (ON DELETE SET NULL) for its replacement to inherit.
+  //
+  // Older rows written shared (origin = this agent, ai_employee_id NULL) are replaced too, so a
+  // re-scan never leaves a stale shared copy beside the new scoped one.
+  await admin.from('knowledge_base').delete().eq('tenant_id', agent.tenant_id).eq('source', WEBSITE_SOURCE).eq('origin_ai_employee_id', agentId)
   const { error } = await admin.from('knowledge_base').insert(
-    items.map((it) => ({ tenant_id: agent.tenant_id, ai_employee_id: null, origin_ai_employee_id: agentId, title: it.title, content: it.content, source: WEBSITE_SOURCE })),
+    items.map((it) => ({ tenant_id: agent.tenant_id, ai_employee_id: agentId, origin_ai_employee_id: agentId, title: it.title, content: it.content, source: WEBSITE_SOURCE })),
   )
   if (error) {
     console.error('[scan] KB insert failed:', error.message)

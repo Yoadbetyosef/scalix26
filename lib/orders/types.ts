@@ -1,4 +1,5 @@
 import type { OrderStage } from './stages'
+import type { OrderKind, KindDetails } from './kinds'
 
 // Jewelry attributes chosen from the tenant-managed dropdowns (lib/orders/options.ts). Stored as the
 // option's label text — a line item is a snapshot, so retiring an option never alters a past order.
@@ -67,6 +68,13 @@ export interface OrderLineItem extends JewelrySpec {
 export interface OrderEvent { id: string; orderId: string; type: string; actor: string | null; payload: Record<string, unknown> | null; createdAt: string }
 
 export interface Order {
+  /**
+   * WHAT KIND OF JOB — custom (the default and every existing row), repair, appraisal, stock sale.
+   * Optional like every column behind a hand-run migration; read as 'custom' when absent.
+   */
+  orderKind?: OrderKind
+  /** Kind-specific fields — a repair's "what was asked", an appraisal's purpose. See lib/orders/kinds.ts. */
+  kindDetails?: KindDetails
   /**
    * The BUSINESS this order is for, when it is for a business.
    *
@@ -141,6 +149,8 @@ export interface LineItemInput extends Partial<JewelrySpec> {
   internalCostCents?: number | null
 }
 export interface OrderInput {
+  orderKind?: OrderKind
+  kindDetails?: KindDetails | null
   deliveryProvince?: string | null
   letterheadStyle?: string | null
   /** An id from TAX_CHOICES. The server resolves province, label and rate from it — never the client. */

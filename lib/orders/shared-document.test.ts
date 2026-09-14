@@ -144,6 +144,7 @@ describe('every function the loader calls resolves tenancy explicitly', () => {
   // These are the six reads a document depends on. Each must take a tenant rather than find one.
   const CHAIN: Array<[string, string]> = [
     ['lib/orders/store.ts', 'getOrderForTenant'],
+    ['lib/orders/attachments.ts', 'publicDocumentMediaForTenant'],
     ['lib/orders/attachments.ts', 'publicDocumentImagesForTenant'],
     ['lib/orders/documents.ts', 'loadDocContext'],
     ['lib/orders/templates.ts', 'listTemplates'],
@@ -165,7 +166,7 @@ describe('every function the loader calls resolves tenancy explicitly', () => {
 
   it('the loader calls the ForTenant variants, not the session ones', () => {
     const src = code('lib/orders/document-data.ts')
-    expect(src).toMatch(/publicDocumentImagesForTenant\(tenantId, orderId\)/)
+    expect(src).toMatch(/publicDocumentMediaForTenant\(tenantId, orderId, urlFor\)/)
     // The session-scoped names must not appear at all.
     expect(src).not.toMatch(/[^A-Za-z]publicDocumentImages\(/)
   })

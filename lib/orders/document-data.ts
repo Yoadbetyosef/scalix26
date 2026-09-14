@@ -1,5 +1,5 @@
 import { loadDocContext } from './documents'
-import { publicDocumentImagesForTenant } from './attachments'
+import { publicDocumentMediaForTenant, type AttachmentUrlFor } from './attachments'
 import { templateForOrder, applyTemplate } from './templates'
 import { getOrderForTenant } from './store'
 import { loadTaxRates } from '@/lib/tax/rates-store'
@@ -7,7 +7,7 @@ import { rateFor, taxOn, taxFromSnapshot, type TaxLine } from '@/lib/tax/canada'
 import type { OrderWithDetails } from './types'
 import type { DocBranding, DocBusiness } from './documents'
 import type { OrderDocType } from './documents'
-import type { DocumentImage } from './attachments'
+import type { DocumentImage, DocumentFile } from './attachments'
 
 // Everything a document needs, assembled ONCE.
 //
@@ -20,11 +20,26 @@ export interface OrderDocumentData {
   branding: DocBranding
   business: DocBusiness
   images: DocumentImage[]
+  /** Certificates and other PDFs the customer may open. */
+  files: DocumentFile[]
   tax: TaxLine | null
   /** Printed beneath the tax line, and ONLY when the order asserts the exemption. */
   pstExemptionNote: string | null
   footerNote: string | null
   templateName: string | null
+}
+
+/**
+ * The tax line for an order — the SNAPSHOT the seller chose, else the live rate for an order raised
+ * before the picker existed. One function, so the order page and the document cannot disagree about
+ * the tax a customer is charged. See the note inside loadOrderDocument for why the snapshot wins.
+ */
+export async function resolveOrderTax(order: Pick<OrderWithDetails, 'subtotalCents' | 'deliveryProvince' | 'taxLabel' | 'taxRatePercent'>): Promise<TaxLine | null> {
+  const snapshot = taxFromSnapshot(order.deliveryProvince ?? null, order.taxLabel ?? null, order.taxRatePercent ?? null, order.subtotalCents)
+  if (snapshot) return snapshot
+  if (!order.deliveryProvince) return null
+  const rates = await loadTaxRates('CA')
+  return taxOn(order.subtotalCents, rateFor(order.deliveryProvince, rates))
 }
 
 export async function loadOrderDocument(
@@ -34,6 +49,10 @@ export async function loadOrderDocument(
   // here — see the filter below. Optional, so a caller that has not been updated gets today's
   // behaviour (the whole gallery) rather than an empty one.
   type?: OrderDocType,
+  // HOW ATTACHMENT URLS ARE MINTED for this surface — see AttachmentUrlFor. The owner's page takes
+  // the default (a signed storage URL); the customer's page passes the token route so a link still
+  // opens after the page has been sitting open for an hour.
+  urlFor?: AttachmentUrlFor,
 ): Promise<OrderDocumentData | null> {
   // getOrderForTenant, NOT getOrder: this loader serves the public /e/[token] page as well as the
   // owner's, and getOrder resolves tenancy from the signed-in workspace. With no session it returned
@@ -52,11 +71,11 @@ export async function loadOrderDocument(
     invoiceImageId?: string | null
   }
 
-  const [ctx, images, template, rates] = await Promise.all([
+  const [ctx, media, template, rates] = await Promise.all([
     loadDocContext(tenantId),
     // ForTenant, NOT the session-scoped variant: on /e/[token] that returned an empty array and the
     // customer's copy silently rendered with no photograph of the piece.
-    publicDocumentImagesForTenant(tenantId, orderId),
+    publicDocumentMediaForTenant(tenantId, orderId, urlFor),
     templateForOrder(tenantId, extra.documentTemplateId ?? null),
     loadTaxRates('CA'),
   ])
@@ -73,6 +92,7 @@ export async function loadOrderDocument(
   // the data — it lives in the filename and in her head — so the alternative to "none" is not "the
   // right one", it is "whichever was uploaded first".
   const forInvoice = type === 'invoice'
+  const images = media.images
   const chosen = forInvoice
     ? images.filter((i) => i.id === (extra.invoiceImageId ?? null))
     : images
@@ -100,6 +120,9 @@ export async function loadOrderDocument(
     branding: applied.branding,
     business: applied.business,
     images: chosen,
+    // Certificates travel with EVERY document type, the invoice included: the GIA report is the
+    // thing the customer files with the invoice for insurance.
+    files: media.files,
     tax,
     // Only when the assertion was actually made. A note left behind after the box was unticked is not
     // a claim, and printing it would put an exemption on a document nobody stood behind.

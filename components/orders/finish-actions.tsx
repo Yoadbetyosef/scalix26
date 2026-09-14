@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useConfirm } from '@/components/v2/confirm'
 import { useState } from 'react'
-import { FileText, Archive } from 'lucide-react'
+import { Archive } from 'lucide-react'
 
 // What happens to a completed job.
 //
@@ -20,8 +20,8 @@ export function FinishActions({ orderId, invoicedAt, archivedAt }: {
   const [err, setErr] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
-  const run = async (action: 'invoice' | 'archive') => {
-    if (action === 'archive' && !(await ask({
+  const run = async (action: 'archive') => {
+    if (!(await ask({
       title: 'Copy these pieces into your catalog?',
       body: 'Quantities are set to zero — the piece has been delivered, so you own none of it. This adds the design to the catalogue so it can be made again; it does not change this order.',
       confirmLabel: 'Add to catalog',
@@ -33,8 +33,7 @@ export function FinishActions({ orderId, invoicedAt, archivedAt }: {
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { setErr(j.error || 'Failed'); return }
-      if (action === 'invoice') router.push(`/orders/${orderId}/document/invoice`)
-      else { setNote(`Added ${j.created ?? 0} item(s) to your catalog.`); router.refresh() }
+      setNote(`Added ${j.created ?? 0} item(s) to your catalog.`); router.refresh()
     } catch (e) {
       setErr((e as Error).message)
     } finally { setBusy(null) }
@@ -46,13 +45,13 @@ export function FinishActions({ orderId, invoicedAt, archivedAt }: {
        having no greyscale of its own at all. */
     <div className="v2-card">
       <div>
-        <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--v2-ink)' }}>This job is finished</p>
-        <span>Raise the invoice from what is already here, or keep the piece in your catalog. Nothing needs re-typing.</span>
+        <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--v2-ink)' }}>This is a closed order</p>
+        <span>Keep the piece in your catalog so it can be made again. The invoice is in the action bar above{invoicedAt ? '' : ' — it has not been raised yet'}.</span>
       </div>
       <div className="v2-bar">
-        <button onClick={() => run('invoice')} disabled={busy !== null} className="v2-act" data-solid>
-          <FileText className="h-3.5 w-3.5" /> {busy === 'invoice' ? 'Working…' : invoicedAt ? 'Open invoice' : 'Raise invoice'}
-        </button>
+        {/* The invoice moved to the action bar (InvoiceButton) because it is no longer something that
+            happens at the end — see raiseInvoice. What remains here is the one thing that IS about
+            the job being over: keeping the design. */}
         <button onClick={() => run('archive')} disabled={busy !== null || !!archivedAt} className="v2-act">
           <Archive className="h-3.5 w-3.5" /> {archivedAt ? 'In catalog' : busy === 'archive' ? 'Working…' : 'Add to catalog'}
         </button>

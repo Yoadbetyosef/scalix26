@@ -30,7 +30,7 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
 
   // The agent that owns this connection drives the reply (same prompt/KB everywhere).
   const { data: agent } = await supabase.from('ai_employees')
-    .select('id, name, system_prompt, business_name, email_auto_reply, email_handoff_after_first_reply')
+    .select('id, name, system_prompt, business_name, personality, industry, email_auto_reply, email_handoff_after_first_reply')
     .eq('id', account.aiEmployeeId || '').maybeSingle()
   const { data: tenant } = await supabase.from('tenants').select('business_name').eq('id', account.tenantId).maybeSingle()
 
@@ -126,9 +126,16 @@ async function pollAccount(account: MailAccount): Promise<{ replied: number; ski
 
     try {
       console.log('[mailbox-poll] generating reply for', msg.fromEmail)
+      // The thread so far — every earlier message on this conversation — so the reply continues a
+      // conversation rather than starting one each time.
+      const { data: prior } = await supabase.from('messages').select('role, content, created_at')
+        .eq('conversation_id', convId).order('created_at', { ascending: true }).limit(40)
+      const history = ((prior ?? []) as Array<{ role: string; content: string }>)
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
       const reply = await generateEmailReply({
         tenantId: account.tenantId, agent, tenantBusinessName: tenant?.business_name ?? null,
-        emailText: msg.body || '', subject: msg.subject,
+        emailText: msg.body || '', subject: msg.subject, history,
       })
       console.log('[mailbox-poll] reply generated, length', reply.length)
       const subject = msg.subject?.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject || 'your message'}`

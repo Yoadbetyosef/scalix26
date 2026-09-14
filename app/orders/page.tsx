@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders } from '@/lib/orders/store'
-import { STAGE_LABELS, isTerminalStage, isAtRestStage, type OrderStage } from '@/lib/orders/stages'
+import { STAGE_LABELS, orderStatusGroup, type OrderStage } from '@/lib/orders/stages'
 import { stageHue } from '@/lib/orders/stage-colors'
 
 export const dynamic = 'force-dynamic'
@@ -14,20 +14,30 @@ const money = (c: number, cur = 'usd') => `${cur === 'usd' ? '$' : ''}${(c / 100
 // week and outnumber them ten to one within a month. A list that defaults to everything is a list
 // where today's work is on page four. The closed ones are one tap away and are never hidden — that
 // was the whole requirement — but they are not what the screen opens on.
+//
+// Every view is a STATUS GROUP (lib/orders/stages.ts orderStatusGroup), never a hand-written list of
+// stages — so a closed order is a closed order here, on the customer's history and on the board,
+// and a new stage cannot leak into "Open" by being forgotten in one of them.
 const VIEWS: { key: string; label: string; test: (s: OrderStage) => boolean }[] = [
-  { key: 'open', label: 'Open', test: (s) => !isTerminalStage(s) && !isAtRestStage(s) },
-  { key: 'no_sale', label: 'Closed – No Sale', test: (s) => s === 'closed_no_sale' },
-  { key: 'done', label: 'Finished', test: (s) => s === 'completed' || s === 'finished' },
+  { key: 'open', label: 'Open', test: (s) => orderStatusGroup(s) === 'active' },
+  { key: 'no_sale', label: 'Closed – No Sale', test: (s) => orderStatusGroup(s) === 'no_sale' },
+  { key: 'done', label: 'Closed Orders', test: (s) => orderStatusGroup(s) === 'closed' },
+  { key: 'cancelled', label: 'Cancelled', test: (s) => orderStatusGroup(s) === 'cancelled' },
   { key: 'all', label: 'All', test: () => true },
 ]
 
-export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ view?: string; q?: string }> }) {
   const a = await requireOrdersAccess()
   if (!a) notFound()
   const all = await listOrders()
   const sp = await searchParams
   const view = VIEWS.find((v) => v.key === sp.view) ?? VIEWS[0]
-  const orders = all.filter((o) => view.test(o.stage as OrderStage))
+  // A search runs across EVERY order regardless of view: "find Irina's bracelet" must find the one
+  // that closed as a no-sale eight months ago, which is the whole point of keeping it.
+  const q = (sp.q ?? '').trim().toLowerCase()
+  const matches = (o: typeof all[number]) => !q || [o.orderNumber, o.customerName, o.customerCompany, o.customerEmail, o.customerPhone, o.factoryName]
+    .some((v) => (v ?? '').toLowerCase().includes(q))
+  const orders = all.filter((o) => (q ? true : view.test(o.stage as OrderStage)) && matches(o))
   const countOf = (v: typeof VIEWS[number]) => all.filter((o) => v.test(o.stage as OrderStage)).length
 
   return (
@@ -40,20 +50,26 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         </p>
         <s />
         <Link href="/settings/options" className="v2-act">Dropdowns</Link>
+        <Link href="/orders/memos" className="v2-act">Memos</Link>
         <Link href="/orders/board" className="v2-act">Board</Link>
         <Link href="/orders/new" className="v2-act" data-solid>New order</Link>
       </div>
 
       {/* The four views, as the kit's chips — the same control /inbox and /catalog filter with. Each
           carries its own count, so "how many did we lose this month" is answered without a click. */}
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="flex flex-wrap items-center gap-2 mb-5">
         {VIEWS.map((v) => (
           <Link key={v.key} href={v.key === 'open' ? '/orders' : `/orders?view=${v.key}`}
-                className="v2-chip" data-on={v.key === view.key || undefined}>
+                className="v2-chip" data-on={!q && v.key === view.key || undefined}>
             {v.label} <span style={{ opacity: 0.6 }}>{countOf(v)}</span>
           </Link>
         ))}
+        <form method="get" action="/orders" className="v2-fld" style={{ marginLeft: 'auto', minWidth: 200 }}>
+          <label htmlFor="orders-q" className="sr-only">Search orders</label>
+          <input id="orders-q" name="q" defaultValue={sp.q ?? ''} placeholder="Search customer, company, order №…" />
+        </form>
       </div>
+      {q && <p className="v2-kick" style={{ marginBottom: 10 }}>Matching “{sp.q}” across every order, open or closed · {orders.length}</p>}
 
       {orders.length === 0 ? (
         <div className="v2-card" data-empty>
@@ -88,8 +104,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                         {o.orderNumber}
                       </Link>
                     </td>
-                    <td style={{ color: 'var(--v2-ink)' }}>{o.customerName ?? '—'}</td>
-                    <td><span className="v2-stat">{STAGE_LABELS[o.stage]}</span></td>
+                    <td style={{ color: 'var(--v2-ink)' }}>{o.customerCompany || o.customerName || '—'}{o.customerCompany && o.customerName ? <span className="v2-hint"> · {o.customerName}</span> : null}</td>
+                    <td><span className="v2-stat">{STAGE_LABELS[o.stage]}</span>{orderStatusGroup(o.stage) === 'closed' && <span className="v2-hint" style={{ marginLeft: 6 }}>Closed Order</span>}</td>
                     <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>{o.factoryName ?? '—'}</td>
                     <td style={{ color: 'var(--v2-ink)', fontVariantNumeric: 'tabular-nums' }}>{money(o.subtotalCents, o.currency)}</td>
                     <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>{o.requestedCompletionDate ?? '—'}</td>

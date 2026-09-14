@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   ORDER_STAGES, STAGE_LABELS, canManualTransition, isTerminalStage, isAtRestStage,
   hasNoBoardColumn, canEditWorkflow, boardColumnLabel, type OrderStage,
@@ -84,5 +85,36 @@ describe('closed_no_sale', () => {
     // on the rule that two words for one state is the thing worth avoiding. 'closed_no_sale' is a
     // different STATE, not a second name for 'finished' — but the bare word stays gone.
     expect(ORDER_STAGES).not.toContain('closed')
+  })
+})
+
+// ── NOTHING CLOSES BY DELETING ──────────────────────────────────────────────────────────────────
+//
+// The only destructive path is Delete order, and it is now refused the moment an order has become
+// a fact to somebody else. Closing, cancelling and finishing are stage moves that keep the row, the
+// lines, the files, the payments and the timeline.
+describe('closing never destroys', () => {
+  const src = (p: string) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
+  it('a stage move writes one column and one timeline row — no delete anywhere in it', () => {
+    const s = src('lib/orders/store.ts')
+    const fn = s.slice(s.indexOf('export async function setStageManual'), s.indexOf('// ── DELETION IS FOR MISTAKES'))
+    expect(fn).not.toMatch(/\.delete\(/)
+    expect(fn).toMatch(/update\(\{ stage: to, updated_at/)
+    expect(fn).toMatch(/addEvent\(id, 'stage_changed', \{ from, to, manual: true/)
+  })
+  it('delete is refused past New, after a sent link, an approval or a payment — on the server', () => {
+    const s = src('lib/orders/store.ts')
+    const fn = s.slice(s.indexOf('export async function deletable'), s.indexOf('// Permanently delete an order.'))
+    expect(fn).toMatch(/order\.stage !== 'new'/)
+    expect(fn).toMatch(/from\('order_document_shares'\)/)
+    expect(fn).toMatch(/from\('order_approval_requests'\)/)
+    expect(fn).toMatch(/from\('payment_allocations'\)/)
+    expect(s).toMatch(/export async function deleteOrder[\s\S]*?if \(!\(await deletable\(id\)\)\.ok\) return false/)
+    expect(src('app/api/orders/[id]/route.ts')).toMatch(/const verdict = await deletable\(id\)/)
+    expect(src('app/orders/[id]/page.tsx')).toMatch(/canDelete\.ok && \(/)
+  })
+  it('a no-sale reopens, and the customer history lists it beside everything else', () => {
+    expect(canManualTransition('closed_no_sale', 'new')).toBe(true)
+    expect(src('lib/customer/history.ts')).toMatch(/closed-no-sale estimate is here on exactly the same footing/)
   })
 })

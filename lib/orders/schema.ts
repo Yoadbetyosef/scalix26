@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { APPRAISAL_PURPOSES, ORDER_KINDS } from './kinds'
 
 // Request validation shared by POST /api/orders and PATCH /api/orders/[id]. Kept in one place so a new
 // field can never be accepted on create but silently dropped on edit (or the reverse).
@@ -35,6 +36,14 @@ export const lineItemSchema = z.object({
 
 // Fields common to create and edit.
 const orderFields = {
+  // What kind of job. Absent = leave as is (edit) / 'custom' (create).
+  orderKind: z.enum(ORDER_KINDS).optional(),
+  kindDetails: z.object({
+    itemDescription: z.string().max(2000).nullable().optional(),
+    repairRequested: z.string().max(5000).nullable().optional(),
+    purpose: z.enum(APPRAISAL_PURPOSES).nullable().optional(),
+    appraiser: z.string().max(200).nullable().optional(),
+  }).passthrough().nullable().optional(),
   contactId: z.string().uuid().nullable().optional(),
   customerName: z.string().max(300).nullable().optional(), customerEmail: z.string().email().max(320).nullable().optional(), customerPhone: z.string().max(50).nullable().optional(),
   // THE B2B HALF OF THE CUSTOMER. On the TG Designs side the customer IS the firm — a yacht centre,

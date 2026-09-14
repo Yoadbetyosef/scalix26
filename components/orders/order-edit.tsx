@@ -7,6 +7,8 @@ import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
 import { TAX_CHOICES } from '@/lib/tax/canada'
 import { LineItemFields, emptyLine, fetchOptionLists, lineFromSaved, lineToPayload, namelessError, type LineDraft } from './line-item-fields'
+import { KindFields, type KindDraft } from './kind-fields'
+import type { KindDetails, OrderKind } from '@/lib/orders/kinds'
 
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
 
@@ -26,6 +28,7 @@ export interface OrderEditInitial {
   documentTemplateId?: string | null
   templates?: Array<{ id: string; name: string }>
   clientRequirements: string | null; isCustomDesign: boolean
+  orderKind?: OrderKind; kindDetails?: KindDetails
   internalNotes: string | null; publicNotes: string | null
   lineItems: Array<Parameters<typeof lineFromSaved>[0]>
 }
@@ -39,16 +42,27 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
   const [lists, setLists] = useState<OrderOptionList[]>([])
 
-  const [customer, setCustomer] = useState<PickedContact>({
-    id: initial.contactId, name: initial.customerName ?? '', company: initial.customerCompany ?? '',
-    email: initial.customerEmail ?? '',
-    phone: initial.customerPhone ?? '', address: '', currency: initial.currency || 'usd',
+  // ── THE DRAWER RE-READS THE ORDER EVERY TIME IT OPENS ─────────────────────────────────────────
+  //
+  // Its state was seeded from `initial` ONCE, on mount. After a save the page re-renders with fresh
+  // props, but the drawer kept the copy it was born with — and so did every other control on the
+  // page that edits the same order. Change the tax on the document page, come back, open Edit
+  // order, press Save: the drawer wrote back the tax it remembered from an hour ago. The same for
+  // anything a second tab or a colleague changed. Every field she had "just saved" reverted, with
+  // nothing on screen to say so. Now the form is rebuilt from the current props on every open.
+  const fromInitial = () => ({
+    customer: {
+      id: initial.contactId, name: initial.customerName ?? '', company: initial.customerCompany ?? '',
+      email: initial.customerEmail ?? '',
+      phone: initial.customerPhone ?? '', address: '', currency: initial.currency || 'usd',
+    } as PickedContact,
+    lines: initial.lineItems.length ? initial.lineItems.map(lineFromSaved) : [emptyLine()],
   })
-  const [f, setF] = useState({
+  const [customer, setCustomer] = useState<PickedContact>(() => fromInitial().customer)
+  const fieldsFromInitial = () => ({
     orderNumber: initial.orderNumber ?? '',
     factoryName: initial.factoryName ?? '', factoryContactName: initial.factoryContactName ?? '', factoryEmail: initial.factoryEmail ?? '',
     assignedEmployee: initial.assignedEmployee ?? '', orderDate: initial.orderDate ?? '', requestedCompletionDate: initial.requestedCompletionDate ?? '',
-    depositAmount: initial.depositCents ? (initial.depositCents / 100).toString() : '',
     // The stored choice, reconstructed. A province with a kind is one of the split rows; a province
     // without one is a province that has only a single reading — see TAX_CHOICES.
     taxChoiceId: initial.deliveryProvince
@@ -58,9 +72,19 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
     documentTemplateId: initial.documentTemplateId ?? '',
     clientRequirements: initial.clientRequirements ?? '', internalNotes: initial.internalNotes ?? '', publicNotes: initial.publicNotes ?? '',
   })
+  const [f, setF] = useState(fieldsFromInitial)
   const [isCustomDesign, setIsCustomDesign] = useState(initial.isCustomDesign)
   const [pstExempt, setPstExempt] = useState(initial.pstExempt === true)
-  const [lines, setLines] = useState<LineDraft[]>(initial.lineItems.length ? initial.lineItems.map(lineFromSaved) : [emptyLine()])
+  const [lines, setLines] = useState<LineDraft[]>(() => fromInitial().lines)
+  const kindFromInitial = (): KindDraft => ({ kind: initial.orderKind ?? 'custom', details: initial.kindDetails ?? {} })
+  const [kind, setKind] = useState<KindDraft>(kindFromInitial)
+
+  const openDrawer = () => {
+    const fresh = fromInitial()
+    setCustomer(fresh.customer); setLines(fresh.lines); setF(fieldsFromInitial()); setKind(kindFromInitial())
+    setIsCustomDesign(initial.isCustomDesign); setPstExempt(initial.pstExempt === true)
+    setErr(null); setOpen(true)
+  }
 
   // Only fetch the dropdown lists once the dialog is actually opened.
   useEffect(() => { if (open && !lists.length) fetchOptionLists().then(setLists) }, [open, lists.length])
@@ -82,7 +106,6 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         currency: customer.currency,
         factoryName: f.factoryName || null, factoryContactName: f.factoryContactName || null, factoryEmail: f.factoryEmail || null,
         assignedEmployee: f.assignedEmployee || null, orderDate: f.orderDate || null, requestedCompletionDate: f.requestedCompletionDate || null,
-        depositCents: Math.round((parseFloat(f.depositAmount) || 0) * 100),
         // The ID only. The server reads province, label and rate off TAX_CHOICES — a client that could
         // post its own percentage could put 3% on a customer's invoice and it would look ordinary.
         // Empty means no tax line at all rather than a 0%, which would be a claim that none is due.
@@ -91,6 +114,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         pstExemptionNote: f.pstExemptionNote.trim() || null,
         documentTemplateId: f.documentTemplateId || null,
         clientRequirements: f.clientRequirements || null, isCustomDesign,
+        orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details,
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
       }
@@ -102,7 +126,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="v2-act">Edit order</button>
+      <button onClick={openDrawer} className="v2-act">Edit order</button>
       {/* THE APPROVED MODAL, replacing a hand-rolled overlay. Three of these existed in this tree,
           each with slightly different odds and ends — bg-black/40 here, bg-black/30 and a shadow-xl
           there — and none of them trapped focus, closed on Escape, or locked the page behind them.
@@ -129,6 +153,8 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                 <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Customer</p><s /></div>
                 <ContactPicker value={customer} onChange={setCustomer} />
               </section>
+
+              <KindFields value={kind} onChange={setKind} idPrefix="oe-kind" />
 
               <section>
                 <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Order</p><s /></div>
@@ -170,7 +196,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                 <div className="space-y-3">
                   {lines.map((l, i) => (
                     <div key={i} className="v2-card" style={{ gap: 0 }}>
-                      <LineItemFields line={l} lists={lists} currencySymbol={sym} onChange={(k, v) => setLine(i, k, v)} />
+                      <LineItemFields line={l} lists={lists} currencySymbol={sym} onChange={(k, v) => setLine(i, k, v)} index={i} />
                       <button type="button" onClick={() => setLines((p) => (p.length > 1 ? p.filter((_, idx) => idx !== i) : p))} className="v2-act" data-danger style={{ marginTop: 14, alignSelf: 'flex-start' }}>Remove item</button>
                     </div>
                   ))}
@@ -180,8 +206,10 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
 
               <section>
                 <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
-                  <div className="v2-fld"><label htmlFor="oe-deposit">Deposit ({sym})</label>
-                    <input id="oe-deposit" value={f.depositAmount} onChange={set('depositAmount')} placeholder="0" /></div>
+                  {/* The deposit is no longer typed here. Money received is recorded on the order
+                      page's Payments panel — a deposit, later instalments and the balance, each with
+                      how it was paid — and the balance follows from that ledger. A number typed in
+                      a drawer had been silently overwriting it. */}
                   {/* PLACE OF SUPPLY — the destination, not the seller's province. A BC business
                       delivering to Ontario charges 13% HST, and getting this backwards is invisible on
                       the document: the arithmetic looks right, it is just the wrong rate. */}

@@ -89,7 +89,7 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
         <div className="approval-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, padding: 28 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>{view.businessName}</div>
           <h1 style={{ fontSize: 22, margin: '8px 0 2px', color: '#111827' }}>Order {view.order.orderNumber}</h1>
-          <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>You are reviewing this order as the {view.approvalType}.{view.deadline ? ` Please respond by ${new Date(view.deadline).toLocaleDateString()}.` : ''}</p>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>{view.requestKind === 'quote' ? `You have been asked to quote a cost for this piece as the ${view.approvalType}.` : `You are reviewing this order as the ${view.approvalType}.`}{view.deadline ? ` Please respond by ${new Date(view.deadline).toLocaleDateString()}.` : ''}</p>
           {/* A workshop works from paper at the bench, not from a phone propped against a vice. This is
               the surface the factory actually opens, so it is the one that needs to print. */}
           <div style={{ marginTop: 14 }} data-print-hidden>
@@ -148,10 +148,10 @@ export default async function ApprovalPage({ params }: { params: Promise<{ token
             <div style={{ marginTop: 20, padding: 14, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 14, color: '#166534' }}>This order is marked <strong>ready</strong> and your invoice was received. Thank you — nothing further is needed.</div>
           ) : (
             <>
-              {responded && <div style={{ marginTop: 18, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 13, color: '#166534' }}>Your response was recorded: <strong>{view.status.replace('_', ' ')}</strong>.{view.existingResponse?.comment ? ` "${view.existingResponse.comment}"` : ''} You can update it below if needed.</div>}
-              <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }} data-print-hidden>Your decision</h2>
+              {responded && <div style={{ marginTop: 18, padding: 12, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 13, color: '#166534' }}>Your response was recorded: <strong>{view.status.replace('_', ' ')}</strong>.{view.existingResponse?.quotedCostCents != null ? ` Quoted ${(view.existingResponse.quotedCostCents / 100).toFixed(2)}.` : ''}{view.existingResponse?.comment ? ` "${view.existingResponse.comment}"` : ''} You can update it below if needed.</div>}
+              <h2 style={{ fontSize: 14, margin: '20px 0 8px', color: '#111827' }} data-print-hidden>{view.requestKind === 'quote' ? 'Your quotation' : 'Your decision'}</h2>
               <div data-print-hidden>
-                {view.canRespond ? <PublicApprovalForm token={token} approvalType={view.approvalType} /> : <p style={{ fontSize: 13, color: '#9ca3af' }}>This request is no longer open for responses.</p>}
+                {view.canRespond ? <PublicApprovalForm token={token} approvalType={view.approvalType} requestKind={view.requestKind} /> : <p style={{ fontSize: 13, color: '#9ca3af' }}>This request is no longer open for responses.</p>}
               </div>
             </>
           )}

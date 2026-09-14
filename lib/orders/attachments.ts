@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
-import { ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, extensionOf, tooLargeMessage } from './attachment-types'
+import { ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, extensionOf, tooLargeMessage, publicAttachmentKind } from './attachment-types'
 import { addEvent } from './store'
 
 // Private order attachments. The bucket is never public; files are reached only via short-lived signed URLs
@@ -10,7 +10,7 @@ export const ORDER_BUCKET = 'order-attachments'
 
 // Size caps and the extension allowlist live in ./attachment-types (isomorphic) so the upload UI can
 // enforce exactly the same rules — this module reaches next/headers and can't be imported by a client.
-export { ALLOWED_EXTENSIONS, ACCEPT_ATTR, MAX_ATTACHMENT_BYTES, MAX_UPLOAD_BYTES, INVOICE_EXTENSIONS, MAX_INVOICE_BYTES } from './attachment-types'
+export { ALLOWED_EXTENSIONS, ACCEPT_ATTR, MAX_ATTACHMENT_BYTES, MAX_UPLOAD_BYTES, INVOICE_EXTENSIONS, MAX_INVOICE_BYTES, publicAttachmentKind } from './attachment-types'
 
 export type Visibility = 'internal' | 'public'
 export interface OrderAttachment { id: string; orderId: string; storagePath: string; fileName: string; mimeType: string; fileSize: number; visibility: Visibility; uploadedBy: string | null; createdAt: string }
@@ -39,6 +39,49 @@ export async function signedUrlFor(storagePath: string, expiresIn = 300): Promis
 export interface DocumentImage { id: string; url: string; fileName: string; kind: 'image' | 'video' }
 
 /**
+ * A document the customer may OPEN rather than look at — a certificate, an appraisal, a warranty.
+ * Everything public that is not a picture or a video and that a browser can display on its own.
+ */
+export interface DocumentFile { id: string; url: string; fileName: string; kind: 'pdf' }
+
+/**
+ * How a public attachment's URL is minted for a given surface.
+ *
+ * The owner's page signs storage URLs directly (30 minutes, plenty for open-read-print). The
+ * customer's page routes every file through /e/[token]/file/[id], which re-signs at click time —
+ * because a customer opens an estimate, leaves the tab open over lunch, and then clicks the
+ * certificate. A signed URL minted at page load would be dead by then, and a dead certificate
+ * link on a customer's document is a support call about "your software".
+ */
+export type AttachmentUrlFor = (a: OrderAttachment) => Promise<string | null> | string | null
+
+/** The default: a signed storage URL. */
+export const signedAttachmentUrl: AttachmentUrlFor = (a) => signedUrlFor(a.storagePath, 1800)
+
+
+/** The public attachments a customer-facing document may show or link, for a tenant given explicitly. */
+export async function publicDocumentMediaForTenant(
+  tenantId: string, orderId: string, urlFor: AttachmentUrlFor = signedAttachmentUrl,
+): Promise<{ images: DocumentImage[]; files: DocumentFile[] }> {
+  const { data } = await createAdminClient()
+    .from('order_attachments').select('*')
+    .eq('tenant_id', tenantId).eq('order_id', orderId).eq('visibility', 'public')
+    .order('created_at')
+  const rows = ((data as Array<Record<string, unknown>> | null) ?? []).map(row)
+  const images: DocumentImage[] = []
+  const files: DocumentFile[] = []
+  for (const a of rows) {
+    const kind = publicAttachmentKind(a.mimeType)
+    if (!kind) continue
+    const url = await urlFor(a)
+    if (!url) continue
+    if (kind === 'pdf') files.push({ id: a.id, url, fileName: a.fileName, kind })
+    else images.push({ id: a.id, url, fileName: a.fileName, kind })
+  }
+  return { images, files }
+}
+
+/**
  * The images a CUSTOMER-facing document may show, for a tenant given EXPLICITLY.
  *
  * ── WHY THIS TAKES A TENANT INSTEAD OF READING A SESSION ────────────────────────────────────────────
@@ -63,41 +106,19 @@ export interface DocumentImage { id: string; url: string; fileName: string; kind
  * printed, and an expired URL prints as a blank rectangle on the customer's copy.
  */
 export async function publicDocumentImagesForTenant(tenantId: string, orderId: string): Promise<DocumentImage[]> {
-  const { data } = await createAdminClient()
-    .from('order_attachments').select('*')
-    .eq('tenant_id', tenantId).eq('order_id', orderId).eq('visibility', 'public')
-    .order('created_at')
-
   // ── VIDEO IS ADMITTED HERE, AND NOWHERE ELSE HAD TO CHANGE ──────────────────────────────────────
   //
   // Video has been an accepted UPLOAD since the attachment allowlist was written (mp4, mov, webm,
-  // m4v). What stopped it reaching a customer was this one filter: `mimeType.startsWith('image/')`.
-  // So a jeweller could attach a turning shot of a ring, see it on her own order, mark it public, and
-  // it would silently never appear on the document — the failure mode this function's own comment
-  // warns about, one line below where it was happening.
+  // m4v). What stopped it reaching a customer was one filter: `mimeType.startsWith('image/')`. So a
+  // jeweller could attach a turning shot of a ring, see it on her own order, mark it public, and it
+  // would silently never appear on the document. PDFs had the same fate for the same reason, and
+  // are now the `files` half of publicDocumentMediaForTenant — the certificate she promised the
+  // customer, finally on the customer's copy.
   //
-  // The visibility rule is untouched and is doing the same job for video that it does for a photo:
-  // 'internal' is filtered out above, in the query, so a supplier's invoice video could no more reach
-  // an estimate than a supplier's invoice PDF can.
-  //
-  // HEIC/HEIF stay out of the picture set for the same reason they always were — no browser renders
-  // them — and everything else (PDF, CAD, ZIP) still has no thumbnail and is still excluded.
-  const kindOf = (mime: string): 'image' | 'video' | null => {
-    if (mime.startsWith('video/')) return 'video'
-    if (mime.startsWith('image/') && mime !== 'image/heic' && mime !== 'image/heif') return 'image'
-    return null
-  }
-
-  const media = ((data as Array<Record<string, unknown>> | null) ?? [])
-    .map(row)
-    .map((a) => ({ a, kind: kindOf(a.mimeType) }))
-    .filter((x): x is { a: OrderAttachment; kind: 'image' | 'video' } => x.kind !== null)
-
-  const signed = await Promise.all(media.map(async ({ a, kind }) => {
-    const url = await signedUrlFor(a.storagePath, 1800)
-    return url ? { id: a.id, url, fileName: a.fileName, kind } : null
-  }))
-  return signed.filter((x): x is DocumentImage => x !== null)
+  // The visibility rule is untouched and is doing the same job for every kind: 'internal' is
+  // filtered out in the query, so a supplier's invoice PDF can no more reach an estimate than a
+  // supplier's invoice photo can.
+  return (await publicDocumentMediaForTenant(tenantId, orderId)).images
 }
 
 /** The owner-facing read: tenancy from the signed-in workspace. Never use on a public route. */

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { patchOrderSchema } from '@/lib/orders/schema'
-import { getOrder, updateOrder, deleteOrder } from '@/lib/orders/store'
+import { getOrder, updateOrder, deleteOrder, deletable } from '@/lib/orders/store'
 import { refusedFields } from '@/lib/orders/stages'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -57,7 +57,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const a = await requireOrdersAccess()
   if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const ok = await deleteOrder((await params).id)
+  const id = (await params).id
+  const verdict = await deletable(id)
+  if (!verdict.ok) return NextResponse.json({ error: verdict.reason }, { status: verdict.reason === 'not found' ? 404 : 409 })
+  const ok = await deleteOrder(id)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ ok: true })
 }
