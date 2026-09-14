@@ -95,11 +95,23 @@ async function moveStockForMemo(tenantId: string, productId: string, qty: number
     [COL.showroom]: q.showroom, [COL.warehouse]: q.warehouse, [COL.storage]: q.storage,
     on_memo_quantity: nextOnMemo, availability_status: availabilityOf(p as Record<string, unknown>, q), updated_at: new Date().toISOString(),
   }).eq('tenant_id', tenantId).eq('id', productId)
-  if (error) return { ok: false, error: error.message }
-  await db.from('catalog_movements').insert({
+  if (error) {
+    if (error.code === '42703' || error.code === 'PGRST204') return { ok: false, error: `Run ${MEMOS_MIGRATION} (part 4) in the Supabase SQL editor first — the catalog does not know about stock on memo yet.` }
+    return { ok: false, error: error.message }
+  }
+  const { error: mvErr } = await db.from('catalog_movements').insert({
     tenant_id: tenantId, product_id: productId, movement_type: movementType, quantity: qty,
     from_location: sign === 1 ? loc : null, to_location: sign === 1 ? null : loc, note, created_by: actor,
   })
+  // The counters moved; the ledger row is the record of it. A refused row (the CHECK not yet
+  // taught the memo types) must not pass silently — the counters are put back and the caller told.
+  if (mvErr) {
+    await db.from('catalog_products').update({
+      [COL.showroom]: Number(p.showroom_quantity ?? 0), [COL.warehouse]: Number(p.warehouse_quantity ?? 0), [COL.storage]: Number(p.storage_quantity ?? 0),
+      on_memo_quantity: onMemo, availability_status: p.availability_status, updated_at: new Date().toISOString(),
+    }).eq('tenant_id', tenantId).eq('id', productId)
+    return { ok: false, error: mvErr.code === '23514' ? `Run ${MEMOS_MIGRATION} (part 4) in the Supabase SQL editor first — the stock ledger does not know the memo movement types yet.` : mvErr.message }
+  }
   return { ok: true }
 }
 
@@ -118,7 +130,9 @@ export async function createMemo(input: MemoInput): Promise<{ ok: boolean; error
   if (input.direction === 'out') {
     // Ours, going out: it must be a product we hold.
     if (!productId) return { ok: false, error: 'Choose the stock item being sent out on memo.' }
-    const { data: p } = await db.from('catalog_products').select('id, name, sku, ownership').eq('tenant_id', c.tenantId).eq('id', productId).maybeSingle()
+    // '*' rather than a named list: `ownership` arrives in add_tg_production_1 part 4, and naming a
+    // column the database does not have fails the whole read — which read as "product not found".
+    const { data: p } = await db.from('catalog_products').select('*').eq('tenant_id', c.tenantId).eq('id', productId).maybeSingle()
     if (!p) return { ok: false, error: 'That product was not found.' }
     if (p.ownership && p.ownership !== 'owned') return { ok: false, error: 'That piece is itself on memo or consignment from a supplier and cannot be sent out on memo.' }
     itemDescription = itemDescription || [p.name, p.sku ? `(${p.sku})` : null].filter(Boolean).join(' ')

@@ -129,6 +129,12 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
     subtotal_cents: subtotal, deposit_cents: deposit, balance_cents: subtotal - deposit, currency: input.currency ?? 'usd',
     client_requirements: input.clientRequirements ?? null, is_custom_design: input.isCustomDesign ?? false,
     internal_notes: input.internalNotes ?? null, public_notes: input.publicNotes ?? null, created_by: c.actor,
+    // The tax choice is accepted by the shared schema on create AND edit; it was applied only on
+    // edit, so a create that named one silently lost it — the exact drift the shared schema exists
+    // to prevent. Same resolver as updateOrder: the server reads the rate off the id.
+    ...(taxSnapshotFrom(input) ?? {}),
+    ...('pstExempt' in input ? { pst_exempt: input.pstExempt } : {}),
+    ...('pstExemptionNote' in input ? { pst_exemption_note: input.pstExemptionNote ?? null } : {}),
   }
   // Same rule as the line items below: the ORDER is the thing being written and must land. A business
   // name that could not be stored is reported afterwards, by name, rather than taking the order with it.
