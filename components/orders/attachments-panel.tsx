@@ -104,7 +104,13 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
       body: 'The file is removed from this order and from the approval page anyone has open. It cannot be recovered.',
       confirmLabel: 'Delete file', danger: true,
     }))) return
-    setBusy(true); try { await fetch(`${base}/${id}`, { method: 'DELETE' }); await load() } finally { setBusy(false) }
+    setBusy(true)
+    try {
+      const r = await fetch(`${base}/${id}`, { method: 'DELETE' })
+      // A file on a document a customer was sent is kept for the record; the server says so.
+      if (!r.ok) setErrs([(await r.json().catch(() => ({}))).error || 'Could not delete the file.'])
+      await load()
+    } finally { setBusy(false) }
   }
 
   return (

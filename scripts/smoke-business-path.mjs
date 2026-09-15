@@ -183,6 +183,42 @@ try {
   ok(`LOGGED OUT: the certificate opens (302 → storage; got ${certOk.status})`, certOk.status === 302 && /storage\/v1\/object\/sign/.test(certOk.headers.get('location') ?? ''))
   const vidOk = await fetch(`${APP}${fileLinks.find((l) => l.endsWith(vid.body?.attachment?.id)) ?? '/nope'}`, { redirect: 'manual' })
   ok(`LOGGED OUT: the video opens (302 → storage; got ${vidOk.status})`, vidOk.status === 302)
+  // ── The sent copy is a record ────────────────────────────────────────────────────────────────
+  {
+    const before = await (await fetch(shareUrl)).text()
+    const priceBefore = /4,990\.00|4990\.00/.test(before)
+    // Edit the order: raise the bracelet's price. The old link must not move; a new link must.
+    const oNow = await cur()
+    await save(oNow.lineItems.map((l) => strip(l.productType === 'Bracelet' ? { ...l, unitPriceCents: 777700 } : l)))
+    const after = await (await fetch(shareUrl)).text()
+    ok('editing the order does not change the estimate the customer was sent', priceBefore && /4,990\.00|4990\.00/.test(after) && !/7,777\.00|7777\.00/.test(after))
+    const sh2 = await api(`/api/orders/${orderId}/shares`, { method: 'POST', body: JSON.stringify({ docType: 'estimate' }) })
+    const fresh = await (await fetch(sh2.body?.url)).text()
+    const oldAgain = await (await fetch(shareUrl)).text()
+    ok('a new link shows the new price; minting it did not touch the old copy', /7,777\.00|7777\.00/.test(fresh) && /4,990\.00|4990\.00/.test(oldAgain))
+    const shares = await api(`/api/orders/${orderId}/shares`)
+    const first = (shares.body?.shares ?? []).slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+    const asSent = await page(`/orders/${orderId}/shares/${first?.id}`)
+    ok('"View as sent" renders the historical copy, not the live order', asSent.status === 200 && /4,990\.00|4990\.00/.test(asSent.html) && /Copy as sent/.test(asSent.html))
+    // Files: a new upload does not disturb what the old copy names; deleting a named file is refused;
+    // making it internal withholds it from the sent copy without breaking a link.
+    const extra = await upload(orderId, 'later-photo.jpg', 'image/jpeg', Buffer.from([0xff, 0xd8, 0xff, 0xd9]))
+    const oldStill = await (await fetch(shareUrl)).text()
+    ok('uploading another file leaves the old copy exactly as it was (no new file on it)', extra.status === 200 && !oldStill.includes('later-photo.jpg') && oldStill.includes('GIA-cert.pdf'))
+    const delCert = await api(`/api/orders/${orderId}/attachments/${cert.body?.attachment?.id}`, { method: 'DELETE' })
+    ok(`deleting the certificate a sent copy names is refused (${delCert.status})`, delCert.status === 409 && /kept for the record/.test(delCert.body?.error ?? ''))
+    const certStill = await fetch(`${APP}${fileLinks.find((l) => l.endsWith(cert.body?.attachment?.id))}`, { redirect: 'manual' })
+    ok('the certificate still opens from the old link after the refused delete', certStill.status === 302)
+    await api(`/api/orders/${orderId}/attachments/${cert.body?.attachment?.id}`, { method: 'PATCH', body: JSON.stringify({ visibility: 'internal' }) })
+    const withheld = await (await fetch(shareUrl)).text()
+    ok('made internal: the sent copy withholds the certificate rather than showing a dead link', !withheld.includes('GIA-cert.pdf'))
+    await api(`/api/orders/${orderId}/attachments/${cert.body?.attachment?.id}`, { method: 'PATCH', body: JSON.stringify({ visibility: 'public' }) })
+    ok('made public again: it is back on the sent copy (nothing was lost)', (await (await fetch(shareUrl)).text()).includes('GIA-cert.pdf'))
+    const delExtra = await api(`/api/orders/${orderId}/attachments/${extra.body?.attachment?.id}`, { method: 'DELETE' })
+    ok('a file no sent copy names can still be deleted', delExtra.status === 200)
+    await save((await cur()).lineItems.map((l) => strip(l.productType === 'Bracelet' ? { ...l, unitPriceCents: 499000 } : l)))
+  }
+
   const internal = await page(`/orders/${orderId}/document/estimate`, false)
   ok(`the INTERNAL document URL still requires login when copied (${internal.status} → ${internal.location})`, internal.status === 307 && /\/auth\/login/.test(internal.location ?? ''))
 

@@ -67,7 +67,11 @@ export async function writeDocumentSnapshot(tenantId: string, orderId: string, s
       tax: data.tax, pstExemptionNote: data.pstExemptionNote, footerNote: data.footerNote, templateName: data.templateName,
     }
     const { error } = await createAdminClient().storage.from(ORDER_BUCKET)
-      .upload(snapshotPath(tenantId, orderId, shareId), Buffer.from(JSON.stringify(snap)), { contentType: 'application/json', upsert: true })
+      // application/octet-stream, NOT application/json: the bucket allows only the file types an
+      // order carries (images, PDF, video, zip, octet-stream), and the first version of this wrote
+      // application/json — every snapshot was silently refused and every link fell back to the
+      // live order. We read the bytes back ourselves; the content type is nothing to anyone else.
+      .upload(snapshotPath(tenantId, orderId, shareId), Buffer.from(JSON.stringify(snap)), { contentType: 'application/octet-stream', upsert: true })
     if (error) { console.error('[orders] document snapshot not written', { orderId, shareId, error: error.message }); return { ok: false, error: error.message } }
     return { ok: true }
   } catch (e) {
@@ -89,6 +93,27 @@ export async function readDocumentSnapshot(tenantId: string, orderId: string, sh
 }
 
 /**
+ * Every attachment id that ANY sent copy of this order still names. The set a delete must respect:
+ * removing one of these files would silently take a photograph or a certificate off a document a
+ * customer is holding. Read from the snapshots folder itself, so there is no second list to drift.
+ */
+export async function attachmentIdsInSnapshots(tenantId: string, orderId: string): Promise<Set<string>> {
+  const db = createAdminClient()
+  const { data: objects } = await db.storage.from(ORDER_BUCKET).list(`${tenantId}/${orderId}/snapshots`, { limit: 1000 })
+  const ids = new Set<string>()
+  for (const o of objects ?? []) {
+    if (!o.name.endsWith('.json')) continue
+    const { data } = await db.storage.from(ORDER_BUCKET).download(`${tenantId}/${orderId}/snapshots/${o.name}`)
+    if (!data) continue
+    try {
+      const snap = JSON.parse(await data.text()) as DocumentSnapshot
+      for (const x of [...(snap.images ?? []), ...(snap.files ?? [])]) ids.add(x.id)
+    } catch { /* an unreadable snapshot protects nothing and blocks nothing */ }
+  }
+  return ids
+}
+
+/**
  * Turn a snapshot back into what the document body renders, with URLs minted for THIS surface —
  * the token route for the customer, signed URLs for the owner's "view as sent".
  */
@@ -100,7 +125,10 @@ export async function documentDataFromSnapshot(snap: DocumentSnapshot, urlFor: A
   const { data } = ids.length
     ? await db.from('order_attachments').select('id, storage_path, file_name, mime_type, file_size, visibility, uploaded_by, created_at, order_id').eq('tenant_id', tenantId).eq('order_id', orderId).in('id', ids)
     : { data: [] as Array<Record<string, unknown>> }
-  const rows = new Map(((data as Array<Record<string, unknown>> | null) ?? []).map((r) => [r.id as string, r]))
+  // Only files that are still PUBLIC: a file the owner has since made internal is withheld from the
+  // rendered copy rather than listed with a link that would refuse to open. The withholding is the
+  // one deliberate way a sent copy changes, and it changes only by omission.
+  const rows = new Map(((data as Array<Record<string, unknown>> | null) ?? []).filter((r) => r.visibility === 'public').map((r) => [r.id as string, r]))
   const urlOf = async (id: string) => {
     const r = rows.get(id)
     if (!r) return null

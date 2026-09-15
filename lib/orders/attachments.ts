@@ -164,12 +164,24 @@ export async function setAttachmentVisibility(id: string, visibility: Visibility
   return !error
 }
 
-export async function deleteAttachment(id: string): Promise<boolean> {
-  const c = await requireActiveBusinessContext(); if (!c) return false
+/**
+ * Remove a file — unless a document a customer was sent still names it.
+ *
+ * A sent estimate is a record (document-snapshot.ts). Deleting the photograph or the certificate
+ * it lists would take that file off a copy the customer holds, silently. So the delete is refused
+ * with the reason, and the owner's way to stop a customer seeing a file is to make it INTERNAL:
+ * the sent copy then withholds it (documentDataFromSnapshot), and the bytes stay for the record.
+ */
+export async function deleteAttachment(id: string): Promise<{ ok: boolean; error?: string }> {
+  const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'Not signed in' }
   const sb = await createClient()
   const { data } = await sb.from('order_attachments').select('storage_path, order_id').eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
-  if (!data) return false
+  if (!data) return { ok: false, error: 'not found' }
+  const { attachmentIdsInSnapshots } = await import('./document-snapshot')
+  if ((await attachmentIdsInSnapshots(c.tenantId, data.order_id as string)).has(id)) {
+    return { ok: false, error: 'This file is on a document that was sent to a customer, so it is kept for the record. Make it internal instead — the sent copy will no longer show it.' }
+  }
   await createAdminClient().storage.from(ORDER_BUCKET).remove([data.storage_path as string])
   await sb.from('order_attachments').delete().eq('tenant_id', c.tenantId).eq('id', id)
-  return true
+  return { ok: true }
 }

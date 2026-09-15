@@ -17,6 +17,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; aid: string }> }) {
   const a = await requireOrdersAccess()
   if (!a) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const ok = await deleteAttachment((await params).aid)
-  return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const r = await deleteAttachment((await params).aid)
+  if (r.ok) return NextResponse.json({ ok: true })
+  return NextResponse.json({ error: r.error === 'not found' ? 'Not found' : r.error }, { status: r.error === 'not found' ? 404 : 409 })
 }

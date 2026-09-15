@@ -68,6 +68,40 @@ describe('a sent document is a record, not a view', () => {
     expect(s).toMatch(/storage\.from\(ORDER_BUCKET\)/)
     expect(s).toMatch(/snapshots\/\$\{shareId\}\.json/)
   })
+  it('a snapshot is written once, under its own share id, and never rewritten by an edit', () => {
+    const s = src('lib/orders/document-snapshot.ts')
+    // Keyed by share id (unique per link); the only writer is share creation; nothing in the order
+    // update path touches snapshots.
+    expect(s).toMatch(/snapshotPath\(tenantId, orderId, shareId\)/)
+    expect(src('lib/orders/store.ts')).not.toMatch(/writeDocumentSnapshot|snapshots\//)
+    expect((src('lib/orders/shares.ts').match(/writeDocumentSnapshot\(/g) ?? []).length).toBe(2)
+  })
+  it('no path removes a snapshot file, and the bucket is never overwritten by an upload', () => {
+    // Every storage removal in the order code, and what it removes.
+    const removals: Array<[string, RegExp]> = [
+      ['lib/orders/attachments.ts', /remove\(\[path\]\)/],            // a just-uploaded file whose row was refused
+      ['lib/orders/attachments.ts', /remove\(\[data\.storage_path as string\]\)/], // an explicit attachment delete (guarded below)
+      ['lib/orders/approvals.ts', /remove\(\[path\]\)/],              // the factory's just-uploaded invoice whose row was refused
+      ['lib/orders/store.ts', /remove\(paths\)/],                     // deleteOrder — refused once any share exists
+    ]
+    for (const [f, re] of removals) expect(src(f), f).toMatch(re)
+    // The bucket refuses application/json; the snapshot is written as octet-stream so it is written at all.
+    expect(src('lib/orders/document-snapshot.ts')).toMatch(/contentType: 'application\/octet-stream', upsert: true/)
+    for (const f of ['lib/orders/attachments.ts', 'lib/orders/approvals.ts', 'lib/orders/store.ts', 'lib/orders/document-snapshot.ts', 'lib/orders/shares.ts']) {
+      expect(src(f), f).not.toMatch(/remove\([^)]*snapshot/i)
+    }
+    expect(src('lib/orders/attachments.ts')).toMatch(/upsert: false/)
+    // deleteOrder is refused once a document link exists, so the snapshots that only exist with a
+    // share can never be swept by it.
+    expect(src('lib/orders/store.ts')).toMatch(/from\('order_document_shares'\)[\s\S]*?if \(shares\.count\) return \{ ok: false/)
+  })
+  it('a file a sent copy names cannot be deleted; making it internal withholds it from the copy', () => {
+    const a = src('lib/orders/attachments.ts')
+    expect(a).toMatch(/attachmentIdsInSnapshots\(c\.tenantId, data\.order_id as string\)\)\.has\(id\)/)
+    expect(a).toMatch(/kept for the record\. Make it internal instead/)
+    expect(src('lib/orders/document-snapshot.ts')).toMatch(/\.filter\(\(r\) => r\.visibility === 'public'\)/)
+    expect(src('app/api/orders/[id]/attachments/[aid]/route.ts')).toMatch(/status: r\.error === 'not found' \? 404 : 409/)
+  })
   it('the owner can open any sent copy', () => {
     expect(src('components/orders/shared-links.tsx')).toMatch(/View as sent/)
     expect(src('app/orders/[id]/shares/[shareId]/page.tsx')).toMatch(/requireOrdersAccess/)
