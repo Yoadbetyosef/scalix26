@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireStudioTenant } from '@/lib/studio/session'
-import { sanitizeProduct } from '@/lib/studio/sanitize'
+import { sanitizeProductPatch } from '@/lib/studio/sanitize'
 import { publicProductUrl, qrDataUrl } from '@/lib/studio/qr'
 
 // GET /api/studio/products/[id] — product + its variants + a QR data URL (product-level).
@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const db = createAdminClient()
   const { data, error } = await db
     .from('studio_products')
-    .update({ ...sanitizeProduct(body), updated_at: new Date().toISOString() })
+    .update({ ...sanitizeProductPatch(body), updated_at: new Date().toISOString() })
     .eq('id', id).eq('tenant_id', s.tenantId)
     .select('*').maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -2,6 +2,9 @@ import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { variantPrice, variantTitle, type StudioProduct, type StudioVariant } from '@/lib/studio/types'
 import { ProductGallery } from '@/components/studio/product-gallery'
+import { StaffEditPanel } from '@/components/studio/staff-edit-panel'
+import { canEditStudioTenant } from '@/lib/studio/viewer'
+import { publicProductUrl } from '@/lib/studio/qr'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +69,15 @@ export default async function PublicProductPage({ params }: { params: Promise<{ 
     ? [fabricSrc.fabric_family, fabricSrc.fabric_name, fabricSrc.fabric_composition].filter(Boolean).join(' · ')
     : null
 
+  // STAFF MODE. Decided entirely on the server from the session cookie and the tenant the TOKEN
+  // resolved to — never from anything in the URL. Anonymous visitors and users of another business
+  // get `false` and the page below renders exactly as it always has. Deliberately NOT a redirect:
+  // /p/ is public, and a customer scanning a code in a showroom must never meet a login screen.
+  //
+  // Only for a PRODUCT token. A sub-product token has its own photos and description, so offering
+  // the product's editor under it would be editing something other than the thing on screen.
+  const canEdit = !activeVariantId && (await canEditStudioTenant(product.tenant_id))
+
   return (
     <main className="mx-auto min-h-screen max-w-xl bg-white px-4 py-8 text-neutral-900">
       <ProductGallery photos={gallery} name={product.name} />
@@ -85,6 +97,16 @@ export default async function PublicProductPage({ params }: { params: Promise<{ 
             </div>
           ))}
         </dl>
+      )}
+
+      {canEdit && (
+        <StaffEditPanel
+          productId={product.id}
+          initialPhotos={product.photos || []}
+          initialDescription={product.description}
+          initialPrice={product.base_price}
+          publicUrl={publicProductUrl(product.qr_token)}
+        />
       )}
 
       {variants.length > 0 && (

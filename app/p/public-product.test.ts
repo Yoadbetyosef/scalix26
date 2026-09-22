@@ -42,6 +42,62 @@ describe('the public product page is read-only and staff-blind', () => {
   })
 })
 
+describe('staff mode on the public page', () => {
+  const src = read(PUBLIC_PAGE)
+  const panel = read('components/studio/staff-edit-panel.tsx')
+
+  it('decides staff from the SERVER, using the tenant the token resolved to', () => {
+    expect(src).toMatch(/canEditStudioTenant\(product\.tenant_id\)/)
+  })
+
+  it('never reads staff-ness from the URL, a query string or a header', () => {
+    expect(src).not.toMatch(/searchParams/)
+    expect(src).not.toMatch(/\bedit=|\?edit|['"]x-/)
+  })
+
+  it('offers the editor only for a PRODUCT token, not a sub-product one', () => {
+    expect(src).toMatch(/!activeVariantId && \(await canEditStudioTenant/)
+  })
+
+  it('renders the panel behind the flag, so the public page is the default', () => {
+    expect(src).toMatch(/\{canEdit && \(/)
+  })
+
+  it('does not redirect or 401 a visitor without a session — /p/ stays public', () => {
+    expect(src).not.toMatch(/redirect\(|unauthorized\(/)
+  })
+
+  it('the panel saves through the existing studio API, not a new write path', () => {
+    expect(panel).toMatch(/`\/api\/studio\/products\/\$\{productId\}`/)
+    expect(panel).toMatch(/method: 'PATCH'/)
+    expect(panel).toMatch(/'\/api\/studio\/upload'/)
+  })
+
+  it('the panel sends ONLY photos, description and price', () => {
+    const body = panel.match(/JSON\.stringify\(\{([^}]*)\}\)/)?.[1] ?? ''
+    expect(body).toContain('photos')
+    expect(body).toContain('description')
+    expect(body).toContain('base_price')
+    for (const k of ['internal_notes', 'supplier_', 'status', 'tenant_id', 'qr_token']) {
+      expect(body).not.toContain(k)
+    }
+  })
+
+  it('the panel never renders internal or supplier fields', () => {
+    for (const f of STAFF_ONLY) expect(panel).not.toContain(f)
+  })
+
+  it('the panel says out loud that customers cannot see it', () => {
+    expect(panel).toContain('Staff only')
+    expect(panel).toMatch(/aria-label="Staff editing"/)
+  })
+
+  it('the panel cannot change the QR — it only links to the print page', () => {
+    expect(panel).toMatch(/`\/studio\/\$\{productId\}\/print`/)
+    expect(panel).not.toMatch(/qr_token\s*[:=]/)
+  })
+})
+
 describe('the gallery', () => {
   const src = read(GALLERY)
 

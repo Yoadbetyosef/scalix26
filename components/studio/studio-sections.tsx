@@ -97,14 +97,26 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
         <div className="v2-shots">
           <div className="v2-shot" data-code>
             <b>Customer scan</b>
-            {qr?.dataUrl
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={qr.dataUrl} alt="QR code for the public customer page" />
-              : <i><QrCode /></i>}
-            <span>The public, customer-facing page — not the staff code at the top.</span>
+            {/* THE CODE IS THE WAY IN. Clicking it opens the very page the customer's phone opens —
+                which, for a signed-in member of this business, carries the staff editing panel
+                (photos, description, price). The same destination as View below, and the same
+                destination a customer reaches; what differs is only who is asking, decided
+                server-side in lib/studio/viewer.ts. Nothing here grants the edit. */}
+            {qr?.dataUrl && qr?.target
+              ? (
+                <a href={qr.target} target="_blank" rel="noreferrer" title="Open the customer page — you can edit it there" style={{ display: 'block' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={qr.dataUrl} alt="QR code for the public customer page — opens that page" />
+                </a>
+              )
+              : qr?.dataUrl
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={qr.dataUrl} alt="QR code for the public customer page" />
+                : <i><QrCode /></i>}
+            <span>Opens the customer page — edit its photos, description and price there.</span>
             <span className="v2-bar">
               <button onClick={downloadQr} className="v2-act tap-target"><Download className="w-3.5 h-3.5" /> Download</button>
-              {qr?.target && <a href={qr.target} target="_blank" rel="noreferrer" className="v2-act tap-target"><ExternalLink className="w-3.5 h-3.5" /> View</a>}
+              {qr?.target && <a href={qr.target} target="_blank" rel="noreferrer" className="v2-act tap-target"><ExternalLink className="w-3.5 h-3.5" /> View &amp; edit</a>}
               {/* The showroom tag. Deliberately the CUSTOMER code — /studio/<id>/print prints
                   publicProductUrl(), never the staff QR sitting at the top of this same page. */}
               {product && <a href={`/studio/${product.id}/print`} target="_blank" rel="noreferrer" className="v2-act tap-target"><Printer className="w-3.5 h-3.5" /> Print customer QR</a>}

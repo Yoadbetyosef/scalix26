@@ -32,28 +32,48 @@ export const MAX_VARIANT_PHOTOS = 12
 const photoList = (v: unknown, cap: number): string[] =>
   Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string' && p.trim().length > 0).map((p) => p.trim()).slice(0, cap) : []
 
-// Whitelist + coerce editable product fields. tenant_id is NEVER taken from the client.
+// The one whitelist of editable product columns. tenant_id, qr_token and catalog_product_id are
+// absent on purpose and are NEVER taken from the client.
+const PRODUCT_FIELDS = {
+  name: (v: unknown) => str(v) || 'Untitled',
+  category: str,
+  description: str,
+  specs: strMap,
+  base_price: price,
+  photos: (v: unknown) => photoList(v, MAX_PHOTOS),
+  status: (v: unknown) => (isStudioStatus(v) ? v : 'active') as StudioProductStatus,
+  supplier_name: str,
+  supplier_email: str,
+  internal_notes: str,
+  fabric_category: str,
+  fabric_family: str,
+  fabric_name: str,
+  fabric_composition: str,
+  fabric_durability: str,
+} as const
+
+/** Whitelist + coerce a FULL product — every column gets a value. For create (POST). */
 export function sanitizeProduct(body: Record<string, unknown>) {
-  return {
-    name: str(body.name) || 'Untitled',
-    category: str(body.category),
-    description: str(body.description),
-    // ONLY when the caller sent it. PATCH feeds this whole object to .update(), so an
-    // unconditional `specs: strMap(undefined)` wrote {} and erased the spec table on every save
-    // from ProductForm — which has no specs control and therefore never sends the key.
-    ...('specs' in body ? { specs: strMap(body.specs) } : {}),
-    base_price: price(body.base_price),
-    photos: photoList(body.photos, MAX_PHOTOS),
-    status: (isStudioStatus(body.status) ? body.status : 'active') as StudioProductStatus,
-    supplier_name: str(body.supplier_name),
-    supplier_email: str(body.supplier_email),
-    internal_notes: str(body.internal_notes),
-    fabric_category: str(body.fabric_category),
-    fabric_family: str(body.fabric_family),
-    fabric_name: str(body.fabric_name),
-    fabric_composition: str(body.fabric_composition),
-    fabric_durability: str(body.fabric_durability),
-  }
+  const out: Record<string, unknown> = {}
+  for (const [k, f] of Object.entries(PRODUCT_FIELDS)) out[k] = f(body[k])
+  return out as { [K in keyof typeof PRODUCT_FIELDS]: ReturnType<(typeof PRODUCT_FIELDS)[K]> }
+}
+
+/**
+ * Whitelist + coerce ONLY the columns the caller actually sent. For update (PATCH).
+ *
+ * PATCH spreads its result straight into .update(), so a key present here is a key WRITTEN — and a
+ * full sanitize therefore wrote a value for every column whether or not the editor had one. That
+ * already cost the specs table on every save from ProductForm (no specs control → key never sent →
+ * `{}` written). It becomes far worse with a second, smaller editor: the staff panel on the public
+ * page sends photos/description/base_price, and under a full sanitize that one Save would have
+ * nulled the supplier, the internal notes, the whole fabric selection and the category, and reset
+ * the status to 'active'. Two editors of one row can only be safe if each writes only its own fields.
+ */
+export function sanitizeProductPatch(body: Record<string, unknown>) {
+  const out: Record<string, unknown> = {}
+  for (const [k, f] of Object.entries(PRODUCT_FIELDS)) if (k in body) out[k] = f(body[k])
+  return out
 }
 
 // Whitelist + coerce editable sub-product (variant) fields (product_id/tenant_id set server-side).

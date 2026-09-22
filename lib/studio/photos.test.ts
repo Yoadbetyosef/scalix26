@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { sanitizeProduct, sanitizeVariant, MAX_PHOTOS, MAX_VARIANT_PHOTOS } from './sanitize'
+import { sanitizeProduct, sanitizeProductPatch, sanitizeVariant, MAX_PHOTOS, MAX_VARIANT_PHOTOS } from './sanitize'
 import { ensureStudioForCatalog } from './link'
 import { publicProductUrl } from './qr'
 
@@ -123,13 +123,20 @@ describe('price validation', () => {
 })
 
 describe('a save cannot erase what the form does not edit', () => {
-  it('omits specs entirely when the caller did not send it', () => {
-    // PATCH spreads this straight into .update(), so a key present here is a key written.
-    expect('specs' in sanitizeProduct({ name: 'x' })).toBe(false)
+  // The guarantee now lives in the PATCH sanitizer, which is what the update route calls.
+  // sanitizeProduct is the CREATE sanitizer and fills every column by design.
+  it('the update path omits specs entirely when the caller did not send it', () => {
+    // PATCH spreads this straight into .update(), so a key present here is a key written. An
+    // unconditional specs:{} is what erased the spec table on every save from ProductForm.
+    expect('specs' in sanitizeProductPatch({ name: 'x' })).toBe(false)
   })
 
-  it('writes specs when the caller does send it', () => {
-    expect(sanitizeProduct({ specs: { Width: '80cm' } }).specs).toEqual({ Width: '80cm' })
+  it('the update path writes specs when the caller does send it', () => {
+    expect(sanitizeProductPatch({ specs: { Width: '80cm' } }).specs).toEqual({ Width: '80cm' })
+  })
+
+  it('the create path still fills specs, because an insert has no prior value to keep', () => {
+    expect(sanitizeProduct({ name: 'x' }).specs).toEqual({})
   })
 })
 
