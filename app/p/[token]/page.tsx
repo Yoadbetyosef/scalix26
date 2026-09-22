@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
 import { variantPrice, variantTitle, type StudioProduct, type StudioVariant } from '@/lib/studio/types'
+import { ProductGallery } from '@/components/studio/product-gallery'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,20 +68,7 @@ export default async function PublicProductPage({ params }: { params: Promise<{ 
 
   return (
     <main className="mx-auto min-h-screen max-w-xl bg-white px-4 py-8 text-neutral-900">
-      {gallery[0] && (
-        <div className="mb-5 overflow-hidden rounded-2xl bg-neutral-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={gallery[0]} alt={product.name} className="aspect-square w-full object-cover" />
-        </div>
-      )}
-      {gallery.length > 1 && (
-        <div className="mb-5 flex gap-2 overflow-x-auto">
-          {gallery.slice(1).map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={url} alt="" className="h-20 w-20 flex-shrink-0 rounded-lg border border-neutral-200 object-cover" />
-          ))}
-        </div>
-      )}
+      <ProductGallery photos={gallery} name={product.name} />
 
       {product.category && <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">{product.category}</p>}
       <h1 className="mt-1 text-2xl font-bold">{product.name}</h1>

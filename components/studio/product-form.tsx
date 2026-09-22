@@ -1,8 +1,9 @@
 'use client'
 
-import { cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react'
-import { ChevronRight, Plus, X } from 'lucide-react'
+import { cloneElement, isValidElement, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { ChevronLeft, ChevronRight, Plus, Star, Upload, X } from 'lucide-react'
 import { STUDIO_PRODUCT_STATUSES, STUDIO_STATUS_LABELS, type StudioProduct } from '@/lib/studio/types'
+import { MAX_PHOTOS } from '@/lib/studio/sanitize'
 import { FabricPicker, type FabricValue } from '@/components/studio/fabric-picker'
 
 export type ProductInput = Partial<StudioProduct>
@@ -33,29 +34,81 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
   })
   const [photoDraft, setPhotoDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const set = (k: keyof ProductInput, v: unknown) => setF((p) => ({ ...p, [k]: v }))
+  const [saved, setSaved] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const set = (k: keyof ProductInput, v: unknown) => { setSaved(false); setF((p) => ({ ...p, [k]: v })) }
   const photos = f.photos || []
+  const full = photos.length >= MAX_PHOTOS
+
+  // Any edit clears a stale "Saved" tick — it must never describe a state the form has moved past.
+  const touch = () => setSaved(false)
+  const setPhotos = (next: string[]) => { set('photos', next.slice(0, MAX_PHOTOS)); touch() }
 
   function addPhoto() {
     const url = photoDraft.trim()
-    if (!url) return
-    set('photos', [...photos, url]); setPhotoDraft('')
+    if (!url || full) return
+    setPhotos([...photos, url]); setPhotoDraft('')
   }
-  const removePhoto = (i: number) => set('photos', photos.filter((_, idx) => idx !== i))
+  const removePhoto = (i: number) => setPhotos(photos.filter((_, idx) => idx !== i))
+  /** Move a photo one place along. photos[0] IS the cover, so this is also how the cover changes. */
+  function movePhoto(i: number, delta: number) {
+    const j = i + delta
+    if (j < 0 || j >= photos.length) return
+    const next = [...photos]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setPhotos(next)
+  }
+  /** Promote to cover — a move to the front that keeps the rest in their existing order. */
+  const makePrimary = (i: number) => { if (i !== 0) setPhotos([photos[i], ...photos.filter((_, idx) => idx !== i)]) }
+
+  async function uploadFiles(files: FileList | null) {
+    if (!files?.length) return
+    setUploading(true); setErr(null)
+    const room = MAX_PHOTOS - photos.length
+    const picked = Array.from(files).slice(0, Math.max(0, room))
+    if (files.length > picked.length) setErr(`Only ${MAX_PHOTOS} photos per product — ${files.length - picked.length} not added.`)
+    const added: string[] = []
+    try {
+      for (const file of picked) {
+        const body = new FormData(); body.append('file', file)
+        const res = await fetch('/api/studio/upload', { method: 'POST', body })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(d.error || `Could not upload ${file.name}.`)
+        if (d.url) added.push(d.url)
+      }
+    } catch (e2) {
+      setErr((e2 as Error).message)
+    } finally {
+      if (added.length) setPhotos([...photos, ...added])
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    setBusy(true); setErr(null)
+    // Validate the price BEFORE the request, so a typo is a sentence under the field rather than a
+    // silent null from the server's sanitizer. The server still rejects it independently.
+    const raw = f.base_price as unknown as string
+    const hasPrice = raw !== '' && raw !== null && raw !== undefined
+    const priceNum = hasPrice ? Number(raw) : null
+    if (hasPrice && (!Number.isFinite(priceNum as number) || (priceNum as number) < 0)) {
+      setErr('Base price must be a number of 0 or more — leave it empty if the piece is not priced yet.')
+      return
+    }
+    setBusy(true); setErr(null); setSaved(false)
     try {
       await onSubmit({
         name: f.name, category: f.category, description: f.description,
-        base_price: f.base_price === null || f.base_price === undefined || (f.base_price as unknown as string) === '' ? null : Number(f.base_price),
+        base_price: priceNum,
         status: f.status, photos,
         supplier_name: f.supplier_name, supplier_email: f.supplier_email, internal_notes: f.internal_notes,
         ...fabric,
       })
-    } catch (e2) { setErr((e2 as Error).message); setBusy(false) }
+      setSaved(true)
+    } catch (e2) { setErr((e2 as Error).message) } finally { setBusy(false) }
   }
 
   return (
@@ -90,27 +143,53 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
         {photos.length > 0 && (
           <div className="v2-shots" style={{ gap: 14, marginBottom: 20 }}>
             {photos.map((url, i) => (
-              <div key={i} className="v2-shot" style={{ ['--shot' as string]: '80px', position: 'relative' }}>
+              <div key={`${url}-${i}`} className="v2-shot" style={{ ['--shot' as string]: '80px', position: 'relative' }}>
                 <b>{i === 0 ? 'Cover' : `Photo ${i + 1}`}</b>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt="" />
                 <button type="button" onClick={() => removePhoto(i)} aria-label={`Remove photo ${i + 1}`} className="v2-ico"
                         style={{ ['--ghue' as string]: 'var(--v2-red)', position: 'absolute', right: -8, top: 14, background: 'var(--v2-paper)' }}><X /></button>
+                {/* Order and cover, on the photo they act on. photos[0] is the cover, so "make cover"
+                    and the arrows are the same operation seen from two angles. */}
+                <span className="v2-bar" style={{ gap: 4, marginTop: 6 }}>
+                  <button type="button" onClick={() => movePhoto(i, -1)} disabled={i === 0}
+                          aria-label={`Move photo ${i + 1} earlier`} title="Move earlier" className="v2-ico"><ChevronLeft /></button>
+                  <button type="button" onClick={() => movePhoto(i, 1)} disabled={i === photos.length - 1}
+                          aria-label={`Move photo ${i + 1} later`} title="Move later" className="v2-ico"><ChevronRight /></button>
+                  <button type="button" onClick={() => makePrimary(i)} disabled={i === 0}
+                          aria-label={`Make photo ${i + 1} the cover`} title="Make cover" className="v2-ico"
+                          style={{ ['--ghue' as string]: 'var(--v2-t1)' }}><Star /></button>
+                </span>
               </div>
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
           <div className="v2-fld" style={{ flex: 1, minWidth: 0 }}>
             <label htmlFor="sp-photo">Add a photo</label>
             <input id="sp-photo" value={photoDraft} onChange={(e) => setPhotoDraft(e.target.value)}
                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPhoto() } }}
-                   placeholder="Paste an image URL" />
+                   disabled={full}
+                   placeholder={full ? `${MAX_PHOTOS} photos is the maximum` : 'Paste an image URL'} />
           </div>
-          <button type="button" onClick={addPhoto} disabled={!photoDraft.trim()} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t1)', marginBottom: 4 }}>
+          <button type="button" onClick={addPhoto} disabled={full || !photoDraft.trim()} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t1)', marginBottom: 4 }}>
             <Plus className="w-3.5 h-3.5" /> Add
           </button>
+          {/* Upload, because pasting a URL is how every one of this tenant's photos ended up on a
+              third-party host. The file goes to the tenant's own folder in the public catalog-images
+              bucket and comes back as a stable URL — the same endpoint the branding modal uses. */}
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={full || uploading}
+                  className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)', marginBottom: 4 }}>
+            <Upload className="w-3.5 h-3.5" /> {uploading ? 'Uploading…' : 'Upload'}
+          </button>
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" multiple
+                 onChange={(e) => uploadFiles(e.target.files)} style={{ display: 'none' }} />
         </div>
+        <span className="v2-hint" style={{ display: 'block', marginTop: 8 }}>
+          {photos.length} of {MAX_PHOTOS}. The first is the cover — it is what the catalogue, the
+          documents and the customer&rsquo;s scanned page all show first.
+        </span>
       </section>
 
       {/* Optional — supplier (used later by "Send to production") + status + internal notes */}
@@ -135,7 +214,12 @@ export function ProductForm({ initial, onSubmit, submitLabel }: { initial?: Part
       </details>
 
       <div className="v2-savebar" data-pin>
-        <button type="submit" disabled={busy} className="v2-act tap-target" data-solid data-wide style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>{busy ? 'Saving…' : submitLabel}</button>
+        <button type="submit" disabled={busy || uploading} className="v2-act tap-target" data-solid data-wide style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+          {busy ? 'Saving…' : uploading ? 'Waiting for the upload…' : submitLabel}
+        </button>
+        {saved && !busy && (
+          <span role="status" className="v2-stat" style={{ ['--chan' as string]: 'var(--v2-t2)', marginLeft: 10 }}>Saved</span>
+        )}
       </div>
     </form>
   )

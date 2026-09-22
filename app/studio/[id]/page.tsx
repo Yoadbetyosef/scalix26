@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Download, ExternalLink, Factory, FileText, Receipt, Pencil, Trash2, ChevronLeft, QrCode, Image as ImageIcon } from 'lucide-react'
+import { Download, ExternalLink, Factory, FileText, Receipt, Pencil, Trash2, ChevronLeft, QrCode, Image as ImageIcon, Printer } from 'lucide-react'
 import { ProductForm } from '@/components/studio/product-form'
 import { useConfirm } from '@/components/v2/confirm'
 import { VariantsPanel } from '@/components/studio/variants-panel'
@@ -110,6 +110,7 @@ export default function StudioProductPage() {
             <span className="v2-bar">
               <button onClick={downloadQr} className="v2-act tap-target"><Download className="w-3.5 h-3.5" /> Download</button>
               {qr?.target && <a href={qr.target} target="_blank" rel="noreferrer" className="v2-act tap-target"><ExternalLink className="w-3.5 h-3.5" /> View</a>}
+              <a href={`/studio/${id}/print`} target="_blank" rel="noreferrer" className="v2-act tap-target"><Printer className="w-3.5 h-3.5" /> Print customer QR</a>
             </span>
           </div>
         </div>

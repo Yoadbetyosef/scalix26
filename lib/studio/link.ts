@@ -24,11 +24,11 @@ const sharedFields = (cat: CatalogLike) => ({
 /**
  * Ensure a studio_products row exists for a catalog product, and return it. Idempotent and
  * race-safe (the UNIQUE(catalog_product_id) constraint collapses a double-create). Photos are
- * seeded once from the catalog image; after that Studio owns its own photo list.
+ * seeded from the catalog image whenever Studio's own list is empty — see seedPhotosIfEmpty.
  */
 export async function ensureStudioForCatalog(db: AdminDb, tenantId: string, cat: CatalogLike): Promise<StudioProduct | null> {
   const existing = await db.from('studio_products').select('*').eq('catalog_product_id', cat.id).eq('tenant_id', tenantId).maybeSingle()
-  if (existing.data) return existing.data as StudioProduct
+  if (existing.data) return seedPhotosIfEmpty(db, tenantId, existing.data as StudioProduct, cat)
 
   const insert = await db.from('studio_products').insert({
     tenant_id: tenantId, catalog_product_id: cat.id,
@@ -38,7 +38,32 @@ export async function ensureStudioForCatalog(db: AdminDb, tenantId: string, cat:
 
   // Lost a create race (unique violation) — read the row the other request created.
   const retry = await db.from('studio_products').select('*').eq('catalog_product_id', cat.id).eq('tenant_id', tenantId).maybeSingle()
-  return (retry.data as StudioProduct) ?? null
+  if (!retry.data) return null
+  return seedPhotosIfEmpty(db, tenantId, retry.data as StudioProduct, cat)
+}
+
+/**
+ * Give a studio product the catalog photo WHENEVER its own list is empty — not only at insert.
+ *
+ * THIS IS THE BUG THAT MADE EVERY CUSTOMER QR OPEN A PICTURE-LESS PAGE. The studio row is created
+ * the first time anyone opens the Studio block of a catalog product, and staff photograph the piece
+ * later. The insert-time seed had already run against image_url = null, syncStudioFromCatalog
+ * deliberately does not mirror photos, and nothing else ever looked again — so `photos` stayed []
+ * for good and /p/<token> rendered no <img> at all. All 15 of one tenant's products were in exactly
+ * that state, each studio row predating its catalog image by minutes to weeks.
+ *
+ * Empty is the ONLY trigger. The moment Studio holds one photo of its own, Studio owns the list and
+ * this never fires again — so reordering, replacing the cover, or adding to it are all safe. The
+ * cost of that rule, accepted deliberately: deleting the last photo is not sticky, because the next
+ * load reads an empty list and seeds it again.
+ */
+async function seedPhotosIfEmpty(db: AdminDb, tenantId: string, product: StudioProduct, cat: CatalogLike): Promise<StudioProduct> {
+  if (!cat.image_url || (product.photos?.length ?? 0) > 0) return product
+  const { data } = await db.from('studio_products')
+    .update({ photos: [cat.image_url], updated_at: new Date().toISOString() })
+    .eq('id', product.id).eq('tenant_id', tenantId)
+    .select('*').maybeSingle()
+  return (data as StudioProduct) ?? { ...product, photos: [cat.image_url] }
 }
 
 export interface FabricFields {

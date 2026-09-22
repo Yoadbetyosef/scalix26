@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Factory, FileText, Receipt, ExternalLink, Download, QrCode } from 'lucide-react'
+import Link from 'next/link'
+import { Download, ExternalLink, Factory, FileText, Pencil, Printer, QrCode, Receipt } from 'lucide-react'
 import type { StudioProduct, StudioVariant, StudioDocument, StudioDocType } from '@/lib/studio/types'
 import { DOC_META, docNumber } from '@/lib/studio/types'
 import { VariantsPanel } from '@/components/studio/variants-panel'
@@ -48,6 +49,16 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
           it, so the words go rather than being kept as a caption under a pill. */}
       <div className="v2-head">
         <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><i />Studio</p><s />
+        {/* The way through to the Studio product itself. Its absence was a dead end: this block is
+            the ONLY place a catalog product admits a studio counterpart exists, and the photo list,
+            the cover and the description that the customer's scanned page renders are all edited
+            over there — reachable until now only by finding the piece again in the Studio list.
+            STAFF-ONLY, like the rest of this component, which renders nothing at all when the
+            studio module is off or the session cannot see it (the fetch 403s and `product` stays
+            null). The customer's page and its QR are untouched by this link. */}
+        <Link href={`/studio/${product.id}`} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}>
+          <Pencil className="w-3.5 h-3.5" /> Open in Studio
+        </Link>
       </div>
       <div className="v2-bar">
         <button type="button" onClick={() => setDocType('production')} className="v2-act tap-target" style={{ ['--ghue' as string]: 'var(--v2-t2)' }}><Factory className="w-3.5 h-3.5" /> Send to production</button>
@@ -94,6 +105,9 @@ export function StudioSections({ catalogId }: { catalogId: string }) {
             <span className="v2-bar">
               <button onClick={downloadQr} className="v2-act tap-target"><Download className="w-3.5 h-3.5" /> Download</button>
               {qr?.target && <a href={qr.target} target="_blank" rel="noreferrer" className="v2-act tap-target"><ExternalLink className="w-3.5 h-3.5" /> View</a>}
+              {/* The showroom tag. Deliberately the CUSTOMER code — /studio/<id>/print prints
+                  publicProductUrl(), never the staff QR sitting at the top of this same page. */}
+              {product && <a href={`/studio/${product.id}/print`} target="_blank" rel="noreferrer" className="v2-act tap-target"><Printer className="w-3.5 h-3.5" /> Print customer QR</a>}
             </span>
           </div>
         </div>

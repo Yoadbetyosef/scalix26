@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import QRCode from 'qrcode'
 import { createAdminClient } from '@/lib/supabase/server'
 import { requireStudioTenant } from '@/lib/studio/session'
 import { sanitizeProduct } from '@/lib/studio/sanitize'
-
-const publicUrl = (token: string) => `${process.env.NEXT_PUBLIC_APP_URL || ''}/p/${token}`
-async function qrDataUrl(token: string): Promise<string | null> {
-  try { return await QRCode.toDataURL(publicUrl(token), { margin: 1, width: 240 }) } catch { return null }
-}
+import { publicProductUrl, qrDataUrl } from '@/lib/studio/qr'
 
 // GET /api/studio/products/[id] — product + its variants + a QR data URL (product-level).
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const s = await requireStudioTenant()
   if (!s) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
@@ -25,7 +20,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .from('studio_variants').select('*').eq('product_id', id).eq('tenant_id', s.tenantId)
     .order('position', { ascending: true }).order('created_at', { ascending: true })
 
-  const qr = { target: publicUrl(product.qr_token), dataUrl: await qrDataUrl(product.qr_token) }
+  const target = publicProductUrl(product.qr_token, req.nextUrl.origin)
+  const qr = { target, dataUrl: await qrDataUrl(target) }
   return NextResponse.json({ product, variants: variants || [], qr })
 }
 
