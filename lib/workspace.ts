@@ -129,7 +129,11 @@ export interface ActiveBusinessContext {
   capabilities: BusinessCapabilities
 }
 
-export async function requireActiveBusinessContext(): Promise<ActiveBusinessContext | null> {
+// Wrapped in React cache() for the same reason getActiveWorkspace() is: the AppShell now resolves the
+// caller's capabilities so the sidebar can render them on the SERVER, and the page inside that shell
+// usually resolves them too. Without this that is two auth.getUser() round-trips per render instead of
+// one. Read-only resolution, so sharing it within a request is safe.
+export const requireActiveBusinessContext = cache(async function requireActiveBusinessContext(): Promise<ActiveBusinessContext | null> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -162,7 +166,7 @@ export async function requireActiveBusinessContext(): Promise<ActiveBusinessCont
     })
   }
   return { actorUserId: user.id, partnerId: ws.partnerId, tenantId: ws.tenantId, mode: ws.mode, role: teamRole, capabilities }
-}
+})
 
 // Verify a partner may ENTER/operate a given tenant (used by the switch route). Server-side only.
 // Requires the tenant to be owned by this partner AND not suspended — a suspended client can't be entered.

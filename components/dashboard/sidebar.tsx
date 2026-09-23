@@ -90,13 +90,20 @@ const INERT = new Map<string, typeof Calendar>([['Knowledge', BookLock]])
 // Subscription" is intentionally excluded (a client's plan is governed by the partner, never Scalix).
 const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Inbox', 'Contacts', 'Catalog', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
 
-export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules }: {
+export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules, capabilities = null }: {
   operator?: boolean
   // True across the whole White Label plane (partner operating a client OR a WL customer's own login):
   // hides Partner Program, Admin, and Scalix billing. `operator` additionally drives tenant resolution.
   whiteLabel?: boolean
   operatorBusinessName?: string | null
   operatorModules?: ModuleKey[]
+  /**
+   * Resolved SERVER-SIDE by AppShell, from requireActiveBusinessContext — the same object every gated
+   * route reads. Present on every real page, so the FIRST PAINT already shows this person's rows and
+   * there is nothing to take away on hydration. Null only where the shell is bypassed (the render
+   * probe), which falls back to the optimistic default below.
+   */
+  capabilities?: { canEditBilling: boolean; canEditSettings: boolean; canManageTeam: boolean } | null
 } = {}) {
   const hidePartnerSurfaces = operator || whiteLabel
   const pathname = usePathname()
@@ -117,10 +124,12 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   const [isAdmin, setIsAdmin] = useState(false)
   // What THIS person may do in THIS business. Gates which Account rows are offered at all; every
   // route behind them re-checks server-side, so this is the courtesy, not the control.
-  // canEditBilling starts true and canManageTeam starts false for the same reason enabledModules
-  // starts as ALL_MODULES: default to the owner's shell so nothing an owner owns flickers away, and
-  // never flash a row at somebody who will be refused when they click it.
-  const [caps, setCaps] = useState({ canEditBilling: true, canEditSettings: true, canManageTeam: false })
+  //
+  // SEEDED FROM THE SERVER. When AppShell passes capabilities (every real page), the initial render is
+  // already correct and hydration changes nothing — a staff member never sees Settings or Billing, not
+  // even for a frame. The all-true fallback is only for the render probe, which mounts the rail with
+  // no shell around it; there, defaulting to the owner's set keeps the probe's geometry honest.
+  const [caps, setCaps] = useState(capabilities ?? { canEditBilling: true, canEditSettings: true, canManageTeam: true })
   // Default to ALL so nothing flickers/hides before the tenant's modules load.
   const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(ALL_MODULES)
 
@@ -160,7 +169,9 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
         setTrialEndsAt(ctx.trialEndsAt ?? null)
         if (ctx.enabledModules) setEnabledModules(ctx.enabledModules)
         setAiOn(!!ctx.aiOn)
-        if (ctx.capabilities) {
+        // Only when the server did not already say. Same source either way, so this cannot disagree —
+        // it just avoids a pointless state write on every mount.
+        if (!capabilities && ctx.capabilities) {
           setCaps({
             canEditBilling: !!ctx.capabilities.canEditBilling,
             canEditSettings: !!ctx.capabilities.canEditSettings,
@@ -170,7 +181,7 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
       } catch { /* leave the optimistic defaults — the shell must still render */ }
     }
     loadBusinessName()
-  }, [operator, operatorBusinessName, operatorModules])
+  }, [operator, operatorBusinessName, operatorModules, capabilities])
 
   // Resolve the host-based brand (myLocksmith / Scalix26 / default) once on mount.
   useEffect(() => { setBrand(detectBrand()) }, [])

@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { OperatorBar } from '@/components/app/operator-bar'
-import { getActiveWorkspace } from '@/lib/workspace'
+import { getActiveWorkspace, requireActiveBusinessContext } from '@/lib/workspace'
 import { getTenantEnabledModules } from '@/lib/tenant'
 
 /**
@@ -23,6 +23,15 @@ export async function AppShell({ children, mainClassName }: { children: ReactNod
   // client business name + the client tenant's effective modules (getTenantEnabledModules is
   // active-workspace aware). Owner mode passes nothing → the sidebar keeps its own client-side load.
   const operatorModules = operator ? await getTenantEnabledModules() : undefined
+  // WHAT THIS PERSON MAY DO, RESOLVED ON THE SERVER.
+  //
+  // The sidebar used to start from the owner's capability set and narrow itself after /api/me/context
+  // came back, so a staff member's first paint contained Settings and Billing & Subscription — rows
+  // the routes then refuse her. Nothing was insecure about it; it was a lie on screen for one frame.
+  //
+  // requireActiveBusinessContext is the same call every gated route makes, so the rail and the routes
+  // cannot disagree: there is one capability object and the server computes it once.
+  const ctx = await requireActiveBusinessContext()
   return (
     <>
       {/* print:hidden throughout — printable pages (estimates, quotes, order documents) must come out as
@@ -45,7 +54,7 @@ export async function AppShell({ children, mainClassName }: { children: ReactNod
         </div>
 
         <div className="print:hidden">
-          <Sidebar operator={operator} whiteLabel={whiteLabel} operatorBusinessName={ws.businessName ?? null} operatorModules={operatorModules} />
+          <Sidebar operator={operator} whiteLabel={whiteLabel} operatorBusinessName={ws.businessName ?? null} operatorModules={operatorModules} capabilities={ctx?.capabilities ?? null} />
         </div>
 
         {/* min-w-0: a flex child defaults to min-width:auto and would expand to its content's
