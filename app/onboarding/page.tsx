@@ -1,5 +1,6 @@
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getActiveWorkspace } from '@/lib/workspace'
 
 // The separate onboarding wizard is retired. Onboarding now happens on the full AI
 // employee edit page. Any hit here routes to that single experience: the first agent's
@@ -10,11 +11,14 @@ export default async function OnboardingPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const serviceSupabase = await createServiceClient()
-  const { data: tenant } = await serviceSupabase
-    .from('tenants').select('id').eq('user_id', user.id).limit(1).maybeSingle()
-  if (!tenant) redirect('/setup')
+  // The ACTIVE workspace, not tenants.user_id. A team member owns no tenant, so the old lookup sent
+  // her to /setup — the one screen whose whole job is to create a business — and the tenant it made
+  // would have outranked her membership. Onboarding belongs to whoever's business this is.
+  const ws = await getActiveWorkspace()
+  if (!ws.tenantId) redirect('/setup')
+  const tenant = { id: ws.tenantId }
 
+  const serviceSupabase = createAdminClient()
   const { data: agent } = await serviceSupabase
     .from('ai_employees').select('id').eq('tenant_id', tenant.id)
     .order('created_at', { ascending: true }).limit(1).maybeSingle()

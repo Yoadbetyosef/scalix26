@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 
 // GET /api/assistant/actions — the caller tenant's assistant action log (newest first).
+//
+// Resolved through the shared context rather than tenants.user_id: the assistant is an operational
+// surface, and a team member owns no tenant, so the old lookup answered 404 for somebody who is
+// plainly inside the business.
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const ctx = await requireActiveBusinessContext()
+  if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const tenant = { id: ctx.tenantId }
 
   const db = createAdminClient()
-  const { data: tenant } = await db.from('tenants').select('id').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  if (!tenant) return NextResponse.json({ error: 'no_tenant' }, { status: 404 })
 
   const status = req.nextUrl.searchParams.get('status')
   const limit = Math.min(100, Math.max(1, parseInt(req.nextUrl.searchParams.get('limit') || '20', 10)))
