@@ -18,6 +18,7 @@ import {
   Shield,
   ClipboardList,
   Ship,
+  UserCog,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -25,7 +26,7 @@ import { useEffect, useState } from 'react'
 import { NotificationCenter } from '@/components/dashboard/notification-center'
 import { type BrandConfig, DEFAULT_BRAND, detectBrand } from '@/lib/brands'
 import { useBrand } from '@/components/brand/brand-provider'
-import { ALL_MODULES, enabledModulesOf, effectiveModules, moduleForNav, type ModuleKey, type ModuleState } from '@/lib/modules'
+import { ALL_MODULES, moduleForNav, type ModuleKey } from '@/lib/modules'
 import { GROUP_HUE } from '@/app/(v2)/v2/nav-icons'
 import { MobileSheet } from '@/components/dashboard/mobile-sheet'
 import { ChevronRight } from 'lucide-react'
@@ -52,6 +53,7 @@ const navItems = [
   { href: '/reports', icon: FileText, label: 'Reports' },
   { href: '/settings#billing', icon: CreditCard, label: 'Billing & Subscription' },
   { href: '/settings', icon: Settings, label: 'Settings' },
+  { href: '/settings/team', icon: UserCog, label: 'Team' },
 ]
 
 // ── THE THREE SECTIONS, /v2's ────────────────────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ const navItems = [
 const SECTIONS: { id: string; label: string; items: string[] }[] = [
   { id: 'g1', label: 'Rudi', items: ['Inbox', 'Appointments', 'Contacts', 'AI Employees', 'Knowledge', 'Test AI'] },
   { id: 'g2', label: 'Business', items: ['Orders', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
-  { id: 'g3', label: 'Account', items: ['Billing & Subscription', 'Settings'] },
+  { id: 'g3', label: 'Account', items: ['Billing & Subscription', 'Settings', 'Team'] },
 ]
 // Dashboard is in none of the three, because it is not a destination among destinations — it is the
 // screen the rail sits beside. It stays above them, where /v2 puts its primaries.
@@ -113,11 +115,21 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
   const [plan, setPlan] = useState<string | null>(null)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  // What THIS person may do in THIS business. Gates which Account rows are offered at all; every
+  // route behind them re-checks server-side, so this is the courtesy, not the control.
+  // canEditBilling starts true and canManageTeam starts false for the same reason enabledModules
+  // starts as ALL_MODULES: default to the owner's shell so nothing an owner owns flickers away, and
+  // never flash a row at somebody who will be refused when they click it.
+  const [caps, setCaps] = useState({ canEditBilling: true, canEditSettings: true, canManageTeam: false })
   // Default to ALL so nothing flickers/hides before the tenant's modules load.
   const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(ALL_MODULES)
 
   const itemActive = (href: string, label: string) => {
     if (label === 'Dashboard') return pathname === '/dashboard'
+    // Settings is a prefix of /settings/team, so a plain startsWith lights both rows at once. Exact
+    // match for the parent; the children (Team, and availability/options if they ever get rows) own
+    // their own highlight.
+    if (label === 'Settings') return pathname === '/settings'
     return pathname.startsWith(href)
   }
 
@@ -130,24 +142,32 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
       if (operatorModules) setEnabledModules(operatorModules)
       return
     }
+    // Ask the SERVER who we are. This used to be `tenants.eq('user_id', user.id)` from the browser,
+    // which silently answers "nothing" for a team member — she owns no tenant — and left her with a
+    // nameless shell and every module hidden. /api/me/context resolves through
+    // requireActiveBusinessContext, so owner, team member and operator all get the same shape.
     async function loadBusinessName() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const [{ data: tenant }, { data: flagRows }] = await Promise.all([
-        supabase.from('tenants').select('id, business_name, plan, trial_ends_at, enabled_modules, tags').eq('user_id', user.id).single(),
-        supabase.from('module_flags').select('module, state'),
-      ])
-      if (tenant?.business_name) setBusinessName(tenant.business_name)
-      setPlan(tenant?.plan ?? null)
-      setTrialEndsAt(tenant?.trial_ends_at ?? null)
-      // Effective modules = the business's own set filtered by the global feature-flag state.
-      const flags = Object.fromEntries((flagRows || []).map((f) => [f.module, f.state as ModuleState]))
-      const isEnterprise = Array.isArray(tenant?.tags) && tenant.tags.includes('Enterprise')
-      setEnabledModules(effectiveModules(enabledModulesOf(tenant), flags, isEnterprise))
-      if (tenant?.id) {
-        const { data: emps } = await supabase.from('ai_employees').select('is_active').eq('tenant_id', tenant.id)
-        setAiOn(!!emps?.some((e) => (e as { is_active?: boolean }).is_active !== false))
-      }
+      try {
+        const res = await fetch('/api/me/context')
+        if (!res.ok) return
+        const ctx = await res.json() as {
+          businessName?: string | null; plan?: string | null; trialEndsAt?: string | null
+          enabledModules?: ModuleKey[]; aiOn?: boolean
+          capabilities?: { canManageTeam?: boolean; canEditBilling?: boolean; canEditSettings?: boolean }
+        }
+        if (ctx.businessName) setBusinessName(ctx.businessName)
+        setPlan(ctx.plan ?? null)
+        setTrialEndsAt(ctx.trialEndsAt ?? null)
+        if (ctx.enabledModules) setEnabledModules(ctx.enabledModules)
+        setAiOn(!!ctx.aiOn)
+        if (ctx.capabilities) {
+          setCaps({
+            canEditBilling: !!ctx.capabilities.canEditBilling,
+            canEditSettings: !!ctx.capabilities.canEditSettings,
+            canManageTeam: !!ctx.capabilities.canManageTeam,
+          })
+        }
+      } catch { /* leave the optimistic defaults — the shell must still render */ }
     }
     loadBusinessName()
   }, [operator, operatorBusinessName, operatorModules])
@@ -177,6 +197,11 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
     // The whole White Label plane (partner operating a client, OR a WL customer's own login) never sees
     // Scalix billing — a client's plan is governed by the partner. All product routes are operator-safe.
     if (hidePartnerSurfaces && i.label === 'Billing & Subscription') return false
+    // Team roles. A staff member has no billing and no team screen — the routes refuse her anyway
+    // (canEditBilling / canManageTeam), so this only keeps the rail honest about what she can reach.
+    if (i.label === 'Billing & Subscription' && !caps.canEditBilling) return false
+    if (i.label === 'Team' && !caps.canManageTeam) return false
+    if (i.label === 'Settings' && !caps.canEditSettings) return false
     // Belt-and-suspenders: in impersonation mode keep the verified operator-safe allowlist.
     if (operator && !OPERATOR_SAFE_LABELS.has(i.label)) return false
     const m = moduleForNav(i.href)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getStripe, PLANS } from '@/lib/stripe/client'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { requireActiveBusinessContext } from '@/lib/workspace'
 
 // Start a subscription Checkout. The client sends the PLAN KEY ('starter'|'pro'|'business') and the Stripe
 // price is resolved SERVER-SIDE from PLANS (server env STRIPE_*_PRICE_ID). Previously the client read
@@ -9,6 +10,13 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Please sign in to upgrade.' }, { status: 401 })
+
+  // Only the owner buys the plan. See the note in /api/stripe/portal — stated, not inferred from the
+  // shape of a tenant lookup.
+  const ctx = await requireActiveBusinessContext()
+  if (!ctx?.capabilities.canEditBilling) {
+    return NextResponse.json({ error: 'Only the business owner can change the subscription.' }, { status: 403 })
+  }
 
   const body = await req.json().catch(() => ({}))
   const plan = typeof body?.plan === 'string' ? body.plan : null

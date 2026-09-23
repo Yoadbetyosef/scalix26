@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { getActiveWorkspace } from '@/lib/workspace'
+import { getActiveWorkspace, requireActiveBusinessContext } from '@/lib/workspace'
 import { readSettings } from '@/lib/settings/read'
 import { SettingsClient } from '@/components/settings/settings-client'
 
@@ -13,6 +13,10 @@ export default async function SettingsPage() {
   // explicit tenant_id — the RLS cookie client would resolve to the operator's own tenant.
   const ws = await getActiveWorkspace()
   if (!ws.tenantId) redirect('/auth/signup')
+  // Business settings belong to the owner (and a manager). A staff member is sent to the dashboard —
+  // the sidebar does not offer her this row, so reaching here means she typed the URL.
+  const ctx = await requireActiveBusinessContext()
+  if (!ctx?.capabilities.canEditSettings) redirect('/dashboard')
   // Moved to lib/settings/read.ts so /v2's settings screen reads the same rows — see that header.
   const data = await readSettings(ws.tenantId)
   if (!data) redirect('/auth/signup')

@@ -31,7 +31,9 @@ export default function SetupPage() {
       const res = await fetch('/api/auth/create-tenant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ businessName, industry, userId: user.id, email: user.email }),
+        // No userId/email: the route reads both from the session. Sending them invited the reader to
+        // believe the server trusted them, which it did until recently.
+        body: JSON.stringify({ businessName, industry }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error)
