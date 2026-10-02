@@ -4,6 +4,8 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 import { OperatorBar } from '@/components/app/operator-bar'
 import { getActiveWorkspace, requireActiveBusinessContext } from '@/lib/workspace'
 import { getTenantEnabledModules } from '@/lib/tenant'
+import { createClient } from '@/lib/supabase/server'
+import { v2Allowed } from '@/lib/v2/access'
 
 /**
  * The Scalix authenticated shell — the continuation of the /auth world inside the app.
@@ -32,6 +34,10 @@ export async function AppShell({ children, mainClassName }: { children: ReactNod
   // requireActiveBusinessContext is the same call every gated route makes, so the rail and the routes
   // cannot disagree: there is one capability object and the server computes it once.
   const ctx = await requireActiveBusinessContext()
+  // Invoices exists only under /v2, which lib/v2/access.ts gates per tenant. Same test as the /v2
+  // layout, so the rail never offers a row that would bounce straight back to /dashboard.
+  const { data: { user } } = await (await createClient()).auth.getUser()
+  const v2Invoices = v2Allowed(ws.tenantId, user?.email)
   return (
     <>
       {/* print:hidden throughout — printable pages (estimates, quotes, order documents) must come out as
@@ -54,7 +60,7 @@ export async function AppShell({ children, mainClassName }: { children: ReactNod
         </div>
 
         <div className="print:hidden">
-          <Sidebar operator={operator} whiteLabel={whiteLabel} operatorBusinessName={ws.businessName ?? null} operatorModules={operatorModules} capabilities={ctx?.capabilities ?? null} />
+          <Sidebar operator={operator} whiteLabel={whiteLabel} operatorBusinessName={ws.businessName ?? null} operatorModules={operatorModules} capabilities={ctx?.capabilities ?? null} v2Invoices={v2Invoices} />
         </div>
 
         {/* min-w-0: a flex child defaults to min-width:auto and would expand to its content's

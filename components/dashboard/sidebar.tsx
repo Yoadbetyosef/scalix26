@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Ship,
   UserCog,
+  Receipt,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -39,6 +40,9 @@ const navItems = [
   { href: '/appointments', icon: Calendar, label: 'Appointments' },
   { href: '/contacts', icon: Users, label: 'Contacts' },
   { href: '/orders', icon: ClipboardList, label: 'Orders' },
+  // The customer-invoice screen exists only in /v2, so this row points there. Shown only when the
+  // tenant has `invoices` AND may enter /v2 (v2Invoices, resolved by AppShell) — see visibleNav.
+  { href: '/v2/invoices', icon: Receipt, label: 'Invoices' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
   // Beside Catalog, because that is what it fills. The page has existed since landed cost shipped and
   // was reachable only by typing the URL — so the tenant it was built for could upload a supplier
@@ -70,7 +74,7 @@ const navItems = [
 // A row that goes nowhere is honest. A row pointed at an approximate page is not.
 const SECTIONS: { id: string; label: string; items: string[] }[] = [
   { id: 'g1', label: 'Rudi', items: ['Inbox', 'Appointments', 'Contacts', 'AI Employees', 'Knowledge', 'Test AI'] },
-  { id: 'g2', label: 'Business', items: ['Orders', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
+  { id: 'g2', label: 'Business', items: ['Orders', 'Invoices', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
   { id: 'g3', label: 'Account', items: ['Billing & Subscription', 'Settings', 'Team'] },
 ]
 // Dashboard is in none of the three, because it is not a destination among destinations — it is the
@@ -90,7 +94,7 @@ const INERT = new Map<string, typeof Calendar>([['Knowledge', BookLock]])
 // Subscription" is intentionally excluded (a client's plan is governed by the partner, never Scalix).
 const OPERATOR_SAFE_LABELS = new Set<string>(['Dashboard', 'Inbox', 'Contacts', 'Catalog', 'AI Employees', 'Test AI', 'Analytics', 'Reports', 'Settings'])
 
-export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules, capabilities = null }: {
+export function Sidebar({ operator = false, whiteLabel = false, operatorBusinessName = null, operatorModules, capabilities = null, v2Invoices = false }: {
   operator?: boolean
   // True across the whole White Label plane (partner operating a client OR a WL customer's own login):
   // hides Partner Program, Admin, and Scalix billing. `operator` additionally drives tenant resolution.
@@ -104,6 +108,8 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
    * probe), which falls back to the optimistic default below.
    */
   capabilities?: { canEditBilling: boolean; canEditSettings: boolean; canManageTeam: boolean } | null
+  /** May this session reach /v2 (lib/v2/access.ts)? Gates the Invoices row, whose only screen lives there. */
+  v2Invoices?: boolean
 } = {}) {
   const hidePartnerSurfaces = operator || whiteLabel
   const pathname = usePathname()
@@ -213,6 +219,7 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
     if (i.label === 'Billing & Subscription' && !caps.canEditBilling) return false
     if (i.label === 'Team' && !caps.canManageTeam) return false
     if (i.label === 'Settings' && !caps.canEditSettings) return false
+    if (i.label === 'Invoices' && (!v2Invoices || !enabledModules.includes('invoices'))) return false
     // Belt-and-suspenders: in impersonation mode keep the verified operator-safe allowlist.
     if (operator && !OPERATOR_SAFE_LABELS.has(i.label)) return false
     const m = moduleForNav(i.href)
