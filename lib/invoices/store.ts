@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext, getActiveTenantId } from '@/lib/workspace'
 import { enabledModulesOf } from '@/lib/modules'
 import { getCostSettings } from '@/lib/catalog/costs'
+import { isRug, salePrice, type PricingRule } from '@/lib/catalog/pricing'
 import { allocate, coverage, type Charges } from './allocate'
 import { clearsGates, describe as describeDivergence, divergenceSentence, projectCost, type Divergence } from './divergence'
 import { matchInvoiceLines, suggestProducts } from './match'
@@ -928,7 +929,46 @@ export async function applyShipment(
       : null,
   })
   if (error) return { ok: false, reason: 'not_found', error: error.message }
+  await priceShipmentProducts(g.tenantId, shipmentId)
   return getShipment(shipmentId)
+}
+
+/**
+ * Reprice every product this shipment carried, from its invoice price — see lib/catalog/pricing.ts.
+ *
+ * Runs AFTER the cost write, from what the RPC stored, so the price is always a multiple of the
+ * cost_primary actually on the row. A tenant with no multiplier (or a database without the column yet)
+ * is left alone. The studio page shows its own copy of the price, so linked studio products follow.
+ */
+async function priceShipmentProducts(tenantId: string, shipmentId: string): Promise<void> {
+  const db = createAdminClient()
+  const { data: t, error: te } = await db.from('tenants')
+    .select('price_multiplier, rug_price_multiplier').eq('id', tenantId).maybeSingle()
+  if (te || !t) return
+  const num = (v: unknown) => (v === null || v === undefined ? null : Number(v))
+  const rule: PricingRule = { multiplier: num(t.price_multiplier), rugMultiplier: num(t.rug_price_multiplier) }
+  if (rule.multiplier === null && rule.rugMultiplier === null) return
+
+  const { data: inv } = await db.from('supplier_invoices').select('id').eq('shipment_id', shipmentId).eq('tenant_id', tenantId).maybeSingle()
+  if (!inv) return
+  const { data: lines } = await db.from('supplier_invoice_lines')
+    .select('product_id').eq('tenant_id', tenantId).eq('invoice_id', (inv as { id: string }).id).eq('status', 'matched')
+  const productIds = [...new Set(((lines as Array<{ product_id: string | null }> | null) ?? []).map((l) => l.product_id).filter((x): x is string => !!x))]
+  if (!productIds.length) return
+
+  const [{ data: costs }, { data: products }] = await Promise.all([
+    db.from('product_costs').select('product_id, cost_primary').eq('tenant_id', tenantId).is('variant_id', null).in('product_id', productIds),
+    db.from('catalog_products').select('id, name, category').eq('tenant_id', tenantId).in('id', productIds),
+  ])
+  const costOf = new Map(((costs as Array<Record<string, unknown>> | null) ?? []).map((c) => [c.product_id as string, num(c.cost_primary)]))
+
+  for (const p of (products as Array<{ id: string; name: string | null; category: string | null }> | null) ?? []) {
+    const price = salePrice(costOf.get(p.id) ?? null, isRug(p), rule)
+    if (price === null) continue
+    const now = new Date().toISOString()
+    await db.from('catalog_products').update({ price, updated_at: now }).eq('id', p.id).eq('tenant_id', tenantId)
+    await db.from('studio_products').update({ base_price: price, updated_at: now }).eq('catalog_product_id', p.id).eq('tenant_id', tenantId)
+  }
 }
 
 /** Coverage for a set of lines — re-exported so routes and the UI never recompute it differently. */
