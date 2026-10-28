@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Sheet } from '../form-sheet'
 import { ContactPick, createContactFor, type PickedContact } from '../contact-pick'
@@ -34,12 +34,22 @@ import { Plus } from './glyphs'
 // The engine supports both per line. Tax is jurisdictional, and a free-text cents box invites somebody
 // to type a number they computed wrong — better no field than that. It gets designed when a tenant who
 // actually charges tax is in front of us. Totals are identical for everyone else.
+//
+// ── PICK FROM THE CATALOG ───────────────────────────────────────────────────────────────────────
+//
+// The description field is also a type-ahead over the tenant's catalog (name or SKU). Picking a
+// product only FILLS the line — name, SKU and price — and every field stays editable, so a discount
+// or a custom piece is still just typing. Nothing links the line to the product: the document's
+// product_id points at studio_products, not catalog_products, and a wrong link is worse than none.
+// A tenant without the catalog module gets a 403 and simply no suggestions.
 
 interface Line { id: number; description: string; quantity: string; unitPrice: string }
 
 const blank = (id: number): Line => ({ id, description: '', quantity: '1', unitPrice: '' })
 const cents = (v: string) => Math.round((Number(String(v).replace(/[^0-9.]/g, '')) || 0) * 100)
 const qty = (v: string) => Number(String(v).replace(/[^0-9.]/g, '')) || 0
+interface CatalogHit { id: string; name: string; sku: string | null; price: number | null }
+
 const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export function NewInvoice() {
@@ -54,6 +64,38 @@ export function NewInvoice() {
   const [phone, setPhone] = useState('')
   const [lines, setLines] = useState<Line[]>([blank(1)])
   const [nextId, setNextId] = useState(2)
+  const [catalog, setCatalog] = useState<CatalogHit[]>([])
+  const [focusLine, setFocusLine] = useState<number | null>(null)
+
+  // Loaded once per opening. The catalog route already returns the whole tenant list for client-side
+  // search, and a few hundred rows is cheaper than a request per keystroke.
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    fetch('/api/catalog/products')
+      .then((r) => (r.ok ? r.json() : { products: [] }))
+      .then((j) => {
+        if (cancelled) return
+        type Row = CatalogHit & { archived_at: string | null; deleted_at: string | null }
+        setCatalog(((j.products ?? []) as Row[]).filter((p) => !p.archived_at && !p.deleted_at).map((p) => ({ id: p.id, name: p.name, sku: p.sku, price: p.price })))
+      })
+      .catch(() => { /* no suggestions; typing a line still works */ })
+    return () => { cancelled = true }
+  }, [open])
+
+  function hitsFor(text: string): CatalogHit[] {
+    const q = text.trim().toLowerCase()
+    if (!q) return []
+    return catalog.filter((p) => p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q)).slice(0, 6)
+  }
+  function pickProduct(lineId: number, p: CatalogHit) {
+    setLines(lines.map((x) => (x.id === lineId ? {
+      ...x,
+      description: p.sku ? `${p.name} (${p.sku})` : p.name,
+      unitPrice: p.price != null ? String(p.price) : x.unitPrice,
+    } : x)))
+    setFocusLine(null)
+  }
 
   /** Set only when the document was created and something after it was not. Closes nothing. */
   const [partial, setPartial] = useState<{ id: string; number: string; message: string } | null>(null)
@@ -69,7 +111,7 @@ export function NewInvoice() {
   const ready = (!!picked || !!name.trim() || !!email.trim() || !!phone.trim()) && usable.length > 0
 
   function reset() {
-    setPicked(null); setName(''); setEmail(''); setPhone(''); setLines([blank(1)]); setNextId(2)
+    setPicked(null); setName(''); setEmail(''); setPhone(''); setLines([blank(1)]); setNextId(2); setFocusLine(null)
     setErr(null); setPartial(null); setBusy(false)
   }
   function close() { setOpen(false); reset() }
@@ -207,11 +249,17 @@ export function NewInvoice() {
               )}
 
               <p className="v2-iv-fl">WHAT THEY ARE PAYING FOR</p>
-              {lines.map((l, i) => (
-                <div key={l.id} className="v2-in-line">
+              {lines.map((l, i) => {
+                const hits = focusLine === l.id ? hitsFor(l.description) : []
+                return (
+                <div key={l.id}>
+                <div className="v2-in-line">
                   <input
-                    className="v2-iv-fld" value={l.description} placeholder="Description"
-                    onChange={(e) => setLines(lines.map((x) => (x.id === l.id ? { ...x, description: e.target.value } : x)))}
+                    className="v2-iv-fld" value={l.description} placeholder={catalog.length ? 'Search the catalog or describe it' : 'Description'}
+                    onChange={(e) => { setFocusLine(l.id); setLines(lines.map((x) => (x.id === l.id ? { ...x, description: e.target.value } : x))) }}
+                    onFocus={() => setFocusLine(l.id)}
+                    // Delayed so a click on a suggestion lands before the list disappears.
+                    onBlur={() => setTimeout(() => setFocusLine((f) => (f === l.id ? null : f)), 150)}
                     disabled={busy} aria-label={`Line ${i + 1} description`}
                   />
                   <input
@@ -228,7 +276,19 @@ export function NewInvoice() {
                     <button type="button" className="v2-in-x" onClick={() => setLines(lines.filter((x) => x.id !== l.id))} disabled={busy} aria-label="Remove line">×</button>
                   )}
                 </div>
-              ))}
+                {hits.length > 0 && (
+                  <div className="v2-ap-hits" data-catalog>
+                    {hits.map((p) => (
+                      <button key={p.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickProduct(l.id, p)}>
+                        <b>{p.name}</b>
+                        <span>{[p.sku, p.price != null ? money(Math.round(p.price * 100)) : null].filter(Boolean).join(' · ')}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                </div>
+                )
+              })}
               <button type="button" className="v2-in-add" onClick={() => { setLines([...lines, blank(nextId)]); setNextId(nextId + 1) }} disabled={busy}>
                 + Add a line
               </button>

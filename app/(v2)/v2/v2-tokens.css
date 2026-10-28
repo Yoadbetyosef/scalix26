@@ -4640,3 +4640,6 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
   font-style: normal; font-family: var(--v2-mono); font-size: 9px;
   letter-spacing: 0.18em; text-transform: uppercase; color: var(--v2-ink-45);
 }
+
+/* Catalog suggestions under an invoice line: the line row has its own bottom margin, so no pull-up. */
+.v2 .v2-ap-hits[data-catalog] { margin: 0 0 9px; }
