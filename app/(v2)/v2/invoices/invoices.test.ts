@@ -480,3 +480,12 @@ describe('sending it to the person who owes the money', () => {
     expect(send).not.toMatch(/\/api\/contacts/)
   })
 })
+
+describe('the send sheet calls each route with its own method', () => {
+  const s = read('./[id]/send.tsx')
+  it('issue and send are POST, edits are PATCH', () => {
+    expect(s).toContain("call('POST', `/api/core/documents/invoice/${invoiceId}/send`")
+    expect(s).toContain("call('POST', `/api/core/documents/invoice/${invoiceId}/issue`")
+    expect(s).not.toMatch(/method: body === undefined/)
+  })
+})

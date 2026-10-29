@@ -75,15 +75,17 @@ export function SendInvoice({
     setOpen(false); setErr(null); setNotes(paper.notes ?? '')
   }
 
-  async function call(url: string, body?: unknown): Promise<string | null> {
+  // The method is explicit: the document route is PATCH, issue and send are POST. Inferring it from
+  // whether there is a body sent the send as PATCH and every send answered 405.
+  async function call(method: 'POST' | 'PATCH', url: string, body?: unknown): Promise<string | null> {
     try {
       const res = await fetch(url, {
-        method: body === undefined ? 'POST' : 'PATCH',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: body === undefined ? undefined : JSON.stringify(body),
       })
       const j = await res.json().catch(() => ({}))
-      return !res.ok || j.ok === false ? (j.error || 'That did not work.') : null
+      return !res.ok || j.ok === false ? (j.error || `That did not work (error ${res.status}).`) : null
     } catch {
       return 'Check your connection.'
     }
@@ -94,7 +96,7 @@ export function SendInvoice({
   async function toggleTax() {
     if (taxBusy || !isDraft) return
     setTaxBusy(true); setErr(null)
-    const e = await call(`/api/core/documents/invoice/${invoiceId}`, { taxable: !taxOn })
+    const e = await call('PATCH', `/api/core/documents/invoice/${invoiceId}`, { taxable: !taxOn })
     if (e) setErr(e)
     router.refresh()
     setTaxBusy(false)
@@ -105,15 +107,15 @@ export function SendInvoice({
     setBusy(true); setErr(null)
     if (isDraft) {
       if (notes.trim() !== (paper.notes ?? '').trim()) {
-        const e = await call(`/api/core/documents/invoice/${invoiceId}`, { notes: notes.trim() || null })
+        const e = await call('PATCH', `/api/core/documents/invoice/${invoiceId}`, { notes: notes.trim() || null })
         if (e) { setErr(`The comments did not save: ${e}`); setBusy(false); return }
       }
-      const e = await call(`/api/core/documents/invoice/${invoiceId}/issue`)
+      const e = await call('POST', `/api/core/documents/invoice/${invoiceId}/issue`)
       if (e) { setErr(e); setBusy(false); router.refresh(); return }
     }
     // The route's sentence, verbatim — it already knows whether the provider refused it, and the
     // difference between "sent" and "we tried to send" is the whole reason it answers in words.
-    const e = await call(`/api/core/documents/invoice/${invoiceId}/send`, { channel, to: to.trim() })
+    const e = await call('POST', `/api/core/documents/invoice/${invoiceId}/send`, { channel, to: to.trim() })
     setBusy(false)
     if (e) {
       // Issued but not sent is a real state, and the one the owner must not miss.
@@ -177,7 +179,7 @@ export function SendInvoice({
           {/* An address typed here is used for THIS send and is not written back to the contact. A
               one-off copy to a bookkeeper must not silently become the customer's address. */}
           <p className="v2-iv-leftover">
-            They get a {channel === 'sms' ? 'text' : 'email'} with a link to this page.
+            They get {channel === 'sms' ? 'a text' : 'an email'} with a link to this page.
             {isDraft ? ' Sending issues it: the total and the date are fixed from then on.' : ' Sending it again does not change the number or the total.'}
           </p>
 
