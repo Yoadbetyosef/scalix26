@@ -250,7 +250,7 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
 
   const [{ data: lines }, { data: allocs }, { data: hist }, { data: contact }] = await Promise.all([
     db.from('sales_document_lines')
-      .select('id, description, quantity, unit_price_cents, line_total_cents')
+      .select('id, description, quantity, unit_price_cents, line_total_cents, tax_cents')
       .eq('tenant_id', tenantId).eq('document_type', 'invoice').eq('document_id', id).order('sort_order'),
     db.from('payment_allocations')
       .select('id, method, kind, amount_cents, created_at, provider_ref, note')
@@ -304,7 +304,9 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
       description: (l.description as string) || 'Item',
       quantity: Number(l.quantity ?? 1),
       unitPriceCents: Number(l.unit_price_cents ?? 0),
-      lineTotalCents: Number(l.line_total_cents ?? 0),
+      // BEFORE TAX. Tax is shown once, as its own row under the subtotal — adding it into every line
+      // as well made the amounts disagree with qty × rate and with the subtotal under them.
+      lineTotalCents: Number(l.line_total_cents ?? 0) - Number(l.tax_cents ?? 0),
     })),
     payments: ((allocs ?? []) as Record<string, unknown>[]).map((a) => ({
       id: a.id as string,
@@ -359,6 +361,9 @@ export interface PublicInvoice {
   /** The snapshot taken at issue — where the money was meant to go on the day they got this. */
   paymentInstructions: string | null
   customerName: string | null
+  customerEmail: string | null
+  customerPhone: string | null
+  logoUrl: string | null
   business: {
     name: string | null; email: string | null; phone: string | null
     address: string | null; city: string | null; state: string | null; zip: string | null
@@ -397,16 +402,18 @@ const PAPER_COLS = 'id, tenant_id, number, status, currency, subtotal_cents, dis
 
 async function paperFor(inv: Record<string, unknown>): Promise<PublicInvoice> {
   const db = createAdminClient()
-  const [{ data: lines }, { data: allocs }, { data: tenant }, { data: contact }] = await Promise.all([
+  const [{ data: lines }, { data: allocs }, { data: tenant }, { data: contact }, { data: brand }] = await Promise.all([
     db.from('sales_document_lines')
-      .select('id, description, quantity, unit_price_cents, line_total_cents')
+      .select('id, description, quantity, unit_price_cents, line_total_cents, tax_cents')
       .eq('document_type', 'invoice').eq('document_id', inv.id as string).order('sort_order'),
     db.from('payment_allocations')
       .select('amount_cents').eq('document_type', 'invoice').eq('document_id', inv.id as string),
     db.from('tenants').select('business_name, email, phone, address, city, state, zip').eq('id', inv.tenant_id as string).maybeSingle(),
     inv.contact_id
-      ? db.from('contacts').select('name').eq('id', inv.contact_id as string).maybeSingle()
+      ? db.from('contacts').select('name, email, phone').eq('id', inv.contact_id as string).maybeSingle()
       : Promise.resolve({ data: null }),
+    // The logo the business already set for its documents (Studio → document settings).
+    db.from('studio_doc_settings').select('logo_url').eq('tenant_id', inv.tenant_id as string).maybeSingle(),
   ])
 
   const total = Number(inv.total_cents ?? 0)
@@ -423,7 +430,9 @@ async function paperFor(inv: Record<string, unknown>): Promise<PublicInvoice> {
       description: (l.description as string) || 'Item',
       quantity: Number(l.quantity ?? 1),
       unitPriceCents: Number(l.unit_price_cents ?? 0),
-      lineTotalCents: Number(l.line_total_cents ?? 0),
+      // BEFORE TAX. Tax is shown once, as its own row under the subtotal — adding it into every line
+      // as well made the amounts disagree with qty × rate and with the subtotal under them.
+      lineTotalCents: Number(l.line_total_cents ?? 0) - Number(l.tax_cents ?? 0),
     })),
     subtotalCents: Number(inv.subtotal_cents ?? 0),
     discountCents: Number(inv.discount_cents ?? 0),
@@ -436,6 +445,9 @@ async function paperFor(inv: Record<string, unknown>): Promise<PublicInvoice> {
     notes: (inv.notes as string) ?? null,
     paymentInstructions: (inv.payment_instructions as string) ?? null,
     customerName: ((contact as { name?: string | null } | null)?.name) ?? null,
+    customerEmail: ((contact as { email?: string | null } | null)?.email) ?? null,
+    customerPhone: ((contact as { phone?: string | null } | null)?.phone) ?? null,
+    logoUrl: ((brand as { logo_url?: string | null } | null)?.logo_url) ?? null,
     business: {
       name: t.business_name ?? null, email: t.email ?? null, phone: t.phone ?? null,
       address: t.address ?? null, city: t.city ?? null, state: t.state ?? null, zip: t.zip ?? null,

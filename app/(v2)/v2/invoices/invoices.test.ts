@@ -438,11 +438,11 @@ describe('sending it to the person who owes the money', () => {
     expect(route).toContain('from_status: inv.status, to_status: inv.status')
   })
 
-  it('the payment instructions are ABOVE the lines on the customer’s page', () => {
-    // On their screen it is the instruction, not reference material — and an instruction comes before
-    // the detail it applies to.
+  it('the payment instructions are on the customer’s page, at reading weight', () => {
+    // Accounting layout (QuickBooks-style): the balance due is up top, how to pay sits under the totals.
     const p = strip(pub)
-    expect(p.indexOf('How to pay')).toBeLessThan(p.indexOf('<tbody'))
+    expect(p.indexOf('Balance due')).toBeLessThan(p.indexOf('<tbody'))
+    expect(p.indexOf('How to pay')).toBeGreaterThan(p.indexOf('<tbody'))
     expect(pub).toContain('text-[15px] leading-relaxed text-neutral-800')
     expect(pub).toContain('whitespace-pre-line')
   })
