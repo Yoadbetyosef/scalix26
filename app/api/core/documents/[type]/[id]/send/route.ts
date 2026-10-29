@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
 
   const db = createAdminClient()
   const { data: inv } = await db.from('invoices')
-    .select('id, number, status, total_cents, currency, token, contact_id, due_on')
+    .select('id, number, status, total_cents, currency, token, contact_id, due_on, notes')
     .eq('tenant_id', c.tenantId).eq('id', id).maybeSingle()
   if (!inv) return NextResponse.json({ error: 'That invoice no longer exists.' }, { status: 404 })
   if (inv.status === 'draft') {
@@ -89,6 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
       const html = `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:auto">
         <p>Hi${who?.name ? ' ' + who.name : ''},</p>
         <p>Here is invoice <strong>${inv.number}</strong> from ${biz} for <strong>${total}</strong>${due ? `, due ${due}` : ''}.</p>
+        ${inv.notes ? `<p style="white-space:pre-wrap;border-left:3px solid #ddd;padding-left:12px;color:#333">${escapeHtml(inv.notes as string)}</p>` : ''}
         <p><a href="${link}" style="display:inline-block;background:#111;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">View invoice</a></p>
         <p style="color:#666;font-size:13px">Or open: ${link}</p>
       </div>`
@@ -116,4 +117,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
   })
 
   return NextResponse.json({ ok: true, channel, to, sentAt: at, link })
+}
+
+// The comments are the owner's free text and go into HTML; nothing they type may become markup.
+function escapeHtml(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }

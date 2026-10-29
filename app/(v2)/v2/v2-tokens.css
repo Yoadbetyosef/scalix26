@@ -3296,6 +3296,21 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 }
 .v2 .v2-iv-save:disabled { opacity: 0.5; cursor: default; }
 
+/* THE CUSTOMER'S COPY, inside the Send sheet. A sheet of paper on the sheet — bordered and white so it
+   reads as the thing that leaves, not as more of the form. Its own typography is the public page's. */
+.v2 .v2-iv-preview {
+  border: 1px solid var(--v2-line); border-radius: 14px; background: #fff; overflow: hidden;
+  max-height: 46vh; overflow-y: auto; margin-top: 4px;
+}
+.v2 .v2-iv-preview > div { padding: 22px 20px; }
+.v2 .v2-in-total[data-sub] { margin-top: 4px; font-size: 13px; color: var(--v2-ink-42); font-weight: 400; padding-top: 2px; padding-bottom: 2px; border: 0; }
+.v2 .v2-iv-tax {
+  display: flex; align-items: center; gap: 9px; margin: 2px 0 14px; font-size: 14px; color: var(--v2-ink);
+  cursor: pointer;
+}
+.v2 .v2-iv-tax input { width: 17px; height: 17px; accent-color: var(--v2-ink); }
+.v2 .v2-iv-tax em { font-style: normal; font-size: 12px; color: var(--v2-ink-42); }
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════
    INVOICES, WIDE. The same DOM: the slot's sentence moves beside the button instead of under it, and
    the row gains room for the state to be a word rather than only a colour. */
@@ -4643,3 +4658,48 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 
 /* Catalog suggestions under an invoice line: the line row has its own bottom margin, so no pull-up. */
 .v2 .v2-ap-hits[data-catalog] { margin: 0 0 9px; }
+
+/* ── Choosing invoice lines from the catalog (invoices/catalog-browse.tsx) ─────────────────────── */
+.v2 .v2-ap-hits[data-catalog] button { align-items: center; }
+.v2 .v2-ap-hits[data-catalog] img,
+.v2 .v2-ap-hits[data-catalog] i { width: 30px; height: 30px; flex: none; border-radius: 6px; object-fit: cover; background: var(--v2-quiet); }
+.v2 .v2-cb-open {
+  display: flex; justify-content: space-between; align-items: center; width: 100%; margin: 0 0 10px;
+  padding: 11px 13px; border: 1px solid var(--v2-line); border-radius: 11px; background: var(--v2-quiet);
+  font-size: 14px; font-weight: 500; font-family: inherit; color: var(--v2-ink); cursor: pointer;
+}
+.v2 .v2-cb-open span { font-size: 12px; font-weight: 400; color: var(--v2-ink-42); }
+.v2 .v2-cb-open:hover:not(:disabled) { border-color: var(--v2-violet); }
+.v2 .v2-cb-cats { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: -2px 0 12px; }
+.v2 .v2-cb-cats button {
+  flex: none; padding: 6px 11px; border-radius: 99px; border: 1px solid var(--v2-line); background: none;
+  font-size: 12.5px; font-family: inherit; color: var(--v2-ink-70); cursor: pointer; white-space: nowrap;
+}
+.v2 .v2-cb-cats button[data-on] { background: var(--v2-ink); border-color: var(--v2-ink); color: #fff; }
+.v2 .v2-cb-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 560px) { .v2 .v2-cb-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 720px) { .v2 .v2-cb-grid { grid-template-columns: repeat(4, 1fr); } }
+.v2 .v2-cb-card {
+  display: flex; flex-direction: column; gap: 3px; padding: 0 0 8px; border: 1.5px solid var(--v2-line);
+  border-radius: 12px; background: var(--v2-paper); overflow: hidden; cursor: pointer; text-align: left; font-family: inherit;
+}
+.v2 .v2-cb-card[data-on] { border-color: var(--v2-violet); box-shadow: 0 0 0 2px color-mix(in srgb, var(--v2-violet) 25%, transparent); }
+.v2 .v2-cb-img { position: relative; display: block; aspect-ratio: 1; background: var(--v2-quiet); margin-bottom: 4px; }
+.v2 .v2-cb-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.v2 .v2-cb-img i {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-style: normal; font-size: 26px; color: var(--v2-ink-45);
+}
+.v2 .v2-cb-img em {
+  position: absolute; top: 7px; right: 7px; width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 13px;
+  background: var(--v2-violet); color: #fff;
+}
+.v2 .v2-cb-card b {
+  padding: 0 9px; font-size: 13px; font-weight: 500; color: var(--v2-ink); line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.v2 .v2-cb-meta { padding: 0 9px; font-size: 11.5px; color: var(--v2-ink-42); }
+/* The add button stays reachable however far the grid scrolls. */
+.v2 .v2-cb-acts { position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom)); background: var(--v2-paper); padding: 12px 0 4px; margin-bottom: -4px; }
+@media (min-width: 720px) { .v2 .v2-cb-acts { bottom: -24px; } }

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Sheet } from '../form-sheet'
 import { ContactPick, createContactFor, type PickedContact } from '../contact-pick'
 import { Plus } from './glyphs'
+import { CatalogBrowse, matches, type CatalogHit } from './catalog-browse'
+import { lineTaxCents } from '@/lib/core/sales-tax'
 
 // A NEW INVOICE.
 //
@@ -29,15 +31,22 @@ import { Plus } from './glyphs'
 //      the HISTORY block on the detail screen shows it. An owner who closed the sheet, went to lunch
 //      and came back still finds out.
 //
-// ── NO DISCOUNT OR TAX FIELD ────────────────────────────────────────────────────────────────────
+// ── SALES TAX IS A TOGGLE, NOT A NUMBER ─────────────────────────────────────────────────────────
 //
-// The engine supports both per line. Tax is jurisdictional, and a free-text cents box invites somebody
-// to type a number they computed wrong — better no field than that. It gets designed when a tenant who
-// actually charges tax is in front of us. Totals are identical for everyone else.
+// Offered only when the business's state has a known rate (lib/core/sales-tax.ts — NJ 6.625%). The
+// form sends `taxable` and the SERVER computes each line's tax at that rate; a free-text cents box
+// invites somebody to type a number they computed wrong. On by default where there is a rate, because
+// a seller in a taxing state who forgets it pays it themselves. No discount field — still per-line in
+// the engine, not designed here.
+//
+// ── COMMENTS ────────────────────────────────────────────────────────────────────────────────────
+//
+// Free text, printed on the customer's copy under the lines. Editable in the Send sheet until issue.
 //
 // ── PICK FROM THE CATALOG ───────────────────────────────────────────────────────────────────────
 //
-// The description field is also a type-ahead over the tenant's catalog (name or SKU). Picking a
+// "Choose from the catalog" opens the whole catalog as pictures (catalog-browse.tsx) and adds every
+// piece tapped. The description field is also a type-ahead (name, SKU or category). Picking a
 // product only FILLS the line — name, SKU and price — and every field stays editable, so a discount
 // or a custom piece is still just typing. Nothing links the line to the product: the document's
 // product_id points at studio_products, not catalog_products, and a wrong link is worse than none.
@@ -48,11 +57,9 @@ interface Line { id: number; description: string; quantity: string; unitPrice: s
 const blank = (id: number): Line => ({ id, description: '', quantity: '1', unitPrice: '' })
 const cents = (v: string) => Math.round((Number(String(v).replace(/[^0-9.]/g, '')) || 0) * 100)
 const qty = (v: string) => Number(String(v).replace(/[^0-9.]/g, '')) || 0
-interface CatalogHit { id: string; name: string; sku: string | null; price: number | null }
-
 const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-export function NewInvoice() {
+export function NewInvoice({ tax }: { tax: { rate: number; label: string } | null }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -66,6 +73,10 @@ export function NewInvoice() {
   const [nextId, setNextId] = useState(2)
   const [catalog, setCatalog] = useState<CatalogHit[]>([])
   const [focusLine, setFocusLine] = useState<number | null>(null)
+  const [catalogLoaded, setCatalogLoaded] = useState(false)
+  const [browsing, setBrowsing] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [taxable, setTaxable] = useState(!!tax)
 
   // Loaded once per opening. The catalog route already returns the whole tenant list for client-side
   // search, and a few hundred rows is cheaper than a request per keystroke.
@@ -77,23 +88,35 @@ export function NewInvoice() {
       .then((j) => {
         if (cancelled) return
         type Row = CatalogHit & { archived_at: string | null; deleted_at: string | null }
-        setCatalog(((j.products ?? []) as Row[]).filter((p) => !p.archived_at && !p.deleted_at).map((p) => ({ id: p.id, name: p.name, sku: p.sku, price: p.price })))
+        setCatalog(((j.products ?? []) as Row[]).filter((p) => !p.archived_at && !p.deleted_at).map((p) => ({
+          id: p.id, name: p.name, sku: p.sku, price: p.price, category: p.category, image_url: p.image_url,
+        })))
+        setCatalogLoaded(true)
       })
-      .catch(() => { /* no suggestions; typing a line still works */ })
+      .catch(() => { setCatalogLoaded(true) /* no suggestions; typing a line still works */ })
     return () => { cancelled = true }
   }, [open])
 
   function hitsFor(text: string): CatalogHit[] {
     const q = text.trim().toLowerCase()
     if (!q) return []
-    return catalog.filter((p) => p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q)).slice(0, 6)
+    return catalog.filter((p) => matches(p, q)).slice(0, 6)
+  }
+  const lineFor = (id: number, p: CatalogHit): Line => ({
+    id, quantity: '1',
+    description: p.sku ? `${p.name} (${p.sku})` : p.name,
+    unitPrice: p.price != null ? String(p.price) : '',
+  })
+  // Untouched blank lines are filled first, so the one empty row the form opens with is not left behind.
+  function addFromCatalog(picked: CatalogHit[]) {
+    let id = nextId
+    const queue = [...picked]
+    const next = lines.map((l) => (!l.description.trim() && !l.unitPrice.trim() && queue.length ? lineFor(l.id, queue.shift()!) : l))
+    for (const p of queue) next.push(lineFor(id++, p))
+    setLines(next); setNextId(id); setBrowsing(false)
   }
   function pickProduct(lineId: number, p: CatalogHit) {
-    setLines(lines.map((x) => (x.id === lineId ? {
-      ...x,
-      description: p.sku ? `${p.name} (${p.sku})` : p.name,
-      unitPrice: p.price != null ? String(p.price) : x.unitPrice,
-    } : x)))
+    setLines(lines.map((x) => (x.id === lineId ? { ...lineFor(x.id, p), quantity: x.quantity, unitPrice: p.price != null ? String(p.price) : x.unitPrice } : x)))
     setFocusLine(null)
   }
 
@@ -102,7 +125,11 @@ export function NewInvoice() {
 
   // Shown while typing, never sent. createDocument recomputes the header from the lines it stored,
   // so the only total that exists is the one the server derived.
-  const preview = lines.reduce((s, l) => s + Math.round(qty(l.quantity) * cents(l.unitPrice)), 0)
+  const subtotal = lines.reduce((s, l) => s + Math.round(qty(l.quantity) * cents(l.unitPrice)), 0)
+  const taxPreview = tax && taxable
+    ? lines.reduce((s, l) => s + lineTaxCents({ quantity: qty(l.quantity), unit_price_cents: cents(l.unitPrice) }, tax.rate), 0)
+    : 0
+  const preview = subtotal + taxPreview
   const usable = lines.filter((l) => l.description.trim() && cents(l.unitPrice) > 0 && qty(l.quantity) > 0)
   // ONE OF THE THREE, which is exactly what createContact requires — it refuses only when all three
   // are empty. Phone is NOT required: an invoice usually goes by email, and demanding a number would
@@ -111,10 +138,12 @@ export function NewInvoice() {
   const ready = (!!picked || !!name.trim() || !!email.trim() || !!phone.trim()) && usable.length > 0
 
   function reset() {
-    setPicked(null); setName(''); setEmail(''); setPhone(''); setLines([blank(1)]); setNextId(2); setFocusLine(null)
+    setPicked(null); setName(''); setEmail(''); setPhone(''); setLines([blank(1)]); setNextId(2); setFocusLine(null); setBrowsing(false)
+    setNotes(''); setTaxable(!!tax)
     setErr(null); setPartial(null); setBusy(false)
   }
-  function close() { setOpen(false); reset() }
+  // Escape or the veil while browsing the catalog steps back to the form instead of dropping the invoice.
+  function close() { if (browsing) { setBrowsing(false); return } setOpen(false); reset() }
 
   async function save() {
     if (busy || !ready) return
@@ -146,7 +175,7 @@ export function NewInvoice() {
       const res = await fetch('/api/core/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'invoice', contactId }),
+        body: JSON.stringify({ type: 'invoice', contactId, notes: notes.trim() || null }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || !j.ok) { setErr(j.error || 'The invoice could not be created.'); setBusy(false); return }
@@ -170,6 +199,7 @@ export function NewInvoice() {
             description: l.description.trim(),
             quantity: qty(l.quantity),
             unit_price_cents: cents(l.unitPrice),
+            taxable: !!tax && taxable,
           }),
         })
         const j = await res.json().catch(() => ({}))
@@ -209,7 +239,9 @@ export function NewInvoice() {
 
       {open && (
         <Sheet title={partial ? 'Something did not save' : 'New invoice'} wide busy={busy} onClose={partial ? () => {} : close}>
-          {partial ? (
+          {browsing && !partial ? (
+            <CatalogBrowse catalog={catalog} loaded={catalogLoaded} onAdd={addFromCatalog} onCancel={() => setBrowsing(false)} />
+          ) : partial ? (
             // A REPORT, not a toast. There is no veil dismissal and no Cancel — the only ways out are
             // opening the draft or acknowledging it, both of which require having read it.
             <>
@@ -249,6 +281,11 @@ export function NewInvoice() {
               )}
 
               <p className="v2-iv-fl">WHAT THEY ARE PAYING FOR</p>
+              {catalog.length > 0 && (
+                <button type="button" className="v2-cb-open" onClick={() => setBrowsing(true)} disabled={busy}>
+                  Choose from the catalog <span>{catalog.length} products</span>
+                </button>
+              )}
               {lines.map((l, i) => {
                 const hits = focusLine === l.id ? hitsFor(l.description) : []
                 return (
@@ -280,6 +317,8 @@ export function NewInvoice() {
                   <div className="v2-ap-hits" data-catalog>
                     {hits.map((p) => (
                       <button key={p.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pickProduct(l.id, p)}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {p.image_url ? <img src={p.image_url} alt="" /> : <i />}
                         <b>{p.name}</b>
                         <span>{[p.sku, p.price != null ? money(Math.round(p.price * 100)) : null].filter(Boolean).join(' · ')}</span>
                       </button>
@@ -295,14 +334,32 @@ export function NewInvoice() {
 
               {/* Shown, never sent. The server recomputes the header from the lines it stored, so this
                   is a preview of the arithmetic and not the source of it. */}
+              {tax && (
+                <label className="v2-iv-tax">
+                  <input type="checkbox" checked={taxable} onChange={(e) => setTaxable(e.target.checked)} disabled={busy} />
+                  <span>Add {tax.label}</span>
+                </label>
+              )}
+              {taxPreview > 0 && (
+                <>
+                  <div className="v2-in-total" data-sub><span>Subtotal</span><span>{money(subtotal)}</span></div>
+                  <div className="v2-in-total" data-sub><span>{tax!.label}</span><span>{money(taxPreview)}</span></div>
+                </>
+              )}
               <div className="v2-in-total">
                 <span>Total</span>
                 <span>{money(preview)}</span>
               </div>
 
+              <label className="v2-efield">
+                <span>Comments on the invoice</span>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} disabled={busy}
+                  placeholder="Delivery date, terms, a thank-you — printed on the customer's copy" />
+              </label>
+
               {err && <p className="v2-emsg" data-bad>{err}</p>}
 
-              <p className="v2-ehint">It saves as a draft. Nothing goes to the customer until you issue it.</p>
+              <p className="v2-ehint">It saves as a draft. Nothing goes to the customer until you press Send — and you see their copy first.</p>
 
               <div className="v2-eacts">
                 <button type="button" className="v2-esec" onClick={close} disabled={busy}>Cancel</button>

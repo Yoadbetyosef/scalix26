@@ -250,7 +250,7 @@ describe('creating an invoice', () => {
   })
 
   it('the total is a preview and is never sent', () => {
-    expect(nw).toContain('const preview = lines.reduce(')
+    expect(nw).toContain('const subtotal = lines.reduce(')
     const body = nw.slice(nw.indexOf("fetch('/api/core/documents'"), nw.indexOf('// 3 ──'))
     expect(body).not.toMatch(/total|subtotal/)
     // The line payload carries quantity and unit price only; the server derives everything else.
@@ -391,7 +391,9 @@ describe('one icon map, not two', () => {
 describe('sending it to the person who owes the money', () => {
   const route = read('../../../api/core/documents/[type]/[id]/send/route.ts')
   const send = read('./[id]/send.tsx')
-  const pub = read('../../../i/[token]/page.tsx')
+  // The customer's page renders the shared paper; the paper is what the customer actually reads.
+  const pub = read('../../../../components/invoices/invoice-paper.tsx')
+  const page = read('../../../i/[token]/page.tsx')
   const middleware = read('../../../../lib/supabase/middleware.ts')
 
   it('a draft is refused, and told why', () => {
@@ -407,7 +409,7 @@ describe('sending it to the person who owes the money', () => {
     // A reader learning that a draft EXISTS learns something about a document they were not given.
     const reader = lib.slice(lib.indexOf('export async function readPublicInvoice'))
     expect(reader).not.toMatch(/status:\s*'draft'|isDraft/)
-    expect(strip(pub)).toContain('if (!inv) notFound()')
+    expect(strip(page)).toContain('if (!inv) notFound()')
   })
 
   it('/i/ is its own public path — /d/ is not touched', () => {
@@ -447,8 +449,8 @@ describe('sending it to the person who owes the money', () => {
 
   it('and the printed page carries the tenant’s name, not ours', () => {
     // Chrome prints document.title at the top of every printed page.
-    expect(pub).toContain('title: [inv.business.name')
-    expect(pub).toContain('<PrintButton />')
+    expect(page).toContain('title: [inv.business.name')
+    expect(page).toContain('<PrintButton />')
   })
 
   it('the list and the detail say whether it actually went out', () => {
@@ -474,7 +476,7 @@ describe('sending it to the person who owes the money', () => {
 
   it('a one-off address is used for this send only', () => {
     // A copy to a bookkeeper must not silently become the customer's address.
-    expect(send).toContain('body: JSON.stringify({ channel, to: to.trim() })')
+    expect(send).toContain('/send`, { channel, to: to.trim() })')
     expect(send).not.toMatch(/\/api\/contacts/)
   })
 })

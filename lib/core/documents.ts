@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { lineTotalCents, documentTotals, type LineAmounts } from './money'
 import { readInvoiceSettings } from './invoice-settings'
+import { salesTaxFor, lineTaxCents } from './sales-tax'
 
 // Sales-document repository (estimates/quotes/invoices). Totals are recomputed server-side from lines on
 // every mutation (client never sets totals). Status changes are recorded in document_status_history.
@@ -46,6 +47,46 @@ async function recomputeTotals(tenantId: string, type: DocType, documentId: stri
   const { data } = await admin().from('sales_document_lines').select('quantity, unit_price_cents, discount_cents, tax_cents').eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId)
   const totals = documentTotals((data ?? []) as LineAmounts[])
   await admin().from(TABLE[type]).update({ ...totals, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', documentId)
+}
+
+/** The tenant's sales-tax rate, from its state. Null when the state has no known rate. */
+export async function tenantSalesTax(tenantId: string) {
+  const { data } = await admin().from('tenants').select('state').eq('id', tenantId).maybeSingle()
+  return salesTaxFor((data?.state as string) ?? null)
+}
+
+// ── WHILE IT IS STILL A DRAFT ────────────────────────────────────────────────────────────────────
+//
+// Comments and sales tax can change until the document is issued, and not after: the customer's copy
+// is frozen at issue, and comments printed on it are part of what they were given. Both writes are
+// guarded on status in the WHERE clause, so a race with Issue loses rather than editing a frozen copy.
+export async function setDraftNotes(tenantId: string, type: DocType, documentId: string, notes: string | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data, error } = await admin().from(TABLE[type])
+    .update({ notes: notes?.trim() || null, updated_at: new Date().toISOString() })
+    .eq('tenant_id', tenantId).eq('id', documentId).eq('status', 'draft').select('id').maybeSingle()
+  if (error) return { ok: false, error: error.message }
+  return data ? { ok: true } : { ok: false, error: 'document_not_draft' }
+}
+
+/** Sales tax on every line at the tenant's rate, or off. The header is recomputed from the lines. */
+export async function setDraftTax(tenantId: string, type: DocType, documentId: string, taxable: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: head } = await admin().from(TABLE[type]).select('status').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle()
+  if (!head) return { ok: false, error: 'not_found' }
+  if (head.status !== 'draft') return { ok: false, error: 'document_not_draft' }
+  const tax = taxable ? await tenantSalesTax(tenantId) : null
+  if (taxable && !tax) return { ok: false, error: 'no_tax_rate' }
+  const { data: lines } = await admin().from('sales_document_lines').select('id, quantity, unit_price_cents, discount_cents')
+    .eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId)
+  for (const l of (lines ?? []) as { id: string; quantity: number; unit_price_cents: number; discount_cents: number | null }[]) {
+    const amounts = { quantity: Number(l.quantity), unit_price_cents: Number(l.unit_price_cents), discount_cents: Number(l.discount_cents ?? 0) }
+    const tax_cents = tax ? lineTaxCents(amounts, tax.rate) : 0
+    const { error } = await admin().from('sales_document_lines')
+      .update({ tax_cents, line_total_cents: lineTotalCents({ ...amounts, tax_cents }) })
+      .eq('tenant_id', tenantId).eq('id', l.id)
+    if (error) return { ok: false, error: error.message }
+  }
+  await recomputeTotals(tenantId, type, documentId)
+  return { ok: true }
 }
 
 export async function listDocuments(tenantId: string, type: DocType, limit = 200) {

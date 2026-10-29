@@ -5,6 +5,7 @@ import { listPageContext } from '../list-page'
 import { invoicesLine } from './line'
 import { PaymentDetails } from './settings'
 import { NewInvoice } from './new'
+import { tenantSalesTax } from '@/lib/core/documents'
 
 // INVOICES — docs/miles/invoices-income.html, both widths, values taken directly.
 //
@@ -21,7 +22,7 @@ const exact = (c: number) => `$${(c / 100).toLocaleString(undefined, { minimumFr
 
 export default async function V2Invoices() {
   const { tenantId } = await listPageContext('invoices')
-  const [list, settings] = await Promise.all([readInvoiceList(tenantId), readInvoiceSettings(tenantId)])
+  const [list, settings, tax] = await Promise.all([readInvoiceList(tenantId), readInvoiceSettings(tenantId), tenantSalesTax(tenantId)])
 
   const line = invoicesLine({
     outstandingCents: list.outstandingCents,
@@ -46,7 +47,7 @@ export default async function V2Invoices() {
           <div className="v2-hacts">
             {/* Typed once, and where the question occurs to somebody. */}
             <PaymentDetails instructions={settings.paymentInstructions} netDays={settings.netDays} />
-            <NewInvoice />
+            <NewInvoice tax={tax ? { rate: tax.rate, label: tax.label } : null} />
           </div>
         </div>
       </header>

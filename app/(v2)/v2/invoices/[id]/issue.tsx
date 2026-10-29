@@ -54,8 +54,8 @@ export function IssueInvoice({ invoiceId, number, canIssue }: { invoiceId: strin
   }
 
   return (
-    <button type="button" className="v2-iv-btn" data-p data-touch onClick={() => setConfirming(true)}>
-      <Check />Issue
+    <button type="button" className="v2-iv-btn" data-touch onClick={() => setConfirming(true)}>
+      <Check />Issue only
     </button>
   )
 }

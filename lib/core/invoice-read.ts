@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { derivePaymentStatus, type PaymentStatus } from './payments'
+import { readInvoiceSettings } from './invoice-settings'
+import { salesTaxFor } from './sales-tax'
 
 // THE INVOICE LIST AND ONE INVOICE — docs/miles/invoices-income.html.
 //
@@ -233,6 +235,8 @@ export interface InvoiceDetail {
   contact: { name: string | null; phone: string | null; email: string | null } | null
   /** SNAPSHOTTED at issue. A draft shows the tenant's current settings instead — see the page. */
   paymentInstructions: string | null
+  /** Comments printed on the customer's copy. Editable while a draft. */
+  notes: string | null
   /** The customer's URL is /i/<token>. Minted at creation, so a draft has one before anybody has it. */
   token: string
 }
@@ -320,6 +324,7 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
     })),
     contact: c ? { name: c.name ?? null, phone: c.phone ?? null, email: c.email ?? null } : null,
     paymentInstructions: (inv.payment_instructions as string) ?? null,
+    notes: (inv.notes as string) ?? null,
     token: (inv.token as string) ?? '',
   }
 }
@@ -344,6 +349,8 @@ export interface PublicInvoice {
   subtotalCents: number
   discountCents: number
   taxCents: number
+  /** "NJ sales tax (6.625%)" when the business's state has a known rate, else "Tax". */
+  taxLabel: string
   totalCents: number
   paidCents: number
   outstandingCents: number
@@ -360,24 +367,45 @@ export interface PublicInvoice {
 
 export async function readPublicInvoice(token: string): Promise<PublicInvoice | null> {
   if (!token || token.length < 8) return null
-  const db = createAdminClient()
-
-  const { data: inv } = await db.from('invoices')
-    .select('id, tenant_id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes, issued_at, due_on, payment_instructions, contact_id')
-    .eq('token', token).maybeSingle()
+  const { data: inv } = await createAdminClient().from('invoices').select(PAPER_COLS).eq('token', token).maybeSingle()
   // Not found AND not-a-draft answer identically. A reader learning that a draft exists learns
   // something about a document they were not given.
   if (!inv || inv.status === 'draft') return null
+  return paperFor(inv as Record<string, unknown>)
+}
 
+// ── THE OWNER'S PREVIEW ─────────────────────────────────────────────────────────────────────────
+//
+// The same paper the customer gets, read by id inside the owner's own tenant — and for a DRAFT too,
+// because "what will they see?" is asked before sending, not after. A draft has no snapshot yet, so
+// it shows what issuing WOULD stamp: today's date, the due date from the net terms, the current
+// payment details. That is exactly what Issue writes a moment later.
+export async function readInvoicePaper(tenantId: string, id: string): Promise<PublicInvoice | null> {
+  const { data: inv } = await createAdminClient().from('invoices').select(PAPER_COLS)
+    .eq('tenant_id', tenantId).eq('id', id).maybeSingle()
+  if (!inv) return null
+  const row = inv as Record<string, unknown>
+  if (row.status !== 'draft') return paperFor(row)
+  const settings = await readInvoiceSettings(tenantId)
+  const today = new Date()
+  const due = new Date(today)
+  due.setUTCDate(due.getUTCDate() + settings.netDays)
+  return paperFor({ ...row, issued_at: today.toISOString(), due_on: due.toISOString().slice(0, 10), payment_instructions: settings.paymentInstructions })
+}
+
+const PAPER_COLS = 'id, tenant_id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes, issued_at, due_on, payment_instructions, contact_id'
+
+async function paperFor(inv: Record<string, unknown>): Promise<PublicInvoice> {
+  const db = createAdminClient()
   const [{ data: lines }, { data: allocs }, { data: tenant }, { data: contact }] = await Promise.all([
     db.from('sales_document_lines')
       .select('id, description, quantity, unit_price_cents, line_total_cents')
-      .eq('document_type', 'invoice').eq('document_id', inv.id).order('sort_order'),
+      .eq('document_type', 'invoice').eq('document_id', inv.id as string).order('sort_order'),
     db.from('payment_allocations')
-      .select('amount_cents').eq('document_type', 'invoice').eq('document_id', inv.id),
-    db.from('tenants').select('business_name, email, phone, address, city, state, zip').eq('id', inv.tenant_id).maybeSingle(),
+      .select('amount_cents').eq('document_type', 'invoice').eq('document_id', inv.id as string),
+    db.from('tenants').select('business_name, email, phone, address, city, state, zip').eq('id', inv.tenant_id as string).maybeSingle(),
     inv.contact_id
-      ? db.from('contacts').select('name').eq('id', inv.contact_id).maybeSingle()
+      ? db.from('contacts').select('name').eq('id', inv.contact_id as string).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
 
@@ -400,6 +428,7 @@ export async function readPublicInvoice(token: string): Promise<PublicInvoice | 
     subtotalCents: Number(inv.subtotal_cents ?? 0),
     discountCents: Number(inv.discount_cents ?? 0),
     taxCents: Number(inv.tax_cents ?? 0),
+    taxLabel: salesTaxFor(t.state)?.label ?? 'Tax',
     totalCents: total,
     paidCents: paid,
     outstandingCents: total - paid,

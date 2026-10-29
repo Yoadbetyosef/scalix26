@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { readInvoice } from '@/lib/core/invoice-read'
+import { readInvoice, readInvoicePaper } from '@/lib/core/invoice-read'
+import { tenantSalesTax } from '@/lib/core/documents'
 import { readInvoiceSettings } from '@/lib/core/invoice-settings'
 import { listPageContext } from '../../list-page'
 import { MethodGlyph, METHOD_LABEL } from '../glyphs'
@@ -23,8 +24,8 @@ const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { day: 'n
 export default async function V2Invoice({ params }: { params: Promise<{ id: string }> }) {
   const { tenantId } = await listPageContext('invoices')
   const { id } = await params
-  const inv = await readInvoice(tenantId, id)
-  if (!inv) notFound()
+  const [inv, paper, tax] = await Promise.all([readInvoice(tenantId, id), readInvoicePaper(tenantId, id), tenantSalesTax(tenantId)])
+  if (!inv || !paper) notFound()
   // A DRAFT has no snapshot yet, so it previews what it WOULD carry — which is the only moment the
   // owner can still change it. An issued invoice shows what it actually went out with, always.
   const settings = inv.row.bucket === 'draft' ? await readInvoiceSettings(tenantId) : null
@@ -96,7 +97,7 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
                 <div className="v2-ag-sep" />
                 <div className="v2-iv-tot"><span>Subtotal</span><span>{exact(inv.subtotalCents)}</span></div>
                 {inv.discountCents > 0 && <div className="v2-iv-tot"><span>Discount</span><span>−{exact(inv.discountCents)}</span></div>}
-                {inv.taxCents > 0 && <div className="v2-iv-tot"><span>Tax</span><span>{exact(inv.taxCents)}</span></div>}
+                {inv.taxCents > 0 && <div className="v2-iv-tot"><span>{paper.taxLabel}</span><span>{exact(inv.taxCents)}</span></div>}
                 <div className="v2-iv-tot" data-big><span>Total</span><span>{exact(r.totalCents)}</span></div>
               </>
             )}
@@ -149,6 +150,14 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
             </>
           )}
 
+          {/* COMMENTS — printed on the customer's copy. Typed in the Send sheet while it is a draft. */}
+          {inv.notes && (
+            <>
+              <p className="v2-ag-grp"><span className="v2-ag-gt">COMMENTS</span><span className="v2-ag-gr" /></p>
+              <div className="v2-iv-pay"><p className="v2-iv-payt">{inv.notes}</p></div>
+            </>
+          )}
+
           {inv.history.length > 0 && (
             <>
               <p className="v2-ag-grp"><span className="v2-ag-gt">HISTORY</span><span className="v2-ag-gr" /></p>
@@ -176,16 +185,28 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
       <div className="v2-iv-slot">
         <div className="v2-iv-slotin">
           {isDraft ? (
-            <IssueInvoice invoiceId={r.id} number={r.number} canIssue={inv.lines.length > 0} />
+            <>
+              <IssueInvoice invoiceId={r.id} number={r.number} canIssue={inv.lines.length > 0} />
+              {/* Send on a draft issues it in the same press — the sheet shows the customer's copy and
+                  says so before the button. Without lines there is nothing to send. */}
+              {inv.lines.length > 0 && (
+              <SendInvoice
+                invoiceId={r.id} number={r.number} who={r.who}
+                email={inv.contact?.email ?? null} phone={inv.contact?.phone ?? null}
+                sentAt={r.sentAt} sentChannel={r.sentChannel}
+                isDraft={isDraft} paper={paper} taxLabel={tax?.label ?? null} primary={isDraft || !r.sentAt}
+              />
+              )}
+            </>
           ) : (
             <>
-              {/* The customer's own page, exactly as they see it — same URL that gets sent. Opening it
-                  is how an owner checks their payment details read right BEFORE somebody else does. */}
+              {/* The customer's own page, exactly as they see it — same URL that gets sent. */}
               <a className="v2-iv-btn" href={`/i/${inv.token}`} target="_blank" rel="noreferrer"><Doc />View as customer</a>
               <SendInvoice
                 invoiceId={r.id} number={r.number} who={r.who}
                 email={inv.contact?.email ?? null} phone={inv.contact?.phone ?? null}
                 sentAt={r.sentAt} sentChannel={r.sentChannel}
+                isDraft={isDraft} paper={paper} taxLabel={tax?.label ?? null} primary={isDraft || !r.sentAt}
               />
               {r.outstandingCents > 0 && (
                 <RecordPayment invoiceId={r.id} who={r.who} number={r.number} outstandingCents={r.outstandingCents} />
@@ -194,7 +215,7 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
           )}
           <p className="v2-iv-smsg">
             {isDraft
-              ? <>Not issued yet. <b>Issuing fixes the total and the date.</b></>
+              ? <>Not issued yet. <b>Send shows you the customer&apos;s copy first.</b> Issuing fixes the total and the date.</>
               // An issued invoice nobody has sent is not waiting on the customer — it is waiting on
               // the owner, and saying "still due" would blame the wrong person.
               : !r.sentAt
