@@ -89,3 +89,36 @@ export async function resolveContactForOrder(db: Db, tenantId: string, c: OrderC
   if (error || !data) return { contactId: null, created: false, matched: false }
   return { contactId: data.id as string, created: true, matched: false }
 }
+
+// ── WHAT WAS TYPED ON THE ORDER REACHES THE CUSTOMER RECORD ─────────────────────────────────────
+//
+// Linking an order to a contact did not carry anything across. A contact the AI created from one
+// email had no name and no phone; the jeweller then typed the phone on the estimate, and the
+// customer's own record still had no phone — so searching the address book for the number found
+// nothing, and the customer looked missing. The order held the details and the record did not.
+//
+// So every save fills the contact's EMPTY fields from the order. Only empty ones: a phone already on
+// the record is never replaced by what was typed on one order, because the record is the place it is
+// maintained and an order is a snapshot. Never throws; a failed fill never fails the order.
+export async function fillContactBlanks(db: Db, tenantId: string, contactId: string, c: OrderCustomerFields): Promise<string[]> {
+  try {
+    const { data: row } = await db.from('contacts').select('name, email, phone, company_name').eq('tenant_id', tenantId).eq('id', contactId).maybeSingle()
+    if (!row) return []
+    const blank = (v: unknown) => !String(v ?? '').trim()
+    const patch: Record<string, unknown> = {}
+    const name = (c.customerName ?? '').trim()
+    const company = (c.customerCompany ?? '').trim()
+    const email = (c.customerEmail ?? '').trim()
+    const phone = (c.customerPhone ?? '').trim()
+    if (name && blank(row.name)) patch.name = name
+    if (company && blank(row.company_name)) patch.company_name = company
+    if (email && normalizeEmail(email) && blank(row.email)) { patch.email = email; patch.normalized_email = normalizeEmail(email) }
+    if (phone && normalizePhone(phone) && blank(row.phone)) { patch.phone = phone; patch.normalized_phone = normalizePhone(phone) }
+    const keys = Object.keys(patch)
+    if (!keys.length) return []
+    const { error } = await db.from('contacts').update({ ...patch, updated_at: new Date().toISOString() }).eq('tenant_id', tenantId).eq('id', contactId)
+    return error ? [] : keys.filter((k) => !k.startsWith('normalized_'))
+  } catch {
+    return []
+  }
+}

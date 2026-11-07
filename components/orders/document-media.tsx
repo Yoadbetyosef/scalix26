@@ -13,7 +13,11 @@ export function DocumentVideo({ src, fileName, single }: { src: string; fileName
   if (failed) {
     return (
       <div className={`${single ? 'max-h-80' : 'h-40'} flex w-full items-center justify-center rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-center text-sm text-neutral-600 print:hidden`}>
-        This video could not be played right now. Try reloading the page; if it still will not play, ask us and we will send it again.
+        <span>
+          This video cannot play in this browser.{' '}
+          <a href={src} className="font-medium text-neutral-900 underline" target="_blank" rel="noreferrer">Open or download it</a>
+          {' '}instead — if it still will not play, ask us and we will send it again.
+        </span>
       </div>
     )
   }

@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { OrderOptionList } from '@/lib/orders/options'
 import { ContactPicker, type PickedContact } from './contact-picker'
+import { ChargeFields, chargesToPayload, chargesDraftTotal, type ChargeDraft } from './charge-fields'
 import { LineItemFields, emptyLine, fetchOptionLists, lineToPayload, namelessError, type LineDraft } from './line-item-fields'
 import { KindFields, emptyKind, type KindDraft } from './kind-fields'
 
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
 
-export function OrderForm({ initialCustomer, supportsKinds = false }: { initialCustomer?: PickedContact | null; supportsKinds?: boolean } = {}) {
+export function OrderForm({ initialCustomer, supportsKinds = false, supportsCharges = false }: { initialCustomer?: PickedContact | null; supportsKinds?: boolean; supportsCharges?: boolean } = {}) {
   const router = useRouter()
   const [customer, setCustomer] = useState<PickedContact>(initialCustomer ?? { id: null, name: '', company: '', email: '', phone: '', address: '', currency: 'usd' })
   const [f, setF] = useState({
@@ -19,6 +20,7 @@ export function OrderForm({ initialCustomer, supportsKinds = false }: { initialC
   const [isCustomDesign, setIsCustomDesign] = useState(false)
   const [kind, setKind] = useState<KindDraft>(emptyKind())
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()])
+  const [charges, setCharges] = useState<ChargeDraft[]>([])
   const [lists, setLists] = useState<OrderOptionList[]>([])
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
 
@@ -27,7 +29,7 @@ export function OrderForm({ initialCustomer, supportsKinds = false }: { initialC
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }))
   const setLine = (i: number, k: keyof LineDraft, v: string | string[]) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
   const sym = SYMBOL[customer.currency] ?? customer.currency.toUpperCase()
-  const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0)
+  const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0) + (supportsCharges ? chargesDraftTotal(charges) : 0)
 
   const submit = async () => {
     // Refused HERE, out loud, rather than dropped on the way to the server. See namelessError.
@@ -45,6 +47,7 @@ export function OrderForm({ initialCustomer, supportsKinds = false }: { initialC
         ...(supportsKinds ? { orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details } : {}),
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
+        ...(supportsCharges ? { charges: chargesToPayload(charges) } : {}),
       }
       const r = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const j = await r.json(); if (!r.ok) throw new Error(j.detail || j.error || 'Failed to create order')
@@ -137,6 +140,8 @@ export function OrderForm({ initialCustomer, supportsKinds = false }: { initialC
           <button type="button" onClick={() => setLines((p) => [...p, emptyLine()])} className="v2-act">+ Add item</button>
         </div>
       </section>
+
+      {supportsCharges && <ChargeFields rows={charges} onChange={setCharges} currencySymbol={sym} idPrefix="of-charge" />}
 
       <section>
         <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>

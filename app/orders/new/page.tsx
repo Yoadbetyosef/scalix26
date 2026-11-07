@@ -37,7 +37,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
         <p className="v2-kick" style={{ ['--ghue' as string]: 'var(--v2-t3)' }}><i />New order</p>
         <s />
       </div>
-      <OrderForm initialCustomer={prefill} supportsKinds={(await getSchemaCapabilities()).orderKinds} />
+      <OrderForm initialCustomer={prefill} supportsKinds={(await getSchemaCapabilities()).orderKinds} supportsCharges={(await getSchemaCapabilities()).orderCharges} />
     </div>
   )
 }

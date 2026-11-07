@@ -29,6 +29,8 @@ export interface SchemaCapabilities {
   orderKinds: boolean
   /** Part 7: order_approval_requests.request_kind / quoted_cost_cents. */
   vendorQuotation: boolean
+  /** add_order_charges.sql: order_charges exists. Always probed — it is not one of the nine parts. */
+  orderCharges: boolean
   /** Which of the nine parts have their flag. Empty when the flags table does not exist. */
   appliedParts: number[]
   /** How the answer was reached — for the smoke script and the admin, not for the UI. */
@@ -37,7 +39,7 @@ export interface SchemaCapabilities {
 
 const NONE: SchemaCapabilities = {
   inProcessStage: false, paymentMethodsExtended: false, memos: false, purchases: false, orderKinds: false, vendorQuotation: false,
-  appliedParts: [], source: 'flags',
+  orderCharges: false, appliedParts: [], source: 'flags',
 }
 
 const TTL_MS = 60_000
@@ -57,6 +59,7 @@ const FLAG_PREFIX = 'tg_production_1.part'
 
 async function read(): Promise<SchemaCapabilities> {
   const db = createAdminClient()
+  const orderCharges = !(await db.from('order_charges').select('id').limit(1)).error
   const { data, error } = await db.from('schema_flags').select('key')
   if (!error) {
     const parts = ((data as Array<{ key: string }> | null) ?? [])
@@ -65,7 +68,7 @@ async function read(): Promise<SchemaCapabilities> {
     const has = (n: number) => parts.includes(n)
     return {
       inProcessStage: has(1), paymentMethodsExtended: has(2), memos: has(4), purchases: has(5), orderKinds: has(6), vendorQuotation: has(7),
-      appliedParts: parts.sort((a, b) => a - b), source: 'flags',
+      orderCharges, appliedParts: parts.sort((a, b) => a - b), source: 'flags',
     }
   }
   // No flags table: probe the parts that left a column or a table behind. Part 1 cannot be probed
@@ -75,7 +78,7 @@ async function read(): Promise<SchemaCapabilities> {
     probe('payment_allocations', 'paid_on'), probe('memos', 'id'), probe('order_purchases', 'id'), probe('orders', 'order_kind'), probe('order_approval_requests', 'request_kind'),
   ])
   const parts = [p2 && 2, p4 && 4, p5 && 5, p6 && 6, p7 && 7].filter((n): n is number => typeof n === 'number')
-  return { inProcessStage: false, paymentMethodsExtended: p2, memos: p4, purchases: p5, orderKinds: p6, vendorQuotation: p7, appliedParts: parts, source: 'probe' }
+  return { inProcessStage: false, paymentMethodsExtended: p2, memos: p4, purchases: p5, orderKinds: p6, vendorQuotation: p7, orderCharges, appliedParts: parts, source: 'probe' }
 }
 
 /** The stages the database accepts today — ORDER_STAGES minus the ones a pending part adds. */

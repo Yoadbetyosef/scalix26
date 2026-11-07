@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
@@ -86,6 +87,13 @@ export default async function OrderDocumentPage({ params }: { params: Promise<{ 
               that comes to one. Which is also what every tenant but TG sees. */}
           {letterheadOptions.length > 1 && (
             <LetterheadChoice orderId={id} value={data.order.letterheadStyle ?? null} options={letterheadOptions} />
+          )}
+          {/* Edit from the document itself — the order page opens with the drawer up. On a closed
+              order that drawer is "Edit invoice". */}
+          {data.order.stage !== 'cancelled' && (
+            <Link href={`/orders/${id}?edit=1`} className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-800 hover:bg-neutral-50">
+              Edit
+            </Link>
           )}
           <SendDocument
             orderId={id}

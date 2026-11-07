@@ -61,7 +61,12 @@ export async function listContactsPage(
     // Searching the company has to find the contact — "yacht" finds Irina at M&P Yacht Centre. The
     // column is trigram-indexed for it (add_contact_company.sql).
     const company = cols === FULL ? `company_name.ilike.%${safe}%,` : ''
-    if (safe) query = query.or(`name.ilike.%${safe}%,${company}email.ilike.%${safe}%,phone.ilike.%${safe}%,address.ilike.%${safe}%`)
+    // A number is typed however the person remembers it — "604 655 2665", "(604) 655-2665",
+    // "6046552665" — and stored however it was first entered. The digits are matched against the
+    // normalised column so every spelling finds the same customer.
+    const digits = q.replace(/\D/g, '')
+    const byDigits = digits.length >= 4 ? `,normalized_phone.ilike.%${digits.length > 10 ? digits.slice(-10) : digits}%` : ''
+    if (safe) query = query.or(`name.ilike.%${safe}%,${company}email.ilike.%${safe}%,phone.ilike.%${safe}%,address.ilike.%${safe}%${byDigits}`)
     return query
   }
 

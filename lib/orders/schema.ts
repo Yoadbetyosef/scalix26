@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { APPRAISAL_PURPOSES, ORDER_KINDS } from './kinds'
+import { CHARGE_TYPE_KEYS } from './charges'
 
 // Request validation shared by POST /api/orders and PATCH /api/orders/[id]. Kept in one place so a new
 // field can never be accepted on create but silently dropped on edit (or the reverse).
@@ -76,8 +77,17 @@ const orderFields = {
   // 400 on a value we can draw around would be a document page that refuses to save.
   letterheadStyle: z.string().max(16).nullable().optional(),
   lineItems: z.array(lineItemSchema).max(200).optional(),
+  // Additional charges. The amount may be negative (a discount, a downward adjustment); the server
+  // applies the sign rule for discount/reimbursement itself, so a client cannot store a discount that
+  // ADDS money. Cost is internal and never negative.
+  charges: z.array(z.object({
+    chargeType: z.enum(CHARGE_TYPE_KEYS),
+    description: z.string().max(500).nullable().optional().transform((v) => v ?? null),
+    amountCents: z.number().int().min(-100_000_000).max(100_000_000),
+    costCents: z.number().int().min(0).max(100_000_000).nullable().optional().transform((v) => v ?? null),
+  })).max(50).optional(),
 }
 
 // On create the order number may be blank (auto-generated); on edit a blank would wipe a NOT NULL column.
 export const createOrderSchema = z.object({ orderNumber: z.string().trim().max(50).optional(), ...orderFields })
-export const patchOrderSchema = z.object({ orderNumber: z.string().trim().min(1).max(50).optional(), ...orderFields })
+export const patchOrderSchema = z.object({ orderNumber: z.string().trim().min(1).max(50).optional(), ...orderFields, editClosed: z.boolean().optional() })
