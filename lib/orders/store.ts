@@ -5,10 +5,11 @@ import { generateOrderNumber } from './order-number'
 import { canManualTransition, STAGE_LABELS, type OrderStage } from './stages'
 import { taxChoiceById } from '@/lib/tax/canada'
 import { isMissingColumn } from '@/lib/db/missing-column'
-import { resolveContactForOrder } from './link-contact'
+import { resolveContactForOrder, fillContactBlanks } from './link-contact'
 import { orderRow, lineRow, lineExtras, lineInsert } from './rows'
 import { getSchemaCapabilities, stageSupported } from '@/lib/db/capabilities'
 import type { Order, OrderEvent, OrderWithDetails, OrderInput, LineItemInput } from './types'
+import { readCharges, replaceCharges, chargesTotal, signedAmount } from './charges'
 
 // Server-only Orders data access. Every call resolves the validated active tenant (requireActiveBusinessContext)
 // and queries through the RLS-scoped authenticated client, so a tenant can only ever touch its own orders.
@@ -103,11 +104,12 @@ export async function getOrderForTenant(tenantId: string, id: string): Promise<O
   const sb = createAdminClient()
   const { data } = await sb.from('orders').select('*').eq('tenant_id', tenantId).eq('id', id).maybeSingle()
   if (!data) return null
-  const [items, events] = await Promise.all([
+  const [items, events, charges] = await Promise.all([
     sb.from('order_line_items').select('*').eq('order_id', id).order('display_order'),
     sb.from('order_events').select('*').eq('order_id', id).order('created_at', { ascending: false }),
+    readCharges(sb, tenantId, id),
   ])
-  return { ...orderRow(data as Record<string, unknown>), lineItems: ((items.data as Array<Record<string, unknown>>) ?? []).map(lineRow), events: ((events.data as Array<Record<string, unknown>>) ?? []).map(eventRow) }
+  return { ...orderRow(data as Record<string, unknown>), lineItems: ((items.data as Array<Record<string, unknown>>) ?? []).map(lineRow), events: ((events.data as Array<Record<string, unknown>>) ?? []).map(eventRow), charges }
 }
 
 /** The owner-facing read: tenancy from the signed-in workspace. Never use on a public route. */
@@ -117,6 +119,8 @@ export async function getOrder(id: string): Promise<OrderWithDetails | null> {
 }
 
 const lineTotals = (items: LineItemInput[]) => items.map((i) => Math.round((i.quantity ?? 1) * (i.unitPriceCents ?? 0)))
+/** The signed sum of charges as they will be STORED — the sign rule applied, so a discount subtracts. */
+const inputChargesTotal = (charges: OrderInput['charges']) => chargesTotal((charges ?? []).map((ch) => ({ amountCents: signedAmount(ch.chargeType, ch.amountCents) })))
 
 export async function addEvent(orderId: string, type: string, payload: Record<string, unknown> | null, actor?: string): Promise<void> {
   const c = await ctx(); if (!c) return
@@ -132,7 +136,8 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
   const sb = await createClient()
   const items = input.lineItems ?? []
   const totals = lineTotals(items)
-  const subtotal = totals.reduce((s, n) => s + n, 0)
+  // Lines AND additional charges: the subtotal every total, tax and balance is computed from.
+  const subtotal = totals.reduce((s, n) => s + n, 0) + inputChargesTotal(input.charges)
   const deposit = input.depositCents ?? 0
   const orderNumber = (input.orderNumber && input.orderNumber.trim()) || generateOrderNumber()
   // The customer record this order belongs to — picked, recognised, or created from what was typed.
@@ -176,9 +181,19 @@ export async function createOrder(input: OrderInput): Promise<Order | null> {
     if (lineErr) throw new Error(`The order was created but its items could not be saved: ${lineErr.message}`)
     if (degraded) throw new Error(`The order was created, but side shapes and band width were not saved — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   }
+  if (input.charges?.length) {
+    const r = await replaceCharges(sb, c.tenantId, order.id, input.charges)
+    if (r.error || r.missing) {
+      // The subtotal already counted them; put it back to the lines alone so the totals stay true.
+      const linesOnly = totals.reduce((s, n) => s + n, 0)
+      await sb.from('orders').update({ subtotal_cents: linesOnly, balance_cents: linesOnly - deposit }).eq('tenant_id', c.tenantId).eq('id', order.id)
+      throw new Error(r.error ?? 'The order was created, but its additional charges were not saved.')
+    }
+  }
   if (companyDropped) throw new Error(`The order was created, but the business name was not saved — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
   await addEvent(order.id, 'created', { orderNumber })
   if (linked.contactId && !input.contactId) await addEvent(order.id, 'contact_linked', { contactId: linked.contactId, created: linked.created })
+  if (linked.contactId && !linked.created) await fillContactBlanks(sb, c.tenantId, linked.contactId, input)
   return order
 }
 
@@ -243,12 +258,34 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   if ('kindDetails' in patch) m.kind_details = patch.kindDetails ?? {}
   // Never blank out the (NOT NULL, unique) order number — ignore an empty edit.
   if (typeof m.order_number === 'string') { const t = m.order_number.trim(); if (t) m.order_number = t; else delete m.order_number }
+  // ── ADDITIONAL CHARGES FIRST ───────────────────────────────────────────────────────────────────
+  // Replaced before the lines so that a refusal (table missing, bad row) stops the save with the
+  // order untouched. The previous set is kept so a later refusal can put it back.
+  let chargesSum: number | null = null
+  let restoreCharges = async () => {}
+  if (patch.charges) {
+    const prev = await readCharges(sb, c.tenantId, id)
+    const r = await replaceCharges(sb, c.tenantId, id, patch.charges)
+    if (r.error) throw new Error(r.error)
+    if (!r.missing) {
+      chargesSum = inputChargesTotal(patch.charges)
+      restoreCharges = async () => { await replaceCharges(sb, c.tenantId, id, prev) }
+    }
+  }
+  const existingChargesSum = async () => chargesSum ?? chargesTotal(await readCharges(sb, c.tenantId, id))
+  // Charges changed but the lines did not: the subtotal is the lines already stored plus the new charges.
+  if (chargesSum !== null && !patch.lineItems) {
+    const { data: stored } = await sb.from('order_line_items').select('line_total_cents').eq('order_id', id)
+    const linesSum = ((stored as Array<{ line_total_cents: number }> | null) ?? []).reduce((s, l) => s + Number(l.line_total_cents ?? 0), 0)
+    const deposit = 'depositCents' in patch && patch.depositCents !== undefined ? patch.depositCents : Number(before?.deposit_cents ?? 0)
+    m.subtotal_cents = linesSum + chargesSum; m.balance_cents = linesSum + chargesSum - deposit
+  }
   // Re-price if line items are replaced.
   let previousLines: Array<Record<string, unknown>> = []
   let linesReplaced = false
   let degradedNote: string | null = null
   if (patch.lineItems) {
-    const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0)
+    const totals = lineTotals(patch.lineItems); const subtotal = totals.reduce((s, n) => s + n, 0) + await existingChargesSum()
     // ── THE DEPOSIT IS NOT IN THIS PATCH, AND IT USED TO BE TREATED AS ZERO ───────────────────────
     //
     // `patch.depositCents ?? 0`: a client that re-sent the line items without the deposit — which is
@@ -276,6 +313,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
       const { error: lineErr, degraded } = await insertLines(sb, c.tenantId, id, patch.lineItems, totals)
       if (lineErr) {
         if (previousLines.length) await sb.from('order_line_items').insert(previousLines)
+        await restoreCharges()
         throw new Error(`The items could not be saved: ${lineErr.message}. The order is unchanged.`)
       }
       linesReplaced = true
@@ -313,6 +351,7 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   }
   if (error) {
     await restoreLines()
+    await restoreCharges()
     throw new Error(error.code === '23505' ? 'That order number is already in use. Choose a different one.' : error.message)
   }
   if (companyDropped) throw new Error(`The order was saved, but the business name was not — run ${LINE_EXTRAS_MIGRATION} in the Supabase SQL editor.`)
@@ -323,7 +362,15 @@ export async function updateOrder(id: string, patch: OrderInput): Promise<Order 
   await addEvent(id, 'updated', null)
   if (linkedNow) await addEvent(id, 'contact_linked', linkedNow)
   if (unlinkedNow) await addEvent(id, 'contact_unlinked', { contactId: unlinkedNow })
-  return orderRow(data as Record<string, unknown>)
+  // Whatever customer details this save carried reach the linked record's empty fields.
+  const saved = data as Record<string, unknown>
+  if (saved.contact_id && ('customerName' in patch || 'customerEmail' in patch || 'customerPhone' in patch || 'customerCompany' in patch || linkedNow)) {
+    await fillContactBlanks(sb, c.tenantId, saved.contact_id as string, {
+      customerName: saved.customer_name as string, customerCompany: saved.customer_company as string,
+      customerEmail: saved.customer_email as string, customerPhone: saved.customer_phone as string,
+    })
+  }
+  return orderRow(saved)
 }
 
 // Manual stage change (drag / explicit set) — approval stages are rejected here; use the workflow actions.

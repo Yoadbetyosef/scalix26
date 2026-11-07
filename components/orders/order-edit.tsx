@@ -8,6 +8,8 @@ import { ContactPicker, type PickedContact } from './contact-picker'
 import { TAX_CHOICES } from '@/lib/tax/canada'
 import { LineItemFields, emptyLine, fetchOptionLists, lineFromSaved, lineToPayload, namelessError, type LineDraft } from './line-item-fields'
 import { KindFields, type KindDraft } from './kind-fields'
+import { ChargeFields, chargeFromSaved, chargesToPayload, chargesDraftTotal, type ChargeDraft } from './charge-fields'
+import type { OrderCharge } from '@/lib/orders/charges'
 import type { KindDetails, OrderKind } from '@/lib/orders/kinds'
 
 const SYMBOL: Record<string, string> = { usd: '$', cad: 'CA$', gbp: '£', eur: '€', ils: '₪' }
@@ -33,12 +35,15 @@ export interface OrderEditInitial {
   supportsKinds?: boolean
   internalNotes: string | null; publicNotes: string | null
   lineItems: Array<Parameters<typeof lineFromSaved>[0]>
+  /** Additional charges. `supportsCharges` false until add_order_charges.sql runs: the section is hidden. */
+  charges?: OrderCharge[]
+  supportsCharges?: boolean
 }
 
 // Edit an EXISTING order's customer / pricing / line items / details after creation — e.g. after the
 // factory quotes a cost, before sending to the customer for approval. Saves via PATCH /api/orders/[id],
 // which re-prices the subtotal/balance. Does NOT touch estimated_completion_date (set by the factory).
-export function OrderEdit({ orderId, initial }: { orderId: string; initial: OrderEditInitial }) {
+export function OrderEdit({ orderId, initial, closed = false }: { orderId: string; initial: OrderEditInitial; closed?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null)
@@ -80,13 +85,23 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
   const [lines, setLines] = useState<LineDraft[]>(() => fromInitial().lines)
   const kindFromInitial = (): KindDraft => ({ kind: initial.orderKind ?? 'custom', details: initial.kindDetails ?? {} })
   const [kind, setKind] = useState<KindDraft>(kindFromInitial)
+  const chargesFromInitial = (): ChargeDraft[] => (initial.charges ?? []).map(chargeFromSaved)
+  const [charges, setCharges] = useState<ChargeDraft[]>(chargesFromInitial)
 
   const openDrawer = () => {
     const fresh = fromInitial()
     setCustomer(fresh.customer); setLines(fresh.lines); setF(fieldsFromInitial()); setKind(kindFromInitial())
-    setIsCustomDesign(initial.isCustomDesign); setPstExempt(initial.pstExempt === true)
+    setIsCustomDesign(initial.isCustomDesign); setPstExempt(initial.pstExempt === true); setCharges(chargesFromInitial())
     setErr(null); setOpen(true)
   }
+
+  // /orders/[id]?edit=1 — the "Edit" on a document page lands here with the drawer already open.
+  // Reads the URL (external state) once on arrival, so setting state here is the intended sync.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot sync from the URL on arrival
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('edit') === '1') openDrawer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, [])
 
   // Only fetch the dropdown lists once the dialog is actually opened.
   useEffect(() => { if (open && !lists.length) fetchOptionLists().then(setLists) }, [open, lists.length])
@@ -94,7 +109,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF((p) => ({ ...p, [k]: e.target.value }))
   const setLine = (i: number, k: keyof LineDraft, v: string | string[]) => setLines((p) => p.map((l, idx) => (idx === i ? { ...l, [k]: v } : l)))
   const sym = SYMBOL[customer.currency] ?? customer.currency.toUpperCase()
-  const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0)
+  const total = lines.reduce((s, l) => s + (parseFloat(l.quantity) || 0) * (parseFloat(l.unitPrice) || 0), 0) + (initial.supportsCharges ? chargesDraftTotal(charges) : 0)
 
   const save = async () => {
     // Refused HERE, out loud, rather than dropped on the way to the server. See namelessError.
@@ -119,6 +134,9 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         ...(initial.supportsKinds ? { orderKind: kind.kind, kindDetails: kind.kind === 'custom' || kind.kind === 'stock' ? {} : kind.details } : {}),
         internalNotes: f.internalNotes || null, publicNotes: f.publicNotes || null,
         lineItems: lines.filter((l) => l.productName.trim()).map(lineToPayload),
+        ...(initial.supportsCharges ? { charges: chargesToPayload(charges) } : {}),
+        // A closed order is edited only on purpose — see refusedFields in lib/orders/stages.ts.
+        ...(closed ? { editClosed: true } : {}),
       }
       const r = await fetch(`/api/orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const j = await r.json(); if (!r.ok) throw new Error(j.detail || j.error || 'Failed to save')
@@ -128,7 +146,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
 
   return (
     <>
-      <button onClick={openDrawer} className="v2-act">Edit order</button>
+      <button onClick={openDrawer} className="v2-act">{closed ? 'Edit invoice' : 'Edit order'}</button>
       {/* THE APPROVED MODAL, replacing a hand-rolled overlay. Three of these existed in this tree,
           each with slightly different odds and ends — bg-black/40 here, bg-black/30 and a shadow-xl
           there — and none of them trapped focus, closed on Escape, or locked the page behind them.
@@ -138,7 +156,7 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         open={open}
         onClose={() => setOpen(false)}
         dismissable={!busy}
-        title="Edit order"
+        title={closed ? 'Edit invoice' : 'Edit order'}
         wide
         actions={
           <>
@@ -148,7 +166,9 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
         }
       >
         <>
-            <p className="v2-hint" style={{ marginBottom: 18 }}>Update the customer, pricing, items and details before sending for approval.</p>
+            {closed
+              ? <p className="v2-hint" style={{ marginBottom: 18, color: 'var(--v2-warn, #b45309)' }}>This order is closed. Saving changes the invoice — items, prices and totals — and is recorded on the order&apos;s history. A customer link already sent keeps the copy they were sent; send the invoice again to give them the corrected one.</p>
+              : <p className="v2-hint" style={{ marginBottom: 18 }}>Update the customer, pricing, items and details before sending for approval.</p>}
 
             <div className="space-y-6">
               <section>
@@ -205,6 +225,8 @@ export function OrderEdit({ orderId, initial }: { orderId: string; initial: Orde
                   <button type="button" onClick={() => setLines((p) => [...p, emptyLine()])} className="v2-act">+ Add item</button>
                 </div>
               </section>
+
+              {initial.supportsCharges && <ChargeFields rows={charges} onChange={setCharges} currencySymbol={sym} idPrefix="oe-charge" />}
 
               <section>
                 <div className="v2-form" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>

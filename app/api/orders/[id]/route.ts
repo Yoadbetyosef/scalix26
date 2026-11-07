@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { patchOrderSchema } from '@/lib/orders/schema'
-import { getOrder, updateOrder, deleteOrder, deletable } from '@/lib/orders/store'
-import { refusedFields } from '@/lib/orders/stages'
+import { getOrder, updateOrder, deleteOrder, deletable, addEvent } from '@/lib/orders/store'
+import { refusedFields, isTerminalStage } from '@/lib/orders/stages'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const a = await requireOrdersAccess()
@@ -31,7 +31,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Null = the whole edit is refused (cancelled). A non-empty array = only these keys are. The
   // decision itself lives in stages.ts beside the rest of the policy, and is unit-tested there.
-  const refused = refusedFields(existing.stage, Object.keys(parsed.data))
+  const { editClosed, ...patch } = parsed.data
+  const refused = refusedFields(existing.stage, Object.keys(patch), { closedEdit: editClosed === true })
   if (refused === null) {
     return NextResponse.json({ error: 'This order is cancelled. Nothing on it can be changed.' }, { status: 409 })
   }
@@ -46,8 +47,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   try {
-    const order = await updateOrder(id, parsed.data)
+    const order = await updateOrder(id, patch)
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (editClosed && isTerminalStage(existing.stage)) await addEvent(id, 'invoice_edited', { stage: existing.stage, before: { subtotalCents: existing.subtotalCents } })
     return NextResponse.json({ ok: true, order })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message || 'Failed to save' }, { status: 400 })

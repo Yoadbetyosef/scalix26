@@ -4,10 +4,9 @@ import { requireOrdersAccess } from '@/lib/orders/guard'
 import { getOrder } from '@/lib/orders/store'
 import { ArrowLeft, Lock } from 'lucide-react'
 import { stageHue } from '@/lib/orders/stage-colors'
-import { STAGE_LABELS, STATUS_GROUP_LABELS, isProtectedStage, canEditWorkflow, canEditDocumentFacts, orderStatusGroup } from '@/lib/orders/stages'
+import { STAGE_LABELS, STATUS_GROUP_LABELS, isProtectedStage, canEditWorkflow, canEditDocumentFacts, canEditClosedInvoice, orderStatusGroup } from '@/lib/orders/stages'
 import { StageControl } from '@/components/orders/stage-control'
 import { OrderEdit } from '@/components/orders/order-edit'
-import { OrderDocumentEdit } from '@/components/orders/order-document-edit'
 import { DeleteOrderButton } from '@/components/orders/delete-order'
 import { AttachmentsPanel } from '@/components/orders/attachments-panel'
 import { ApprovalActions } from '@/components/orders/approval-actions'
@@ -22,6 +21,7 @@ import { listTemplates } from '@/lib/orders/templates'
 import { getSupplier } from '@/lib/orders/suppliers'
 import { deletable } from '@/lib/orders/store'
 import { listOrderPayments, orderTotals, sumPayments, LEGACY_DEPOSIT_NOTE } from '@/lib/orders/payments'
+import { chargeLabel } from '@/lib/orders/charges'
 import { resolveOrderTax } from '@/lib/orders/document-data'
 import { actorLabels, actorLabel } from '@/lib/orders/actors'
 import { ORDER_KIND_LABELS, APPRAISAL_PURPOSE_LABELS, kindWords } from '@/lib/orders/kinds'
@@ -141,8 +141,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             fact about a document that exists, and it is the fact most likely to be missing at that
             exact moment — so it stays open on finished and completed, and shuts on cancelled,
             where there is no document to be right about. See lib/orders/stages.ts. */}
-        {canEditWorkflow(o.stage) ? (
-          <OrderEdit orderId={o.id} initial={{
+        {/* Live orders: the full drawer. Closed (completed / finished): the SAME drawer as "Edit invoice",
+            which says what saving does and is recorded as invoice_edited — see refusedFields. Cancelled:
+            nothing to edit. */}
+        {canEditWorkflow(o.stage) || canEditClosedInvoice(o.stage) ? (
+          <OrderEdit orderId={o.id} closed={!canEditWorkflow(o.stage)} initial={{
             orderNumber: o.orderNumber, contactId: o.contactId,
             customerName: o.customerName, customerCompany: o.customerCompany, customerEmail: o.customerEmail, customerPhone: o.customerPhone,
             factoryName: o.factoryName, factoryContactName: o.factoryContactName, factoryEmail: o.factoryEmail,
@@ -155,16 +158,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             clientRequirements: o.clientRequirements, isCustomDesign: o.isCustomDesign,
             orderKind: o.orderKind, kindDetails: o.kindDetails, supportsKinds: caps.orderKinds,
             lineItems: o.lineItems,
+            charges: o.charges ?? [], supportsCharges: caps.orderCharges,
           }} />
-        ) : canEditDocumentFacts(o.stage) ? (
-          <OrderDocumentEdit
-            orderId={o.id}
-            stage={STAGE_LABELS[o.stage].toLowerCase()}
-            initial={{
-              deliveryProvince: o.deliveryProvince, taxKind: o.taxKind,
-              pstExempt: o.pstExempt, pstExemptionNote: o.pstExemptionNote,
-            }}
-          />
         ) : null}
         {/* Open in a new tab: the document is a print-to-PDF page, not a place to navigate away to. */}
         <Link href={`/orders/${o.id}/document/estimate`} target="_blank" className="v2-act">Estimate ↗</Link>
@@ -223,6 +218,25 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
           </div>
+          {/* Additional charges — selling amount as invoiced, cost beside it for her eyes only. */}
+          {(o.charges ?? []).length > 0 && (
+            <div className="overflow-x-auto" style={{ marginTop: 20 }}>
+              <div className="v2-head" style={{ marginBottom: 12 }}><p className="v2-kick"><i />Additional charges · {(o.charges ?? []).length}</p><s /></div>
+              <table className="v2-tbl">
+                <thead><tr>{['Charge', 'Description', 'Selling', 'Cost (internal)'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {(o.charges ?? []).map((ch, i) => (
+                    <tr key={ch.id ?? i}>
+                      <td style={{ fontWeight: 500, color: 'var(--v2-ink)' }}>{chargeLabel(ch.chargeType)}</td>
+                      <td style={{ color: 'var(--v2-mute)' }}>{ch.description ?? '—'}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{money(ch.amountCents, o.currency)}</td>
+                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--v2-mute)' }}>{ch.costCents == null ? '—' : money(ch.costCents, o.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           {/* Subtotal, tax, total, paid and balance due — the same five figures the invoice prints,
               from the same arithmetic (orderTotals), with every payment underneath. */}
           <div style={{ marginTop: 20 }}>

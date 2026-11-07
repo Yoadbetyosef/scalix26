@@ -162,6 +162,9 @@ export const canEditWorkflow = (s: OrderStage): boolean => !isTerminalStage(s)
  */
 export const canEditDocumentFacts = (s: OrderStage): boolean => s !== 'cancelled'
 
+/** A closed (completed / finished) order whose invoice may be edited in full, deliberately. */
+export const canEditClosedInvoice = (s: OrderStage): boolean => isTerminalStage(s) && s !== 'cancelled'
+
 /**
  * The only keys a terminal order accepts. Enforced in PATCH /api/orders/[id], not just hidden in the
  * page — the route had NO stage check at all, so the old gate was a hidden button rather than a rule
@@ -188,8 +191,13 @@ export const RECORD_FIELDS = ['contactId'] as const
  * Returns null when the whole edit is refused (cancelled), an array of refused keys when only some
  * are (finished / completed), and an empty array when everything is allowed.
  */
-export function refusedFields(stage: OrderStage, offered: string[]): string[] | null {
+export function refusedFields(stage: OrderStage, offered: string[], opts: { closedEdit?: boolean } = {}): string[] | null {
   if (canEditWorkflow(stage)) return []
+  // EDIT INVOICE: a closed order's invoice can be corrected in full — items, prices, customer — when
+  // the person says so explicitly. The refusal below exists to stop an ACCIDENTAL re-price (a tax
+  // fix silently re-sending lines); a deliberate "Edit invoice", confirmed on screen and written to
+  // the timeline as invoice_edited, is the opposite case. Cancelled stays shut.
+  if (opts.closedEdit && canEditClosedInvoice(stage)) return []
   if (!canEditDocumentFacts(stage)) {
     // Cancelled: nothing about the work or the document, but the customer link may still be fixed.
     return offered.length > 0 && offered.every((k) => (RECORD_FIELDS as readonly string[]).includes(k)) ? [] : null

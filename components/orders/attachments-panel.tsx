@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, FileText, Film, Image as ImageIcon, Upload } from 'lucide-react'
-import { ACCEPT_ATTR } from '@/lib/orders/attachment-types'
+import { ACCEPT_ATTR, MAX_UPLOAD_BYTES } from '@/lib/orders/attachment-types'
+import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import { useConfirm } from '@/components/v2/confirm'
 
 // Sketches, reference photos, CAD renders, videos and documents for an order. Drag a pile of files in or
@@ -79,6 +80,24 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
 
   // Sequential rather than parallel: a 100 MB video and a stack of photos at once would otherwise
   // compete for the same connection, and per-file errors stay attributable this way.
+  // Small files: through our route, as before. Returns the error to show, or null.
+  const uploadThroughServer = async (file: File): Promise<string | null> => {
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch(base, { method: 'POST', body: fd })
+    return r.ok ? null : ((await r.json().catch(() => ({}))).error ?? 'upload failed')
+  }
+  // Large files (ring videos): straight to storage with a one-time URL — the platform refuses a
+  // function body over ~4.5 MB. See createDirectUpload.
+  const uploadDirect = async (file: File): Promise<string | null> => {
+    const s = await fetch(`${base}/direct`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: file.name, size: file.size }) })
+    const sj = await s.json().catch(() => ({}))
+    if (!s.ok) return sj.error ?? 'upload failed'
+    const { error } = await createBrowserClient().storage.from('order-attachments').uploadToSignedUrl(sj.path, sj.token, file, { contentType: sj.contentType })
+    if (error) return error.message
+    const d = await fetch(`${base}/direct`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: sj.path, fileName: file.name }) })
+    return d.ok ? null : ((await d.json().catch(() => ({}))).error ?? 'upload failed')
+  }
+
   const uploadAll = async (files: File[]) => {
     if (!files.length) return
     setBusy(true); setErrs([])
@@ -86,9 +105,8 @@ export function AttachmentsPanel({ orderId, invoiceImageId, canSetInvoiceImage =
     for (let i = 0; i < files.length; i++) {
       setProgress(`Uploading ${i + 1} of ${files.length}: ${files[i].name}`)
       try {
-        const fd = new FormData(); fd.append('file', files[i])
-        const r = await fetch(base, { method: 'POST', body: fd })
-        if (!r.ok) failures.push(`${files[i].name} — ${(await r.json().catch(() => ({}))).error ?? 'upload failed'}`)
+        const failure = files[i].size > MAX_UPLOAD_BYTES ? await uploadDirect(files[i]) : await uploadThroughServer(files[i])
+        if (failure) failures.push(`${files[i].name} — ${failure}`)
       } catch { failures.push(`${files[i].name} — upload failed`) }
     }
     setProgress(null); setErrs(failures); setBusy(false)

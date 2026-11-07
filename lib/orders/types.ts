@@ -1,5 +1,6 @@
 import type { OrderStage } from './stages'
 import type { OrderKind, KindDetails } from './kinds'
+import type { OrderCharge } from './charges'
 
 // Jewelry attributes chosen from the tenant-managed dropdowns (lib/orders/options.ts). Stored as the
 // option's label text — a line item is a snapshot, so retiring an option never alters a past order.
@@ -124,7 +125,7 @@ export interface Order {
   clientRequirements: string | null; isCustomDesign: boolean
   internalNotes: string | null; publicNotes: string | null; createdBy: string | null; createdAt: string; updatedAt: string
 }
-export interface OrderWithDetails extends Order { lineItems: OrderLineItem[]; events: OrderEvent[] }
+export interface OrderWithDetails extends Order { lineItems: OrderLineItem[]; events: OrderEvent[]; /** Additional charges (shipping, CAD, discount…). Empty until add_order_charges.sql runs. */ charges?: OrderCharge[] }
 
 /**
  * The order's total internal cost — DERIVED, never stored.
@@ -168,6 +169,8 @@ export interface OrderInput {
   depositCents?: number; currency?: string; internalNotes?: string | null; publicNotes?: string | null
   clientRequirements?: string | null; isCustomDesign?: boolean
   lineItems?: LineItemInput[]
+  /** Replaces the order's additional charges when present. See lib/orders/charges.ts. */
+  charges?: OrderCharge[]
 }
 
 // Public-safe projection for the external approval page — NO internal notes/ids/tenant data.

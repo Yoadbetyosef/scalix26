@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireOrdersAccess } from '@/lib/orders/guard'
 import { listOrders, orderIdsMatchingLines } from '@/lib/orders/store'
+import { orderThumbnails } from '@/lib/orders/attachments'
 import { STAGE_LABELS, orderStatusGroup, type OrderStage } from '@/lib/orders/stages'
 import { stageHue } from '@/lib/orders/stage-colors'
 
@@ -42,6 +43,17 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     .some((v) => (v ?? '').toLowerCase().includes(q))
   const orders = all.filter((o) => (q ? true : view.test(o.stage as OrderStage)) && matches(o))
   const countOf = (v: typeof VIEWS[number]) => all.filter((o) => v.test(o.stage as OrderStage)).length
+  // A picture beside each order, so the piece is recognised without opening it.
+  const thumbs = await orderThumbnails(a.tenantId, orders)
+  const thumb = (id: string) => {
+    const url = thumbs.get(id)
+    return (
+      <span aria-hidden style={{ width: 40, height: 40, flex: '0 0 40px', borderRadius: 8, overflow: 'hidden', background: 'var(--v2-line, #eef0f2)', display: 'inline-block' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL, not a static asset */}
+        {url && <img src={url} alt="" loading="lazy" style={{ width: 40, height: 40, objectFit: 'cover', display: 'block' }} />}
+      </span>
+    )
+  }
 
   return (
     <div className="v2 v2-embedded mx-auto max-w-6xl p-4 sm:p-6">
@@ -94,13 +106,14 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
             <table className="v2-tbl">
               <thead>
                 <tr>
-                  <th>Order</th><th>Customer</th><th>Stage</th>
+                  <th style={{ width: 56 }} aria-label="Picture" /><th>Order</th><th>Customer</th><th>Stage</th>
                   <th className="max-lg:hidden">Factory</th><th>Total</th><th className="max-lg:hidden">Requested</th>
                 </tr>
               </thead>
               <tbody>
                 {orders.map((o) => (
                   <tr key={o.id} style={{ ['--chan' as string]: stageHue(o.stage) }}>
+                    <td><Link href={`/orders/${o.id}`} tabIndex={-1}>{thumb(o.id)}</Link></td>
                     <td>
                       <Link href={`/orders/${o.id}`} className="block truncate"
                             style={{ fontFamily: 'var(--v2-mono)', fontSize: 12.5, color: 'var(--v2-ink)' }}>
@@ -122,6 +135,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
             {orders.map((o) => (
               <Link key={o.id} href={`/orders/${o.id}`} className="v2-row tap-target" data-click
                     style={{ ['--chan' as string]: stageHue(o.stage) }}>
+                {thumb(o.id)}
                 <div className="v2-m">
                   <p className="flex items-center gap-2 flex-wrap min-w-0">
                     <span className="truncate">{o.customerName ?? 'No customer'}</span>

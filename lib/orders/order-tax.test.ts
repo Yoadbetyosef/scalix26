@@ -244,7 +244,9 @@ describe('the gate is a rule, not a hidden button', () => {
   it('the ROUTE enforces it — it had no stage check at all before', () => {
     // The only thing stopping an edit to a finished order was that the page did not render the
     // button, so every other caller inherited the hole.
-    expect(route).toContain('refusedFields(existing.stage, Object.keys(parsed.data))')
+    // editClosed is the request flag, not an order field — split off first so it is never written.
+    expect(route).toContain('const { editClosed, ...patch } = parsed.data')
+    expect(route).toContain('refusedFields(existing.stage, Object.keys(patch), { closedEdit: editClosed === true })')
     // Reading the order is what makes the check possible at all — the route wrote blind before.
     expect(route).toContain('const existing = await getOrder(id)')
   })
@@ -272,10 +274,13 @@ describe('the gate is a rule, not a hidden button', () => {
     }
   })
 
-  it('the page shows the drawer OR the narrow form, never both', () => {
-    expect(page).toContain('canEditWorkflow(o.stage) ? (')
-    expect(page).toContain(') : canEditDocumentFacts(o.stage) ? (')
+  it('the page shows ONE drawer: live orders edit freely, closed ones edit as a recorded invoice edit', () => {
+    // The narrow tax-only form was replaced by the full drawer in closed mode ("Edit invoice"),
+    // which the route accepts only with editClosed and records as invoice_edited.
+    expect(page).toContain('canEditWorkflow(o.stage) || canEditClosedInvoice(o.stage) ? (')
+    expect(page).toContain('closed={!canEditWorkflow(o.stage)}')
     expect(page).toContain(') : null}')
+    expect(route).toContain("addEvent(id, 'invoice_edited'")
   })
 
   it('and the photo choice closes on cancelled only', () => {

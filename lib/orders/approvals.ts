@@ -286,19 +286,17 @@ export async function getApprovalByToken(rawToken: string): Promise<PublicApprov
   // The letterhead's business, so the page a factory or customer opens is headed by the company that
   // sent it — T.G. Designs on a Designs order, TG jewellers on a retail one.
   const sender = await documentSender(r.tenant_id as string, { letterheadStyle: (order?.letterhead_style as string) ?? null }).catch(() => null)
-  const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
-  const attIds = (attRows ?? []).map((a) => a.attachment_id as string)
-  let attachments: PublicApprovalView['attachments'] = []
-  if (attIds.length) {
-    const { data: atts } = await sb.from('order_attachments').select('id, file_name, mime_type, visibility').in('id', attIds).eq('visibility', 'public')
-    attachments = (atts ?? []).map((a) => ({
-      id: a.id as string, fileName: a.file_name as string, mimeType: a.mime_type as string,
-      url: `/api/approval/${encodeURIComponent(rawToken)}/file/${a.id as string}`,
-    }))
-  }
+  const attachments: PublicApprovalView['attachments'] = (await visibleAttachments(r)).map((a) => ({
+    id: a.id, fileName: a.fileName, mimeType: a.mimeType,
+    url: `/api/approval/${encodeURIComponent(rawToken)}/file/${a.id}`,
+  }))
 
   const publicOrder: PublicOrderView = {
-    orderNumber: (order?.order_number as string) ?? '', customerName: (order?.customer_name as string) ?? null,
+    orderNumber: (order?.order_number as string) ?? '',
+    // THE FACTORY NEVER LEARNS WHOSE PIECE IT IS. The customer is the business's relationship, and a
+    // workshop that can read the name on the job can approach that customer directly. A customer
+    // reviewing their own order may see their own name.
+    customerName: (r.approval_type as ApprovalType) === 'factory' ? null : ((order?.customer_name as string) ?? null),
     requestedCompletionDate: (order?.requested_completion_date as string) ?? null, publicNotes: (order?.public_notes as string) ?? null,
     lineItems: lines.map((l) => ({
       productName: l.product_name as string, description: (l.description as string) ?? null, quantity: Number(l.quantity ?? 1),
@@ -352,16 +350,35 @@ export async function attachmentForToken(rawToken: string, attachmentId: string)
   if (!r) return null
   if (['revoked', 'draft'].includes(r.status as string)) return null
 
-  const sb = createAdminClient()
-  const { data: link } = await sb.from('order_approval_attachments')
-    .select('attachment_id').eq('approval_request_id', r.id as string).eq('attachment_id', attachmentId).maybeSingle()
-  if (!link) return null
+  const visible = (await visibleAttachments(r)).find((a) => a.id === attachmentId)
+  if (!visible) return null
+  return { storagePath: visible.storagePath, fileName: visible.fileName, mimeType: visible.mimeType }
+}
 
-  const { data: att } = await sb.from('order_attachments')
-    .select('storage_path, file_name, mime_type, visibility')
-    .eq('id', attachmentId).eq('tenant_id', r.tenant_id as string).maybeSingle()
-  if (!att || att.visibility !== 'public') return null
-  return { storagePath: att.storage_path as string, fileName: att.file_name as string, mimeType: att.mime_type as string }
+// ── WHAT A RECIPIENT SEES: WHAT WAS PICKED, PLUS WHAT WAS SHARED SINCE ──────────────────────────
+//
+// The files were frozen at the moment of sending. A job's photos arrive in pieces — the render
+// today, the stone photo tomorrow — and every picture shared after the request went out never
+// reached the factory, which then reviewed a spec with no images. So the request shows the files
+// ticked at send time AND every file made public on the order after it was sent. A file left
+// unticked at send time stays out: that was a decision, and it is respected.
+//
+// One function for the page and the file route, so the page can never show a file the route refuses.
+async function visibleAttachments(r: Record<string, unknown>): Promise<Array<{ id: string; fileName: string; mimeType: string; storagePath: string }>> {
+  const sb = createAdminClient()
+  const { data: attRows } = await sb.from('order_approval_attachments').select('attachment_id').eq('approval_request_id', r.id as string).order('display_order')
+  const picked = (attRows ?? []).map((a) => a.attachment_id as string)
+  const since = (r.sent_at as string) ?? (r.created_at as string)
+  const { data: atts } = await sb.from('order_attachments')
+    .select('id, file_name, mime_type, visibility, storage_path, created_at')
+    .eq('tenant_id', r.tenant_id as string).eq('order_id', r.order_id as string).eq('visibility', 'public')
+    .order('created_at')
+  const rows = (atts ?? []).filter((a) => picked.includes(a.id as string) || (since && (a.created_at as string) > since))
+  rows.sort((a, b) => {
+    const ia = picked.indexOf(a.id as string), ib = picked.indexOf(b.id as string)
+    return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib)
+  })
+  return rows.map((a) => ({ id: a.id as string, fileName: a.file_name as string, mimeType: a.mime_type as string, storagePath: a.storage_path as string }))
 }
 
 export async function recordApprovalResponse(rawToken: string, decision: ApprovalDecision, comment: string | null, estCompletionDate: string | null, quotedCostCents: number | null = null): Promise<{ ok: boolean; error?: string }> {

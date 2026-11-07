@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { requireActiveBusinessContext } from '@/lib/workspace'
-import { ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, extensionOf, tooLargeMessage, publicAttachmentKind } from './attachment-types'
+import { ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, MAX_ATTACHMENT_BYTES, extensionOf, tooLargeMessage, publicAttachmentKind } from './attachment-types'
 import { addEvent } from './store'
 
 // Private order attachments. The bucket is never public; files are reached only via short-lived signed URLs
@@ -28,6 +28,34 @@ export async function listAttachments(orderId: string): Promise<OrderAttachment[
 export async function signedUrlFor(storagePath: string, expiresIn = 300): Promise<string | null> {
   const { data } = await createAdminClient().storage.from(ORDER_BUCKET).createSignedUrl(storagePath, expiresIn)
   return data?.signedUrl ?? null
+}
+
+/**
+ * One picture per order for the order list, so a jeweller can tell the pieces apart without opening
+ * each one. The invoice photograph when one was chosen, else the first image uploaded. Internal images
+ * count too — this is the owner's own list, not anything a customer sees. HEIC is skipped because
+ * only Safari can draw it. Signed in one batch; an order with no image simply has no entry.
+ */
+export async function orderThumbnails(tenantId: string, orders: Array<{ id: string; invoiceImageId?: string | null }>): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (!orders.length) return out
+  const db = createAdminClient()
+  const { data } = await db.from('order_attachments').select('id, order_id, storage_path, mime_type, created_at')
+    .eq('tenant_id', tenantId).in('order_id', orders.map((o) => o.id)).like('mime_type', 'image/%')
+    .order('created_at')
+  const rows = ((data as Array<Record<string, string>> | null) ?? []).filter((r) => r.mime_type !== 'image/heic' && r.mime_type !== 'image/heif')
+  const chosen = new Map<string, string>()
+  for (const o of orders) {
+    const mine = rows.filter((r) => r.order_id === o.id)
+    const pick = mine.find((r) => r.id === o.invoiceImageId) ?? mine[0]
+    if (pick) chosen.set(o.id, pick.storage_path)
+  }
+  if (!chosen.size) return out
+  const paths = [...chosen.values()]
+  const { data: signed } = await db.storage.from(ORDER_BUCKET).createSignedUrls(paths, 3600)
+  const byPath = new Map((signed ?? []).filter((s) => s.signedUrl).map((s) => [s.path as string, s.signedUrl]))
+  for (const [orderId, path] of chosen) { const url = byPath.get(path); if (url) out.set(orderId, url) }
+  return out
 }
 
 /**
@@ -154,6 +182,55 @@ export async function uploadAttachment(orderId: string, file: File): Promise<{ o
   const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: file.name.slice(0, 200), mime_type: storedType, file_size: file.size, uploaded_by: c.actorUserId, visibility: 'public' }).select('*').single()
   if (error) { await createAdminClient().storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: error.message } }
   await addEvent(orderId, 'attachment_added', { fileName: file.name })
+  return { ok: true, attachment: row(data as Record<string, unknown>) }
+}
+
+// ── LARGE FILES GO STRAIGHT TO STORAGE ──────────────────────────────────────────────────────────
+//
+// uploadAttachment above streams the bytes through a Vercel function, and the platform refuses any
+// request body over ~4.5 MB before our code runs. A ring video from a phone is 10–40 MB, so every
+// one of them failed and the customer link showed the stone video (a 3 MB clip) but never the ring.
+//
+// So a large file is uploaded by the browser DIRECTLY to the private bucket, through a one-time
+// signed upload URL minted here for a path we choose (tenant/order/random), then registered with
+// completeDirectUpload, which checks the object really landed under that order before writing the
+// row. The bucket's own limit (50 MB) and MIME allowlist still apply to the PUT itself.
+
+export async function createDirectUpload(orderId: string, fileName: string, size: number): Promise<{ ok: boolean; error?: string; path?: string; token?: string; contentType?: string }> {
+  const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
+  const ext = extensionOf(fileName)
+  const storedType = ALLOWED_EXTENSIONS[ext]
+  if (!storedType) return { ok: false, error: `Can't accept a .${ext || 'unknown'} file. Photos, PDFs, videos and CAD files (STL, OBJ, 3DM, STEP, ZIP…) are all supported.` }
+  if (size > MAX_ATTACHMENT_BYTES) return { ok: false, error: `That file is ${(size / 1024 / 1024).toFixed(1)} MB and the limit is ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB.` }
+  const sb = await createClient()
+  const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
+  if (!order) return { ok: false, error: 'not found' }
+  const path = `${c.tenantId}/${orderId}/${crypto.randomUUID()}.${ext}`
+  const { data, error } = await createAdminClient().storage.from(ORDER_BUCKET).createSignedUploadUrl(path)
+  if (error || !data) return { ok: false, error: error?.message ?? 'Could not start the upload.' }
+  return { ok: true, path, token: data.token, contentType: storedType }
+}
+
+export async function completeDirectUpload(orderId: string, path: string, fileName: string): Promise<{ ok: boolean; error?: string; attachment?: OrderAttachment }> {
+  const c = await requireActiveBusinessContext(); if (!c) return { ok: false, error: 'unauthorized' }
+  // The path must be one createDirectUpload could have minted for THIS tenant and order.
+  const prefix = `${c.tenantId}/${orderId}/`
+  const name = path.slice(prefix.length)
+  if (!path.startsWith(prefix) || !/^[0-9a-f-]{36}\.[a-z0-9]+$/.test(name)) return { ok: false, error: 'not found' }
+  const ext = extensionOf(name)
+  const storedType = ALLOWED_EXTENSIONS[ext]
+  if (!storedType) return { ok: false, error: 'not found' }
+  const sb = await createClient()
+  const { data: order } = await sb.from('orders').select('id').eq('tenant_id', c.tenantId).eq('id', orderId).maybeSingle()
+  if (!order) return { ok: false, error: 'not found' }
+  // The object must exist — a row pointing at nothing would be a broken tile on the customer's copy.
+  const { data: listed } = await createAdminClient().storage.from(ORDER_BUCKET).list(`${c.tenantId}/${orderId}`, { search: name, limit: 1 })
+  const obj = (listed ?? []).find((o) => o.name === name)
+  if (!obj) return { ok: false, error: 'The upload did not arrive. Please try again.' }
+  const size = Number((obj.metadata as Record<string, unknown> | null)?.size ?? 0)
+  const { data, error } = await sb.from('order_attachments').insert({ tenant_id: c.tenantId, order_id: orderId, storage_path: path, file_name: fileName.slice(0, 200), mime_type: storedType, file_size: size, uploaded_by: c.actorUserId, visibility: 'public' }).select('*').single()
+  if (error) { await createAdminClient().storage.from(ORDER_BUCKET).remove([path]); return { ok: false, error: error.message } }
+  await addEvent(orderId, 'attachment_added', { fileName })
   return { ok: true, attachment: row(data as Record<string, unknown>) }
 }
 

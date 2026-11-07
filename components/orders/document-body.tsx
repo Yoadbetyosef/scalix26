@@ -3,6 +3,7 @@ import { ORDER_DOC_META, orderDocNumber, specRows, totalCarats, validUntil, type
 import { taxLabel, type TaxLine } from '@/lib/tax/canada'
 import type { DocumentImage, DocumentFile } from '@/lib/orders/attachments'
 import { orderTotals } from '@/lib/orders/payment-types'
+import { chargeLabel } from '@/lib/orders/charges'
 import type { OrderWithDetails } from '@/lib/orders/types'
 import { Letterhead } from '@/components/documents/letterhead'
 import { letterheadStyleFor, resolveLetterhead } from '@/lib/documents/letterhead-resolve'
@@ -252,6 +253,25 @@ export function OrderDocumentBody({ order: o, type, branding, business, images, 
             })}
             {o.lineItems.length === 0 && <p className="text-sm text-neutral-400">No items on this order yet.</p>}
           </section>
+
+          {/* ADDITIONAL CHARGES — shipping, CAD, certificates, a discount. The selling amount only:
+              cost is internal and is not on this object's path to the page. */}
+          {(o.charges ?? []).length > 0 && (
+            <section className="mt-5 break-inside-avoid">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Additional charges</h2>
+              <dl className="divide-y divide-neutral-100 rounded-lg border border-neutral-200 text-sm">
+                {(o.charges ?? []).map((ch, i) => (
+                  <div key={ch.id ?? i} className="flex items-start justify-between gap-4 px-4 py-2">
+                    <dt className="min-w-0">
+                      <span className="font-medium text-neutral-800">{chargeLabel(ch.chargeType)}</span>
+                      {ch.description && <span className="text-neutral-500"> · {ch.description}</span>}
+                    </dt>
+                    <dd className="shrink-0 font-medium tabular-nums">{money(ch.amountCents, o.currency)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
 
           <section className="mt-6 flex justify-end">
             <dl className="w-full max-w-xs space-y-1 text-sm">
