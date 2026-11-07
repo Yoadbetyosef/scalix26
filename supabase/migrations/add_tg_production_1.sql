@@ -203,6 +203,8 @@ ALTER TABLE catalog_products ADD CONSTRAINT catalog_products_ownership_check
 COMMENT ON COLUMN catalog_products.ownership IS
   'Who owns this stock: owned (ours) | memo_in (a supplier''s, here on memo) | consignment (a supplier''s, here on consignment). Never company stock unless owned.';
 ALTER TABLE catalog_products ADD COLUMN IF NOT EXISTS on_memo_quantity integer NOT NULL DEFAULT 0;
+-- !! These two NOT NULL columns break create_product_with_cost (jsonb_populate_record → NULL).
+-- !! Run fix_create_product_memo_columns.sql right after this part. Applied to prod 2026-11-07.
 COMMENT ON COLUMN catalog_products.on_memo_quantity IS
   'Units of OUR stock currently out on memo with a customer or dealer. Not in any location and not available; comes back on return.';
 
