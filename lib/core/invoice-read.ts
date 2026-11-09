@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { derivePaymentStatus, type PaymentStatus } from './payments'
 import { readInvoiceSettings } from './invoice-settings'
 import { salesTaxFor } from './sales-tax'
+import { discountLabel } from './money'
 
 // THE INVOICE LIST AND ONE INVOICE — docs/miles/invoices-income.html.
 //
@@ -228,6 +229,10 @@ export interface InvoiceDetail {
   row: InvoiceRow
   subtotalCents: number
   discountCents: number
+  /** "Discount (10%)" or "Discount". */
+  discountLabel: string
+  /** What the owner chose, for editing a draft. Null = no discount. */
+  discount: { kind: 'percent' | 'amount'; value: number } | null
   taxCents: number
   lines: InvoiceLine[]
   payments: InvoicePayment[]
@@ -244,7 +249,7 @@ export interface InvoiceDetail {
 export async function readInvoice(tenantId: string, id: string): Promise<InvoiceDetail | null> {
   const db = createAdminClient()
   const { data: inv } = await db.from('invoices')
-    .select('id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on, payment_instructions, token, sent_at, sent_channel')
+    .select('id, number, status, currency, subtotal_cents, discount_cents, discount_kind, discount_value, tax_cents, total_cents, contact_id, company_id, notes, issued_at, created_at, due_on, payment_instructions, token, sent_at, sent_channel')
     .eq('tenant_id', tenantId).eq('id', id).maybeSingle()
   if (!inv) return null
 
@@ -298,16 +303,12 @@ export async function readInvoice(tenantId: string, id: string): Promise<Invoice
     },
     subtotalCents: Number(inv.subtotal_cents ?? 0),
     discountCents: Number(inv.discount_cents ?? 0),
+    discountLabel: discountLabel(inv.discount_kind as string | null, Number(inv.discount_value ?? 0)),
+    discount: inv.discount_kind === 'percent' || inv.discount_kind === 'amount'
+      ? { kind: inv.discount_kind, value: Number(inv.discount_value ?? 0) }
+      : null,
     taxCents: Number(inv.tax_cents ?? 0),
-    lines: ((lines ?? []) as Record<string, unknown>[]).map((l) => ({
-      id: l.id as string,
-      description: (l.description as string) || 'Item',
-      quantity: Number(l.quantity ?? 1),
-      unitPriceCents: Number(l.unit_price_cents ?? 0),
-      // BEFORE TAX. Tax is shown once, as its own row under the subtotal — adding it into every line
-      // as well made the amounts disagree with qty × rate and with the subtotal under them.
-      lineTotalCents: Number(l.line_total_cents ?? 0) - Number(l.tax_cents ?? 0),
-    })),
+    lines: ((lines ?? []) as Record<string, unknown>[]).map(paperLine),
     payments: ((allocs ?? []) as Record<string, unknown>[]).map((a) => ({
       id: a.id as string,
       method: (a.method as string) ?? null,
@@ -350,6 +351,8 @@ export interface PublicInvoice {
   lines: InvoiceLine[]
   subtotalCents: number
   discountCents: number
+  /** "Discount (10%)" when chosen as a percent, else "Discount". Only printed when discountCents > 0. */
+  discountLabel: string
   taxCents: number
   /** "NJ sales tax (6.625%)" when the business's state has a known rate, else "Tax". */
   taxLabel: string
@@ -398,7 +401,22 @@ export async function readInvoicePaper(tenantId: string, id: string): Promise<Pu
   return paperFor({ ...row, issued_at: today.toISOString(), due_on: due.toISOString().slice(0, 10), payment_instructions: settings.paymentInstructions })
 }
 
-const PAPER_COLS = 'id, tenant_id, number, status, currency, subtotal_cents, discount_cents, tax_cents, total_cents, notes, issued_at, due_on, payment_instructions, contact_id'
+/**
+ * One line as printed: qty × rate = amount, BEFORE discount and tax. Both are shown once, as their
+ * own rows under the subtotal — folding them into every line made the amounts disagree with
+ * qty × rate and with the subtotal under them.
+ */
+function paperLine(l: Record<string, unknown>): InvoiceLine {
+  return {
+    id: l.id as string,
+    description: (l.description as string) || 'Item',
+    quantity: Number(l.quantity ?? 1),
+    unitPriceCents: Number(l.unit_price_cents ?? 0),
+    lineTotalCents: Math.round(Number(l.quantity ?? 1) * Number(l.unit_price_cents ?? 0)),
+  }
+}
+
+const PAPER_COLS = 'id, tenant_id, number, status, currency, subtotal_cents, discount_cents, discount_kind, discount_value, tax_cents, total_cents, notes, issued_at, due_on, payment_instructions, contact_id'
 
 async function paperFor(inv: Record<string, unknown>): Promise<PublicInvoice> {
   const db = createAdminClient()
@@ -425,17 +443,10 @@ async function paperFor(inv: Record<string, unknown>): Promise<PublicInvoice> {
     issuedAt: inv.issued_at as string | null,
     dueOn: (inv.due_on as string) ?? null,
     currency: (inv.currency as string) || 'usd',
-    lines: ((lines ?? []) as Record<string, unknown>[]).map((l) => ({
-      id: l.id as string,
-      description: (l.description as string) || 'Item',
-      quantity: Number(l.quantity ?? 1),
-      unitPriceCents: Number(l.unit_price_cents ?? 0),
-      // BEFORE TAX. Tax is shown once, as its own row under the subtotal — adding it into every line
-      // as well made the amounts disagree with qty × rate and with the subtotal under them.
-      lineTotalCents: Number(l.line_total_cents ?? 0) - Number(l.tax_cents ?? 0),
-    })),
+    lines: ((lines ?? []) as Record<string, unknown>[]).map(paperLine),
     subtotalCents: Number(inv.subtotal_cents ?? 0),
     discountCents: Number(inv.discount_cents ?? 0),
+    discountLabel: discountLabel(inv.discount_kind as string | null, Number(inv.discount_value ?? 0)),
     taxCents: Number(inv.tax_cents ?? 0),
     taxLabel: salesTaxFor(t.state)?.label ?? 'Tax',
     totalCents: total,

@@ -250,16 +250,19 @@ describe('creating an invoice', () => {
   })
 
   it('the total is a preview and is never sent', () => {
-    expect(nw).toContain('const subtotal = lines.reduce(')
+    expect(nw).toContain('const subtotal = gross.reduce(')
     const body = nw.slice(nw.indexOf("fetch('/api/core/documents'"), nw.indexOf('// 3 ──'))
     expect(body).not.toMatch(/total|subtotal/)
     // The line payload carries quantity and unit price only; the server derives everything else.
     expect(nw).toContain('unit_price_cents: cents(l.unitPrice),')
   })
 
-  it('has no discount or tax field', () => {
-    // Tax is jurisdictional, and a free-text cents box invites a number somebody computed wrong.
-    expect(nw).not.toMatch(/discount_cents|tax_cents/)
+  it('has no cents fields for discount or tax', () => {
+    // Tax is jurisdictional, and a free-text cents box invites a number somebody computed wrong. The
+    // discount is a percent or dollar CHOICE; the server turns it into cents.
+    // (The on-screen preview may use them; what is SENT may not.)
+    expect(nw.slice(nw.indexOf('async function save()'))).not.toMatch(/discount_cents|tax_cents/)
+    expect(nw).toContain('JSON.stringify({ discount })')
   })
 
   it('uses an existing contact, and a 409 means use THAT one', () => {

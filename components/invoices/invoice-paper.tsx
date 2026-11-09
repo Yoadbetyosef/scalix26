@@ -99,7 +99,7 @@ export function InvoicePaper({ inv, children }: { inv: PublicInvoice; children?:
         <dl className="w-full max-w-xs text-sm">
           <div className="flex justify-between py-1.5"><dt className="text-neutral-600">Subtotal</dt><dd className="tabular-nums">{m(inv.subtotalCents)}</dd></div>
           {inv.discountCents > 0 && (
-            <div className="flex justify-between py-1.5"><dt className="text-neutral-600">Discount</dt><dd className="tabular-nums">−{m(inv.discountCents)}</dd></div>
+            <div className="flex justify-between py-1.5"><dt className="text-neutral-600">{inv.discountLabel}</dt><dd className="tabular-nums">−{m(inv.discountCents)}</dd></div>
           )}
           {inv.taxCents > 0 && (
             <div className="flex justify-between py-1.5"><dt className="text-neutral-600">{inv.taxLabel}</dt><dd className="tabular-nums">{m(inv.taxCents)}</dd></div>

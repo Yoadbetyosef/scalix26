@@ -96,7 +96,7 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
                 ))}
                 <div className="v2-ag-sep" />
                 <div className="v2-iv-tot"><span>Subtotal</span><span>{exact(inv.subtotalCents)}</span></div>
-                {inv.discountCents > 0 && <div className="v2-iv-tot"><span>Discount</span><span>−{exact(inv.discountCents)}</span></div>}
+                {inv.discountCents > 0 && <div className="v2-iv-tot"><span>{inv.discountLabel}</span><span>−{exact(inv.discountCents)}</span></div>}
                 {inv.taxCents > 0 && <div className="v2-iv-tot"><span>{paper.taxLabel}</span><span>{exact(inv.taxCents)}</span></div>}
                 <div className="v2-iv-tot" data-big><span>Total</span><span>{exact(r.totalCents)}</span></div>
               </>
@@ -194,7 +194,7 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
                 invoiceId={r.id} number={r.number} who={r.who}
                 email={inv.contact?.email ?? null} phone={inv.contact?.phone ?? null}
                 sentAt={r.sentAt} sentChannel={r.sentChannel}
-                isDraft={isDraft} paper={paper} taxLabel={tax?.label ?? null} primary={isDraft || !r.sentAt}
+                isDraft={isDraft} paper={paper} taxLabel={tax?.label ?? null} discount={inv.discount} primary={isDraft || !r.sentAt}
               />
               )}
             </>
@@ -206,7 +206,7 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
                 invoiceId={r.id} number={r.number} who={r.who}
                 email={inv.contact?.email ?? null} phone={inv.contact?.phone ?? null}
                 sentAt={r.sentAt} sentChannel={r.sentChannel}
-                isDraft={isDraft} paper={paper} taxLabel={tax?.label ?? null} primary={isDraft || !r.sentAt}
+                isDraft={isDraft} paper={paper} taxLabel={tax?.label ?? null} discount={inv.discount} primary={isDraft || !r.sentAt}
               />
               {r.outstandingCents > 0 && (
                 <RecordPayment invoiceId={r.id} who={r.who} number={r.number} outstandingCents={r.outstandingCents} />

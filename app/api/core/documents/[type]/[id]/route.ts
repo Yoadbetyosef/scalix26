@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireCore } from '@/lib/core/guard'
-import { getDocument, updateStatus, setDocumentCustomer, setDraftNotes, setDraftTax, type DocType } from '@/lib/core/documents'
+import { getDocument, updateStatus, setDocumentCustomer, setDraftNotes, setDraftTax, setDraftDiscount, type DocType } from '@/lib/core/documents'
 
 const TYPES = ['estimate', 'quote', 'invoice'] as const
 const parseType = (t: string): DocType | null => (TYPES as readonly string[]).includes(t) ? (t as DocType) : null
@@ -23,9 +23,11 @@ const schema = z.object({
   /** Drafts only — the customer's copy is frozen at issue. */
   notes: z.string().max(10000).nullable().optional(),
   taxable: z.boolean().optional(),
+  /** Invoices, drafts only — a percent or a dollar amount off the whole invoice; null removes it. */
+  discount: z.object({ kind: z.enum(['percent', 'amount']), value: z.number().nonnegative().max(10_000_000) }).nullable().optional(),
 })
 const DRAFT_ERR: Record<string, string> = {
-  document_not_draft: 'It has already been issued — comments and tax are fixed on the copy the customer has.',
+  document_not_draft: 'It has already been issued — comments, discount and tax are fixed on the copy the customer has.',
   no_tax_rate: 'There is no sales-tax rate for this business\'s state.',
 }
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ type: string; id: string }> }) {
@@ -44,6 +46,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ty
   for (const r of [
     'notes' in body ? await setDraftNotes(c.tenantId, t, id, body.notes ?? null) : null,
     body.taxable !== undefined ? await setDraftTax(c.tenantId, t, id, body.taxable) : null,
+    'discount' in body
+      ? (t === 'invoice' ? await setDraftDiscount(c.tenantId, id, body.discount ?? null) : { ok: false as const, error: 'Only invoices take a discount here.' })
+      : null,
   ]) {
     if (r && !r.ok) return NextResponse.json({ ok: false, error: DRAFT_ERR[r.error] ?? r.error }, { status: r.error === 'not_found' ? 404 : 409 })
   }

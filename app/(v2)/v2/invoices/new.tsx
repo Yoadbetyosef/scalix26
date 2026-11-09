@@ -7,6 +7,8 @@ import { ContactPick, createContactFor, type PickedContact } from '../contact-pi
 import { Plus } from './glyphs'
 import { CatalogBrowse, matches, type CatalogHit } from './catalog-browse'
 import { lineTaxCents } from '@/lib/core/sales-tax'
+import { docDiscountCents, spreadDiscount } from '@/lib/core/money'
+import { DiscountField, toDiscount, type DiscountKind } from './discount-field'
 
 // A NEW INVOICE.
 //
@@ -36,8 +38,13 @@ import { lineTaxCents } from '@/lib/core/sales-tax'
 // Offered only when the business's state has a known rate (lib/core/sales-tax.ts — NJ 6.625%). The
 // form sends `taxable` and the SERVER computes each line's tax at that rate; a free-text cents box
 // invites somebody to type a number they computed wrong. On by default where there is a rate, because
-// a seller in a taxing state who forgets it pays it themselves. No discount field — still per-line in
-// the engine, not designed here.
+// a seller in a taxing state who forgets it pays it themselves.
+//
+// ── DISCOUNT: PERCENT OR DOLLARS, OPTIONAL ──────────────────────────────────────────────────────
+//
+// One discount on the whole invoice (discount-field.tsx). Left empty, the customer's copy says
+// nothing about a discount. Filled, it is sent AFTER the lines as a PATCH and the server spreads it
+// over them, so tax is on the discounted price. Percent prints as "Discount (10%)".
 //
 // ── COMMENTS ────────────────────────────────────────────────────────────────────────────────────
 //
@@ -77,6 +84,8 @@ export function NewInvoice({ tax }: { tax: { rate: number; label: string } | nul
   const [browsing, setBrowsing] = useState(false)
   const [notes, setNotes] = useState('')
   const [taxable, setTaxable] = useState(!!tax)
+  const [discKind, setDiscKind] = useState<DiscountKind>('percent')
+  const [discValue, setDiscValue] = useState('')
 
   // Loaded once per opening. The catalog route already returns the whole tenant list for client-side
   // search, and a few hundred rows is cheaper than a request per keystroke.
@@ -125,12 +134,16 @@ export function NewInvoice({ tax }: { tax: { rate: number; label: string } | nul
 
   // Shown while typing, never sent. createDocument recomputes the header from the lines it stored,
   // so the only total that exists is the one the server derived.
-  const subtotal = lines.reduce((s, l) => s + Math.round(qty(l.quantity) * cents(l.unitPrice)), 0)
-  const taxPreview = tax && taxable
-    ? lines.reduce((s, l) => s + lineTaxCents({ quantity: qty(l.quantity), unit_price_cents: cents(l.unitPrice) }, tax.rate), 0)
-    : 0
-  const preview = subtotal + taxPreview
   const usable = lines.filter((l) => l.description.trim() && cents(l.unitPrice) > 0 && qty(l.quantity) > 0)
+  const gross = usable.map((l) => Math.round(qty(l.quantity) * cents(l.unitPrice)))
+  const subtotal = gross.reduce((s, g) => s + g, 0)
+  const discount = toDiscount(discKind, discValue)
+  const discountPreview = docDiscountCents(subtotal, discount)
+  const offs = spreadDiscount(gross, discountPreview)
+  const taxPreview = tax && taxable
+    ? usable.reduce((s, l, i) => s + lineTaxCents({ quantity: qty(l.quantity), unit_price_cents: cents(l.unitPrice), discount_cents: offs[i] }, tax.rate), 0)
+    : 0
+  const preview = subtotal - discountPreview + taxPreview
   // ONE OF THE THREE, which is exactly what createContact requires — it refuses only when all three
   // are empty. Phone is NOT required: an invoice usually goes by email, and demanding a number would
   // block a customer who has only ever written to you. Neither is email, because a walk-in with a
@@ -139,7 +152,7 @@ export function NewInvoice({ tax }: { tax: { rate: number; label: string } | nul
 
   function reset() {
     setPicked(null); setName(''); setEmail(''); setPhone(''); setLines([blank(1)]); setNextId(2); setFocusLine(null); setBrowsing(false)
-    setNotes(''); setTaxable(!!tax)
+    setNotes(''); setTaxable(!!tax); setDiscKind('percent'); setDiscValue('')
     setErr(null); setPartial(null); setBusy(false)
   }
   // Escape or the veil while browsing the catalog steps back to the form instead of dropping the invoice.
@@ -209,9 +222,27 @@ export function NewInvoice({ tax }: { tax: { rate: number; label: string } | nul
       }
     }
 
-    if (failed.length) {
+    // 4 ── the discount, once the lines it is spread over exist.
+    let discountFailed = false
+    if (discount) {
+      try {
+        const res = await fetch(`/api/core/documents/invoice/${docId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ discount }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok || !j.ok) discountFailed = true
+      } catch {
+        discountFailed = true
+      }
+    }
+
+    if (failed.length || discountFailed) {
       const which = failed.length === 1 ? `Line ${failed[0]}` : `Lines ${failed.join(', ')}`
-      const message = `${number} was created, but ${which} of ${usable.length} did not save. Its total is lower than you meant. It is in your drafts.`
+      const message = failed.length
+        ? `${number} was created, but ${which} of ${usable.length} did not save. Its total is lower than you meant. It is in your drafts.`
+        : `${number} was created, but the discount did not save, so its total is higher than you meant. Add the discount in Send before it goes out. It is in your drafts.`
       // Written to the document's own history, so this outlives the sheet, the tab and the day.
       // The detail screen renders HISTORY, so the invoice carries the explanation with it.
       try {
@@ -340,10 +371,16 @@ export function NewInvoice({ tax }: { tax: { rate: number; label: string } | nul
                   <span>Add {tax.label}</span>
                 </label>
               )}
-              {taxPreview > 0 && (
+              <DiscountField kind={discKind} value={discValue} onKind={setDiscKind} onValue={setDiscValue} disabled={busy} />
+              {(taxPreview > 0 || discountPreview > 0) && (
                 <>
                   <div className="v2-in-total" data-sub><span>Subtotal</span><span>{money(subtotal)}</span></div>
-                  <div className="v2-in-total" data-sub><span>{tax!.label}</span><span>{money(taxPreview)}</span></div>
+                  {discountPreview > 0 && (
+                    <div className="v2-in-total" data-sub>
+                      <span>Discount{discount?.kind === 'percent' ? ` (${discount.value}%)` : ''}</span><span>−{money(discountPreview)}</span>
+                    </div>
+                  )}
+                  {taxPreview > 0 && <div className="v2-in-total" data-sub><span>{tax!.label}</span><span>{money(taxPreview)}</span></div>}
                 </>
               )}
               <div className="v2-in-total">
