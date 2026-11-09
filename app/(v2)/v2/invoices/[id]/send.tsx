@@ -6,6 +6,7 @@ import { Sheet } from '../../form-sheet'
 import { Send } from '../glyphs'
 import { InvoicePaper } from '@/components/invoices/invoice-paper'
 import type { PublicInvoice } from '@/lib/core/invoice-read'
+import { DiscountField, toDiscount, type DiscountKind } from '../discount-field'
 
 // SENDING AN INVOICE TO THE PERSON WHO OWES THE MONEY.
 //
@@ -24,8 +25,9 @@ import type { PublicInvoice } from '@/lib/core/invoice-read'
 // On a draft the button says "Issue & send": it saves the comments, issues (date, due date and payment
 // details stamped; total frozen), then sends. The route still refuses to send a draft — issuing is
 // the step that makes there be something to send, and the button names both so nobody is surprised
-// that the invoice can no longer be edited afterwards. Comments and sales tax are editable only here,
-// while it is a draft: the copy a customer has never changes.
+// that the invoice can no longer be edited afterwards. Comments, the discount and sales tax are
+// editable only here, while it is a draft: the copy a customer has never changes. The discount is
+// optional — percent or dollars — and with none, the paper says nothing about one.
 //
 // ── RESEND SAYS WHEN IT LAST WENT ───────────────────────────────────────────────────────────────
 //
@@ -33,7 +35,7 @@ import type { PublicInvoice } from '@/lib/core/invoice-read'
 // has only ever gone once. The full record is in HISTORY, which gets a row for every send.
 
 export function SendInvoice({
-  invoiceId, number, who, email, phone, sentAt, sentChannel, isDraft, paper, taxLabel, primary,
+  invoiceId, number, who, email, phone, sentAt, sentChannel, isDraft, paper, taxLabel, discount, primary,
 }: {
   invoiceId: string
   number: string
@@ -47,6 +49,8 @@ export function SendInvoice({
   paper: PublicInvoice
   /** The business's sales-tax rate label, or null when its state has no known rate. */
   taxLabel: string | null
+  /** The discount saved on the draft, or null. */
+  discount: { kind: 'percent' | 'amount'; value: number } | null
   primary?: boolean
 }) {
   const router = useRouter()
@@ -60,6 +64,12 @@ export function SendInvoice({
   const [to, setTo] = useState(channel === 'sms' ? (phone ?? '') : (email ?? ''))
   const [notes, setNotes] = useState(paper.notes ?? '')
   const taxOn = paper.taxCents > 0
+  const [discKind, setDiscKind] = useState<DiscountKind>(discount?.kind ?? 'percent')
+  const [discValue, setDiscValue] = useState(discount ? String(discount.value) : '')
+  const [discBusy, setDiscBusy] = useState(false)
+  const typed = toDiscount(discKind, discValue)
+  // Whether what is typed differs from what is saved — the paper shows the SAVED one until applied.
+  const discDirty = JSON.stringify(typed) !== JSON.stringify(discount && discount.value > 0 ? discount : null)
 
   function pick(next: 'email' | 'sms') {
     setChannel(next)
@@ -73,6 +83,7 @@ export function SendInvoice({
   function close() {
     if (busy) return
     setOpen(false); setErr(null); setNotes(paper.notes ?? '')
+    setDiscKind(discount?.kind ?? 'percent'); setDiscValue(discount ? String(discount.value) : '')
   }
 
   // The method is explicit: the document route is PATCH, issue and send are POST. Inferring it from
@@ -102,6 +113,18 @@ export function SendInvoice({
     setTaxBusy(false)
   }
 
+  // The cents are the server's: it spreads the discount over the lines and re-taxes them, and the
+  // paper below re-reads, so the total shown is the one that will be issued.
+  async function applyDiscount(): Promise<string | null> {
+    if (!isDraft || !discDirty) return null
+    setDiscBusy(true); setErr(null)
+    const e = await call('PATCH', `/api/core/documents/invoice/${invoiceId}`, { discount: typed })
+    if (e) setErr(`The discount did not save: ${e}`)
+    router.refresh()
+    setDiscBusy(false)
+    return e
+  }
+
   async function send() {
     if (busy || !to.trim()) return
     setBusy(true); setErr(null)
@@ -109,6 +132,10 @@ export function SendInvoice({
       if (notes.trim() !== (paper.notes ?? '').trim()) {
         const e = await call('PATCH', `/api/core/documents/invoice/${invoiceId}`, { notes: notes.trim() || null })
         if (e) { setErr(`The comments did not save: ${e}`); setBusy(false); return }
+      }
+      if (discDirty) {
+        const e = await call('PATCH', `/api/core/documents/invoice/${invoiceId}`, { discount: typed })
+        if (e) { setErr(`The discount did not save: ${e}`); setBusy(false); router.refresh(); return }
       }
       const e = await call('POST', `/api/core/documents/invoice/${invoiceId}/issue`)
       if (e) { setErr(e); setBusy(false); router.refresh(); return }
@@ -150,6 +177,14 @@ export function SendInvoice({
                   placeholder="Delivery date, terms, a thank-you — printed on the customer's copy"
                 />
               </label>
+              <DiscountField
+                kind={discKind} value={discValue} onKind={setDiscKind} onValue={setDiscValue} disabled={busy || discBusy}
+                trailing={discDirty ? (
+                  <button type="button" className="v2-esec" onClick={() => void applyDiscount()} disabled={busy || discBusy}>
+                    {discBusy ? 'Applying…' : 'Apply'}
+                  </button>
+                ) : null}
+              />
               {taxLabel && (
                 <label className="v2-iv-tax">
                   <input type="checkbox" checked={taxOn} onChange={() => void toggleTax()} disabled={busy || taxBusy} />
@@ -190,7 +225,7 @@ export function SendInvoice({
 
           {err && <p className="v2-emsg" data-bad>{err}</p>}
 
-          <button type="button" className="v2-iv-save" onClick={() => void send()} disabled={busy || taxBusy || !to.trim()}>
+          <button type="button" className="v2-iv-save" onClick={() => void send()} disabled={busy || taxBusy || discBusy || !to.trim()}>
             {busy ? 'Sending…' : isDraft ? `Issue & send ${number}` : sentAt ? 'Send it again' : 'Send it'}
           </button>
         </Sheet>

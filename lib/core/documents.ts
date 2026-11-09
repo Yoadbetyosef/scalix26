@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
-import { lineTotalCents, documentTotals, type LineAmounts } from './money'
+import { lineTotalCents, documentTotals, docDiscountCents, spreadDiscount, type LineAmounts, type DocDiscount } from './money'
 import { readInvoiceSettings } from './invoice-settings'
 import { salesTaxFor, lineTaxCents } from './sales-tax'
 
@@ -39,6 +39,16 @@ export async function addLine(tenantId: string, type: DocType, documentId: strin
     custom_attributes: line.customAttributes ?? {}, sort_order: count ?? 0,
   })
   if (error) return { ok: false, error: error.message }
+  // An invoice that already carries a discount re-spreads it over the new set of lines, so a
+  // percent stays a percent of everything on it.
+  if (type === 'invoice') {
+    const { data: inv } = await admin().from('invoices').select('discount_kind, discount_value').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle()
+    if (inv?.discount_kind) {
+      const r = await applyDiscount(tenantId, type, documentId, { kind: inv.discount_kind, value: Number(inv.discount_value ?? 0) } as DocDiscount)
+      if (!r.ok) return r
+      return { ok: true }
+    }
+  }
   await recomputeTotals(tenantId, type, documentId)
   return { ok: true }
 }
@@ -83,6 +93,45 @@ export async function setDraftTax(tenantId: string, type: DocType, documentId: s
     const { error } = await admin().from('sales_document_lines')
       .update({ tax_cents, line_total_cents: lineTotalCents({ ...amounts, tax_cents }) })
       .eq('tenant_id', tenantId).eq('id', l.id)
+    if (error) return { ok: false, error: error.message }
+  }
+  await recomputeTotals(tenantId, type, documentId)
+  return { ok: true }
+}
+
+/**
+ * A discount on the whole INVOICE — a percent or a dollar amount, or null to take it off. Drafts only.
+ * The choice is kept on the header (so the customer's copy can say "10%"), and the cents are spread
+ * over the lines' discount_cents, re-taxing each taxed line on what is left. This replaces any
+ * per-line discount on the invoice; the invoice form never sets one.
+ */
+export async function setDraftDiscount(tenantId: string, documentId: string, discount: DocDiscount | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const d = discount && discount.value > 0 ? discount : null
+  const { data, error } = await admin().from('invoices')
+    .update({ discount_kind: d?.kind ?? null, discount_value: d?.value ?? null, updated_at: new Date().toISOString() })
+    .eq('tenant_id', tenantId).eq('id', documentId).eq('status', 'draft').select('id').maybeSingle()
+  if (error) return { ok: false, error: error.message }
+  if (!data) {
+    const { data: head } = await admin().from('invoices').select('id').eq('tenant_id', tenantId).eq('id', documentId).maybeSingle()
+    return { ok: false, error: head ? 'document_not_draft' : 'not_found' }
+  }
+  return applyDiscount(tenantId, 'invoice', documentId, d)
+}
+
+async function applyDiscount(tenantId: string, type: DocType, documentId: string, d: DocDiscount | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: lines } = await admin().from('sales_document_lines').select('id, quantity, unit_price_cents, tax_cents')
+    .eq('tenant_id', tenantId).eq('document_type', type).eq('document_id', documentId).order('sort_order')
+  const rows = (lines ?? []) as { id: string; quantity: number; unit_price_cents: number; tax_cents: number | null }[]
+  const gross = rows.map((l) => Math.round(Number(l.quantity) * Number(l.unit_price_cents)))
+  const parts = spreadDiscount(gross, docDiscountCents(gross.reduce((s, g) => s + g, 0), d))
+  // Taxed is a fact about the invoice, not each line: if any line carries tax, they all do.
+  const tax = rows.some((l) => Number(l.tax_cents ?? 0) > 0) ? await tenantSalesTax(tenantId) : null
+  for (let i = 0; i < rows.length; i++) {
+    const amounts = { quantity: Number(rows[i].quantity), unit_price_cents: Number(rows[i].unit_price_cents), discount_cents: parts[i] }
+    const tax_cents = tax ? lineTaxCents(amounts, tax.rate) : 0
+    const { error } = await admin().from('sales_document_lines')
+      .update({ discount_cents: parts[i], tax_cents, line_total_cents: lineTotalCents({ ...amounts, tax_cents }) })
+      .eq('tenant_id', tenantId).eq('id', rows[i].id)
     if (error) return { ok: false, error: error.message }
   }
   await recomputeTotals(tenantId, type, documentId)

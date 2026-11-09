@@ -38,3 +38,36 @@ export function depositCents(totalCents: number, spec: { kind: 'fixed'; cents: n
   if (spec.kind === 'fixed') return Math.max(0, Math.min(totalCents, Math.round(spec.cents)))
   return Math.max(0, Math.min(totalCents, Math.round((totalCents * spec.percent) / 100)))
 }
+
+// ── A DISCOUNT ON THE WHOLE INVOICE ─────────────────────────────────────────────────────────────
+//
+// Chosen as a percent OR a dollar amount, and turned into cents here, once. It is then SPREAD over the
+// lines' discount_cents in proportion to each line's gross, so sales tax (charged per line) is on the
+// price the customer actually pays, and documentTotals above needs no second discount path.
+export type DocDiscount = { kind: 'percent'; value: number } | { kind: 'amount'; value: number }
+
+/** The discount in cents for a subtotal. Percent is capped at 100, an amount at the subtotal. */
+export function docDiscountCents(subtotalCents: number, d: DocDiscount | null | undefined): number {
+  if (!d || !(d.value > 0) || subtotalCents <= 0) return 0
+  if (d.kind === 'percent') return Math.round((subtotalCents * Math.min(100, d.value)) / 100)
+  return Math.min(subtotalCents, Math.round(d.value * 100))
+}
+
+/** Split `discountCents` across lines by gross, largest remainder — the parts always sum exactly. */
+export function spreadDiscount(grossCents: number[], discountCents: number): number[] {
+  const total = grossCents.reduce((s, g) => s + Math.max(0, g), 0)
+  if (total <= 0 || discountCents <= 0) return grossCents.map(() => 0)
+  const d = Math.min(discountCents, total)
+  const exact = grossCents.map((g) => (Math.max(0, g) * d) / total)
+  const parts = exact.map(Math.floor)
+  let left = d - parts.reduce((s, p) => s + p, 0)
+  const order = exact.map((x, i) => [x - Math.floor(x), i] as const).sort((a, b) => b[0] - a[0])
+  for (const [, i] of order) { if (left <= 0) break; parts[i] += 1; left -= 1 }
+  return parts
+}
+
+/** "Discount (10%)" when chosen as a percent, plain "Discount" when chosen as an amount. */
+export function discountLabel(kind: string | null | undefined, value: number | null | undefined): string {
+  if (kind === 'percent' && value && value > 0) return `Discount (${Number(value.toFixed(2))}%)`
+  return 'Discount'
+}
