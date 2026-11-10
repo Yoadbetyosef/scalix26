@@ -47,6 +47,10 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
 
   return (
     <main className="min-h-screen bg-white">
+      {/* A PDF IS A LETTER PAGE, WHATEVER PRINTS IT. A phone prints at its own narrow width, which
+          stacked the invoice into one column down the left half of the page; the paper's print:
+          classes force the desktop layout, and this fixes the page and its margins. */}
+      <style>{'@page { size: letter; margin: 0.5in; }'}</style>
       <InvoicePaper inv={inv}>
         <div className="mt-10 print:hidden"><PrintButton /></div>
       </InvoicePaper>
