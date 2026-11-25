@@ -247,3 +247,41 @@ export async function updateStatus(tenantId: string, type: DocType, documentId: 
   await admin().from('document_status_history').insert({ tenant_id: tenantId, document_type: type, document_id: documentId, from_status: doc.status, to_status: toStatus, actor, note: note ?? null })
   return true
 }
+
+
+// ── DELETING AN INVOICE NOBODY PAID ─────────────────────────────────────────────────────────────────
+//
+// An invoice that was raised and never paid is clutter the owner is entitled to clear. An invoice
+// with ANY money recorded against it — a part payment, a deposit, a refund — is a record of that
+// money and is refused here, whatever the screen offered.
+//
+// ORDER MATTERS. trg_lines_only_on_draft (add_document_freeze.sql) refuses to delete the lines of an
+// issued document — and lets them go once the document itself no longer exists. So the invoice row
+// goes first, guarded on tenant, and its lines and history follow. Done the other way round, an
+// issued invoice could never be deleted at all.
+export type DeleteInvoiceResult = { ok: true } | { ok: false; error: 'not_found' | 'has_payments' | 'failed' }
+export async function deleteUnpaidInvoice(tenantId: string, invoiceId: string): Promise<DeleteInvoiceResult> {
+  const db = admin()
+  const { data: inv } = await db.from('invoices').select('id').eq('tenant_id', tenantId).eq('id', invoiceId).maybeSingle()
+  if (!inv) return { ok: false, error: 'not_found' }
+
+  // Read as a count of rows rather than a sum: a payment and its refund net to zero and are still
+  // two things that happened.
+  const { count, error: allocErr } = await db.from('payment_allocations')
+    .select('document_id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId).eq('document_type', 'invoice').eq('document_id', invoiceId)
+  if (allocErr) return { ok: false, error: 'failed' }
+  if ((count ?? 0) > 0) return { ok: false, error: 'has_payments' }
+
+  const { data: gone, error } = await db.from('invoices').delete().eq('tenant_id', tenantId).eq('id', invoiceId).select('id').maybeSingle()
+  if (error) { console.error('[invoices] delete failed:', error.code, error.message); return { ok: false, error: 'failed' } }
+  if (!gone) return { ok: false, error: 'not_found' }
+
+  // The invoice is gone, so these are orphans either way; a failure here must not report the delete
+  // as having failed.
+  const lines = await db.from('sales_document_lines').delete().eq('tenant_id', tenantId).eq('document_type', 'invoice').eq('document_id', invoiceId)
+  if (lines.error) console.error('[invoices] orphan lines left behind:', invoiceId, lines.error.message)
+  const hist = await db.from('document_status_history').delete().eq('tenant_id', tenantId).eq('document_type', 'invoice').eq('document_id', invoiceId)
+  if (hist.error) console.error('[invoices] orphan history left behind:', invoiceId, hist.error.message)
+  return { ok: true }
+}

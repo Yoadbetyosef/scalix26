@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { requireCore } from '@/lib/core/guard'
-import { getDocument, updateStatus, setDocumentCustomer, setDraftNotes, setDraftTax, setDraftDiscount, type DocType } from '@/lib/core/documents'
+import { requireCore, requireCoreTenant } from '@/lib/core/guard'
+import { getDocument, updateStatus, setDocumentCustomer, setDraftNotes, setDraftTax, setDraftDiscount, deleteUnpaidInvoice, type DocType } from '@/lib/core/documents'
 
 const TYPES = ['estimate', 'quote', 'invoice'] as const
 const parseType = (t: string): DocType | null => (TYPES as readonly string[]).includes(t) ? (t as DocType) : null
@@ -52,5 +52,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ ty
   ]) {
     if (r && !r.ok) return NextResponse.json({ ok: false, error: DRAFT_ERR[r.error] ?? r.error }, { status: r.error === 'not_found' ? 404 : 409 })
   }
+  return NextResponse.json({ ok: true })
+}
+
+// Delete an invoice that has had no money recorded against it. Invoices only — estimates and quotes
+// have their own lifecycles and nobody has asked to delete those.
+const DELETE_ERR: Record<string, string> = {
+  has_payments: 'A payment has been recorded on this invoice, so it cannot be deleted.',
+  failed: 'Could not delete it.',
+}
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ type: string; id: string }> }) {
+  const c = await requireCoreTenant('invoices')
+  if (!c) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const { type, id } = await params
+  if (parseType(type) !== 'invoice') return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
+  if (!z.string().uuid().safeParse(id).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const r = await deleteUnpaidInvoice(c.tenantId, id)
+  if (!r.ok) return NextResponse.json({ ok: false, error: DELETE_ERR[r.error] ?? 'Not found' }, { status: r.error === 'not_found' ? 404 : r.error === 'has_payments' ? 409 : 500 })
   return NextResponse.json({ ok: true })
 }
