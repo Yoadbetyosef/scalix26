@@ -11,7 +11,7 @@ import { Trash } from './glyphs'
 // never lost to a thumb that was aiming at the row. Leaving the button disarms it.
 //
 // The server decides whether it may go (lib/core/documents.ts → deleteUnpaidInvoice). This only asks.
-export function DeleteInvoice({ id, label }: { id: string; label: string }) {
+export function DeleteInvoice({ id, label, endpoint, noun = 'invoice' }: { id: string; label: string; /** Defaults to the invoice route; Quotes passes its own. */ endpoint?: string; noun?: string }) {
   const router = useRouter()
   const [armed, setArmed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -22,7 +22,7 @@ export function DeleteInvoice({ id, label }: { id: string; label: string }) {
     if (!armed) { setArmed(true); setError(null); return }
     setBusy(true)
     try {
-      const res = await fetch(`/api/core/documents/invoice/${id}`, { method: 'DELETE' })
+      const res = await fetch(endpoint ?? `/api/core/documents/invoice/${id}`, { method: 'DELETE' })
       const body = await res.json().catch(() => ({})) as { ok?: boolean; error?: string }
       if (!res.ok || !body.ok) { setError(body.error || 'Could not delete it.'); setArmed(false); return }
       router.refresh()
@@ -43,7 +43,7 @@ export function DeleteInvoice({ id, label }: { id: string; label: string }) {
       onClick={press}
       onBlur={() => setArmed(false)}
       aria-label={armed ? `Confirm deleting ${label}` : `Delete ${label}`}
-      title={error ?? (armed ? 'Press again to delete' : 'Delete invoice')}
+      title={error ?? (armed ? 'Press again to delete' : `Delete ${noun}`)}
     >
       {armed ? <span>{busy ? 'Deleting…' : 'Delete?'}</span> : error ? <span>{error}</span> : <Trash />}
     </button>

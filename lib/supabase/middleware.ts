@@ -65,6 +65,9 @@ export const PUBLIC_ROUTES = ['/auth/login', '/auth/signup', '/auth/forgot-passw
     // The customer's copy of a core INVOICE. Same arrangement again, and a third path on purpose:
     // /d/ resolves against studio_documents and four of those are already in customers' hands.
     '/i/',
+    // The customer's copy of a quote, and the one thing they can do from it. Both keyed by the
+    // unguessable token in the link they were sent — no session, like /i/.
+    '/quote/', '/api/quote/',
     // Deciding a held draft from the SMS/email link. The OWNER is the recipient here rather than a
     // customer, but the arrangement is identical: no session, the token in the URL is the sole
     // credential, and it resolves to exactly one draft. ('/d/' was already taken by the studio

@@ -70,6 +70,8 @@ export const GROUPS: Group[] = [
       // Gated on `invoices`, so a tenant without it never sees the row — the same rule every other
       // destination here follows, applied once and read by both the rail and the sheet.
       { label: 'Invoices', href: '/v2/invoices', module: 'invoices' },
+      // Directly under Invoices, and on the same module: a quote is the step before one.
+      { label: 'Quotes', href: '/v2/quotes', module: 'invoices' },
       // "MONEY OUT", not "Expenses". This row is the ONE DOOR every bill comes in through — a photo
       // or a PDF, read, and then landed as an expense or as a supplier bill by what is in it. So the
       // label has to name the whole category of money leaving, not one of the two outcomes behind it:
