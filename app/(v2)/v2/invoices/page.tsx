@@ -5,6 +5,7 @@ import { listPageContext } from '../list-page'
 import { invoicesLine } from './line'
 import { PaymentDetails } from './settings'
 import { NewInvoice } from './new'
+import { DeleteInvoice } from './delete'
 import { tenantSalesTax } from '@/lib/core/documents'
 
 // INVOICES — docs/miles/invoices-income.html, both widths, values taken directly.
@@ -12,8 +13,9 @@ import { tenantSalesTax } from '@/lib/core/documents'
 // Not ListPage: the money band, the day-group form and a row that carries a progress bar are this
 // screen's own, and forcing them through the shared list would mean a branch in it for one screen.
 //
-// READ-ONLY here. The one thing that writes is recording a payment, and that lives on the invoice
-// itself — where the balance it changes is on the screen beside it.
+// READ-ONLY here but for one thing: an invoice nobody has paid anything against can be deleted from
+// its row (delete.tsx). Recording a payment still lives on the invoice itself — where the balance it
+// changes is on the screen beside it.
 
 export const dynamic = 'force-dynamic'
 
@@ -107,6 +109,8 @@ export default async function V2Invoices() {
                     {g.rows.map((r, i) => (
                       <div key={r.id}>
                         {i > 0 && <div className="v2-ag-sep" />}
+                        {/* The bin is a SIBLING of the link, not a child — see delete.tsx. */}
+                        <div className="v2-iv-line">
                         <Link href={`/v2/invoices/${r.id}`} className="v2-iv-row" data-s={r.bucket === 'draft' ? 'draft' : r.status}>
                           {/* The spine IS the state: grey draft, violet issued, amber part paid, acid paid. */}
                           <span className="v2-iv-bar" />
@@ -133,6 +137,12 @@ export default async function V2Invoices() {
                             </span>
                           </span>
                         </Link>
+                        {/* Only where no money has been recorded. An invoice somebody has paid
+                            against — in part or in full — is a record of that money and stays. */}
+                        {r.paidCents === 0 && r.status !== 'paid' && (
+                          <DeleteInvoice id={r.id} label={r.bucket === 'draft' ? `the draft for ${r.who}` : `invoice ${r.number}`} />
+                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
