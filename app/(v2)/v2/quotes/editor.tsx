@@ -12,8 +12,8 @@ import { Doc, Plus, Send, Trash, Check } from '../invoices/glyphs'
 // THE QUOTE, WHOLE, ON ONE SCREEN. The same screen makes a new one and edits an existing one — sent
 // or not — because revising an offer is the ordinary thing to do with it. Only acceptance fixes it.
 //
-// Nothing is written until Save or Send: the editor holds the whole quote and sends the whole quote
-// (PUT /api/core/quotes/[id]), so a half-edited line can never be the customer's copy.
+// The editor holds the whole quote and saves the whole quote (PUT /api/core/quotes/[id]). Until it is
+// sent it saves itself as a draft a moment after every change; once sent, a change goes out on Save.
 
 interface Line { key: number; name: string; detail: string; imageUrl: string | null; productId: string | null; quantity: string; unitPrice: string }
 const cents = (v: string) => Math.round((Number(String(v).replace(/[^0-9.]/g, '')) || 0) * 100)
@@ -24,11 +24,14 @@ const plain = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.roun
 export function QuoteEditor({ quote }: { quote: Quote | null }) {
   const router = useRouter()
   const fixed = quote?.state === 'accepted'
+  const sentAlready = !!quote?.sentAt
   const [id, setId] = useState<string | null>(quote?.id ?? null)
   const [picked, setPicked] = useState<PickedContact | null>(quote?.contact ?? null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [clientName, setClientName] = useState(quote?.clientName ?? '')
+  const [cc, setCc] = useState((quote?.ccEmails ?? []).join(', '))
   const [validUntil, setValidUntil] = useState(quote?.validUntil ?? '')
   const [notes, setNotes] = useState(quote?.notes ?? '')
   const [discount, setDiscount] = useState(quote?.discountPercent ? plain(quote.discountPercent) : '')
@@ -40,13 +43,17 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
   const [dirty, setDirty] = useState(!quote)
   const [busy, setBusy] = useState<null | 'save' | 'send' | 'invoice' | 'photo'>(null)
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
+  const [tick, setTick] = useState(0)
+  const [autoAt, setAutoAt] = useState<string | null>(null)
   const [browsing, setBrowsing] = useState(false)
   const [catalog, setCatalog] = useState<CatalogHit[]>([])
   const [catalogLoaded, setCatalogLoaded] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const photoFor = useRef<number | null>(null)
 
-  const touch = () => { setDirty(true); setMsg(null) }
+  // Counts edits, so a save that finishes after a newer edit does not call the form clean.
+  const version = useRef(0)
+  const touch = () => { version.current += 1; setDirty(true); setMsg(null); setTick((t) => t + 1) }
   const patch = (key: number, p: Partial<Line>) => { setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...p } : l))); touch() }
 
   useEffect(() => {
@@ -84,6 +91,23 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     } catch { setMsg({ text: 'That photo could not be uploaded — check your connection.', bad: true }) } finally { setBusy(null) }
   }
 
+  // ── SAVED AS A DRAFT WHILE IT IS BEING WRITTEN ────────────────────────────────────────────────────
+  // A quote is built over minutes — pieces looked up, a call taken in the middle — and a quote that
+  // exists only in a browser tab is lost to a closed lid. So two seconds after the last change it is
+  // saved as it stands, from the moment there is anything to save: a customer, a client name, a line.
+  const saveRef = useRef<(auto?: boolean) => Promise<string | null>>(async () => null)
+  const hasSomething = !!picked || name.trim().length >= 2 || !!clientName.trim() || lines.some((l) => l.name.trim())
+  useEffect(() => {
+    // Only until it is sent. After that the customer's link shows whatever is saved, so a change
+    // to a sent quote goes out when Save is pressed, not while a price is half typed.
+    if (fixed || sentAlready || !dirty || busy || !hasSomething || tick === 0) return
+    const t = setTimeout(async () => {
+      const saved = await saveRef.current(true)
+      if (saved) setAutoAt(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))
+    }, 2000)
+    return () => clearTimeout(t)
+  }, [tick, dirty, busy, fixed, sentAlready, hasSomething])
+
   const usable = lines.filter((l) => l.name.trim())
   const subtotal = usable.reduce((s, l) => s + Math.round(num(l.quantity) * cents(l.unitPrice)), 0)
   const pct = Math.min(100, Math.max(0, num(discount)))
@@ -91,27 +115,34 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
   const total = subtotal - off
 
   /** Save the whole quote. Returns its id, or null when something stopped it (and says what). */
-  async function save(): Promise<string | null> {
+  async function save(auto = false): Promise<string | null> {
     let contactId = picked?.id ?? null
-    if (!contactId && (name.trim() || email.trim() || phone.trim())) {
+    // An autosave makes the customer's record only once their name is finished — never from a
+    // half-typed one, which would fill the contact book with "J", "Jo", "Joa".
+    const typing = auto && !!document.activeElement?.closest('.v2-qt-new')
+    if (!contactId && !typing && (auto ? name.trim().length >= 2 : (name.trim() || email.trim() || phone.trim()))) {
       const r = await createContactFor({ name, email, phone })
       const c = r.duplicateOf ?? (r.ok ? r.contact : undefined)
-      if (!c) { setMsg({ text: r.error || 'That customer could not be saved.', bad: true }); return null }
+      if (!c) { if (!auto) setMsg({ text: r.error || 'That customer could not be saved.', bad: true }); return null }
       contactId = c.id; setPicked(c)
     }
+    const mine = version.current
     const body = JSON.stringify({
-      contactId, validUntil: validUntil || null, notes: notes.trim() || null, discountPercent: pct || null,
+      contactId, clientName: clientName.trim() || null, ccEmails: cc.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean).slice(0, 8),
+      validUntil: validUntil || null, notes: notes.trim() || null, discountPercent: pct || null,
       lines: usable.map((l) => ({ name: l.name.trim(), detail: l.detail.trim() || null, imageUrl: l.imageUrl, productId: l.productId, quantity: num(l.quantity), unitPriceCents: cents(l.unitPrice) })),
     })
     try {
       const res = await fetch(id ? `/api/core/quotes/${id}` : '/api/core/quotes', { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body })
       const j = await res.json().catch(() => ({})) as { ok?: boolean; id?: string; error?: string }
-      if (!res.ok || !j.ok || !j.id) { setMsg({ text: j.error || 'The quote could not be saved.', bad: true }); return null }
-      setDirty(false)
+      if (!res.ok || !j.ok || !j.id) { if (!auto) setMsg({ text: j.error || 'The quote could not be saved.', bad: true }); return null }
+      if (version.current === mine) setDirty(false)
       if (!id) { setId(j.id); window.history.replaceState(null, '', `/v2/quotes/${j.id}`) }
       return j.id
-    } catch { setMsg({ text: 'The quote could not be saved — check your connection.', bad: true }); return null }
+    } catch { if (!auto) setMsg({ text: 'The quote could not be saved — check your connection.', bad: true }); return null }
   }
+
+  useEffect(() => { saveRef.current = save })
 
   async function onSave() {
     if (busy) return
@@ -128,9 +159,13 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     if (saved) {
       try {
         const res = await fetch(`/api/core/quotes/${saved}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        const j = await res.json().catch(() => ({})) as { ok?: boolean; to?: string; channel?: string; error?: string }
+        const j = await res.json().catch(() => ({})) as { ok?: boolean; to?: string; channel?: string; copied?: string[]; failed?: string[]; error?: string }
         if (!res.ok || !j.ok) setMsg({ text: j.error || 'The quote was saved but could not be sent.', bad: true })
-        else { setMsg({ text: `Sent by ${j.channel === 'sms' ? 'text' : 'email'} to ${j.to}.` }); router.refresh() }
+        else {
+          const extra = j.copied?.length ? ` Copy to ${j.copied.join(', ')}.` : ''
+          const bad = j.failed?.length ? ` Could not send the copy to ${j.failed.join(', ')}.` : ''
+          setMsg({ text: `Sent by ${j.channel === 'sms' ? 'text' : 'email'} to ${j.to}.${extra}${bad}`, bad: !!bad }); router.refresh()
+        }
       } catch { setMsg({ text: 'The quote was saved but could not be sent — check your connection.', bad: true }) }
     }
     setBusy(null)
@@ -166,14 +201,20 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
             <div>
               <ContactPick picked={picked} onPick={(c) => { setPicked(c); if (!c) { setName(''); setEmail(''); setPhone('') } touch() }} disabled={!!busy || fixed} />
               {!picked && !fixed && (
-                <div className="v2-qt-new">
+                <div className="v2-qt-new" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && name.trim()) touch() }}>
                   <label className="v2-efield"><span>Name</span><input value={name} onChange={(e) => { setName(e.target.value); touch() }} /></label>
                   <label className="v2-efield"><span>Email</span><input type="email" value={email} onChange={(e) => { setEmail(e.target.value); touch() }} /></label>
                   <label className="v2-efield"><span>Phone</span><input value={phone} onChange={(e) => { setPhone(e.target.value); touch() }} /></label>
                 </div>
               )}
             </div>
-            <label className="v2-efield"><span>Valid until</span><input type="date" value={validUntil} disabled={fixed} onChange={(e) => { setValidUntil(e.target.value); touch() }} /></label>
+            <div>
+              <label className="v2-efield"><span>Valid until</span><input type="date" value={validUntil} disabled={fixed} onChange={(e) => { setValidUntil(e.target.value); touch() }} /></label>
+            </div>
+          </div>
+          <div className="v2-qt-who" data-even>
+            <label className="v2-efield"><span>Designer&apos;s client (optional)</span><input value={clientName} disabled={fixed} placeholder="Whose project this is" onChange={(e) => { setClientName(e.target.value); touch() }} /></label>
+            <label className="v2-efield"><span>Also send a copy to (optional)</span><input value={cc} disabled={fixed} inputMode="email" placeholder="one@example.com, two@example.com" onChange={(e) => { setCc(e.target.value); touch() }} /></label>
           </div>
 
           <p className="v2-ag-grp"><span className="v2-ag-gt">WHAT&apos;S ON IT</span><span className="v2-ag-gn">{usable.length}</span><span className="v2-ag-gr" /></p>
@@ -256,7 +297,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
           {id && !dirty && (quote?.invoiceId
             ? <Link className="v2-iv-btn" data-p={fixed ? true : undefined} href={`/v2/invoices/${quote.invoiceId}`}><Doc />Open the invoice</Link>
             : quote && quote.state !== 'draft' && <button type="button" className="v2-iv-btn" data-p={fixed ? true : undefined} disabled={!!busy} onClick={onInvoice}><Doc />{busy === 'invoice' ? 'Making it…' : 'Make invoice'}</button>)}
-          <p className="v2-iv-smsg">{msg ? <b style={msg.bad ? { color: 'var(--iv-late-ink)' } : undefined}>{msg.text}</b> : sentLine}</p>
+          <p className="v2-iv-smsg">{msg ? <b style={msg.bad ? { color: 'var(--iv-late-ink)' } : undefined}>{msg.text}</b> : autoAt && !dirty && !sentAlready ? <><b>Draft saved at {autoAt}.</b> {sentLine}</> : sentLine}</p>
         </div>
       </div>
 

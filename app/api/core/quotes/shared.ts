@@ -3,6 +3,8 @@ import { z } from 'zod'
 // The whole quote, as the editor holds it. One shape for create and for save.
 export const quoteContentSchema = z.object({
   contactId: z.string().uuid().nullable(),
+  clientName: z.string().max(200).nullable().optional(),
+  ccEmails: z.array(z.string().max(200)).max(8).optional(),
   validUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   notes: z.string().max(10000).nullable(),
   discountPercent: z.number().min(0).max(100).nullable(),

@@ -36,6 +36,7 @@ export function QuotePaper({ q, children }: { q: PublicQuote; children?: ReactNo
           <p className="mt-1.5 font-medium capitalize">{q.contact?.name || '—'}</p>
           {q.contact?.email && <p className="text-neutral-600">{q.contact.email.toLowerCase()}</p>}
           {q.contact?.phone && <p className="text-neutral-600">{q.contact.phone}</p>}
+          {q.clientName && <><p className={`${LABEL} mt-3`}>Client</p><p className="mt-1 font-medium capitalize">{q.clientName}</p></>}
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
           <dt className={`${LABEL} whitespace-nowrap leading-5`}>Quote no.</dt><dd>{q.number}</dd>

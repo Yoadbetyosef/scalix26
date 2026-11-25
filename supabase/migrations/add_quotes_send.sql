@@ -1,7 +1,7 @@
 -- ============================================================================
 -- QUOTES — what a quote needs that an invoice already has, plus its own two dates.
 --
--- Run in the Supabase SQL editor (project bphpnlgjlklgwhewsnrm). Additive only: seven nullable
+-- Run in the Supabase SQL editor (project bphpnlgjlklgwhewsnrm). Additive only: nine nullable
 -- columns on `quotes`, a table no screen read or wrote before this. Nothing existing changes.
 --
 --   token          the customer's URL, /quote/<token>. Minted at creation, never rotated.
@@ -10,6 +10,8 @@
 --   valid_until    the date the offer lapses. NULL = open-ended.
 --   accepted_at    when the customer pressed Accept. status moves to 'accepted' with it.
 --   discount_kind / discount_value   the same pair invoices carry (add_invoice_discount.sql).
+--   client_name    whose project it is, when the customer is a designer quoting for her own client.
+--   cc_emails      further addresses the quote is also sent to, comma-separated.
 --
 -- A QUOTE STAYS status='draft' UNTIL IT IS ACCEPTED, sent or not. That is deliberate:
 -- trg_lines_only_on_draft freezes the lines of anything not in draft, and a quote that has been sent
@@ -23,14 +25,16 @@ ALTER TABLE quotes
   ADD COLUMN IF NOT EXISTS valid_until    date,
   ADD COLUMN IF NOT EXISTS accepted_at    timestamptz,
   ADD COLUMN IF NOT EXISTS discount_kind  text,
-  ADD COLUMN IF NOT EXISTS discount_value numeric;
+  ADD COLUMN IF NOT EXISTS discount_value numeric,
+  ADD COLUMN IF NOT EXISTS client_name    text,
+  ADD COLUMN IF NOT EXISTS cc_emails      text;
 
 UPDATE quotes SET token = gen_random_uuid()::text WHERE token IS NULL;
 ALTER TABLE quotes ALTER COLUMN token SET DEFAULT gen_random_uuid()::text;
 ALTER TABLE quotes ALTER COLUMN token SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS quotes_token_uniq ON quotes (token);
 
--- Verify: expect the seven rows.
+-- Verify: expect the nine rows.
 SELECT column_name, data_type, is_nullable FROM information_schema.columns
-WHERE table_name = 'quotes' AND column_name IN ('token','sent_at','sent_channel','valid_until','accepted_at','discount_kind','discount_value')
+WHERE table_name = 'quotes' AND column_name IN ('token','sent_at','sent_channel','valid_until','accepted_at','discount_kind','discount_value','client_name','cc_emails')
 ORDER BY column_name;

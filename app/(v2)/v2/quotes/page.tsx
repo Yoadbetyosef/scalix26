@@ -122,7 +122,7 @@ export default async function V2Quotes() {
                                 </span>
                               )}
                               <span className="v2-iv-mid">
-                                <span className="v2-iv-nm">{q.who}</span>
+                                <span className="v2-iv-nm">{q.who}{q.clientName ? ` · ${q.clientName}` : ''}</span>
                                 <span className="v2-iv-sub">{sub(q)}</span>
                               </span>
                               <span className="v2-iv-amt">

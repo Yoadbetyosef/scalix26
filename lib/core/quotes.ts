@@ -37,11 +37,15 @@ export interface QuoteRow {
   notes: string | null; validUntil: string | null; daysLeft: number | null
   sentAt: string | null; sentChannel: string | null; acceptedAt: string | null; createdAt: string
   invoiceId: string | null
+  /** Whose project it is, when the customer is a designer quoting for her own client. */
+  clientName: string | null
+  /** Further addresses the quote also goes to. */
+  ccEmails: string[]
 }
 export interface Quote extends QuoteRow { lines: QuoteLine[]; history: { at: string; note: string }[] }
 export interface QuoteListRow extends QuoteRow { thumbs: string[] }
 
-const HEAD = 'id, tenant_id, number, token, status, contact_id, currency, subtotal_cents, discount_cents, discount_kind, discount_value, total_cents, notes, valid_until, sent_at, sent_channel, accepted_at, created_at'
+const HEAD = 'id, tenant_id, number, token, status, contact_id, currency, subtotal_cents, discount_cents, discount_kind, discount_value, total_cents, notes, valid_until, sent_at, sent_channel, accepted_at, created_at, client_name, cc_emails'
 
 function daysUntil(d: string | null): number | null {
   if (!d) return null
@@ -74,7 +78,18 @@ function toRow(h: Record<string, unknown>, contact: Contact | null, invoiceId: s
     sentAt: (h.sent_at as string) ?? null, sentChannel: (h.sent_channel as string) ?? null,
     acceptedAt: (h.accepted_at as string) ?? null, createdAt: h.created_at as string,
     invoiceId,
+    clientName: ((h.client_name as string) ?? '').trim() || null,
+    ccEmails: parseCc(h.cc_emails as string | null),
   }
+}
+/** Pure: the stored comma-separated list as clean, distinct addresses. */
+export function parseCc(raw: string | null | undefined): string[] {
+  const seen = new Set<string>()
+  for (const part of (raw ?? '').split(/[,;\s]+/)) {
+    const e = part.trim().toLowerCase()
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) seen.add(e)
+  }
+  return [...seen].slice(0, 8)
 }
 function toLine(l: Record<string, unknown>): QuoteLine {
   const a = (l.custom_attributes ?? {}) as Record<string, unknown>
@@ -170,6 +185,8 @@ export async function readQuotePaper(tenantId: string, id: string): Promise<Publ
 // ── WRITING ─────────────────────────────────────────────────────────────────────────────────────────
 export interface QuoteContent {
   contactId: string | null
+  clientName?: string | null
+  ccEmails?: string[]
   validUntil: string | null
   notes: string | null
   discountPercent: number | null
@@ -212,6 +229,7 @@ export async function saveQuote(tenantId: string, id: string, c: QuoteContent, a
   const upd = await db().from('quotes').update({
     ...documentTotals(amounts),
     contact_id: c.contactId, notes: c.notes?.trim() || null, valid_until: c.validUntil || null,
+    client_name: c.clientName?.trim() || null, cc_emails: parseCc((c.ccEmails ?? []).join(',')).join(', ') || null,
     discount_kind: discount?.kind ?? null, discount_value: discount?.value ?? null,
     updated_at: new Date().toISOString(),
   }).eq('tenant_id', tenantId).eq('id', id)

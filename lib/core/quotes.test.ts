@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { quoteState } from './quotes'
+import { quoteState, parseCc } from './quotes'
 
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)
 
@@ -17,5 +17,12 @@ describe('the four states of a quote', () => {
   })
   it('accepted outranks an old date', () => {
     expect(quoteState({ status: 'accepted', sent_at: '2026-11-01T00:00:00Z', valid_until: day(-30) })).toBe('accepted')
+  })
+})
+
+describe('the copy addresses', () => {
+  it('splits on commas, semicolons and spaces, lower-cases, and drops what is not an address', () => {
+    expect(parseCc('A@x.com; b@y.co  nope, a@x.com')).toEqual(['a@x.com', 'b@y.co'])
+    expect(parseCc(null)).toEqual([])
   })
 })
