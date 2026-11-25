@@ -1,6 +1,6 @@
 import {
   TrendingUp, MessageSquare, Calendar, Users, Bot, BookLock, FlaskConical,
-  Package, Receipt, Truck, Wallet, BarChart3, FileText, CreditCard, Settings, Plug, LogOut,
+  Package, Receipt, Truck, Wallet, BarChart3, FileText, CreditCard, Settings, Plug, LogOut, FileSignature,
 } from 'lucide-react'
 
 // ONE LABEL, ONE MARK, BOTH WIDTHS.
@@ -20,7 +20,7 @@ export const NAV_ICONS: Record<string, typeof TrendingUp> = {
   'AI Employees': Bot, Knowledge: BookLock, 'Test AI': FlaskConical,
   // Truck stays with SUPPLIER BILLS — it is stock arriving. MONEY OUT gets the wallet, because it is
   // the door everything leaving goes through, and only some of what goes through it becomes stock.
-  Orders: Package, Invoices: Receipt, 'Money out': Wallet, 'Supplier bills': Truck,
+  Orders: Package, Invoices: Receipt, Quotes: FileSignature, 'Money out': Wallet, 'Supplier bills': Truck,
   Analytics: BarChart3, Reports: FileText,
   'Your plan': CreditCard, Settings, Connections: Plug, 'Sign Out': LogOut,
 }

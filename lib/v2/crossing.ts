@@ -44,6 +44,7 @@ const RETURNABLE: Record<string, string> = {
   '/v2/contacts': 'Contacts',
   '/v2/orders': 'Orders',
   '/v2/invoices': 'Invoices',
+  '/v2/quotes': 'Quotes',
   '/v2/bills': 'Supplier bills',
   '/v2/agents': 'AI Employees',
   '/v2/analytics': 'Analytics',

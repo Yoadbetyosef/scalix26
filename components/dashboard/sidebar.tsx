@@ -19,7 +19,7 @@ import {
   ClipboardList,
   Ship,
   UserCog,
-  Receipt,
+  Receipt, FileSignature,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -43,6 +43,8 @@ const navItems = [
   // The customer-invoice screen exists only in /v2, so this row points there. Shown only when the
   // tenant has `invoices` AND may enter /v2 (v2Invoices, resolved by AppShell) — see visibleNav.
   { href: '/v2/invoices', icon: Receipt, label: 'Invoices' },
+  // Quotes lives beside Invoices and only in /v2, so it follows the same two conditions.
+  { href: '/v2/quotes', icon: FileSignature, label: 'Quotes' },
   { href: '/catalog', icon: Package, label: 'Catalog' },
   // Beside Catalog, because that is what it fills. The page has existed since landed cost shipped and
   // was reachable only by typing the URL — so the tenant it was built for could upload a supplier
@@ -74,7 +76,7 @@ const navItems = [
 // A row that goes nowhere is honest. A row pointed at an approximate page is not.
 const SECTIONS: { id: string; label: string; items: string[] }[] = [
   { id: 'g1', label: 'Rudi', items: ['Inbox', 'Appointments', 'Contacts', 'AI Employees', 'Knowledge', 'Test AI'] },
-  { id: 'g2', label: 'Business', items: ['Orders', 'Invoices', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
+  { id: 'g2', label: 'Business', items: ['Orders', 'Invoices', 'Quotes', 'Catalog', 'Supplier bills', 'Analytics', 'Reports'] },
   { id: 'g3', label: 'Account', items: ['Billing & Subscription', 'Settings', 'Team'] },
 ]
 // Dashboard is in none of the three, because it is not a destination among destinations — it is the
@@ -220,6 +222,7 @@ export function Sidebar({ operator = false, whiteLabel = false, operatorBusiness
     if (i.label === 'Team' && !caps.canManageTeam) return false
     if (i.label === 'Settings' && !caps.canEditSettings) return false
     if (i.label === 'Invoices' && (!v2Invoices || !enabledModules.includes('invoices'))) return false
+    if (i.label === 'Quotes' && (!v2Invoices || !enabledModules.includes('invoices'))) return false
     // Belt-and-suspenders: in impersonation mode keep the verified operator-safe allowlist.
     if (operator && !OPERATOR_SAFE_LABELS.has(i.label)) return false
     const m = moduleForNav(i.href)

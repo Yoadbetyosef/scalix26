@@ -20,6 +20,7 @@ export function isCustomerDocumentPath(pathname: string): boolean {
   // enquiry form saw our name in the browser tab.
   if (pathname.startsWith('/d/') || pathname.startsWith('/approval/') || pathname.startsWith('/f/')) return true
   if (pathname.startsWith('/e/')) return true
+  if (pathname.startsWith('/quote/')) return true
 
   // ── THE FOUR THAT WERE MISSING, AND WHY THE LIST KEEPS GROWING ────────────────────────────────
   //
