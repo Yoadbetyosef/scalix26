@@ -11,9 +11,21 @@ export async function GET() {
   const s = await requireCatalogTenant()
   if (!s) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
-  const { data, error } = await db.from('catalog_products').select('*').eq('tenant_id', s.tenantId).order('created_at', { ascending: false }).limit(5000)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ products: data || [] })
+  // READ IN PAGES. The database answers at most 1,000 rows per request whatever limit is asked for, so
+  // a single read silently showed the newest 1,000 products and hid the rest — which is every older
+  // product the day a supplier price list of several thousand is imported. The id tiebreak keeps the
+  // pages stable: a bulk import stamps thousands of rows with the same created_at.
+  const PAGE = 1000
+  const MAX = 20000
+  const products: Record<string, unknown>[] = []
+  for (let from = 0; from < MAX; from += PAGE) {
+    const { data, error } = await db.from('catalog_products').select('*').eq('tenant_id', s.tenantId)
+      .order('created_at', { ascending: false }).order('id', { ascending: true }).range(from, from + PAGE - 1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    products.push(...(data ?? []))
+    if (!data || data.length < PAGE) break
+  }
+  return NextResponse.json({ products })
 }
 
 // POST /api/catalog/products — create a product for the caller's tenant.
