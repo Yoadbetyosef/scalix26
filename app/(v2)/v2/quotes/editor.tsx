@@ -208,6 +208,9 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
                   <label className="v2-efield"><span>Phone</span><input value={phone} onChange={(e) => { setPhone(e.target.value); touch() }} /></label>
                 </div>
               )}
+              {/* A customer saved with only a phone number has nowhere for an email to go — say so here,
+                  where it can be fixed, rather than at Send. */}
+              {picked && !picked.email && !fixed && <p className="v2-ehint">No email address on file for this customer. To email the quote, type the address under &quot;Also send a copy to&quot; — or use Send by text.</p>}
             </div>
             <div>
               <label className="v2-efield"><span>Valid until</span><input type="date" value={validUntil} disabled={fixed} onChange={(e) => { setValidUntil(e.target.value); touch() }} /></label>
@@ -294,7 +297,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
         <div className="v2-iv-slotin">
           {id && !dirty && <a className="v2-iv-btn" href={`/quote/preview/${id}`} target="_blank" rel="noreferrer"><Doc />View as customer</a>}
           {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy || !dirty} onClick={onSave}><Check />{busy === 'save' ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>}
-          {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={() => onSend()}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Send again' : 'Send quote'}</button>}
+          {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={() => onSend()}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Email again' : 'Send by email'}</button>}
           {/* The same quote, the same link, as a text message to the customer's phone. Its own button
               rather than a setting: which way it goes is decided each time, at the moment of sending. */}
           {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy} onClick={() => onSend('sms')}><Send />{busy === 'text' ? 'Sending…' : 'Send by text'}</button>}
