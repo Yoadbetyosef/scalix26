@@ -50,7 +50,10 @@ const files = walk(V2).filter((f) => !f.includes('.test.') && !f.endsWith('.md')
 // page opened in a new tab. It is not a destination inside the app at all, so the /v2 tab the owner is
 // standing in never moves and there is no dead end to come back from. (`i/` only matches when the very
 // next character is a slash — a future `/inbox/` would still be caught.)
-const OUTSIDE = /(?:href:\s*|href=\{?["'`]|href="|router\.(?:push|replace)\(\s*["'`]|`)(\/(?!v2\/|v2["'`\s]|auth\/|api\/|i\/)[a-z][a-z0-9-]*(?:\/|["'`]))/g
+//
+// `/quote/` is the same thing for a quote: the customer's paper (and the owner's preview of it), opened
+// in a new tab from the quote editor.
+const OUTSIDE = /(?:href:\s*|href=\{?["'`]|href="|router\.(?:push|replace)\(\s*["'`]|`)(\/(?!v2\/|v2["'`\s]|auth\/|api\/|i\/|quote\/)[a-z][a-z0-9-]*(?:\/|["'`]))/g
 
 /**
  * The declared crossing. An element carrying `data-classic` may hold an outbound href, because it

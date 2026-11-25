@@ -291,7 +291,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
 
       <div className="v2-iv-slot">
         <div className="v2-iv-slotin">
-          {id && !dirty && <a className="v2-iv-btn" href={`/v2/quotes/${id}/paper`} target="_blank" rel="noreferrer"><Doc />View as customer</a>}
+          {id && !dirty && <a className="v2-iv-btn" href={`/quote/preview/${id}`} target="_blank" rel="noreferrer"><Doc />View as customer</a>}
           {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy || !dirty} onClick={onSave}><Check />{busy === 'save' ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>}
           {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={onSend}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Send again' : 'Send quote'}</button>}
           {id && !dirty && (quote?.invoiceId
