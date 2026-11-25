@@ -3141,6 +3141,8 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 /* The row and its bin, side by side. The link keeps the whole row; the bin is the last 44px. */
 .v2 .v2-iv-line { display: flex; align-items: stretch; }
 .v2 .v2-iv-line > .v2-iv-row { flex: 1; min-width: 0; }
+/* A row with no bin keeps the bin's width empty, so every amount ends on the same line. */
+.v2 .v2-iv-line > .v2-iv-row:only-child { padding-right: 58px; }
 .v2 .v2-iv-del {
   flex: none; min-width: 44px; padding: 0 12px; border: 0; background: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
