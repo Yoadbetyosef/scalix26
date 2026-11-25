@@ -17,19 +17,25 @@ export function DeleteInvoice({ id, label, endpoint, noun = 'invoice' }: { id: s
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function press() {
+  async function press(e: React.MouseEvent<HTMLButtonElement>) {
     if (busy) return
     if (!armed) { setArmed(true); setError(null); return }
+    const row = e.currentTarget.closest<HTMLElement>('.v2-iv-line')?.parentElement ?? null
     setBusy(true)
     try {
       const res = await fetch(endpoint ?? `/api/core/documents/invoice/${id}`, { method: 'DELETE' })
       const body = await res.json().catch(() => ({})) as { ok?: boolean; error?: string }
-      if (!res.ok || !body.ok) { setError(body.error || 'Could not delete it.'); setArmed(false); return }
+      // 404 is "it is already gone" — a second press that raced the first, or another tab. That is the
+      // outcome that was asked for, not a failure to show somebody.
+      if (!(res.ok && body.ok) && res.status !== 404) { setError(body.error || 'Could not delete it.'); setArmed(false); setBusy(false); return }
+      // GONE NOW, not when the list comes back. The row stayed on screen — and stayed a link — for the
+      // second or so the refresh takes, and a tap on it in that window opened an invoice that no
+      // longer existed. Hide it immediately; the refresh then removes it for real. The button stays
+      // busy on purpose, so it cannot be pressed again in the meantime.
+      if (row) row.style.display = 'none'
       router.refresh()
     } catch {
-      setError('Could not delete it.'); setArmed(false)
-    } finally {
-      setBusy(false)
+      setError('Could not delete it.'); setArmed(false); setBusy(false)
     }
   }
 

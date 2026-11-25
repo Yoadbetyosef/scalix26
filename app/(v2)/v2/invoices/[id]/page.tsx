@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { redirect } from 'next/navigation'
 import { readInvoice, readInvoicePaper } from '@/lib/core/invoice-read'
 import { tenantSalesTax } from '@/lib/core/documents'
 import { readInvoiceSettings } from '@/lib/core/invoice-settings'
@@ -25,7 +25,9 @@ export default async function V2Invoice({ params }: { params: Promise<{ id: stri
   const { tenantId } = await listPageContext('invoices')
   const { id } = await params
   const [inv, paper, tax] = await Promise.all([readInvoice(tenantId, id), readInvoicePaper(tenantId, id), tenantSalesTax(tenantId)])
-  if (!inv || !paper) notFound()
+  // An invoice that is not there — deleted a moment ago, or an old link — goes back to the list it
+  // would have been on. A 404 page inside the app is a dead end with no way back but the browser's.
+  if (!inv || !paper) redirect('/v2/invoices')
   // A DRAFT has no snapshot yet, so it previews what it WOULD carry — which is the only moment the
   // owner can still change it. An issued invoice shows what it actually went out with, always.
   const settings = inv.row.bucket === 'draft' ? await readInvoiceSettings(tenantId) : null
