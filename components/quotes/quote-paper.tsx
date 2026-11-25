@@ -69,6 +69,7 @@ export function QuotePaper({ q, children }: { q: PublicQuote; children?: ReactNo
       <div className="ml-auto mt-5 w-full max-w-xs text-sm">
         <div className="flex justify-between py-2 text-neutral-600"><span>Subtotal</span><span className="tabular-nums">{money(q.subtotalCents)}</span></div>
         {q.discountCents > 0 && <div className="flex justify-between py-2 text-neutral-600"><span>{q.discountLabel}</span><span className="tabular-nums">−{money(q.discountCents)}</span></div>}
+        {q.taxCents > 0 && <div className="flex justify-between py-2 text-neutral-600"><span>{q.taxLabel}</span><span className="tabular-nums">{money(q.taxCents)}</span></div>}
         <div className="mt-1 flex justify-between border-t-2 border-[#2b2b2b] pt-3 text-[17px] font-semibold"><span>Total</span><span className="tabular-nums">{money(q.totalCents)}</span></div>
       </div>
 

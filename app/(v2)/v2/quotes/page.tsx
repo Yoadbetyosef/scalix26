@@ -22,7 +22,7 @@ const SPINE: Record<QuoteState, string> = { draft: 'draft', waiting: 'unpaid', a
 function sub(q: QuoteListRow): string {
   if (q.state === 'draft') return `Not sent · created ${ago(q.createdAt)}`
   if (q.state === 'accepted') return `${q.number} · accepted ${q.acceptedAt ? ago(q.acceptedAt) : ''}${q.invoiceId ? ' · invoice made' : ''}`
-  const sent = q.sentAt ? `sent ${ago(q.sentAt)}${q.sentChannel ? ` by ${q.sentChannel === 'sms' ? 'SMS' : 'email'}` : ''}` : 'not sent'
+  const sent = q.sentAt ? `sent ${ago(q.sentAt)}${q.sentChannel ? ` by ${q.sentChannel === 'sms' ? 'text' : q.sentChannel === 'both' ? 'email and text' : 'email'}` : ''}` : 'not sent'
   return q.state === 'expired' ? `${q.number} · ${sent}, never answered` : `${q.number} · ${sent}`
 }
 function tag(q: QuoteListRow): { text: string; tone?: 'due' | 'late' } {

@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import type { Quote } from '@/lib/core/quotes'
 import { Sheet } from '../form-sheet'
+import { lineTaxCents } from '@/lib/core/sales-tax'
+import { spreadDiscount } from '@/lib/core/money'
 import { ContactPick, createContactFor, type PickedContact } from '../contact-pick'
 import { CatalogBrowse, type CatalogHit } from '../invoices/catalog-browse'
 import { Doc, Plus, Send, Trash, Check } from '../invoices/glyphs'
@@ -21,7 +23,7 @@ const num = (v: string) => Number(String(v).replace(/[^0-9.]/g, '')) || 0
 const money = (c: number) => `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const plain = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100))
 
-export function QuoteEditor({ quote }: { quote: Quote | null }) {
+export function QuoteEditor({ quote, tax }: { quote: Quote | null; /** The business's state sales tax, when its state has one. */ tax: { rate: number; label: string } | null }) {
   const router = useRouter()
   const fixed = quote?.state === 'accepted'
   const sentAlready = !!quote?.sentAt
@@ -34,6 +36,11 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
   const [cc, setCc] = useState((quote?.ccEmails ?? []).join(', '))
   const [validUntil, setValidUntil] = useState(quote?.validUntil ?? '')
   const [notes, setNotes] = useState(quote?.notes ?? '')
+  // On for a new quote, as on a new invoice; an existing one keeps whatever it was saved with.
+  const [taxable, setTaxable] = useState(quote && quote.lines.length ? quote.taxCents > 0 : !!tax)
+  const [sending, setSending] = useState(false)
+  const [viaEmail, setViaEmail] = useState(true)
+  const [viaText, setViaText] = useState(false)
   const [discount, setDiscount] = useState(quote?.discountPercent ? plain(quote.discountPercent) : '')
   const nextKey = useRef((quote?.lines.length ?? 0) + 1)
   const [lines, setLines] = useState<Line[]>(() => (quote?.lines ?? []).map((l, i) => ({
@@ -41,7 +48,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     quantity: plain(l.quantity), unitPrice: plain(l.unitPriceCents / 100),
   })))
   const [dirty, setDirty] = useState(!quote)
-  const [busy, setBusy] = useState<null | 'save' | 'send' | 'text' | 'invoice' | 'photo'>(null)
+  const [busy, setBusy] = useState<null | 'save' | 'send' | 'invoice' | 'photo'>(null)
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
   const [tick, setTick] = useState(0)
   const [autoAt, setAutoAt] = useState<string | null>(null)
@@ -112,7 +119,14 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
   const subtotal = usable.reduce((s, l) => s + Math.round(num(l.quantity) * cents(l.unitPrice)), 0)
   const pct = Math.min(100, Math.max(0, num(discount)))
   const off = Math.round((subtotal * pct) / 100)
-  const total = subtotal - off
+  // A preview of the server's own sum (lib/core/quotes.ts → saveQuote): discount spread over the
+  // lines, tax on what is left of each.
+  const grossEach = usable.map((l) => Math.round(num(l.quantity) * cents(l.unitPrice)))
+  const offEach = spreadDiscount(grossEach, off)
+  const taxAmount = tax && taxable
+    ? usable.reduce((sum, l, i) => sum + lineTaxCents({ quantity: num(l.quantity), unit_price_cents: cents(l.unitPrice), discount_cents: offEach[i] }, tax.rate), 0)
+    : 0
+  const total = subtotal - off + taxAmount
 
   /** Save the whole quote. Returns its id, or null when something stopped it (and says what). */
   async function save(auto = false): Promise<string | null> {
@@ -129,6 +143,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     const mine = version.current
     const body = JSON.stringify({
       contactId, clientName: clientName.trim() || null, ccEmails: cc.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean).slice(0, 8),
+      taxable: !!tax && taxable,
       validUntil: validUntil || null, notes: notes.trim() || null, discountPercent: pct || null,
       lines: usable.map((l) => ({ name: l.name.trim(), detail: l.detail.trim() || null, imageUrl: l.imageUrl, productId: l.productId, quantity: num(l.quantity), unitPriceCents: cents(l.unitPrice) })),
     })
@@ -152,20 +167,20 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     setBusy(null)
   }
   /** No channel = the server's own choice: email when there is an address, a text when there is only a number. */
-  async function onSend(channel?: 'email' | 'sms') {
+  async function onSend(channel: 'email' | 'sms' | 'both') {
     if (busy) return
     if (!usable.length || total <= 0) { setMsg({ text: 'Add at least one item with a price before sending.', bad: true }); return }
-    setBusy(channel === 'sms' ? 'text' : 'send')
+    setSending(false); setBusy('send')
     const saved = await save()
     if (saved) {
       try {
-        const res = await fetch(`/api/core/quotes/${saved}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(channel ? { channel } : {}) })
+        const res = await fetch(`/api/core/quotes/${saved}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel }) })
         const j = await res.json().catch(() => ({})) as { ok?: boolean; to?: string; channel?: string; copied?: string[]; failed?: string[]; error?: string }
         if (!res.ok || !j.ok) setMsg({ text: j.error || 'The quote was saved but could not be sent.', bad: true })
         else {
           const extra = j.copied?.length ? ` Copy to ${j.copied.join(', ')}.` : ''
           const bad = j.failed?.length ? ` Could not send the copy to ${j.failed.join(', ')}.` : ''
-          setMsg({ text: `Sent by ${j.channel === 'sms' ? 'text' : 'email'} to ${j.to}.${extra}${bad}`, bad: !!bad }); router.refresh()
+          setMsg({ text: `Sent by ${j.channel === 'email' ? 'email' : 'text'} to ${j.to}.${j.channel !== 'email' && j.copied?.length ? ` Emailed to ${j.copied.join(', ')}.` : extra}${bad}`, bad: !!bad }); router.refresh()
         }
       } catch { setMsg({ text: 'The quote was saved but could not be sent — check your connection.', bad: true }) }
     }
@@ -184,7 +199,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
 
   const sentLine = quote?.state === 'accepted' ? 'The customer accepted this quote. It is fixed — make the invoice from it.'
     : quote?.sentAt ? 'Already sent. You can still change it and send it again — the customer\'s link shows the latest saved version.'
-      : 'Send goes by email, Send by text goes to their phone — both carry a link to their copy, where they can accept it in one tap.'
+      : 'Send asks how: by email, by text, or both. Each carries a link to their copy, where they can accept it in one tap.'
 
   return (
     <div className="v2-page">
@@ -264,6 +279,12 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
               <span className="v2-qt-disc">Discount <input value={discount} inputMode="decimal" placeholder="0" disabled={fixed} aria-label="Discount percent" onChange={(e) => { setDiscount(e.target.value); touch() }} /> %</span>
               <span>{off > 0 ? `−${money(off)}` : money(0)}</span>
             </div>
+            {tax && (
+              <div className="v2-iv-tot">
+                <label className="v2-qt-taxl"><input type="checkbox" checked={taxable} disabled={fixed} onChange={(e) => { setTaxable(e.target.checked); touch() }} /> {tax.label}</label>
+                <span>{money(taxAmount)}</span>
+              </div>
+            )}
             <div className="v2-iv-tot" data-big><span>Total</span><span>{money(total)}</span></div>
           </div>
 
@@ -297,10 +318,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
         <div className="v2-iv-slotin">
           {id && !dirty && <a className="v2-iv-btn" href={`/quote/preview/${id}`} target="_blank" rel="noreferrer"><Doc />View as customer</a>}
           {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy || !dirty} onClick={onSave}><Check />{busy === 'save' ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>}
-          {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={() => onSend()}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Email again' : 'Send by email'}</button>}
-          {/* The same quote, the same link, as a text message to the customer's phone. Its own button
-              rather than a setting: which way it goes is decided each time, at the moment of sending. */}
-          {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy} onClick={() => onSend('sms')}><Send />{busy === 'text' ? 'Sending…' : 'Send by text'}</button>}
+          {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={() => { setMsg(null); setSending(true) }}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Send again' : 'Send quote'}</button>}
           {id && !dirty && (quote?.invoiceId
             ? <Link className="v2-iv-btn" data-p={fixed ? true : undefined} href={`/v2/invoices/${quote.invoiceId}`}><Doc />Open the invoice</Link>
             : quote && quote.state !== 'draft' && <button type="button" className="v2-iv-btn" data-p={fixed ? true : undefined} disabled={!!busy} onClick={onInvoice}><Doc />{busy === 'invoice' ? 'Making it…' : 'Make invoice'}</button>)}
@@ -310,6 +328,31 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
 
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void onPhoto(f); e.target.value = '' }} />
+
+      {sending && (() => {
+        const emails = [picked?.email ?? (!picked ? email.trim() : ''), ...cc.split(/[,;\s]+/)].map((x) => (x ?? '').trim()).filter(Boolean)
+        const toPhone = picked?.phone ?? (!picked ? phone.trim() : '')
+        const canEmail = emails.length > 0, canText = !!toPhone
+        const email$ = viaEmail && canEmail, text$ = viaText && canText
+        return (
+          <Sheet title="How should it go?" busy={false} onClose={() => setSending(false)}>
+            <label className="v2-check" style={{ ['--ghue' as string]: 'var(--v2-t3)', opacity: canEmail ? 1 : 0.5 }}>
+              <input type="checkbox" checked={email$} disabled={!canEmail} onChange={(e) => setViaEmail(e.target.checked)} />
+              <span>By email{canEmail ? ` — ${emails.join(', ')}` : ' — no email address on this quote. Type one under "Also send a copy to".'}</span>
+            </label>
+            <label className="v2-check" style={{ ['--ghue' as string]: 'var(--v2-t3)', opacity: canText ? 1 : 0.5 }}>
+              <input type="checkbox" checked={text$} disabled={!canText} onChange={(e) => setViaText(e.target.checked)} />
+              <span>By text message{canText ? ` — ${toPhone}` : ' — no phone number for this customer.'}</span>
+            </label>
+            <div className="v2-eacts">
+              <button type="button" className="v2-esec" onClick={() => setSending(false)}>Cancel</button>
+              <button type="button" className="v2-epri" disabled={!email$ && !text$} onClick={() => onSend(email$ && text$ ? 'both' : text$ ? 'sms' : 'email')}>
+                {email$ && text$ ? 'Send both' : text$ ? 'Send text' : 'Send email'}
+              </button>
+            </div>
+          </Sheet>
+        )
+      })()}
 
       {browsing && (
         <Sheet title="Add from catalog" wide busy={false} onClose={() => setBrowsing(false)}>

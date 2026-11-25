@@ -9,7 +9,11 @@ import { parseCc } from '@/lib/core/quotes'
 // POST — send the quote to its customer, by email or text, with the link to their copy. The same
 // shape as sending an invoice (../../documents/[type]/[id]/send), minus the one rule that does not
 // apply: a quote does not have to be issued first, because it is not frozen by being sent.
-const schema = z.object({ channel: z.enum(['email', 'sms']).optional(), to: z.string().trim().min(3).max(200).optional() })
+const schema = z.object({
+  /** One way, or both at once. */
+  channel: z.enum(['email', 'sms', 'both']).optional(),
+  to: z.string().trim().min(3).max(200).optional(),
+})
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -34,15 +38,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // pressed — not a guess from which details the customer happens to have. (It used to fall back to a
   // text when the customer had no email, which sent a quote by SMS to somebody who pressed "Send" and
   // had typed an email address into the copies field. Nothing reached that address at all.)
-  const channel = parsed.data.channel ?? 'email'
+  const asked = parsed.data.channel ?? 'email'
+  const byEmail = asked !== 'sms', byText = asked !== 'email'
   const copies = parseCc(q.cc_emails as string | null)
   // Everybody the quote goes to by email: the customer's own address first, then the copies.
-  const emails = [...new Set([(channel === 'email' ? (parsed.data.to ?? who?.email ?? '') : '').trim().toLowerCase(), ...copies].filter(Boolean))]
-  const phone = (channel === 'sms' ? (parsed.data.to ?? who?.phone ?? '') : '').trim()
-  if (channel === 'sms' && !phone) {
+  const emails = [...new Set([(byEmail ? (asked === 'email' ? (parsed.data.to ?? who?.email ?? '') : (who?.email ?? '')) : '').trim().toLowerCase(), ...copies].filter(Boolean))]
+  const phone = (byText ? (asked === 'sms' ? (parsed.data.to ?? who?.phone ?? '') : (who?.phone ?? '')) : '').trim()
+  if (byText && !phone) {
     return NextResponse.json({ error: 'There is no phone number for this customer. Add one to their contact, or send it by email.' }, { status: 400 })
   }
-  if (channel === 'email' && !emails.length) {
+  if (asked === 'email' && !emails.length) {
     return NextResponse.json({ error: 'There is no email address on this quote. Type one under "Also send a copy to", or use Send by text.' }, { status: 400 })
   }
 
@@ -64,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const delivered: string[] = [], failed: string[] = []
   let lastError: string | null = null
   try {
-    if (channel === 'sms') {
+    if (byText) {
       const { data: ch } = await db.from('channels').select('twilio_number')
         .eq('tenant_id', c.tenantId).eq('type', 'sms').not('twilio_number', 'is', null).limit(1).maybeSingle()
       const from = (ch?.twilio_number as string) || process.env.TWILIO_PHONE_NUMBER
@@ -79,17 +84,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: (e as Error).message || 'That could not be sent.' }, { status: 502 })
   }
   // By email and none of it went: nothing was sent, and saying otherwise is how a quote goes missing.
-  if (channel === 'email' && !delivered.length) {
+  if (asked === 'email' && !delivered.length) {
     return NextResponse.json({ error: `The email did not go out${lastError ? ` (${lastError})` : ''}. Nothing was sent.` }, { status: 502 })
   }
-  const to = channel === 'sms' ? phone : delivered[0]
-  const copied = channel === 'sms' ? delivered : delivered.slice(1)
+  // What actually happened, which for "both" may be only the text if every email was refused.
+  const channel = byText && delivered.length && byEmail && asked === 'both' ? 'both' : byText ? 'sms' : 'email'
+  const to = byText ? phone : delivered[0]
+  const copied = byText ? delivered : delivered.slice(1)
 
   const at = new Date().toISOString()
   await db.from('quotes').update({ sent_at: at, sent_channel: channel, updated_at: at }).eq('tenant_id', c.tenantId).eq('id', id)
   await db.from('document_status_history').insert({
     tenant_id: c.tenantId, document_type: 'quote', document_id: id, from_status: q.status, to_status: q.status, actor: c.actor,
-    note: `Sent by ${channel === 'sms' ? 'SMS' : 'email'} to ${to}${copied.length ? `, copy to ${copied.join(', ')}` : ''}`,
+    note: byText
+      ? `Sent by text to ${to}${copied.length ? ` and by email to ${copied.join(', ')}` : ''}`
+      : `Sent by email to ${to}${copied.length ? `, copy to ${copied.join(', ')}` : ''}`,
   })
   return NextResponse.json({ ok: true, channel, to, copied, failed, sentAt: at, link })
 }
