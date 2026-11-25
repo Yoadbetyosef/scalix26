@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { lineTotalCents, documentTotals, docDiscountCents, spreadDiscount, discountLabel, type DocDiscount } from './money'
-import { createDocument, addLine, setDraftDiscount } from './documents'
+import { createDocument, addLine, setDraftDiscount, tenantSalesTax } from './documents'
+import { lineTaxCents, salesTaxFor } from './sales-tax'
 
 // ── QUOTES ──────────────────────────────────────────────────────────────────────────────────────────
 //
@@ -34,6 +35,8 @@ export interface QuoteRow {
   id: string; number: string; token: string; state: QuoteState
   who: string; contact: { id: string; name: string | null; email: string | null; phone: string | null } | null
   totalCents: number; subtotalCents: number; discountCents: number; discountPercent: number | null; discountLabel: string
+  /** Sales tax on the quote, at the business's own state rate. 0 when the quote is not taxed. */
+  taxCents: number
   notes: string | null; validUntil: string | null; daysLeft: number | null
   sentAt: string | null; sentChannel: string | null; acceptedAt: string | null; createdAt: string
   invoiceId: string | null
@@ -45,7 +48,7 @@ export interface QuoteRow {
 export interface Quote extends QuoteRow { lines: QuoteLine[]; history: { at: string; note: string }[] }
 export interface QuoteListRow extends QuoteRow { thumbs: string[] }
 
-const HEAD = 'id, tenant_id, number, token, status, contact_id, currency, subtotal_cents, discount_cents, discount_kind, discount_value, total_cents, notes, valid_until, sent_at, sent_channel, accepted_at, created_at, client_name, cc_emails'
+const HEAD = 'id, tenant_id, number, token, status, contact_id, currency, subtotal_cents, discount_cents, discount_kind, discount_value, tax_cents, total_cents, notes, valid_until, sent_at, sent_channel, accepted_at, created_at, client_name, cc_emails'
 
 function daysUntil(d: string | null): number | null {
   if (!d) return null
@@ -71,6 +74,7 @@ function toRow(h: Record<string, unknown>, contact: Contact | null, invoiceId: s
     who: contact?.name?.trim() || contact?.email?.trim() || contact?.phone?.trim() || 'No customer yet',
     contact,
     totalCents: Number(h.total_cents ?? 0), subtotalCents: Number(h.subtotal_cents ?? 0), discountCents: Number(h.discount_cents ?? 0),
+    taxCents: Number(h.tax_cents ?? 0),
     discountPercent: kind === 'percent' ? value : null,
     discountLabel: discountLabel(kind, value),
     notes: (h.notes as string) ?? null,
@@ -154,6 +158,7 @@ export async function readQuote(tenantId: string, id: string): Promise<Quote | n
 // ── THE CUSTOMER'S COPY ─────────────────────────────────────────────────────────────────────────────
 export interface PublicQuote extends Quote {
   logoUrl: string | null
+  taxLabel: string
   business: { name: string | null; email: string | null; phone: string | null; address: string | null; city: string | null; state: string | null; zip: string | null }
 }
 async function withBusiness(h: Record<string, unknown>): Promise<PublicQuote> {
@@ -165,6 +170,7 @@ async function withBusiness(h: Record<string, unknown>): Promise<PublicQuote> {
   const t = (tenant ?? {}) as Record<string, string | null>
   return {
     ...q, history: [],
+    taxLabel: salesTaxFor(t.state)?.label ?? 'Sales tax',
     logoUrl: ((brand as { logo_url?: string | null } | null)?.logo_url) ?? null,
     business: { name: t.business_name ?? null, email: t.email ?? null, phone: t.phone ?? null, address: t.address ?? null, city: t.city ?? null, state: t.state ?? null, zip: t.zip ?? null },
   }
@@ -187,6 +193,8 @@ export interface QuoteContent {
   contactId: string | null
   clientName?: string | null
   ccEmails?: string[]
+  /** Charge sales tax at the business's state rate. Ignored when the state has no known rate. */
+  taxable?: boolean
   validUntil: string | null
   notes: string | null
   discountPercent: number | null
@@ -211,7 +219,13 @@ export async function saveQuote(tenantId: string, id: string, c: QuoteContent, a
   const gross = lines.map((l) => Math.round(l.quantity * l.unitPriceCents))
   const discount: DocDiscount | null = c.discountPercent && c.discountPercent > 0 ? { kind: 'percent', value: Math.min(100, c.discountPercent) } : null
   const parts = spreadDiscount(gross, docDiscountCents(gross.reduce((s, g) => s + g, 0), discount))
-  const amounts = lines.map((l, i) => ({ quantity: l.quantity, unit_price_cents: l.unitPriceCents, discount_cents: parts[i], tax_cents: 0 }))
+  // Tax per line, on what is left after the discount — the same sum an invoice does, so the invoice
+  // made from this quote comes to the same total.
+  const tax = c.taxable ? await tenantSalesTax(tenantId) : null
+  const amounts = lines.map((l, i) => {
+    const a = { quantity: l.quantity, unit_price_cents: l.unitPriceCents, discount_cents: parts[i] }
+    return { ...a, tax_cents: tax ? lineTaxCents(a, tax.rate) : 0 }
+  })
 
   const del = await db().from('sales_document_lines').delete().eq('tenant_id', tenantId).eq('document_type', 'quote').eq('document_id', id)
   if (del.error) return { ok: false, error: del.error.message }
@@ -220,7 +234,7 @@ export async function saveQuote(tenantId: string, id: string, c: QuoteContent, a
       tenant_id: tenantId, document_type: 'quote', document_id: id,
       product_id: l.productId ?? null, description: l.name.trim(),
       quantity: l.quantity, unit_price_cents: l.unitPriceCents,
-      discount_cents: parts[i], tax_cents: 0, line_total_cents: lineTotalCents(amounts[i]),
+      discount_cents: parts[i], tax_cents: amounts[i].tax_cents, line_total_cents: lineTotalCents(amounts[i]),
       custom_attributes: { ...(l.detail?.trim() ? { detail: l.detail.trim() } : {}), ...(l.imageUrl ? { image_url: l.imageUrl } : {}) },
       sort_order: i,
     })))
@@ -295,9 +309,11 @@ export async function quoteToInvoice(tenantId: string, id: string, actor: string
   if (!made.ok) return { ok: false, error: made.error }
   const invoiceId = made.document.id as string
   await db().from('invoices').update({ source_document_type: 'quote', source_document_id: id }).eq('tenant_id', tenantId).eq('id', invoiceId)
+  const tax = q.taxCents > 0 ? await tenantSalesTax(tenantId) : null
   for (const l of q.lines) {
     const r = await addLine(tenantId, 'invoice', invoiceId, {
       productId: l.productId, description: l.name, quantity: l.quantity, unit_price_cents: l.unitPriceCents,
+      tax_cents: tax ? lineTaxCents({ quantity: l.quantity, unit_price_cents: l.unitPriceCents }, tax.rate) : 0,
       customAttributes: { ...(l.detail ? { detail: l.detail } : {}), ...(l.imageUrl ? { image_url: l.imageUrl } : {}) },
     })
     if (!r.ok) return { ok: false, error: `The invoice was started but a line did not copy (${r.error}). It is in your invoice drafts.` }

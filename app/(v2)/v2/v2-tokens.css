@@ -3207,6 +3207,8 @@ textarea.v2-mbox:focus { outline: none; border-left-color: var(--v2-pink); }
 .v2 .v2-qt-li .v2-iv-del { align-self: stretch; }
 .v2 .v2-qt-add { display: flex; gap: 10px; padding: 12px 14px; flex-wrap: wrap; }
 .v2 .v2-qt-add .v2-iv-btn { flex: 0 0 auto; }
+.v2 .v2-qt-taxl { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.v2 .v2-qt-taxl input { width: 16px; height: 16px; accent-color: var(--v2-ink); }
 .v2 .v2-qt-disc input {
   width: 62px; margin: 0 4px; padding: 4px 8px; text-align: right; font: inherit; font-size: 13.5px;
   border: 1px solid var(--v2-line); border-radius: 8px; background: var(--v2-paper); color: var(--v2-ink);

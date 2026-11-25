@@ -35,11 +35,36 @@ const FILTERS: { key: string; label: string; test: (p: CatalogProduct) => boolea
 ]
 const money = (n: number | null) => (n === null ? '—' : `$${n.toLocaleString()}`)
 
+// WHAT THE PRICE CELL SAYS WHEN THERE IS NO PRICE. A product that came off a supplier's price list has
+// a cost and no selling price yet; an empty cell reads as "free". So the cost is shown in its place,
+// in its own currency and marked as a cost — and only to somebody allowed to see costs, because
+// /api/catalog/costs answers nobody else.
+type CostPair = [number | null, number | null]
+interface Costs { products: Record<string, CostPair>; variants: Record<string, CostPair>; base: string; secondary: string | null }
+const SYMBOL: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', ILS: '₪' }
+function costText(pair: CostPair | undefined, c: Costs): string | null {
+  if (!pair) return null
+  const [primary, secondary] = pair
+  const amount = primary ?? secondary
+  if (amount === null) return null
+  const cur = (primary !== null ? c.base : c.secondary ?? '').toUpperCase()
+  return `${SYMBOL[cur] ?? `${cur} `}${amount.toLocaleString()}`
+}
+
+
+/** The price, or — when there is none — the cost, said to be a cost. */
+function PriceOrCost({ price, cost, from }: { price: number | null; cost: string | null; from?: boolean }) {
+  if (price !== null) return <>{money(price)}</>
+  if (!cost) return <>—</>
+  return <span title="What the supplier charges. No selling price has been set."><span style={{ color: 'var(--v2-mute)', fontSize: 12 }}>{from ? 'cost from ' : 'cost '}</span>{cost}</span>
+}
+
 export default function CatalogListPage() {
   const [products, setProducts] = useState<CatalogProduct[]>([])
   // Sub-products for every product at once, keyed by product id. Empty for a tenant without Studio,
   // which is exactly why nothing below needs to know whether Studio exists.
   const [variants, setVariants] = useState<VariantsByProduct>({})
+  const [costs, setCosts] = useState<Costs>({ products: {}, variants: {}, base: 'USD', secondary: null })
   // Collapsed by default — with a handful of sub-products in the whole system, nothing should shift
   // the list on load. Expansion is per product and deliberately not remembered across reloads.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -62,7 +87,18 @@ export default function CatalogListPage() {
       if (!res.ok) throw new Error(d.error || 'Failed to load')
       setProducts(d.products || [])
       setVariants(vres?.ok ? ((await vres.json()).variants ?? {}) : {})
+      // After the list is on screen, and best-effort: the cost column fills in when it arrives.
+      fetch('/api/catalog/costs').then((r) => (r.ok ? r.json() : null)).then((j) => { if (j?.products) setCosts(j as Costs) }).catch(() => {})
     } catch (e) { setErr((e as Error).message) } finally { setLoading(false) }
+  }
+  const priceOf = (p: CatalogProduct) => {
+    const own = costText(costs.products[p.id], costs)
+    if (p.price !== null || own) return <PriceOrCost price={p.price} cost={own} />
+    // Priced per sub-product (a fabric category each): the lowest of them, said to be a floor.
+    const subCosts = (variants[p.id] ?? []).map((v) => costs.variants[v.id]).filter((x): x is CostPair => !!x && (x[0] ?? x[1]) !== null)
+    if (!subCosts.length) return <PriceOrCost price={null} cost={null} />
+    const lowest = subCosts.reduce((a, b) => ((a[0] ?? a[1])! <= (b[0] ?? b[1])! ? a : b))
+    return <PriceOrCost price={null} cost={costText(lowest, costs)} from={subCosts.length > 1} />
   }
   const toggle = (id: string) => setExpanded((prev) => {
     const next = new Set(prev)
@@ -214,7 +250,7 @@ export default function CatalogListPage() {
                       </div>
                     </td>
                     <td className="max-lg:hidden" style={{ color: 'var(--v2-ink-72)' }}>{p.category || '—'}</td>
-                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink)' }}>{money(p.price)}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink)' }}>{priceOf(p)}</td>
                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink)', fontWeight: 500 }}>{totalAvailable(p)}</td>
                     <td className="max-xl:hidden" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink-72)' }}>{p.showroom_quantity}</td>
                     <td className="max-xl:hidden" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink-72)' }}>{p.warehouse_quantity}</td>
@@ -236,7 +272,7 @@ export default function CatalogListPage() {
                         <span className="block" style={{ fontSize: 12, color: 'var(--v2-mute)' }}>{v.sku || '—'}</span>
                       </td>
                       <td className="max-lg:hidden" style={{ fontSize: 12, color: 'var(--v2-mute)' }}>Sub-product</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink)' }}>{money(v.price)}</td>
+                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--v2-ink)' }}><PriceOrCost price={v.price} cost={costText(costs.variants[v.id], costs)} /></td>
                       {/* Stock and status are tracked on the parent product, not per sub-product, so
                           these stay blank rather than repeating the parent's numbers as if they were
                           the variant's own. */}
@@ -271,7 +307,7 @@ export default function CatalogListPage() {
                   </span>
                 </div>
                 <div className="v2-meta">
-                  <em style={{ fontVariantNumeric: 'tabular-nums' }}>{money(p.price)}</em>
+                  <em style={{ fontVariantNumeric: 'tabular-nums' }}>{priceOf(p)}</em>
                 </div>
               </Link>
               <button onClick={(e) => del(p, e)} aria-label={`Delete ${p.name}`} className="v2-ico"
@@ -293,7 +329,7 @@ export default function CatalogListPage() {
                         <p><span className="truncate">{v.name}</span></p>
                         <span>{v.sku || '—'}</span>
                       </div>
-                      <div className="v2-meta"><em style={{ fontVariantNumeric: 'tabular-nums' }}>{money(v.price)}</em></div>
+                      <div className="v2-meta"><em style={{ fontVariantNumeric: 'tabular-nums' }}><PriceOrCost price={v.price} cost={costText(costs.variants[v.id], costs)} /></em></div>
                     </div>
                   ))}
                 </>

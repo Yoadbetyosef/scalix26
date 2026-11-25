@@ -11,6 +11,8 @@ import { AlertCircle, Loader2, Upload } from 'lucide-react'
 // chunk that fails can be sent again — the server skips what is already there.
 
 interface PriceListFile { supplier?: string; currency: string; items: unknown[] }
+/** The pictures that go with a price list: small JPEGs, each with the product codes it belongs to. */
+interface PictureFile { supplier?: string; images: Array<{ data: string; skus: string[] }> }
 interface ChunkResult {
   ok: boolean; error?: string; costColumn: 'cost_primary' | 'cost_secondary' | null
   baseCurrency: string; secondaryCurrency: string | null
@@ -27,6 +29,7 @@ export default function ImportPriceList() {
   const [fileName, setFileName] = useState('')
   const [check, setCheck] = useState<(Totals & { costColumn: ChunkResult['costColumn']; baseCurrency: string; secondaryCurrency: string | null }) | null>(null)
   const [done, setDone] = useState<Totals | null>(null)
+  const [pictures, setPictures] = useState<{ sent: number; updated: number; failed: number } | null>(null)
   const [progress, setProgress] = useState<{ sent: number; total: number } | null>(null)
   const [busy, setBusy] = useState<'check' | 'import' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -52,8 +55,12 @@ export default function ImportPriceList() {
   }
 
   async function pick(picked: File) {
-    setError(null); setCheck(null); setDone(null); setProgress(null); setFile(null); setFileName(picked.name)
+    setError(null); setCheck(null); setDone(null); setPictures(null); setProgress(null); setFile(null); setFileName(picked.name)
     let parsed: PriceListFile
+    try {
+      const raw = JSON.parse(await picked.text()) as Partial<PictureFile> & Partial<PriceListFile>
+      if (Array.isArray(raw.images)) { await sendPictures(raw as PictureFile); return }
+    } catch { /* not pictures — fall through to the price-list reading below, which reports it */ }
     try {
       parsed = JSON.parse(await picked.text()) as PriceListFile
       if (!parsed || typeof parsed.currency !== 'string' || !Array.isArray(parsed.items) || !parsed.items.length) throw new Error('shape')
@@ -64,6 +71,25 @@ export default function ImportPriceList() {
       const r = await run(parsed, true)
       if (r?.last) setCheck({ created: r.created, skipped: r.skipped, variants: r.variants, costs: r.costs, costColumn: r.last.costColumn, baseCurrency: r.last.baseCurrency, secondaryCurrency: r.last.secondaryCurrency })
     } catch { setError('Could not reach the server. Try again.') } finally { setBusy(null); setProgress(null) }
+  }
+
+  // Pictures need no check step: nothing is replaced, only products without a photo get one.
+  async function sendPictures(f: PictureFile) {
+    setBusy('import')
+    let updated = 0, failed = 0
+    try {
+      for (let i = 0; i < f.images.length; i += 30) {
+        const res = await fetch('/api/catalog/import/pricelist-images', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ images: f.images.slice(i, i + 30) }),
+        })
+        const j = await res.json().catch(() => ({})) as { ok?: boolean; updated?: number; failed?: string[]; error?: string }
+        if (!res.ok || !j.ok) { setError(`${j.error ?? 'The server refused that part of the file.'} (stopped at picture ${i + 1}; sending the file again continues.)`); return }
+        updated += j.updated ?? 0; failed += j.failed?.length ?? 0
+        setProgress({ sent: Math.min(i + 30, f.images.length), total: f.images.length })
+      }
+      setPictures({ sent: f.images.length, updated, failed })
+    } catch { setError('Could not reach the server. Sending the file again continues from where it stopped.') } finally { setBusy(null); setProgress(null) }
   }
 
   async function importNow() {
@@ -124,6 +150,14 @@ export default function ImportPriceList() {
             </button>
           )}
         </div>
+      )}
+
+      {pictures && !busy && (
+        <p className="mt-4 text-sm text-ink">
+          {fileName}: {n(pictures.sent)} pictures sent, {n(pictures.updated)} products now have a photo.
+          {pictures.failed ? ` ${n(pictures.failed)} could not be stored.` : ''}{' '}
+          <Link href="/catalog" className="underline">Open the catalog</Link>
+        </p>
       )}
 
       {done && !busy && (
