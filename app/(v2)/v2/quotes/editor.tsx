@@ -41,7 +41,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     quantity: plain(l.quantity), unitPrice: plain(l.unitPriceCents / 100),
   })))
   const [dirty, setDirty] = useState(!quote)
-  const [busy, setBusy] = useState<null | 'save' | 'send' | 'invoice' | 'photo'>(null)
+  const [busy, setBusy] = useState<null | 'save' | 'send' | 'text' | 'invoice' | 'photo'>(null)
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null)
   const [tick, setTick] = useState(0)
   const [autoAt, setAutoAt] = useState<string | null>(null)
@@ -151,14 +151,15 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
     if (saved) { setMsg({ text: 'Saved.' }); router.refresh() }
     setBusy(null)
   }
-  async function onSend() {
+  /** No channel = the server's own choice: email when there is an address, a text when there is only a number. */
+  async function onSend(channel?: 'email' | 'sms') {
     if (busy) return
     if (!usable.length || total <= 0) { setMsg({ text: 'Add at least one item with a price before sending.', bad: true }); return }
-    setBusy('send')
+    setBusy(channel === 'sms' ? 'text' : 'send')
     const saved = await save()
     if (saved) {
       try {
-        const res = await fetch(`/api/core/quotes/${saved}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        const res = await fetch(`/api/core/quotes/${saved}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(channel ? { channel } : {}) })
         const j = await res.json().catch(() => ({})) as { ok?: boolean; to?: string; channel?: string; copied?: string[]; failed?: string[]; error?: string }
         if (!res.ok || !j.ok) setMsg({ text: j.error || 'The quote was saved but could not be sent.', bad: true })
         else {
@@ -183,7 +184,7 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
 
   const sentLine = quote?.state === 'accepted' ? 'The customer accepted this quote. It is fixed — make the invoice from it.'
     : quote?.sentAt ? 'Already sent. You can still change it and send it again — the customer\'s link shows the latest saved version.'
-      : 'Send emails the customer a link to their copy. They can accept it in one tap.'
+      : 'Send goes by email, Send by text goes to their phone — both carry a link to their copy, where they can accept it in one tap.'
 
   return (
     <div className="v2-page">
@@ -293,7 +294,10 @@ export function QuoteEditor({ quote }: { quote: Quote | null }) {
         <div className="v2-iv-slotin">
           {id && !dirty && <a className="v2-iv-btn" href={`/quote/preview/${id}`} target="_blank" rel="noreferrer"><Doc />View as customer</a>}
           {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy || !dirty} onClick={onSave}><Check />{busy === 'save' ? 'Saving…' : dirty ? 'Save' : 'Saved'}</button>}
-          {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={onSend}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Send again' : 'Send quote'}</button>}
+          {!fixed && <button type="button" className="v2-iv-btn" data-p disabled={!!busy} onClick={() => onSend()}><Send />{busy === 'send' ? 'Sending…' : quote?.sentAt ? 'Send again' : 'Send quote'}</button>}
+          {/* The same quote, the same link, as a text message to the customer's phone. Its own button
+              rather than a setting: which way it goes is decided each time, at the moment of sending. */}
+          {!fixed && <button type="button" className="v2-iv-btn" disabled={!!busy} onClick={() => onSend('sms')}><Send />{busy === 'text' ? 'Sending…' : 'Send by text'}</button>}
           {id && !dirty && (quote?.invoiceId
             ? <Link className="v2-iv-btn" data-p={fixed ? true : undefined} href={`/v2/invoices/${quote.invoiceId}`}><Doc />Open the invoice</Link>
             : quote && quote.state !== 'draft' && <button type="button" className="v2-iv-btn" data-p={fixed ? true : undefined} disabled={!!busy} onClick={onInvoice}><Doc />{busy === 'invoice' ? 'Making it…' : 'Make invoice'}</button>)}

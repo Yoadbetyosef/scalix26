@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const channel = parsed.data.channel ?? (who?.email?.trim() ? 'email' : who?.phone?.trim() ? 'sms' : 'email')
   const to = (parsed.data.to ?? (channel === 'sms' ? who?.phone : who?.email) ?? '').trim()
   if (!to) {
-    return NextResponse.json({ error: channel === 'sms' ? 'There is no phone number for this customer.' : 'There is no email address for this customer. Add one to the quote first.' }, { status: 400 })
+    return NextResponse.json({ error: channel === 'sms' ? 'There is no phone number for this customer. Add one to their contact, or send it by email.' : 'There is no email address for this customer. Add one to the quote first.' }, { status: 400 })
   }
 
   const { data: tenant } = await db.from('tenants').select('business_name').eq('id', c.tenantId).maybeSingle()
